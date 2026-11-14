@@ -8,6 +8,11 @@ and replacement support. Extracted from the xDS safe-regex implementation in
 
 - RE2-style syntax subset with explicit limits for program size, states,
   instructions, and replacement expansion.
+- Set-lookahead `(?=set)` / `(?!set)` where the body is a single set atom
+  (`\S`, `\p{...}`, `[...]`, `.`, or a literal). General lookaround,
+  backreferences, and quantified lookahead remain unsupported.
+- Optional UCP Perl space: `Limits.unicode_perl_space = true` makes `\s`/`\S`
+  use Unicode White_Space. `\d`/`\w` remain ASCII.
 - Caller-owned compilation: `compile` writes into the allocator you provide;
   `Regex` keeps an internal arena.
 - Reusable workspaces (`Workspace`, `ReplaceWorkspace`) for matching and

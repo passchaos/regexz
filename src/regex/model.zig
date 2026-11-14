@@ -9,6 +9,9 @@ pub const Limits = struct {
     max_depth: usize = 64,
     max_repeat: usize = 1000,
     max_ranges: usize = 4096,
+    /// Use Unicode White_Space for `\s` and its negation for `\S`.
+    /// Other Perl classes (`\d`, `\w`) remain ASCII.
+    unicode_perl_space: bool = false,
     /// Bounded backtracking budget for capture-aware replacement. Boolean
     /// matching remains linear and does not use these.
     max_execution_steps: usize = 4_000_000,
@@ -64,6 +67,8 @@ pub const Node = union(enum) {
         lazy: bool = false,
     },
     assertion: Assertion,
+    /// Zero-width set assertion. `negative` is true for `(?!set)`.
+    lookahead_set: struct { set: Set, negative: bool },
 };
 pub const Instruction = union(enum) {
     accept,
@@ -71,6 +76,9 @@ pub const Instruction = union(enum) {
     consume: struct { set: Set, next: usize },
     split: struct { left: usize, right: usize },
     assertion: struct { kind: Assertion, next: usize },
+    /// Zero-width set assertion. The set is tested against the rune at the
+    /// current input offset; the offset itself never advances.
+    lookahead: struct { set: Set, negative: bool, next: usize },
     /// Capture boundary. Slot 0/1 are the whole match; group `i` uses
     /// slots `2*i` and `2*i+1`.
     save: struct { slot: u16, next: usize },

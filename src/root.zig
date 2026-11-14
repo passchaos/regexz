@@ -1,4 +1,6 @@
 //! Bounded RE2-style boolean/full-match engine with replace support.
+//! Set-lookahead `(?=set)` / `(?!set)` is supported as a deliberate extension
+//! for tokenizer patterns; general lookaround remains unsupported.
 //!
 //! The engine was extracted from netz's xDS safe-regex implementation so it
 //! can be reused independently of gRPC/xDS.

@@ -26,8 +26,122 @@ test "gRPC xDS safe regex supports full match RE2 operators Unicode and byte esc
         for (case.no) |input| try std.testing.expect(!try value.matches(gpa, input));
     }
 }
+test "set lookahead supports positive and negative assertions" {
+    const Case = struct { pattern: []const u8, yes: []const []const u8, no: []const []const u8 };
+    for ([_]Case{
+        .{ .pattern = "(?=a)a", .yes = &.{"a"}, .no = &.{ "b", "aa" } },
+        .{ .pattern = "(?!a)b", .yes = &.{"b"}, .no = &.{ "a", "ab" } },
+        .{ .pattern = "(?!\\S)\\s", .yes = &.{ " ", "\t", "\n" }, .no = &.{ "a", "0" } },
+        .{ .pattern = "(?=\\p{L})\\p{L}", .yes = &.{ "é", "猫" }, .no = &.{ "1", "_" } },
+        .{ .pattern = "(?![^a])a", .yes = &.{"a"}, .no = &.{ "b", "aa" } },
+        .{ .pattern = "(?=.)a", .yes = &.{"a"}, .no = &.{ "\n", "b" } },
+        .{ .pattern = "(?i:(?=a))A", .yes = &.{"A"}, .no = &.{"a"} },
+        .{ .pattern = "(?!\\S)", .yes = &.{""}, .no = &.{"a"} },
+        .{ .pattern = "(?=\\S)", .yes = &.{}, .no = &.{ "", "a" } },
+    }) |case| {
+        var value = try regex.Regex.init(gpa, case.pattern, .{});
+        defer value.deinit();
+        for (case.yes) |input| try std.testing.expect(try value.matches(gpa, input));
+        for (case.no) |input| try std.testing.expect(!try value.matches(gpa, input));
+    }
+}
+test "set lookahead compiles Qwen pre-tokenizer pattern and returns spans" {
+    const pattern = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+";
+    var value = try regex.Regex.init(gpa, pattern, .{});
+    defer value.deinit();
+    try std.testing.expect(try value.matches(gpa, "hello"));
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    const Case = struct { input: []const u8, spans: []const [2]usize };
+    for ([_]Case{
+        .{ .input = "a b", .spans = &.{ .{ 0, 1 }, .{ 1, 3 } } },
+        .{ .input = "a  b", .spans = &.{ .{ 0, 1 }, .{ 1, 2 }, .{ 2, 4 } } },
+        .{ .input = "a   ", .spans = &.{ .{ 0, 1 }, .{ 1, 4 } } },
+        .{ .input = "a \n b", .spans = &.{ .{ 0, 1 }, .{ 1, 3 }, .{ 3, 5 } } },
+        .{ .input = "a\n b", .spans = &.{ .{ 0, 1 }, .{ 1, 2 }, .{ 2, 4 } } },
+        .{ .input = "a\r\n \r\nb", .spans = &.{ .{ 0, 1 }, .{ 1, 6 }, .{ 6, 7 } } },
+        .{ .input = "hello!  world", .spans = &.{ .{ 0, 5 }, .{ 5, 6 }, .{ 6, 7 }, .{ 7, 13 } } },
+        .{ .input = "'s 'S 'ſ 're 'll", .spans = &.{ .{ 0, 2 }, .{ 2, 4 }, .{ 4, 5 }, .{ 5, 7 }, .{ 7, 9 }, .{ 9, 11 }, .{ 11, 13 }, .{ 13, 15 }, .{ 15, 17 } } },
+    }) |case| {
+        var offset: usize = 0;
+        for (case.spans) |span| {
+            const match = (try workspace.find(case.input, offset)) orelse return error.TestUnexpectedResult;
+            try std.testing.expectEqual(span[0], match.start);
+            try std.testing.expectEqual(span[1], match.end);
+            offset = match.end;
+        }
+        try std.testing.expectEqual(case.input.len, offset);
+    }
+}
+test "set lookahead decodes multi-byte runes in the backtracking workspace" {
+    var value = try regex.Regex.init(gpa, "\\p{L}+(?!\\p{L})", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    const single = (try workspace.find("é1", 0)).?;
+    try std.testing.expectEqual(@as(usize, 0), single.start);
+    try std.testing.expectEqual(@as(usize, 2), single.end);
+    const whole = (try workspace.find("éé", 0)).?;
+    try std.testing.expectEqual(@as(usize, 0), whole.start);
+    try std.testing.expectEqual(@as(usize, 4), whole.end);
+}
+test "UCP Perl space matches Unicode White_Space" {
+    const ucp = regex.Limits{ .unicode_perl_space = true };
+    var space = try regex.Regex.init(gpa, "\\s+", ucp);
+    defer space.deinit();
+    for ([_][]const u8{ " ", "\t", "\u{0085}", "\u{00A0}", "\u{1680}", "\u{2000}", "\u{2028}", "\u{202F}", "\u{205F}", "\u{3000}" }) |input|
+        try std.testing.expect(try space.matches(gpa, input));
+    try std.testing.expect(!try space.matches(gpa, "a"));
+
+    var non_space = try regex.Regex.init(gpa, "\\S+", ucp);
+    defer non_space.deinit();
+    try std.testing.expect(try non_space.matches(gpa, "a"));
+    try std.testing.expect(!try non_space.matches(gpa, "\u{00A0}"));
+
+    // In-class and complemented forms use the same UCP set.
+    var class_space = try regex.Regex.init(gpa, "[\\s]+", ucp);
+    defer class_space.deinit();
+    try std.testing.expect(try class_space.matches(gpa, "\u{00A0}"));
+    var negated_non_space = try regex.Regex.init(gpa, "[^\\S]+", ucp);
+    defer negated_non_space.deinit();
+    try std.testing.expect(try negated_non_space.matches(gpa, "\u{00A0}"));
+
+    // The default remains ASCII-only.
+    var ascii_space = try regex.Regex.init(gpa, "\\s+", .{});
+    defer ascii_space.deinit();
+    try std.testing.expect(try ascii_space.matches(gpa, " "));
+    try std.testing.expect(!try ascii_space.matches(gpa, "\u{00A0}"));
+}
+test "UCP Qwen pre-tokenizer matches PCRE2 on Unicode whitespace" {
+    const pattern = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+";
+    const ucp = regex.Limits{ .unicode_perl_space = true };
+    var value = try regex.Regex.init(gpa, pattern, ucp);
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, ucp);
+    defer workspace.deinit();
+    const Case = struct { input: []const u8, spans: []const [2]usize };
+    for ([_]Case{
+        .{ .input = "a\u{00A0}!", .spans = &.{ .{ 0, 1 }, .{ 1, 3 }, .{ 3, 4 } } },
+        .{ .input = "a\u{3000}!", .spans = &.{ .{ 0, 1 }, .{ 1, 4 }, .{ 4, 5 } } },
+        .{ .input = "a\u{00A0}  b", .spans = &.{ .{ 0, 1 }, .{ 1, 4 }, .{ 4, 6 } } },
+        .{ .input = "a\u{00A0} b", .spans = &.{ .{ 0, 1 }, .{ 1, 3 }, .{ 3, 5 } } },
+        .{ .input = "a\u{00A0}\u{00A0} b", .spans = &.{ .{ 0, 1 }, .{ 1, 5 }, .{ 5, 7 } } },
+        .{ .input = "a\u{3000} b", .spans = &.{ .{ 0, 1 }, .{ 1, 4 }, .{ 4, 6 } } },
+        .{ .input = "a\u{00A0}", .spans = &.{ .{ 0, 1 }, .{ 1, 3 } } },
+        .{ .input = "a\u{00A0}b", .spans = &.{ .{ 0, 1 }, .{ 1, 4 } } },
+    }) |case| {
+        var offset: usize = 0;
+        for (case.spans) |span| {
+            const match = (try workspace.find(case.input, offset)) orelse return error.TestUnexpectedResult;
+            try std.testing.expectEqual(span[0], match.start);
+            try std.testing.expectEqual(span[1], match.end);
+            offset = match.end;
+        }
+        try std.testing.expectEqual(case.input.len, offset);
+    }
+}
 test "gRPC xDS safe regex rejects invalid syntax and bounds nested repetitions" {
-    for ([_][]const u8{ "(", "[a-z", "[z-a]", "a**", "a++", "(?=a)", "(a)\\1", "(?x)a", "(?i-)a", "(?i)*", "{1}", "a{1}{2}", "\\p{Unknown}", "\\x{110000}", "a{2,1}", "a{1001}", "[a-\\d]", "[\\b]", "\\" }) |pattern| try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, pattern, .{}));
+    for ([_][]const u8{ "(", "[a-z", "[z-a]", "a**", "a++", "(?!a+)", "(?!a|b)", "(?!ab)", "(?=)", "(?<=a)", "(?<!a)", "(?=a)*", "(?=", "(?=[a-z)", "(a)\\1", "(?x)a", "(?i-)a", "(?i)*", "{1}", "a{1}{2}", "\\p{Unknown}", "\\x{110000}", "a{2,1}", "a{1001}", "[a-\\d]", "[\\b]", "\\" }) |pattern| try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, pattern, .{}));
     try std.testing.expectError(error.RegexLimitExceeded, regex.Regex.init(gpa, "abcdef", .{ .max_pattern_bytes = 5 }));
     try std.testing.expectError(error.RegexLimitExceeded, regex.Regex.init(gpa, "a{5}", .{ .max_repeat = 4 }));
     try std.testing.expectError(error.RegexLimitExceeded, regex.Regex.init(gpa, "(a{100}){100}", .{ .max_instructions = 64 }));

@@ -1,4 +1,6 @@
 //! Bounded RE2 boolean-match syntax with balanced concatenation/alternation.
+//! Set-lookahead `(?=set)` / `(?!set)` is a deliberate extension; the body
+//! must be a single set atom, not a general expression.
 const std = @import("std");
 const m = @import("model.zig");
 const classes = @import("classes.zig");
@@ -72,6 +74,12 @@ pub const Parser = struct {
                 try self.name();
             } else if (self.take('<')) {
                 try self.name();
+            } else if (self.peek() == '=' or self.peek() == '!') {
+                const negative = self.peek() == '!';
+                self.cursor += 1;
+                const set = try self.lookaheadSet();
+                if (!self.take(')')) return error.InvalidRegex;
+                return self.node(.{ .lookahead_set = .{ .set = set, .negative = negative } });
             } else {
                 var negative = false;
                 var flag_count: usize = 0;
@@ -141,6 +149,25 @@ pub const Parser = struct {
         }
         return escape.literal(self, try self.rune());
     }
+    fn dotSet(self: *Parser) m.Error!m.Set {
+        return classes.normalize(self.allocator, if (self.flags.dot_newline) &.{.{ .first = 0, .last = 0x10ffff }} else &.{.{ .first = '\n', .last = '\n' }}, !self.flags.dot_newline, false, self.limits.max_ranges);
+    }
+    fn lookaheadSet(self: *Parser) m.Error!m.Set {
+        const byte = self.peek() orelse return error.InvalidRegex;
+        if (byte == '[') {
+            self.cursor += 1;
+            const value = try self.characterClass();
+            return switch (value.*) {
+                .set => |set| set,
+                else => error.InvalidRegex,
+            };
+        }
+        if (byte == '.') {
+            self.cursor += 1;
+            return self.dotSet();
+        }
+        return self.element();
+    }
     fn characterClass(self: *Parser) m.Error!*const m.Node {
         const negate = self.take('^');
         var ranges: std.ArrayList(m.Range) = .empty;
@@ -166,7 +193,7 @@ pub const Parser = struct {
         return switch (byte) {
             '(' => self.group(depth),
             '[' => self.characterClass(),
-            '.' => self.node(.{ .set = try classes.normalize(self.allocator, if (self.flags.dot_newline) &.{.{ .first = 0, .last = 0x10ffff }} else &.{.{ .first = '\n', .last = '\n' }}, !self.flags.dot_newline, false, self.limits.max_ranges) }),
+            '.' => self.node(.{ .set = try self.dotSet() }),
             '^' => self.node(.{ .assertion = if (self.flags.multiline) .start_line else .start_text }),
             '$' => self.node(.{ .assertion = if (self.flags.multiline) .end_line else .end_text }),
             '\\' => blk: {
@@ -225,7 +252,7 @@ pub const Parser = struct {
             minimum = count.minimum;
             maximum = count.maximum;
         } else return child;
-        if (child.* == .flag_change) return error.InvalidRegex;
+        if (child.* == .flag_change or child.* == .lookahead_set) return error.InvalidRegex;
         const lazy = self.take('?');
         if (self.peek()) |byte| if (byte == '*' or byte == '+' or byte == '?') return error.InvalidRegex;
         return self.node(.{ .repeat = .{

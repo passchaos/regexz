@@ -1,4 +1,5 @@
-//! RE2 escapes; capture/backreference and lookaround syntax is never executed.
+//! RE2 escapes; capture/backreference and general lookaround are not executed.
+//! Set-lookahead bodies are parsed by the group parser in `parse.zig`.
 const std = @import("std");
 const m = @import("model.zig");
 const classes = @import("classes.zig");
@@ -62,12 +63,16 @@ pub fn parse(p: anytype, in_class: bool) m.Error!Atom {
     const byte = p.peek() orelse return error.InvalidRegex;
     p.cursor += 1;
     if (std.mem.indexOfScalar(u8, "dDsSwW", byte) != null) {
+        const negate = std.ascii.isUpper(byte);
+        if ((byte == 's' or byte == 'S') and p.limits.unicode_perl_space) {
+            return .{ .set = try classes.unicodePerlSpace(p.allocator, negate, p.flags.fold, p.limits.max_ranges) };
+        }
         const name: []const u8 = switch (std.ascii.toLower(byte)) {
             'd' => "digit",
             's' => "perl_space",
             else => "word",
         };
-        return .{ .set = try classes.normalize(p.allocator, classes.ascii(name).?, std.ascii.isUpper(byte), p.flags.fold, p.limits.max_ranges) };
+        return .{ .set = try classes.normalize(p.allocator, classes.ascii(name).?, negate, p.flags.fold, p.limits.max_ranges) };
     }
     if (byte == 'p' or byte == 'P') return .{ .set = try property(p, byte == 'P') };
     if (byte == 'C' and !in_class) return .byte;

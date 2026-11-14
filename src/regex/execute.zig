@@ -50,7 +50,7 @@ pub const Workspace = struct {
         stack[count.*] = index;
         count.* += 1;
     }
-    fn add(self: *Workspace, program: Program, index: usize, context: Position, list: []usize, count: *usize, stack: []usize, seen: []usize) budget_mod.Error!void {
+    fn add(self: *Workspace, program: Program, index: usize, input: []const u8, offset: usize, context: Position, list: []usize, count: *usize, stack: []usize, seen: []usize) budget_mod.Error!void {
         var pending: usize = 0;
         self.push(seen, stack, &pending, index);
         while (pending != 0) {
@@ -69,6 +69,11 @@ pub const Workspace = struct {
                 },
                 .save => |save| self.push(seen, stack, &pending, save.next),
                 .assertion => |assertion| if (context.allows(assertion.kind)) self.push(seen, stack, &pending, assertion.next),
+                .lookahead => |look| {
+                    const next = if (offset < input.len) runeAt(input, offset) else null;
+                    const matched = if (next) |value| look.set.matches(value.value) else false;
+                    if (matched != look.negative) self.push(seen, stack, &pending, look.next);
+                },
             }
         }
     }
@@ -97,7 +102,7 @@ pub const Workspace = struct {
         var counts = [_]usize{0} ** 5;
         const stack = self.storage[n * 5 ..][0..n];
         self.epoch = 1;
-        try self.add(program, program.start, position(input, 0), self.storage[0..n], &counts[0], stack, self.seen[0..n]);
+        try self.add(program, program.start, input, 0, position(input, 0), self.storage[0..n], &counts[0], stack, self.seen[0..n]);
         // Rune transitions advance 1..4 bytes; \C advances exactly one.
         // Five rotating buckets retain only future positions without letting
         // a 4-byte transition overwrite the list being consumed.
@@ -121,7 +126,7 @@ pub const Workspace = struct {
                 const destination = offset + advance;
                 const bucket = destination % 5;
                 self.epoch = destination + 1;
-                try self.add(program, continuation, position(input, destination), self.storage[bucket * n ..][0..n], &counts[bucket], stack, self.seen[bucket * n ..][0..n]);
+                try self.add(program, continuation, input, destination, position(input, destination), self.storage[bucket * n ..][0..n], &counts[bucket], stack, self.seen[bucket * n ..][0..n]);
             }
         }
         return false;

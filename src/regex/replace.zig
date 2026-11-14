@@ -210,6 +210,14 @@ pub const Workspace = struct {
                         continue;
                     }
                 },
+                .lookahead => |look| {
+                    const next = runeAt(input, pos);
+                    const matched = if (next) |rune| look.set.matches(rune.value) else false;
+                    if (matched != look.negative) {
+                        pc = look.next;
+                        continue;
+                    }
+                },
             }
             const choice = self.choices.pop() orelse return null;
             while (self.trail.items.len > choice.trail_len) {

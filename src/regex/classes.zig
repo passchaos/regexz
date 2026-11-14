@@ -21,6 +21,22 @@ pub fn normalize(gpa: std.mem.Allocator, raw: []const m.Range, negate: bool, fol
     }
     return .{ .ranges = ranges[0..count], .negate = negate, .fold = fold };
 }
+/// Unicode White_Space, the set PCRE2 uses for UCP `\s`.
+pub const unicode_space_ranges = [_]m.Range{
+    .{ .first = 0x09, .last = 0x0d },
+    .{ .first = 0x20, .last = 0x20 },
+    .{ .first = 0x85, .last = 0x85 },
+    .{ .first = 0xa0, .last = 0xa0 },
+    .{ .first = 0x1680, .last = 0x1680 },
+    .{ .first = 0x2000, .last = 0x200a },
+    .{ .first = 0x2028, .last = 0x2029 },
+    .{ .first = 0x202f, .last = 0x202f },
+    .{ .first = 0x205f, .last = 0x205f },
+    .{ .first = 0x3000, .last = 0x3000 },
+};
+pub fn unicodePerlSpace(gpa: std.mem.Allocator, negate: bool, fold: bool, limit: usize) m.Error!m.Set {
+    return normalize(gpa, &unicode_space_ranges, negate, fold, limit);
+}
 pub fn append(list: *std.ArrayList(m.Range), gpa: std.mem.Allocator, set: m.Set, limit: usize) m.Error!void {
     // Materialize complements before unioning a negated class with other
     // entries. The enclosing class's own negation is applied after folding.

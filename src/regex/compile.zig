@@ -44,6 +44,7 @@ const Builder = struct {
             .byte => self.emit(.{ .byte = continuation }),
             .set => |set| self.emit(.{ .consume = .{ .set = set, .next = continuation } }),
             .assertion => |kind| self.emit(.{ .assertion = .{ .kind = kind, .next = continuation } }),
+            .lookahead_set => |look| self.emit(.{ .lookahead = .{ .set = look.set, .negative = look.negative, .next = continuation } }),
             .pair => |pair| self.node(pair.left, try self.node(pair.right, continuation)),
             .alternate => |pair| self.emit(.{ .split = .{ .left = try self.node(pair.left, continuation), .right = try self.node(pair.right, continuation) } }),
             .repeat => |repeat| blk: {
