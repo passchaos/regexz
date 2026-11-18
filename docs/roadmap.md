@@ -217,7 +217,7 @@ Unicode full matches scan at ~800 MiB/s and ASCII full matches at ~2.7 GiB/s
 persistent backtracking workspace (~17 ns for a backreference pattern), and
 shared-prefix no-match scans are ~1.55 µs (15.5 GiB/s). The bench gate now covers 33 cases;
 `RegexSet` ~97 µs, `replaceAll` ~85 µs, compile ~1.5 µs with `smp_allocator`,
-and all 194 tests plus the V8/Rust/extended/replacement differential fuzzers pass. On the
+and all 195 tests plus the V8/Rust/extended/replacement differential fuzzers pass. On the
 feature side, PCRE2 forward numeric/named references, `\e` and isolated `\E`,
 the full substitution reference syntax (`$<name>`, `$+`, `$_`, `` $` ``, `$'`),
 `escape`/`splitn`/`replacen`, and compile diagnostics (`diagnose`) are covered.
@@ -310,8 +310,9 @@ on the tokenizer and xDS workloads.
 9. ~~**Capture semantics controls**~~: done. `Limits.capture_reset` selects
    JavaScript-style reset between iterations; the default remains
    PCRE2/Rust/Perl semantics.
-10. **`Program` ownership**: add `Program.deinit` or encode the arena
-    requirement in the type system.
+10. ~~**`Program` ownership**~~: done. `compileOwned` returns an
+    `OwnedProgram` with an internal arena and a `deinit`; `compile` keeps the
+    documented caller-arena contract.
 11. ~~**Compile diagnostics**~~: done. `diagnose` reports the byte offset and
     kind (`syntax`, `unsupported`, `limit`) where a pattern failed to compile.
 

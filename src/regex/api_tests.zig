@@ -225,3 +225,14 @@ test "Regex.find and findAll expose MARK names" {
     try std.testing.expectEqualStrings("two", (try iterator.next()).?.mark.?);
     try std.testing.expect((try iterator.next()) == null);
 }
+
+test "compileOwned releases the program arena" {
+    var owned = try regex.compileOwned(gpa, "(?<word>\\p{L}+)@(\\p{L}+)", .{});
+    defer owned.deinit();
+    try std.testing.expectEqual(@as(?u16, 1), owned.program.groupIndex("word"));
+    var workspace = try regex.ReplaceWorkspace.init(gpa, owned.program, .{});
+    defer workspace.deinit();
+    const found = (try workspace.find("mail user@example now", 0)).?;
+    try std.testing.expectEqual(@as(usize, 5), found.start);
+    try std.testing.expectEqual(@as(usize, 17), found.end);
+}

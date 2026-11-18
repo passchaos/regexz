@@ -204,6 +204,7 @@ The engine picks the execution strategy automatically:
   - Pattern escaping: `escape` turns a literal string into a pattern that
     matches it.
 - Caller-owned compilation: `compile` writes into the allocator you provide;
+  `compileOwned` keeps an internal arena and releases it with `deinit`.
   `Regex` keeps an internal arena.
 - Reusable workspaces (`Workspace`, `ReplaceWorkspace`) for matching and
   substitution without per-call program compilation.
@@ -388,7 +389,8 @@ recursion-depth limits and fail closed with `error.RegexLimitExceeded`.
   `Limits.unset_backref_empty = true` for PCRE2's
   `PCRE2_MATCH_UNSET_BACKREF` / JavaScript behavior (empty match).
 - `compile` has no `Program.deinit`; its `gpa` must be an arena (or outlive
-  the program and be released as a whole). `Regex.init` manages its own arena.
+  the program and be released as a whole). Use `compileOwned` when the program
+  should own its storage. `Regex.init` manages its own arena.
   `Program.deserialize` follows the same arena contract.
 - `\Q...\E` is handled before parsing; quoted class metacharacters
   (including `-`) are escaped.

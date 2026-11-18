@@ -105,6 +105,25 @@ pub fn compile(gpa: std.mem.Allocator, pattern: []const u8, limits: Limits) Erro
     return compile_mod.compile(gpa, parsed, limits);
 }
 
+/// A program together with the arena that owns all of its storage.
+pub const OwnedProgram = struct {
+    arena: std.heap.ArenaAllocator,
+    program: Program,
+    pub fn deinit(self: *OwnedProgram) void {
+        self.arena.deinit();
+        self.* = undefined;
+    }
+};
+
+/// Compile into an internal arena. Use this when the program must outlive the
+/// call site without a caller-managed arena; `deinit` releases everything.
+pub fn compileOwned(gpa: std.mem.Allocator, pattern: []const u8, limits: Limits) Error!OwnedProgram {
+    var arena = std.heap.ArenaAllocator.init(gpa);
+    errdefer arena.deinit();
+    const program = try compile(arena.allocator(), pattern, limits);
+    return .{ .arena = arena, .program = program };
+}
+
 /// Escape `literal` so that compiling the result matches the literal bytes.
 /// The escaped set matches Rust `regex::escape`: `\ . + * ? ( ) | [ ] { } ^
 /// $ # & - ~`.
