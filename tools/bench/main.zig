@@ -141,6 +141,7 @@ pub fn main() !void {
     try benchFind(io, out, "find capture email tokens", "(\\w+)@(\\w+)\\.com", email_text.items, 100, .{});
     try benchFind(io, out, "find capture no-match", "(\\p{L}+)@(\\p{L}+)", text.items, 20, .{});
     try benchFindFirst(io, out, "find loop-exit no-match", "[a-z]*(?:foo|bar)", text.items, 200, .{});
+    try benchFindFirst(io, out, "find extended no-match", "(?=foo)bar", text.items, 2000, .{});
     try benchFindFirst(io, out, "find suffix no-match", "[a-z]+(?:ing|ed)\\b", text.items, 200, .{});
 
     {

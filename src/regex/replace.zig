@@ -267,6 +267,22 @@ pub const Workspace = struct {
         return .{ .start = start, .end = end, .slots = self.slots };
     }
 
+    /// True when a multi-byte literal required by every match is absent from
+    /// the remaining input. One-byte literals are skipped because their scan
+    /// cost can exceed the VM work on match-heavy inputs.
+    fn requiredLiteralMiss(self: *Workspace, input: []const u8, search_start: usize) bool {
+        const literals = self.program.required_literals orelse return false;
+        var useful = false;
+        for (literals) |literal| {
+            if (literal.len >= 2) {
+                useful = true;
+                break;
+            }
+        }
+        if (!useful or input.len - search_start < 256) return false;
+        return !required_literals.containsAny(input, search_start, literals);
+    }
+
     fn findInternal(
         self: *Workspace,
         input: []const u8,
@@ -282,6 +298,7 @@ pub const Workspace = struct {
             }
         }
         if (self.program.extended) {
+            if (self.requiredLiteralMiss(input, search_start)) return null;
             if (self.backtrack_workspace == null) {
                 self.backtrack_workspace = try backtrack.Workspace.init(self.allocator, self.program, self.limits);
             }
@@ -328,24 +345,7 @@ pub const Workspace = struct {
                 }
             }
         }
-        // Required-literal prefilter for interpreter fallbacks: when no
-        // literal that every match must contain occurs in the remaining
-        // input, no match is possible. One-byte literals are skipped because
-        // their scan cost can exceed the VM work on match-heavy inputs.
-        if (self.program.required_literals) |literals| {
-            var useful = false;
-            for (literals) |literal| {
-                if (literal.len >= 2) {
-                    useful = true;
-                    break;
-                }
-            }
-            if (useful and input.len - search_start >= 256 and
-                !required_literals.containsAny(input, search_start, literals))
-            {
-                return null;
-            }
-        }
+        if (self.requiredLiteralMiss(input, search_start)) return null;
         var start = search_start;
         while (start <= input.len) {
             if (self.program.literal_prefix) |prefix| {

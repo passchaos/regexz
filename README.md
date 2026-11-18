@@ -260,6 +260,7 @@ busy Apple Silicon host (absolute numbers vary with load):
 | `find` capture no-match scan (23 KiB) | ~617 µs | ~124 µs |
 | `find` loop-exit no-match (23 KiB) | ~120 µs | ~4.7 µs |
 | `find` suffix no-match (23 KiB) | ~238 µs | ~14 µs |
+| `find` extended no-match (23 KiB) | ~275 µs | ~2.5 µs |
 | `RegexSet`, 9 no-match patterns (23 KiB) | ~1.7 ms | ~63 µs |
 | Compile xDS-like pattern | ~2.9 µs | ~3.1 µs |
 
@@ -270,8 +271,8 @@ the arena's multiple page allocations. Sets carry a 128-bit ASCII membership bit
 instruction payloads by reference, greedy single-set loops scan without
 per-character choice records, and search uses literal/prefix prefilters, a
 workspace-cached SIMD first-byte prefilter for small selective sets, a
-compile-time required-literal prefilter, and a `memchr`-based literal fast
-path. Capture programs use the same search DFA for match bounds and replay
+compile-time required-literal prefilter (also used by extended fallbacks),
+and a `memchr`-based literal fast path. Capture programs use the same search DFA for match bounds and replay
 only the matched slice to recover groups.
 
 For external context on the same host and load, Rust `regex` 1.13 full-matches

@@ -148,6 +148,7 @@ Measured on an Apple Silicon macOS host. "Before" is the initial commit state;
 | `find` capture no-match scan, 23 KiB | ~617 µs | ~124 µs | — | — |
 | `find` loop-exit no-match, 23 KiB | ~120 µs | ~4.7 µs | ~31.8 µs | — |
 | `find` suffix no-match, 23 KiB | ~238 µs | ~14 µs | ~155 µs | — |
+| `find` extended no-match, 23 KiB | ~275 µs | ~2.5 µs | — | — |
 | `RegexSet`, 9 no-match patterns, 23 KiB | ~1.7 ms | ~63 µs | ~104 µs | — |
 | `replaceAll` `a+`, 32 KiB | ~265 µs | ~64 µs (480 MiB/s) | ~91 µs | ~47 µs |
 | Compile xDS-like pattern | ~2.9 µs | ~3.1 µs | ~10.8 µs | ~61 ns† |
