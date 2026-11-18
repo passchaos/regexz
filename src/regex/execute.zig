@@ -37,6 +37,10 @@ const Position = struct {
     }
 };
 const dfa_dead: u32 = std.math.maxInt(u32);
+/// ASCII table sentinels: both are >= `ascii_dead`, so the scan loop checks
+/// them with one comparison.
+const ascii_dead: u32 = std.math.maxInt(u32) - 1;
+const ascii_unprepared: u32 = std.math.maxInt(u32);
 const dfa_max_states: usize = 64;
 /// Direct-mapped cache for non-ASCII (state, rune) transitions.
 const unicode_cache_size: usize = 4096;
@@ -54,8 +58,6 @@ const dfa_min_input: usize = 4096;
 const dfa_warmup_calls: usize = 2;
 const DfaState = struct {
     instructions: []const u32,
-    /// 0 = unknown, `dfa_dead` = dead, otherwise state id + 1.
-    ascii: [128]u32,
     accept: bool,
 };
 const Dfa = struct {
@@ -63,6 +65,9 @@ const Dfa = struct {
     arena: std.heap.ArenaAllocator,
     states: std.ArrayList(DfaState) = .empty,
     index: std.StringHashMapUnmanaged(u32) = .empty,
+    /// Flat [state][byte] table: `ascii_unprepared` = unknown,
+    /// `ascii_dead` = dead, otherwise the state id.
+    ascii_table: std.ArrayList(u32) = .empty,
     unicode_cache: []UnicodeEntry,
     scratch: []u32,
     seen: []u32,
@@ -89,6 +94,7 @@ const Dfa = struct {
     fn deinit(self: *Dfa) void {
         self.states.deinit(self.allocator);
         self.index.deinit(self.allocator);
+        self.ascii_table.deinit(self.allocator);
         self.allocator.free(self.unicode_cache);
         self.allocator.free(self.scratch);
         self.allocator.free(self.seen);
@@ -247,7 +253,7 @@ pub const Workspace = struct {
         if (dfa.index.get(key)) |id| return id;
         if (dfa.states.items.len >= dfa_max_states) return error.OutOfMemory;
         const owned = try dfa.arena.allocator().dupe(u32, scratch);
-        var state: DfaState = .{ .instructions = owned, .accept = false, .ascii = [_]u32{0} ** 128 };
+        var state: DfaState = .{ .instructions = owned, .accept = false };
         for (owned) |index| switch (program.instructions[index]) {
             .accept => {
                 state.accept = true;
@@ -257,6 +263,7 @@ pub const Workspace = struct {
         };
         const id: u32 = @intCast(dfa.states.items.len);
         try dfa.states.append(dfa.allocator, state);
+        try dfa.ascii_table.appendNTimes(dfa.allocator, ascii_unprepared, 128);
         try dfa.index.put(dfa.allocator, std.mem.sliceAsBytes(owned), id);
         return id;
     }
@@ -274,8 +281,8 @@ pub const Workspace = struct {
     fn dfaTransition(self: *Workspace, program: Program, state_id: u32, rune: u21) std.mem.Allocator.Error!u32 {
         const dfa = &self.dfa.?;
         if (rune < 128) {
-            const cached = dfa.states.items[state_id].ascii[@intCast(rune)];
-            if (cached != 0) return if (cached == dfa_dead) dfa_dead else cached - 1;
+            const cached = dfa.ascii_table.items[@as(usize, state_id) * 128 + rune];
+            if (cached != ascii_unprepared) return if (cached == ascii_dead) dfa_dead else cached;
         } else {
             const key = (@as(u64, state_id) << 21) | rune;
             const entry = &dfa.unicode_cache[unicodeSlot(key)];
@@ -298,7 +305,7 @@ pub const Workspace = struct {
         const next: u32 = if (count == 0) dfa_dead else try self.dfaGetState(program, list[0..count]);
         const cached: u32 = if (next == dfa_dead) dfa_dead else next + 1;
         if (rune < 128) {
-            dfa.states.items[state_id].ascii[@intCast(rune)] = cached;
+            dfa.ascii_table.items[@as(usize, state_id) * 128 + rune] = if (next == dfa_dead) ascii_dead else next;
         } else {
             dfa.unicode_cache[unicodeSlot((@as(u64, state_id) << 21) | rune)] = .{
                 .key = (@as(u64, state_id) << 21) | rune,
@@ -315,10 +322,11 @@ pub const Workspace = struct {
         while (offset < input.len) {
             const byte = input[offset];
             if (byte < 0x80) {
-                const cached = dfa.states.items[state].ascii[byte];
-                if (cached != 0) {
-                    state = if (cached == dfa_dead) dfa_dead else cached - 1;
-                    if (state == dfa_dead) return false;
+                const cached = dfa.ascii_table.items[@as(usize, state) * 128 + byte];
+                if (cached >= ascii_dead) {
+                    if (cached == ascii_dead) return false;
+                } else {
+                    state = cached;
                     offset += 1;
                     continue;
                 }
