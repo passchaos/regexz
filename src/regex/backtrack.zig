@@ -283,6 +283,7 @@ pub const Workspace = struct {
     fn lookaround(self: *Workspace, input: []const u8, child: usize, negative: bool, behind: bool, pos: usize) Error!bool {
         const trail_base = self.trail.items.len;
         const choice_base = self.choices.items.len;
+        const saved_partial = self.partial;
         var matched = false;
         if (behind) {
             var start: usize = 0;
@@ -296,6 +297,10 @@ pub const Workspace = struct {
             matched = try self.run(input, child, pos, .{ .sub = null }, choice_base, trail_base) != null;
         }
         self.choices.shrinkRetainingCapacity(choice_base);
+        // A child that needs more input only makes the subject partial for a
+        // positive lookahead; negative assertions and fixed-width lookbehind
+        // windows must not leak the child's partial state.
+        if (negative or behind) self.partial = saved_partial;
         if (negative) {
             self.restoreTrail(trail_base);
             return !matched;

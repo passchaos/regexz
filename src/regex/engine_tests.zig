@@ -202,6 +202,12 @@ test "partial matching reports prefixes of possible matches" {
         .{ .pattern = "a(?=b)", .input = "ab", .expected = .none },
         .{ .pattern = "a(?!b)", .input = "a", .expected = .full },
         .{ .pattern = "a(?=\\p{Han})", .input = "a", .expected = .partial },
+        // Negative assertions and lookbehind windows must not leak a child's
+        // partial state.
+        .{ .pattern = "(?!ab)", .input = "a", .expected = .none },
+        .{ .pattern = "(?!ab)", .input = "", .expected = .full },
+        .{ .pattern = "(?=ab)", .input = "a", .expected = .partial },
+        .{ .pattern = "(?<=ab)", .input = "a", .expected = .none },
     }) |case| {
         var value = try regex.Regex.init(gpa, case.pattern, .{});
         defer value.deinit();
