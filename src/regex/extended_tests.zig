@@ -749,3 +749,19 @@ test "branch reset allows duplicate names on the same number" {
     try expectFull("(?|(?<AA>aa)|(?<AA>bb))\\k<AA>", "aabb", .{}, false);
     try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, "(?<x>a)(?<x>b)", .{}));
 }
+
+test "forward numeric references resolve after parsing" {
+    try expectFull("(?1)(a)", "aa", .{}, true);
+    try expectFull("(?2)(a)(b)", "bab", .{}, true);
+    // Forward backreferences compile; an unset group still fails to match.
+    try expectFull("\\1(a)", "aa", .{}, false);
+    try expectFull("\\1(a)", "a", .{ .unset_backref_empty = true }, true);
+    // Forward references to non-existent groups fail.
+    try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, "\\1", .{}));
+    try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, "(?1)", .{}));
+    try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, "\\81", .{}));
+    // `\11` without enough groups is still an octal tab.
+    try expectFull("\\11", "\t", .{}, true);
+    // Multi-digit references fall back to octal when the group is missing.
+    try expectFull("\\40", " ", .{}, true);
+}

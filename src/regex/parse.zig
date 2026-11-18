@@ -30,6 +30,10 @@ pub const Parser = struct {
     marks: std.ArrayList([]const u8) = .empty,
     callouts: std.ArrayList(m.CalloutSpec) = .empty,
     extended: bool = false,
+    /// Highest group number referenced before its definition was seen. Forward
+    /// references are resolved after parsing, when the group count is final.
+    max_reference: u16 = 0,
+    max_reference_offset: usize = 0,
 
     pub fn peek(self: *Parser) ?u8 {
         return if (self.cursor < self.pattern.len) self.pattern[self.cursor] else null;
@@ -162,7 +166,14 @@ pub const Parser = struct {
     }
     fn subroutine(self: *Parser, group_index: u16) m.Error!*const m.Node {
         self.extended = true;
+        if (group_index != 0) self.noteReference(group_index, self.cursor);
         return self.node(.{ .subroutine = .{ .group = group_index } });
+    }
+    pub fn noteReference(self: *Parser, index: u16, offset: usize) void {
+        if (index > self.max_reference) {
+            self.max_reference = index;
+            self.max_reference_offset = offset;
+        }
     }
     fn limitDirective(name: []const u8, prefix: []const u8) ?usize {
         if (!std.mem.startsWith(u8, name, prefix)) return null;
@@ -629,7 +640,8 @@ pub const Parser = struct {
                     self.cursor += 1;
                 }
                 const value = std.fmt.parseInt(u16, self.pattern[start..self.cursor], 10) catch return error.InvalidRegex;
-                if (value > self.captures) return error.InvalidRegex;
+                // Forward references are validated after parsing, when the
+                // final group count is known (PCRE2 behaviour).
                 if (!self.take(')')) return error.InvalidRegex;
                 return self.subroutine(value);
             } else if (self.take('<')) {
@@ -1212,6 +1224,12 @@ pub fn parseWithDiagnostic(
     };
     if (parser.cursor != parser.pattern.len) {
         setDiagnostic(diagnostic, parser.cursor, error.InvalidRegex);
+        return error.InvalidRegex;
+    }
+    // Numeric back/subroutine references may point forward; validate them
+    // against the final group count, as PCRE2 does.
+    if (parser.max_reference > parser.captures) {
+        setDiagnostic(diagnostic, parser.max_reference_offset, error.InvalidRegex);
         return error.InvalidRegex;
     }
     const nodes = try gpa.alloc(*const m.Node, @as(usize, parser.captures) + 1);

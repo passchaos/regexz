@@ -112,7 +112,7 @@ fn property(p: anytype, negative: bool, fold: m.Fold) m.Error!m.ParsedSet {
     if (std.mem.indexOfAny(u8, name, "=:")) |separator| {
         const prefix = std.mem.trim(u8, name[0..separator], " \t\n\r\x0b\x0c");
         const value = std.mem.trim(u8, name[separator + 1 ..], " \t\n\r\x0b\x0c");
-        if (std.ascii.eqlIgnoreCase(prefix, "block")) {
+        if (std.ascii.eqlIgnoreCase(prefix, "block") or std.ascii.eqlIgnoreCase(prefix, "blk")) {
             const block = m.unicode.lookupBlock(value) orelse return error.InvalidRegex;
             const ranges = try p.allocator.alloc(m.Range, block.count);
             for (ranges, 0..) |*range, index| range.* = block.range(index);
@@ -299,19 +299,24 @@ fn namedBackref(p: anytype, open: u8) m.Error!Atom {
     return .{ .backref = .{ .index = groups[0], .groups = groups } };
 }
 fn numericBackref(p: anytype, byte: u8) m.Error!?u16 {
+    // PCRE2 rules: `\1`..`\9` are always backreferences (a forward reference
+    // is validated after parsing), `\8x`/`\9x` stay decimal backreferences,
+    // and a two/three-digit `\1x`..`\7xx` falls back to octal when it exceeds
+    // the groups seen so far.
     var value: u32 = byte - '0';
     var count: usize = 1;
-    while (count < 3) {
-        const next = p.peek() orelse break;
+    var look = p.cursor;
+    while (count < 3 and look < p.pattern.len) : (look += 1) {
+        const next = p.pattern[look];
         if (next < '0' or next > '9') break;
-        const candidate = value * 10 + (next - '0');
-        if (candidate > p.captures) break;
-        p.cursor += 1;
-        value = candidate;
+        value = value * 10 + (next - '0');
         count += 1;
     }
-    if (value == 0 or value > p.captures) return null;
+    const always = byte == '8' or byte == '9' or count == 1;
+    if (!always and value > p.captures) return null;
+    p.cursor += count - 1;
     p.extended = true;
+    p.noteReference(@intCast(value), p.cursor);
     return @intCast(value);
 }
 const GroupSpec = union(enum) {
