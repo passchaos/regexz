@@ -23,8 +23,10 @@ regexz now has two execution engines:
 
 Implemented functionality:
 
-- General lookahead/lookbehind, including variable-length lookbehind, and
-  PCRE2 non-atomic positive lookaround `(?*...)`/`(?<*...)`.
+- General lookahead/lookbehind, including variable-length lookbehind, PCRE2
+  alphabetic assertion names (`(*pla:)`, `(*nla:)`, `(*plb:)`, `(*nlb:)`),
+  and non-atomic positive lookaround `(?*...)`/`(?<*...)`
+  (`(*napla:)`/`(*naplb:)`).
 - Numeric/named backreferences.
 - Named captures and group-name lookup; duplicate names with `(?J)`.
 - Atomic groups and possessive quantifiers.

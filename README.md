@@ -47,9 +47,12 @@ The engine picks the execution strategy automatically:
   a single set atom.
 - Extended features:
   - General lookahead and lookbehind: `(?=...)`, `(?!...)`, `(?<=...)`,
-    `(?<!...)` (variable-length lookbehind is supported and budgeted).
-  - Non-atomic positive lookaround `(?*...)` and `(?<*...)`: the engine can
-    backtrack into the assertion when the continuation fails.
+    `(?<!...)` (variable-length lookbehind is supported and budgeted), with
+    PCRE2 alphabetic synonyms `(*pla:...)`, `(*nla:...)`, `(*plb:...)`, and
+    `(*nlb:...)`.
+  - Non-atomic positive lookaround `(?*...)` and `(?<*...)` (also
+    `(*napla:...)`/`(*naplb:...)`): the engine can backtrack into the
+    assertion when the continuation fails.
   - Script-run assertions `(*sr:...)`/`(*script_run:...)` and atomic
     `(*asr:...)`/`(*atomic_script_run:...)`, following UAX #24/UTS #39:
     `Script_Extensions` intersection, Han virtual scripts, and a single

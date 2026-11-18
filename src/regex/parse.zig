@@ -152,6 +152,33 @@ pub const Parser = struct {
                 .atomic = std.mem.eql(u8, name, "asr") or std.mem.eql(u8, name, "atomic_script_run"),
             } });
         }
+        const Look = struct { negative: bool, behind: bool, non_atomic: bool };
+        const alias: ?Look = if (std.mem.eql(u8, name, "pla") or std.mem.eql(u8, name, "positive_lookahead"))
+            .{ .negative = false, .behind = false, .non_atomic = false }
+        else if (std.mem.eql(u8, name, "nla") or std.mem.eql(u8, name, "negative_lookahead"))
+            .{ .negative = true, .behind = false, .non_atomic = false }
+        else if (std.mem.eql(u8, name, "plb") or std.mem.eql(u8, name, "positive_lookbehind"))
+            .{ .negative = false, .behind = true, .non_atomic = false }
+        else if (std.mem.eql(u8, name, "nlb") or std.mem.eql(u8, name, "negative_lookbehind"))
+            .{ .negative = true, .behind = true, .non_atomic = false }
+        else if (std.mem.eql(u8, name, "napla") or std.mem.eql(u8, name, "non_atomic_positive_lookahead"))
+            .{ .negative = false, .behind = false, .non_atomic = true }
+        else if (std.mem.eql(u8, name, "naplb") or std.mem.eql(u8, name, "non_atomic_positive_lookbehind"))
+            .{ .negative = false, .behind = true, .non_atomic = true }
+        else
+            null;
+        if (alias) |look| {
+            if (!self.take(':')) return error.InvalidRegex;
+            self.extended = true;
+            const child = try self.expression(depth + 1);
+            if (!self.take(')')) return error.InvalidRegex;
+            return self.node(.{ .lookaround = .{
+                .child = child,
+                .negative = look.negative,
+                .behind = look.behind,
+                .non_atomic = look.non_atomic,
+            } });
+        }
         if (self.peek() == ':') {
             self.cursor += 1;
             const mark_start = self.cursor;

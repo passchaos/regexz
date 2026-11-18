@@ -72,6 +72,25 @@ test "non-atomic lookbehind backtracks into the assertion" {
     try std.testing.expectEqual(@as(?[2]usize, null), try findSpan(allocator, &atomic, "aaac"));
 }
 
+test "alphabetic assertion names" {
+    const allocator = std.testing.allocator;
+    const cases = [_]struct { pattern: []const u8, input: []const u8, span: ?[2]usize }{
+        .{ .pattern = "(*pla:a)a", .input = "aa", .span = .{ 0, 1 } },
+        .{ .pattern = "(*positive_lookahead:a)a", .input = "aa", .span = .{ 0, 1 } },
+        .{ .pattern = "(*nla:b)a", .input = "a", .span = .{ 0, 1 } },
+        .{ .pattern = "(*plb:a)b", .input = "ab", .span = .{ 1, 2 } },
+        .{ .pattern = "(*nlb:a)b", .input = "cb", .span = .{ 1, 2 } },
+        .{ .pattern = "(*napla:(a|ab))(?1)c", .input = "abc", .span = .{ 0, 3 } },
+        .{ .pattern = "(*non_atomic_positive_lookahead:(a|ab))(?1)c", .input = "abc", .span = .{ 0, 3 } },
+        .{ .pattern = "(*naplb:(a+))\\1c", .input = "aaac", .span = .{ 2, 4 } },
+    };
+    for (cases) |case| {
+        var value = try regex.Regex.init(allocator, case.pattern, .{});
+        defer value.deinit();
+        try std.testing.expectEqual(case.span, try findSpan(allocator, &value, case.input));
+    }
+}
+
 test "non-atomic lookbehind captures are visible" {
     const allocator = std.testing.allocator;
     var value = try regex.Regex.init(allocator, "(?<*(ab))c", .{});
