@@ -50,6 +50,10 @@ The engine picks the execution strategy automatically:
     `(?<!...)` (variable-length lookbehind is supported and budgeted).
   - Non-atomic positive lookaround `(?*...)` and `(?<*...)`: the engine can
     backtrack into the assertion when the continuation fails.
+  - Script-run assertions `(*sr:...)`/`(*script_run:...)` and atomic
+    `(*asr:...)`/`(*atomic_script_run:...)`, following UAX #24/UTS #39:
+    `Script_Extensions` intersection, Han virtual scripts, and a single
+    decimal-digit set.
   - Numeric and named backreferences: `\1`..`\99`, `\k<name>`, `\k'name'`,
     `\k{name}`, `\g{name}`, `\g{1}`, relative `\g{-1}`, `(?P=name)`.
   - Subroutine calls by number, name, and relative offset: `(?1)`, `(?+1)`,
@@ -334,10 +338,10 @@ recursion-depth limits and fail closed with `error.RegexLimitExceeded`.
 The engine and Unicode scripts/categories were moved from `netz`
 (`src/grpc/xds/routing/regex` and `src/grpc/xds/routing/regex.zig`). The
 generated RE2 tables remain covered by the RE2 BSD license in
-`src/regex/unicode/LICENSE.re2`. Grapheme-cluster and binary-property tables
-are generated from Unicode 17.0.0 UCD data (emoji sequence data from 16.0) by
-`tools/codegen/generate.py`; the pinned source hashes are recorded in
-`src/regex/unicode/source.json`.
+`src/regex/unicode/LICENSE.re2`. Grapheme-cluster, binary-property, and
+script-run tables are generated from Unicode 17.0.0 UCD data (emoji sequence
+data from 16.0) by `tools/codegen/generate.py`; the pinned source hashes are
+recorded in `src/regex/unicode/source.json`.
 
 ## License
 

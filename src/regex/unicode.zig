@@ -15,6 +15,8 @@ const blocks = @import("unicode/blocks.zig").entries;
 const block_data = @embedFile("unicode/blocks.bin");
 const script_extensions = @import("unicode/script_extensions.zig").entries;
 const script_extension_data = @embedFile("unicode/script_extensions.bin");
+const script_run = @import("unicode/script_run.zig");
+const script_run_data = @embedFile("unicode/script_run.bin");
 pub const Alias = struct { name: []const u8, canonical: []const u8 };
 const aliases = @import("unicode/aliases.zig");
 pub const grapheme = @import("unicode/grapheme.zig");
@@ -146,6 +148,42 @@ pub fn lookupScriptExtension(name: []const u8) ?ScriptExtension {
     }
     for (script_extensions) |entry| {
         if (blockNameEqual(name, entry.name)) return .{ .offset = entry.offset, .count = entry.count };
+    }
+    return null;
+}
+
+/// A code point's `Script_Extensions` set, with the UTS #39 augmented mask
+/// used by script-run checks. `mask` includes the virtual Hanb/Jpan/Kore ids.
+pub const ScriptSet = struct {
+    ids: []const u16,
+    mask: [script_run.mask_words]u64,
+};
+pub const script_mask_words = script_run.mask_words;
+pub const script_common = script_run.common;
+pub const script_inherited = script_run.inherited;
+/// Look up the `Script_Extensions` set of a code point. Unassigned code
+/// points (Unknown script) return null.
+pub fn scriptSetFor(rune: u21) ?ScriptSet {
+    var first: usize = 0;
+    var last: usize = script_run.range_count;
+    while (first < last) {
+        const middle = first + (last - first) / 2;
+        const bytes = script_run_data[middle * 12 ..];
+        const range_first: u21 = @intCast(std.mem.readInt(u32, bytes[0..4], .little));
+        const range_last: u21 = @intCast(std.mem.readInt(u32, bytes[4..8], .little));
+        if (rune < range_first) {
+            last = middle;
+        } else if (rune > range_last) {
+            first = middle + 1;
+        } else {
+            const id = std.mem.readInt(u16, bytes[8..10], .little);
+            const offset = script_run.set_offsets[id];
+            const count = script_run.set_counts[id];
+            return .{
+                .ids = script_run.set_data[offset..][0..@as(usize, count)],
+                .mask = script_run.set_masks[id],
+            };
+        }
     }
     return null;
 }

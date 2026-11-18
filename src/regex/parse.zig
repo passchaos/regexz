@@ -130,7 +130,7 @@ pub const Parser = struct {
         self.extended = true;
         return self.node(.{ .subroutine = .{ .group = group_index } });
     }
-    fn verb(self: *Parser) m.Error!*const m.Node {
+    fn verb(self: *Parser, depth: usize) m.Error!*const m.Node {
         self.cursor += 1; // '*'
         const start = self.cursor;
         while (self.peek()) |byte| {
@@ -138,6 +138,20 @@ pub const Parser = struct {
             self.cursor += 1;
         }
         const name = self.pattern[start..self.cursor];
+        const script_run = std.mem.eql(u8, name, "sr") or
+            std.mem.eql(u8, name, "script_run") or
+            std.mem.eql(u8, name, "asr") or
+            std.mem.eql(u8, name, "atomic_script_run");
+        if (script_run) {
+            if (!self.take(':')) return error.InvalidRegex;
+            self.extended = true;
+            const child = try self.expression(depth + 1);
+            if (!self.take(')')) return error.InvalidRegex;
+            return self.node(.{ .script_run = .{
+                .child = child,
+                .atomic = std.mem.eql(u8, name, "asr") or std.mem.eql(u8, name, "atomic_script_run"),
+            } });
+        }
         if (self.peek() == ':') {
             self.cursor += 1;
             const mark_start = self.cursor;
@@ -660,7 +674,7 @@ pub const Parser = struct {
         const byte = self.peek() orelse return error.InvalidRegex;
         self.cursor += 1;
         return switch (byte) {
-            '(' => if (self.peek() == '*') self.verb() else self.group(depth),
+            '(' => if (self.peek() == '*') self.verb(depth) else self.group(depth),
             '[' => self.characterClass(),
             '.' => self.node(.{ .set = try self.dotSet() }),
             '^' => self.node(.{ .assertion = if (self.flags.multiline) .start_line else .start_text }),

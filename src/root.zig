@@ -294,6 +294,7 @@ test {
     _ = @import("regex/word_boundary_tests.zig");
     _ = @import("regex/sentence_boundary_tests.zig");
     _ = @import("regex/non_atomic_tests.zig");
+    _ = @import("regex/script_run_tests.zig");
     _ = @import("regex/char_names_tests.zig");
     _ = @import("regex/replace.zig");
     _ = @import("regex/stream_tests.zig");

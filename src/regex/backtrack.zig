@@ -9,6 +9,7 @@ const std = @import("std");
 const model = @import("model.zig");
 const Program = @import("compile.zig").Program;
 const grapheme = @import("grapheme.zig");
+const script_run = @import("script_run.zig");
 const word_boundary = @import("word_boundary.zig");
 const sentence_boundary = @import("sentence_boundary.zig");
 const unset = std.math.maxInt(usize);
@@ -524,6 +525,13 @@ pub const Workspace = struct {
                 .lookbehind_accept => |look| {
                     if (pos == self.slots[look.target_slot]) {
                         pc = look.next;
+                        continue;
+                    }
+                },
+                .script_run_check => |check| {
+                    const start = self.slots[check.slot];
+                    if (start != unset and script_run.isScriptRun(input, start, pos)) {
+                        pc = check.next;
                         continue;
                     }
                 },

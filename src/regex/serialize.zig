@@ -55,6 +55,7 @@ const Tag = enum(u8) {
     lookbehind_non_atomic,
     lookbehind_next,
     lookbehind_accept,
+    script_run_check,
 };
 
 const Writer = struct {
@@ -359,12 +360,17 @@ fn writeInstruction(writer: *Writer, instruction: model.Instruction) !void {
             try writer.u16v(look.target_slot);
             try writer.u32v(@intCast(look.next));
         },
+        .script_run_check => |check| {
+            try writer.byte(@intFromEnum(Tag.script_run_check));
+            try writer.u16v(check.slot);
+            try writer.u32v(@intCast(check.next));
+        },
     }
 }
 
 fn readInstruction(reader: *Reader, allocator: std.mem.Allocator) !model.Instruction {
     const tag_value = try reader.byte();
-    if (tag_value > @intFromEnum(Tag.lookbehind_accept)) return error.InvalidRegex;
+    if (tag_value > @intFromEnum(Tag.script_run_check)) return error.InvalidRegex;
     const tag: Tag = @enumFromInt(tag_value);
     return switch (tag) {
         .accept => .accept,
@@ -453,6 +459,10 @@ fn readInstruction(reader: *Reader, allocator: std.mem.Allocator) !model.Instruc
         } },
         .lookbehind_accept => .{ .lookbehind_accept = .{
             .target_slot = try reader.u16v(),
+            .next = @intCast(try reader.u32v()),
+        } },
+        .script_run_check => .{ .script_run_check = .{
+            .slot = try reader.u16v(),
             .next = @intCast(try reader.u32v()),
         } },
     };
@@ -642,6 +652,7 @@ fn validate(program: Program) model.Error!void {
         .lookbehind_non_atomic => |look| if (look.child >= count or look.next >= count or look.scan_pc >= count or look.target_slot >= slot_count or look.start_slot >= slot_count) return error.InvalidRegex,
         .lookbehind_next => |look| if (look.child >= count or look.target_slot >= slot_count or look.start_slot >= slot_count) return error.InvalidRegex,
         .lookbehind_accept => |look| if (look.next >= count or look.target_slot >= slot_count) return error.InvalidRegex,
+        .script_run_check => |check| if (check.next >= count or check.slot >= slot_count) return error.InvalidRegex,
     };
     for (program.dispatches) |dispatch| {
         for (dispatch.branches) |branch| {

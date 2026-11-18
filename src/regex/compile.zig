@@ -137,6 +137,7 @@ const Builder = struct {
             .repeat => |repeat| collectCaptureSlots(repeat.child, range),
             .atomic => |child| collectCaptureSlots(child, range),
             .lookaround => |look| collectCaptureSlots(look.child, range),
+            .script_run => |run| collectCaptureSlots(run.child, range),
             .conditional => |cond| {
                 collectCaptureSlots(cond.yes, range);
                 if (cond.no) |no| collectCaptureSlots(no, range);
@@ -322,6 +323,21 @@ const Builder = struct {
                 } });
             },
             .backref => |ref| self.emit(.{ .backref = .{ .group = ref.index, .next = continuation } }),
+            .script_run => |run| blk: {
+                const base = 2 * (@as(usize, self.capture_count) + 1);
+                const slot = base + self.extra_slots;
+                if (slot > 65535) return error.RegexLimitExceeded;
+                self.extra_slots += 1;
+                const check = try self.emit(.{ .script_run_check = .{ .slot = @intCast(slot), .next = continuation } });
+                const inner = if (run.atomic)
+                    try self.emit(.{ .atomic = .{
+                        .child = try self.node(run.child, self.sub_accept),
+                        .next = check,
+                    } })
+                else
+                    try self.node(run.child, check);
+                break :blk try self.emit(.{ .save = .{ .slot = @intCast(slot), .next = inner } });
+            },
             .atomic => |child| blk: {
                 const start = try self.node(child, self.sub_accept);
                 break :blk self.emit(.{ .atomic = .{ .child = start, .next = continuation } });
@@ -447,7 +463,7 @@ fn terminalFirst(instruction: model.Instruction) model.FirstSet {
         .byte, .grapheme, .string_property => .{ .ascii = .{ ~@as(u64, 0), ~@as(u64, 0) }, .nonascii = true },
         .accept, .sub_accept, .accept_verb => .{ .empty = true },
         .fail => .{},
-        .split, .save, .restore_pos, .assertion, .lookahead, .reset_start, .prune, .skip, .commit, .then, .mark, .callout, .auto_callout, .reset_captures, .dispatch, .lookaround, .conditional, .conditional_assert, .conditional_recursion, .lookbehind_non_atomic, .lookbehind_next, .lookbehind_accept => .{},
+        .split, .save, .restore_pos, .assertion, .lookahead, .reset_start, .prune, .skip, .commit, .then, .mark, .callout, .auto_callout, .reset_captures, .dispatch, .lookaround, .conditional, .conditional_assert, .conditional_recursion, .lookbehind_non_atomic, .lookbehind_next, .lookbehind_accept, .script_run_check => .{},
         .backref, .atomic, .call, .ret => conservative_first,
     };
 }
@@ -681,7 +697,7 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
                 else => {},
             }
         },
-        .lookahead, .lookaround, .backref, .atomic, .conditional, .conditional_assert, .conditional_recursion, .byte, .reset_start, .grapheme, .string_property, .restore_pos, .fail, .accept_verb, .prune, .skip, .commit, .then, .mark, .call => dfa_eligible = false,
+        .lookahead, .lookaround, .backref, .atomic, .conditional, .conditional_assert, .conditional_recursion, .byte, .reset_start, .grapheme, .string_property, .restore_pos, .lookbehind_non_atomic, .lookbehind_next, .lookbehind_accept, .script_run_check, .fail, .accept_verb, .prune, .skip, .commit, .then, .mark, .call => dfa_eligible = false,
         else => {},
     };
     const ucp_word: ?model.Set = if (needs_ucp_word) blk: {
