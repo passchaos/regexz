@@ -395,6 +395,13 @@ test "byte-level DFA searches non-ASCII sets" {
     try expectFindSpans(allocator, "\\p{Han}+", "abc", &.{}, .{});
     // Invalid UTF-8 cannot extend a rune-based match.
     try expectFindSpans(allocator, "\\p{Han}+", "a\xE4\xB8", &.{}, .{});
+    // Literal runes, mixed ASCII/Unicode classes, bounded repeats, and
+    // case-folded non-ASCII literals all take the byte construction.
+    try expectFindSpans(allocator, "\u{4F60}\u{597D}", "x你好y", &.{.{ 1, 7 }}, .{});
+    try expectFindSpans(allocator, "[a\u{4E00}-\u{4E10}]+", "z a\u{4E00}a\u{4E01}z", &.{.{ 2, 10 }}, .{});
+    try expectFindSpans(allocator, "\u{4E00}{2,4}", "\u{4E00}\u{4E00}\u{4E00}", &.{.{ 0, 9 }}, .{});
+    try expectFindSpans(allocator, "(?i)\u{03A3}", "\u{03C3}\u{03C2}\u{03A3}", &.{ .{ 0, 2 }, .{ 2, 4 }, .{ 4, 6 } }, .{});
+    try expectFindSpans(allocator, "(?i)\u{03A3}+", "\u{03C3}\u{03C2}\u{03A3}", &.{.{ 0, 6 }}, .{});
 }
 
 test "byte loops scan without per-byte choices" {
