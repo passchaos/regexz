@@ -294,7 +294,7 @@ fn namedBackref(p: anytype, open: u8) m.Error!Atom {
         },
         .relative, .not_number => {},
     }
-    const groups = try p.nameIndices(name) orelse return error.InvalidRegex;
+    const groups = try p.resolveIndices(name) orelse return error.InvalidRegex;
     p.extended = true;
     return .{ .backref = .{ .index = groups[0], .groups = groups } };
 }
@@ -517,7 +517,7 @@ pub fn parse(p: anytype, in_class: bool, fold: m.Fold) m.Error!Atom {
                     },
                     .not_number => {},
                 }
-                const index = p.lookupName(name) orelse return error.InvalidRegex;
+                const index = p.resolveName(name) orelse return error.InvalidRegex;
                 p.extended = true;
                 return .{ .subroutine = index };
             }
@@ -547,7 +547,7 @@ pub fn parse(p: anytype, in_class: bool, fold: m.Fold) m.Error!Atom {
                 },
                 .not_number => {},
             }
-            const groups = try p.nameIndices(name) orelse return error.InvalidRegex;
+            const groups = try p.resolveIndices(name) orelse return error.InvalidRegex;
             p.extended = true;
             return .{ .backref = .{ .index = groups[0], .groups = groups } };
         }

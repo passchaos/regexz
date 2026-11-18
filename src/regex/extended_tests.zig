@@ -765,3 +765,20 @@ test "forward numeric references resolve after parsing" {
     // Multi-digit references fall back to octal when the group is missing.
     try expectFull("\\40", " ", .{}, true);
 }
+
+test "forward named references resolve after parsing" {
+    try expectFull("(?&n)(?<n>a)", "aa", .{}, true);
+    try expectFull("(?P>n)(?<n>a)", "aa", .{}, true);
+    try expectFull("\\g<n>(?<n>a)", "aa", .{}, true);
+    // A forward backreference is unset until its group matches.
+    try expectFull("\\k<n>(?<n>a)", "aa", .{}, false);
+    try expectFull("\\k<n>(?<n>a)", "a", .{ .unset_backref_empty = true }, true);
+    try expectFull("\\g{n}(?<n>a)", "a", .{ .unset_backref_empty = true }, true);
+    // A forward named condition is false until the group has matched.
+    try expectFull("(?(<n>)ab|cd)(?<n>a)", "cda", .{}, true);
+    try expectFull("(?(<n>)ab|cd)(?<n>a)", "aba", .{}, false);
+    // Truly missing names still fail.
+    try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, "(?&missing)", .{}));
+    try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, "\\k<missing>", .{}));
+    try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, "(?(<missing>)a|b)", .{}));
+}

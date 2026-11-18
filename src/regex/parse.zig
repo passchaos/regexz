@@ -34,6 +34,13 @@ pub const Parser = struct {
     /// references are resolved after parsing, when the group count is final.
     max_reference: u16 = 0,
     max_reference_offset: usize = 0,
+    /// Group names collected by a tolerant first pass, used to resolve
+    /// forward references in the real pass.
+    known_names: []const m.GroupName = &.{},
+    /// Tolerant passes substitute group 0 for names that are not defined yet
+    /// and set `missing_names`, so the full name table can be collected.
+    tolerant: bool = false,
+    missing_names: bool = false,
 
     pub fn peek(self: *Parser) ?u8 {
         return if (self.cursor < self.pattern.len) self.pattern[self.cursor] else null;
@@ -58,6 +65,9 @@ pub const Parser = struct {
         for (self.group_names.items) |entry| {
             if (std.mem.eql(u8, entry.name, name)) try list.append(self.allocator, entry.index);
         }
+        for (self.known_names) |entry| {
+            if (std.mem.eql(u8, entry.name, name)) try list.append(self.allocator, entry.index);
+        }
         if (list.items.len == 0) return null;
         std.mem.sort(u16, list.items, {}, std.sort.asc(u16));
         var count: usize = 0;
@@ -74,7 +84,26 @@ pub const Parser = struct {
         for (self.group_names.items) |entry| {
             if (std.mem.eql(u8, entry.name, name)) return entry.index;
         }
+        for (self.known_names) |entry| {
+            if (std.mem.eql(u8, entry.name, name)) return entry.index;
+        }
         return null;
+    }
+    /// Resolve a name for a single-group reference. Tolerant passes accept a
+    /// forward reference with a placeholder index.
+    pub fn resolveName(self: *Parser, name: []const u8) ?u16 {
+        if (self.lookupName(name)) |index| return index;
+        if (!self.tolerant) return null;
+        self.missing_names = true;
+        return 0;
+    }
+    /// Resolve a name for a backreference. Tolerant passes accept a forward
+    /// reference with a placeholder group list.
+    pub fn resolveIndices(self: *Parser, name: []const u8) m.Error!?[]const u16 {
+        if (try self.nameIndices(name)) |groups| return groups;
+        if (!self.tolerant) return null;
+        self.missing_names = true;
+        return &[_]u16{0};
     }
     fn node(self: *Parser, value: m.Node) m.Error!*const m.Node {
         if (self.nodes >= self.limits.max_nodes) return error.RegexLimitExceeded;
@@ -441,7 +470,7 @@ pub const Parser = struct {
                     self.cursor += 1;
                 }
                 const name = self.pattern[start..self.cursor];
-                group_index = self.lookupName(name) orelse return error.InvalidRegex;
+                group_index = self.resolveName(name) orelse return error.InvalidRegex;
             } else if (self.peek()) |byte| {
                 if (std.ascii.isDigit(byte)) {
                     const start = self.cursor;
@@ -482,7 +511,7 @@ pub const Parser = struct {
             const name = self.pattern[start..self.cursor];
             if (!self.take('>')) return error.InvalidRegex;
             if (!self.take(')')) return error.InvalidRegex;
-            const groups = try self.nameIndices(name) orelse return error.InvalidRegex;
+            const groups = try self.resolveIndices(name) orelse return error.InvalidRegex;
             if (groups.len == 1) return .{ .group = groups[0] };
             return .{ .groups = groups };
         }
@@ -495,7 +524,7 @@ pub const Parser = struct {
             const name = self.pattern[start..self.cursor];
             if (!self.take('\'')) return error.InvalidRegex;
             if (!self.take(')')) return error.InvalidRegex;
-            const groups = try self.nameIndices(name) orelse return error.InvalidRegex;
+            const groups = try self.resolveIndices(name) orelse return error.InvalidRegex;
             if (groups.len == 1) return .{ .group = groups[0] };
             return .{ .groups = groups };
         }
@@ -619,11 +648,11 @@ pub const Parser = struct {
                     const name = self.pattern[start..self.cursor];
                     if (!self.take(')')) return error.InvalidRegex;
                     self.extended = true;
-                    const groups = try self.nameIndices(name) orelse return error.InvalidRegex;
+                    const groups = try self.resolveIndices(name) orelse return error.InvalidRegex;
                     return self.node(.{ .backref = .{ .index = groups[0], .groups = groups, .fold = self.foldMode() } });
                 } else if (self.take('>')) {
                     const name = try self.nameUntil(')');
-                    const index = self.lookupName(name) orelse return error.InvalidRegex;
+                    const index = self.resolveName(name) orelse return error.InvalidRegex;
                     return self.subroutine(index);
                 } else return error.InvalidRegex;
             } else if (self.take('R')) {
@@ -631,7 +660,7 @@ pub const Parser = struct {
                 return self.subroutine(0);
             } else if (self.take('&')) {
                 const name = try self.nameUntil(')');
-                const index = self.lookupName(name) orelse return error.InvalidRegex;
+                const index = self.resolveName(name) orelse return error.InvalidRegex;
                 return self.subroutine(index);
             } else if (self.peek() != null and std.ascii.isDigit(self.peek().?)) {
                 const start = self.cursor;
@@ -1198,11 +1227,20 @@ pub fn parse(gpa: std.mem.Allocator, pattern: []const u8, limits: m.Limits) m.Er
     return parseWithDiagnostic(gpa, pattern, limits, null);
 }
 
-/// Like `parse`, but records where parsing stopped on failure.
-pub fn parseWithDiagnostic(
+const PassOptions = struct {
+    /// Names collected by an earlier tolerant pass, used for forward refs.
+    known_names: []const m.GroupName = &.{},
+    /// Substitute group 0 for undefined names instead of failing, so the
+    /// complete name table can be collected.
+    tolerant: bool = false,
+    missing_names: ?*bool = null,
+};
+
+fn parsePass(
     gpa: std.mem.Allocator,
     pattern: []const u8,
     limits: m.Limits,
+    options: PassOptions,
     diagnostic: ?*m.Diagnostic,
 ) m.Error!m.ParseResult {
     if (pattern.len > limits.max_pattern_bytes) {
@@ -1213,15 +1251,23 @@ pub fn parseWithDiagnostic(
         setDiagnostic(diagnostic, invalidUtf8Offset(pattern), error.InvalidRegex);
         return error.InvalidRegex;
     }
-    var parser = Parser{ .allocator = gpa, .pattern = try unquote(gpa, pattern), .limits = limits };
+    var parser = Parser{
+        .allocator = gpa,
+        .pattern = try unquote(gpa, pattern),
+        .limits = limits,
+        .known_names = options.known_names,
+        .tolerant = options.tolerant,
+    };
     defer parser.group_names.deinit(gpa);
     defer parser.group_nodes.deinit(gpa);
     defer parser.marks.deinit(gpa);
     defer parser.callouts.deinit(gpa);
     const root = parser.expression(0) catch |err| {
         setDiagnostic(diagnostic, parser.cursor, err);
+        if (options.missing_names) |flag| flag.* = parser.missing_names;
         return err;
     };
+    if (options.missing_names) |flag| flag.* = parser.missing_names;
     if (parser.cursor != parser.pattern.len) {
         setDiagnostic(diagnostic, parser.cursor, error.InvalidRegex);
         return error.InvalidRegex;
@@ -1252,5 +1298,31 @@ pub fn parseWithDiagnostic(
         .limit_match = parser.limit_match,
         .limit_depth = parser.limit_depth,
         .limit_heap_kib = parser.limit_heap_kib,
+    };
+}
+
+/// Like `parse`, but records where parsing stopped on failure. Undefined names
+/// may be forward references: a tolerant pass then collects the complete name
+/// table and the parse is retried.
+pub fn parseWithDiagnostic(
+    gpa: std.mem.Allocator,
+    pattern: []const u8,
+    limits: m.Limits,
+    diagnostic: ?*m.Diagnostic,
+) m.Error!m.ParseResult {
+    return parsePass(gpa, pattern, limits, .{}, diagnostic) catch |err| {
+        if (err == error.OutOfMemory) return err;
+        var arena = std.heap.ArenaAllocator.init(gpa);
+        defer arena.deinit();
+        var missing = false;
+        const collected = parsePass(
+            arena.allocator(),
+            pattern,
+            limits,
+            .{ .tolerant = true, .missing_names = &missing },
+            diagnostic,
+        ) catch return err;
+        if (!missing) return err;
+        return parsePass(gpa, pattern, limits, .{ .known_names = collected.group_names }, diagnostic);
     };
 }
