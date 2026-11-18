@@ -29,7 +29,7 @@ pub const StreamMatch = struct {
 pub const EmitFn = *const fn (context: ?*anyopaque, match: StreamMatch) void;
 
 const Thread = struct { pc: u32, start: usize, slots: []usize };
-const SimpleChain = struct { set_a: model.Set, literal: u8, set_b: model.Set };
+const SimpleChain = struct { set_a: model.Set, literal: [4]u8, literal_len: u8, set_b: model.Set };
 const ChainPhase = enum { idle, run_a, run_b };
 const ResetEntry = struct { slot: u16, old: usize };
 const Rune = struct { value: u21, len: usize };
@@ -450,16 +450,31 @@ pub const Scanner = struct {
         if (std.meta.activeTag(ins[0]) != .accept or std.meta.activeTag(ins[1]) != .sub_accept or
             std.meta.activeTag(ins[2]) != .ret or std.meta.activeTag(ins[3]) != .save or
             std.meta.activeTag(ins[4]) != .star or std.meta.activeTag(ins[5]) != .consume or
-            std.meta.activeTag(ins[6]) != .literal_byte or std.meta.activeTag(ins[7]) != .star or
-            std.meta.activeTag(ins[8]) != .consume or std.meta.activeTag(ins[9]) != .save) return null;
+            std.meta.activeTag(ins[7]) != .star or std.meta.activeTag(ins[8]) != .consume or
+            std.meta.activeTag(ins[9]) != .save) return null;
         if (program.start != 9 or program.body != 8) return null;
         const save1 = ins[3].save;
         if (save1.slot != 1 or save1.next != program.accept) return null;
         const star_b = ins[4].star;
         const consume_b = ins[5].consume;
         if (star_b.next != 3 or star_b.backtrack or consume_b.next != 4) return null;
-        const literal = ins[6].literal_byte;
-        if (literal.next != 5) return null;
+        var literal_value: u21 = undefined;
+        var literal: [4]u8 = undefined;
+        var literal_len: u8 = 0;
+        switch (ins[6]) {
+            .literal_byte => |value| {
+                if (value.next != 5) return null;
+                literal_value = value.value;
+                literal[0] = value.value;
+                literal_len = 1;
+            },
+            .literal_rune => |value| {
+                if (value.next != 5) return null;
+                literal_value = value.value;
+                literal_len = std.unicode.utf8Encode(value.value, &literal) catch return null;
+            },
+            else => return null,
+        }
         const star_a = ins[7].star;
         const consume_a = ins[8].consume;
         // The first star backtracks in general, but the literal is outside its
@@ -468,8 +483,22 @@ pub const Scanner = struct {
         const save0 = ins[9].save;
         if (save0.slot != 0 or save0.next != 8) return null;
         if (!sameSet(star_a.set, consume_a.set) or !sameSet(star_b.set, consume_b.set)) return null;
-        if (star_a.set.matches(literal.value)) return null;
-        return .{ .set_a = star_a.set, .literal = literal.value, .set_b = star_b.set };
+        if (star_a.set.matches(literal_value)) return null;
+        return .{ .set_a = star_a.set, .literal = literal, .literal_len = literal_len, .set_b = star_b.set };
+    }
+
+    const LiteralMatch = union(enum) { match: u8, incomplete, no };
+
+    fn chainLiteralAt(self: *Scanner, rel: usize) LiteralMatch {
+        const chain = self.simple_chain.?;
+        const literal = chain.literal[0..chain.literal_len];
+        const available = self.buffer.items.len - rel;
+        if (available < literal.len) {
+            if (std.mem.eql(u8, self.buffer.items[rel..], literal[0..available])) return .incomplete;
+            return .no;
+        }
+        if (std.mem.eql(u8, self.buffer.items[rel..][0..literal.len], literal)) return .{ .match = chain.literal_len };
+        return .no;
     }
 
     fn emitChain(self: *Scanner, context: ?*anyopaque, emit: EmitFn) void {
@@ -502,12 +531,17 @@ pub const Scanner = struct {
                     .valid => |rune| {
                         if (chain.set_a.matches(rune.value)) {
                             self.scan += rune.len;
-                        } else if (self.buffer.items[self.scan] == chain.literal) {
-                            self.scan += 1;
-                            self.chain_phase = .run_b;
-                            self.chain_b_start = self.buffer_base + self.scan;
-                        } else {
-                            self.chain_phase = .idle;
+                        } else switch (self.chainLiteralAt(self.scan)) {
+                            .match => |length| {
+                                self.scan += length;
+                                self.chain_phase = .run_b;
+                                self.chain_b_start = self.buffer_base + self.scan;
+                            },
+                            .incomplete => {
+                                if (!at_eof) break;
+                                self.chain_phase = .idle;
+                            },
+                            .no => self.chain_phase = .idle,
                         }
                     },
                     .invalid => {
