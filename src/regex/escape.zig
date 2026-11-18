@@ -5,6 +5,7 @@ const m = @import("model.zig");
 const classes = @import("classes.zig");
 pub const Atom = union(enum) { set: m.ParsedSet, assertion: m.Assertion, byte, backref: u16, subroutine: u16, reset_start, string_property: m.StringProperty };
 const any_range = [_]m.Range{.{ .first = 0, .last = 0x10ffff }};
+const ascii_range = [_]m.Range{.{ .first = 0, .last = 0x7f }};
 /// PCRE2 `\p{Xuc}`: characters representable by a Universal Character Name.
 const xuc_ranges = [_]m.Range{
     .{ .first = '$', .last = '$' },
@@ -86,6 +87,7 @@ fn property(p: anytype, negative: bool, fold: bool) m.Error!m.ParsedSet {
         name = name[1..];
     }
     if (std.mem.eql(u8, name, "Any")) return .{ .ranges = &any_range, .negate = negate, .fold = fold };
+    if (nameEqual(name, "ASCII")) return .{ .ranges = &ascii_range, .negate = negate, .fold = fold };
     if (std.mem.eql(u8, name, "Xan")) return .{ .ranges = try classes.unicodePropertyUnion(p.allocator, &.{ "L", "N" }, p.limits.max_ranges), .negate = negate, .fold = fold };
     if (std.mem.eql(u8, name, "Xwd")) return .{ .ranges = try classes.unicodeWordRanges(p.allocator, p.limits.max_ranges), .negate = negate, .fold = fold };
     if (std.mem.eql(u8, name, "Xps") or std.mem.eql(u8, name, "Xsp")) return .{ .ranges = &classes.unicode_space_ranges, .negate = negate, .fold = fold };

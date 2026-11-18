@@ -207,3 +207,17 @@ test "Unicode 16 scripts missing from RE2 tables" {
         try std.testing.expectEqual(case.matches, try value.matches(gpa, case.input));
     }
 }
+
+test "ASCII property" {
+    const Case = struct { pattern: []const u8, yes: []const []const u8, no: []const []const u8 };
+    for ([_]Case{
+        .{ .pattern = "\\p{ASCII}+", .yes = &.{ "abc", "a b" }, .no = &.{ "\u{00e9}", "\u{732b}" } },
+        .{ .pattern = "\\P{ASCII}", .yes = &.{ "\u{00e9}", "\u{732b}" }, .no = &.{ "a", "abc" } },
+        .{ .pattern = "[\\p{ASCII}&&[a-z]]+", .yes = &.{"abc"}, .no = &.{ "ABC", "\u{00e9}" } },
+    }) |case| {
+        var value = try regex.Regex.init(gpa, case.pattern, .{});
+        defer value.deinit();
+        for (case.yes) |input| try std.testing.expect(try value.matches(gpa, input));
+        for (case.no) |input| try std.testing.expect(!try value.matches(gpa, input));
+    }
+}
