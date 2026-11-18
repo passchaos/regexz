@@ -32,3 +32,12 @@ test "Unicode character names" {
     try std.testing.expectError(error.InvalidRegex, regex.Regex.init(allocator, "\\N{CJK UNIFIED IDEOGRAPH-0041}", .{}));
     try std.testing.expectError(error.InvalidRegex, regex.Regex.init(allocator, "\\N{HANGUL SYLLABLE ZZZ}", .{}));
 }
+
+test "all generated character names round-trip" {
+    const unicode = @import("unicode.zig");
+    var index: usize = 0;
+    while (index < unicode.charNameCount()) : (index += 1) {
+        const entry = unicode.charNameAt(index).?;
+        try std.testing.expectEqual(@as(?u21, entry.cp), unicode.lookupCharName(entry.name));
+    }
+}

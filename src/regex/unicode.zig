@@ -343,6 +343,26 @@ pub fn sbOf(rune: u21) Sb {
     return .other;
 }
 
+/// Number of entries in the generated Unicode character-name table.
+pub fn charNameCount() usize {
+    return std.mem.readInt(u32, char_names_data[0..4], .little);
+}
+
+/// Introspection for the generated character-name table.
+pub fn charNameAt(index: usize) ?struct { name: []const u8, cp: u21 } {
+    const count = charNameCount();
+    if (index >= count) return null;
+    const entry = char_names_data[4 + index * 10 ..];
+    const offset = std.mem.readInt(u32, entry[0..4], .little);
+    const name_length = std.mem.readInt(u16, entry[4..6], .little);
+    const cp = std.mem.readInt(u32, entry[6..10], .little);
+    const names_start = 4 + count * 10;
+    return .{
+        .name = char_names_data[names_start + offset ..][0..name_length],
+        .cp = @intCast(cp),
+    };
+}
+
 /// Look up an explicit Unicode character name (`\N{LATIN SMALL LETTER A}`).
 /// Matching is case-insensitive and ignores spaces, hyphens, and underscores.
 /// Algorithmic names for CJK/Hangul ranges are not included.

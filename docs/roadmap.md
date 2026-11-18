@@ -79,7 +79,7 @@ Implemented functionality:
 - Replacement syntax: `\0`..`\9`, `$0`..`$99`, `$&`, `$$`, `${name}`,
   case transforms `\U`/`\L`/`\E`/`\u`/`\l` (simple Unicode), and callback
   replacement via `replaceAllWithFn`.
-- 125 tests, including recursion, branch reset, conditional assertions,
+- 126 tests, including recursion, branch reset, conditional assertions,
   grapheme clusters, binary properties, Unicode blocks, partial matching,
   control verbs, thread safety, allocation-failure, and differential coverage
   against V8 for the supported subset.
