@@ -77,6 +77,8 @@ pub const Workspace = struct {
     search_dfa_workspace: ?search_dfa.Workspace = null,
     search_dfa_failed: bool = false,
     search_dfa_ineligible: bool = false,
+    /// Cached capture-free DFA for the common find fast path.
+    fast_dfa: ?*search_dfa.Workspace = null,
     first_filter: prefilter.FirstFilter,
 
     pub fn init(
@@ -134,6 +136,12 @@ pub const Workspace = struct {
         search_start: usize,
     ) Error!?Match {
         self.steps = 0;
+        if (self.fast_dfa) |dfa| {
+            const found = (try dfa.find(input, search_start)) orelse return null;
+            self.slots[0] = found.start;
+            self.slots[1] = found.end;
+            return .{ .start = found.start, .end = found.end, .slots = self.slots };
+        }
         return self.findInternal(input, search_start);
     }
 
@@ -344,6 +352,13 @@ pub const Workspace = struct {
                     break :blk null;
                 };
                 if (self.search_dfa_workspace == null and !self.search_dfa_failed) self.search_dfa_ineligible = true;
+            }
+            if (self.fast_dfa == null and self.search_dfa_workspace != null and
+                self.program.capture_count == 0 and self.program.literal == null and
+                !self.program.extended and !self.limits.longest and
+                !self.program.notempty and !self.program.notempty_atstart)
+            {
+                self.fast_dfa = &self.search_dfa_workspace.?;
             }
             if (self.search_dfa_workspace) |*dfa| {
                 const found = dfa.find(input, search_start) catch |err| switch (err) {
