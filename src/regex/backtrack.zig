@@ -381,9 +381,22 @@ pub const Workspace = struct {
         return result;
     }
 
-    fn backref(self: *Workspace, input: []const u8, group: u16, fold: model.Fold, pos: usize) ?usize {
-        const begin = self.slots[@as(usize, group) * 2];
-        const end = self.slots[@as(usize, group) * 2 + 1];
+    fn backref(self: *Workspace, input: []const u8, group: u16, groups: []const u16, fold: model.Fold, pos: usize) ?usize {
+        // Duplicate names: use the first group in pattern order that is set.
+        var selected: u16 = group;
+        if (groups.len != 0) {
+            var found = false;
+            for (groups) |candidate| {
+                if (self.slots[@as(usize, candidate) * 2] != unset and self.slots[@as(usize, candidate) * 2 + 1] != unset) {
+                    selected = candidate;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) return if (self.limits.unset_backref_empty) pos else null;
+        }
+        const begin = self.slots[@as(usize, selected) * 2];
+        const end = self.slots[@as(usize, selected) * 2 + 1];
         if (begin == unset or end == unset) {
             // PCRE2_MATCH_UNSET_BACKREF / JavaScript: an unset group behaves
             // like an empty capture.
@@ -643,7 +656,7 @@ pub const Workspace = struct {
                     }
                 },
                 .backref => |ref| {
-                    if (self.backref(input, ref.group, ref.fold, pos)) |end| {
+                    if (self.backref(input, ref.group, ref.groups, ref.fold, pos)) |end| {
                         pos = end;
                         pc = ref.next;
                         continue;

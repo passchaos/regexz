@@ -247,6 +247,8 @@ pub const Condition = union(enum) {
     recursion: ?u16,
     /// `(?(VERSION>=x.y))`: evaluated at compile time.
     version: bool,
+    /// Duplicate-name condition: true if any listed group has matched.
+    groups: []const u16,
 };
 pub const Node = union(enum) {
     empty,
@@ -279,9 +281,9 @@ pub const Node = union(enum) {
     /// in `groups` that has participated. The scan is anchored at the start of
     /// the captured substring and bounded by its end.
     scan_substring: struct { child: *const Node, groups: []const u16 },
-    /// Numeric or named backreference. Names are resolved to an index at
-    /// parse time. `fold` reflects the caseless flag at the reference site.
-    backref: struct { index: u16, fold: Fold = .none },
+    /// Numeric or named backreference. Names are resolved to indices at parse
+    /// time; `groups` lists every group sharing the name in pattern order.
+    backref: struct { index: u16, groups: []const u16 = &.{}, fold: Fold = .none },
     /// `(?>...)`: the first match of the child is committed.
     atomic: *const Node,
     /// `(?(cond)yes|no)`: `no` is null when the else branch is omitted.
@@ -346,7 +348,7 @@ pub const Instruction = union(enum) {
     /// `sub_accept`.
     lookaround: struct { child: usize, negative: bool, behind: bool, next: usize },
     /// Backreference to a captured group.
-    backref: struct { group: u16, fold: Fold = .none, next: usize },
+    backref: struct { group: u16, groups: []const u16 = &.{}, fold: Fold = .none, next: usize },
     /// Atomic sub-expression: commit to the first match of `child`.
     atomic: struct { child: usize, next: usize },
     /// Zero-width conditional branch on whether `group` participated.

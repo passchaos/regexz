@@ -331,7 +331,7 @@ const Builder = struct {
             },
             .backref => |ref| blk: {
                 if (ref.index > self.capture_count) return error.InvalidRegex;
-                break :blk self.emit(.{ .backref = .{ .group = ref.index, .fold = ref.fold, .next = continuation } });
+                break :blk self.emit(.{ .backref = .{ .group = ref.index, .groups = ref.groups, .fold = ref.fold, .next = continuation } });
             },
             .script_run => |run| blk: {
                 const base = 2 * (@as(usize, self.capture_count) + 1);
@@ -371,6 +371,16 @@ const Builder = struct {
                     },
                     .recursion => |group| break :blk self.emit(.{ .conditional_recursion = .{ .group = group, .yes = yes, .no = no } }),
                     .version => |satisfied| break :blk if (satisfied) yes else no,
+                    .groups => |list| {
+                        for (list) |group| if (group > self.capture_count) return error.InvalidRegex;
+                        var inner = no;
+                        var index = list.len;
+                        while (index > 0) {
+                            index -= 1;
+                            inner = try self.emit(.{ .conditional = .{ .group = list[index], .yes = yes, .no = inner } });
+                        }
+                        break :blk inner;
+                    },
                     .assertion => |assertion_node| {
                         const look = switch (assertion_node.*) {
                             .lookaround => |look_value| look_value,

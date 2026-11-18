@@ -709,3 +709,29 @@ test "caseless backreferences" {
     try expectFull("(?ir)(k)\\1", "k\u{212a}", .{}, false);
     try expectFull("(?i)(k)\\1", "k\u{212a}", .{}, true);
 }
+
+test "duplicate names in backreferences and conditions" {
+    try expectFull("(?J)(?:(?<n>foo)|(?<n>bar))\\k<n>", "foofoo", .{}, true);
+    try expectFull("(?J)(?:(?<n>foo)|(?<n>bar))\\k<n>", "barbar", .{}, true);
+    try expectFull("(?J)(?:(?<n>foo)|(?<n>bar))\\k<n>", "foobar", .{}, false);
+    try expectFull("(?J)(?:(?<n>foo)|(?<n>bar))\\k<n>", "barfoo", .{}, false);
+    try expectFull("(?J)(?:(?<n>a)|(?<n>b))(?(<n>)c|d)", "ac", .{}, true);
+    try expectFull("(?J)(?:(?<n>a)|(?<n>b))(?(<n>)c|d)", "bc", .{}, true);
+    try expectFull("(?J)(?:(?<n>a)|(?<n>b))(?(<n>)c|d)", "ad", .{}, false);
+    try expectFull("(?J)(?:(?<n>a)|(?<n>b))(?(<n>)c|d)", "bd", .{}, false);
+    try expectFull("(?J)(?<n>a)?(?(<n>)c|d)", "d", .{}, true);
+    try expectFull("(?J)(?<n>a)?(?(<n>)c|d)", "ac", .{}, true);
+    // Subroutine calls use the first occurrence of a duplicate name.
+    try expectFull("(?J)(?:(?<n>a)|(?<n>b))(?&n)", "aa", .{}, true);
+    try expectFull("(?J)(?:(?<n>a)|(?<n>b))(?&n)", "ba", .{}, true);
+    try expectFull("(?J)(?:(?<n>a)|(?<n>b))(?&n)", "bb", .{}, false);
+}
+
+test "undelimited name conditions" {
+    try expectFull("(?<DN>a)(?(DN)b|c)", "ab", .{}, true);
+    try expectFull("(?<DN>a)(?(DN)b|c)", "ac", .{}, false);
+    try expectFull("(?J)(?:(?<n>a)|(?<n>b))(?(n)c|d)", "bc", .{}, true);
+    // A group named R shadows the recursion pseudo-condition.
+    try expectFull("(?<R>a)(?(R)b|c)", "ab", .{}, true);
+    try expectFull("(?<R>a)(?(R)b|c)", "ac", .{}, false);
+}

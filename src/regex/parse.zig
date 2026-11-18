@@ -43,6 +43,17 @@ pub const Parser = struct {
         self.cursor += len;
         return value;
     }
+    /// All group indices sharing `name`, sorted by pattern position.
+    pub fn nameIndices(self: *Parser, name: []const u8) m.Error!?[]const u16 {
+        var list: std.ArrayList(u16) = .empty;
+        defer list.deinit(self.allocator);
+        for (self.group_names.items) |entry| {
+            if (std.mem.eql(u8, entry.name, name)) try list.append(self.allocator, entry.index);
+        }
+        if (list.items.len == 0) return null;
+        std.mem.sort(u16, list.items, {}, std.sort.asc(u16));
+        return try list.toOwnedSlice(self.allocator);
+    }
     pub fn lookupName(self: *Parser, name: []const u8) ?u16 {
         for (self.group_names.items) |entry| {
             if (std.mem.eql(u8, entry.name, name)) return entry.index;
@@ -355,6 +366,19 @@ pub const Parser = struct {
                 major == supported_major and minor == supported_minor;
             return .{ .version = satisfied };
         }
+        // Undelimited name condition `(?(name)...)`, including names that
+        // start with R (which otherwise introduce recursion conditions).
+        {
+            var end = self.cursor;
+            while (end < self.pattern.len and self.pattern[end] != ')') end += 1;
+            const candidate = self.pattern[self.cursor..end];
+            if (candidate.len != 0 and self.lookupName(candidate) != null) {
+                const groups = try self.nameIndices(candidate) orelse return error.InvalidRegex;
+                self.cursor = end + 1;
+                if (groups.len == 1) return .{ .group = groups[0] };
+                return .{ .groups = groups };
+            }
+        }
         if (self.peek() == 'R') {
             self.cursor += 1;
             var group_index: ?u16 = null;
@@ -406,7 +430,9 @@ pub const Parser = struct {
             const name = self.pattern[start..self.cursor];
             if (!self.take('>')) return error.InvalidRegex;
             if (!self.take(')')) return error.InvalidRegex;
-            return .{ .group = self.lookupName(name) orelse return error.InvalidRegex };
+            const groups = try self.nameIndices(name) orelse return error.InvalidRegex;
+            if (groups.len == 1) return .{ .group = groups[0] };
+            return .{ .groups = groups };
         }
         if (self.take('\'')) {
             const start = self.cursor;
@@ -417,7 +443,9 @@ pub const Parser = struct {
             const name = self.pattern[start..self.cursor];
             if (!self.take('\'')) return error.InvalidRegex;
             if (!self.take(')')) return error.InvalidRegex;
-            return .{ .group = self.lookupName(name) orelse return error.InvalidRegex };
+            const groups = try self.nameIndices(name) orelse return error.InvalidRegex;
+            if (groups.len == 1) return .{ .group = groups[0] };
+            return .{ .groups = groups };
         }
         var negative = false;
         var signed = false;
@@ -537,10 +565,10 @@ pub const Parser = struct {
                         self.cursor += 1;
                     }
                     const name = self.pattern[start..self.cursor];
-                    const index = self.lookupName(name) orelse return error.InvalidRegex;
                     if (!self.take(')')) return error.InvalidRegex;
                     self.extended = true;
-                    return self.node(.{ .backref = .{ .index = index, .fold = self.foldMode() } });
+                    const groups = try self.nameIndices(name) orelse return error.InvalidRegex;
+                    return self.node(.{ .backref = .{ .index = groups[0], .groups = groups, .fold = self.foldMode() } });
                 } else if (self.take('>')) {
                     const name = try self.nameUntil(')');
                     const index = self.lookupName(name) orelse return error.InvalidRegex;
@@ -959,7 +987,7 @@ pub const Parser = struct {
                     .dot => self.dotNode(),
                     .byte => self.node(.byte),
                     .assertion => |assertion| self.node(.{ .assertion = assertion }),
-                    .backref => |index| self.node(.{ .backref = .{ .index = index, .fold = self.foldMode() } }),
+                    .backref => |ref| self.node(.{ .backref = .{ .index = ref.index, .groups = ref.groups, .fold = self.foldMode() } }),
                     .subroutine => |index| self.node(.{ .subroutine = .{ .group = index } }),
                     .reset_start => self.node(.reset_start),
                     .string_property => |property| self.node(.{ .string_property = property }),

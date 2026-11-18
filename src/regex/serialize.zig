@@ -58,6 +58,7 @@ const Tag = enum(u8) {
     script_run_check,
     scan_substring,
     backref_fold,
+    backref_groups,
 };
 
 const Writer = struct {
@@ -236,7 +237,14 @@ fn writeInstruction(writer: *Writer, instruction: model.Instruction) !void {
             try writer.u32v(@intCast(look.next));
         },
         .backref => |ref| {
-            if (ref.fold == .none) {
+            if (ref.groups.len != 0) {
+                try writer.byte(@intFromEnum(Tag.backref_groups));
+                try writer.u16v(ref.group);
+                try writer.u32v(@intCast(ref.groups.len));
+                for (ref.groups) |group| try writer.u16v(group);
+                try writer.byte(@intFromEnum(ref.fold));
+                try writer.u32v(@intCast(ref.next));
+            } else if (ref.fold == .none) {
                 try writer.byte(@intFromEnum(Tag.backref));
                 try writer.u16v(ref.group);
                 try writer.u32v(@intCast(ref.next));
@@ -386,7 +394,7 @@ fn writeInstruction(writer: *Writer, instruction: model.Instruction) !void {
 
 fn readInstruction(reader: *Reader, allocator: std.mem.Allocator) !model.Instruction {
     const tag_value = try reader.byte();
-    if (tag_value > @intFromEnum(Tag.backref_fold)) return error.InvalidRegex;
+    if (tag_value > @intFromEnum(Tag.backref_groups)) return error.InvalidRegex;
     const tag: Tag = @enumFromInt(tag_value);
     return switch (tag) {
         .accept => .accept,
@@ -425,6 +433,21 @@ fn readInstruction(reader: *Reader, allocator: std.mem.Allocator) !model.Instruc
             if (fold_value > @intFromEnum(model.Fold.ascii)) return error.InvalidRegex;
             break :blk .{ .backref = .{
                 .group = group,
+                .fold = @enumFromInt(fold_value),
+                .next = @intCast(try reader.u32v()),
+            } };
+        },
+        .backref_groups => blk: {
+            const group = try reader.u16v();
+            const count = try reader.u32v();
+            if (count > 65535) return error.RegexLimitExceeded;
+            const groups = try allocator.alloc(u16, count);
+            for (groups) |*item| item.* = try reader.u16v();
+            const fold_value = try reader.byte();
+            if (fold_value > @intFromEnum(model.Fold.ascii)) return error.InvalidRegex;
+            break :blk .{ .backref = .{
+                .group = group,
+                .groups = groups,
                 .fold = @enumFromInt(fold_value),
                 .next = @intCast(try reader.u32v()),
             } };
@@ -672,7 +695,10 @@ fn validate(program: Program) model.Error!void {
         .assertion => |assertion| if (assertion.next >= count) return error.InvalidRegex,
         .lookahead => |look| if (look.next >= count) return error.InvalidRegex,
         .lookaround => |look| if (look.child >= count or look.next >= count) return error.InvalidRegex,
-        .backref => |ref| if (ref.next >= count or ref.group > program.capture_count) return error.InvalidRegex,
+        .backref => |ref| {
+            if (ref.next >= count or ref.group > program.capture_count) return error.InvalidRegex;
+            for (ref.groups) |group| if (group > program.capture_count) return error.InvalidRegex;
+        },
         .atomic => |atom| if (atom.child >= count or atom.next >= count) return error.InvalidRegex,
         .conditional => |cond| if (cond.yes >= count or cond.no >= count or cond.group > program.capture_count) return error.InvalidRegex,
         .conditional_assert => |cond| if (cond.child >= count or cond.yes >= count or cond.no >= count) return error.InvalidRegex,

@@ -21,6 +21,7 @@ const patterns = [_][]const u8{
     "(*NOTEMPTY)a*",
     "(*NOTEMPTY_ATSTART)a*",
     "(?i)(a)\\1",
+    "(?J)(?:(?<n>foo)|(?<n>bar))\\k<n>",
     "a|ab",
     "(?:ab|cd)+",
     "(a)(b)?",

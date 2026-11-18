@@ -3,7 +3,8 @@
 const std = @import("std");
 const m = @import("model.zig");
 const classes = @import("classes.zig");
-pub const Atom = union(enum) { set: m.ParsedSet, assertion: m.Assertion, byte, dot, backref: u16, subroutine: u16, reset_start, string_property: m.StringProperty };
+pub const Backref = struct { index: u16, groups: []const u16 = &.{} };
+pub const Atom = union(enum) { set: m.ParsedSet, assertion: m.Assertion, byte, dot, backref: Backref, subroutine: u16, reset_start, string_property: m.StringProperty };
 const any_range = [_]m.Range{.{ .first = 0, .last = 0x10ffff }};
 const ascii_range = [_]m.Range{.{ .first = 0, .last = 0x7f }};
 /// PCRE2 `\p{Xuc}`: characters representable by a Universal Character Name.
@@ -284,9 +285,9 @@ fn namedBackref(p: anytype, open: u8) m.Error!Atom {
     }
     const name = p.pattern[start..p.cursor];
     if (!p.take(close)) return error.InvalidRegex;
-    const index = p.lookupName(name) orelse return error.InvalidRegex;
+    const groups = try p.nameIndices(name) orelse return error.InvalidRegex;
     p.extended = true;
-    return .{ .backref = index };
+    return .{ .backref = .{ .index = groups[0], .groups = groups } };
 }
 fn numericBackref(p: anytype, byte: u8) m.Error!?u16 {
     var value: u32 = byte - '0';
@@ -516,7 +517,7 @@ pub fn parse(p: anytype, in_class: bool, fold: m.Fold) m.Error!Atom {
                 .absolute => |index| {
                     if (index == 0) return error.InvalidRegex;
                     p.extended = true;
-                    return .{ .backref = index };
+                    return .{ .backref = .{ .index = index } };
                 },
                 .relative => |offset| {
                     // Relative to the most recently opened group; positive
@@ -525,16 +526,16 @@ pub fn parse(p: anytype, in_class: bool, fold: m.Fold) m.Error!Atom {
                     const value = base + offset;
                     if (value <= 0 or value > 32767) return error.InvalidRegex;
                     p.extended = true;
-                    return .{ .backref = @intCast(value) };
+                    return .{ .backref = .{ .index = @intCast(value) } };
                 },
                 .not_number => {},
             }
-            const index = p.lookupName(name) orelse return error.InvalidRegex;
+            const groups = try p.nameIndices(name) orelse return error.InvalidRegex;
             p.extended = true;
-            return .{ .backref = index };
+            return .{ .backref = .{ .index = groups[0], .groups = groups } };
         }
         if (byte >= '1' and byte <= '9') {
-            if (try numericBackref(p, byte)) |index| return .{ .backref = index };
+            if (try numericBackref(p, byte)) |index| return .{ .backref = .{ .index = index } };
         }
         if (byte == 'K') {
             p.extended = true;
