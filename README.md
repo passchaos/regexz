@@ -184,7 +184,8 @@ The engine picks the execution strategy automatically:
     `patterns`. Eligible patterns share one unanchored DFA
     scan; patterns with assertions or extended features stay on their
     per-pattern engines.
-  - Replacement: `Regex.replaceAll`, `Regex.replacen` (limited matches), and
+  - Replacement: `Regex.replaceAll`, `Regex.replacen` (limited matches),
+    `Regex.expandMatch` (expand a template for one match), and
     `ReplaceWorkspace`. Dynamic
     replacement via `Regex.replaceAllWithFn` /
     `ReplaceWorkspace.replaceAllWithFn` passes each match and its capture

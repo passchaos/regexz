@@ -208,7 +208,7 @@ Qwen search is ~68–74 µs (~330–353 MiB/s), CJK tokenizer search is ~284–3
 ~635 µs), greedy `\C+` scans collapse to a single full-span match (~8 ns), and
 shared-prefix no-match scans are ~1.55 µs (15.5 GiB/s). The bench gate now covers 27 cases;
 `RegexSet` ~97 µs, `replaceAll` ~85 µs, compile ~1.5 µs with `smp_allocator`,
-and all 187 tests plus the V8/Rust/extended/replacement differential fuzzers pass. On the
+and all 188 tests plus the V8/Rust/extended/replacement differential fuzzers pass. On the
 feature side, PCRE2 forward numeric/named references, `\e` and isolated `\E`,
 the full substitution reference syntax (`$<name>`, `$+`, `$_`, `` $` ``, `$'`),
 `escape`/`splitn`/`replacen`, and compile diagnostics (`diagnose`) are covered.

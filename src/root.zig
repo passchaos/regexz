@@ -21,7 +21,8 @@ pub const Budget = @import("regex/budget.zig").Budget;
 pub const BudgetError = @import("regex/budget.zig").Error;
 pub const Workspace = @import("regex/execute.zig").Workspace;
 pub const PartialResult = @import("regex/execute.zig").PartialResult;
-pub const ReplaceWorkspace = @import("regex/replace.zig").Workspace;
+const replace_mod = @import("regex/replace.zig");
+pub const ReplaceWorkspace = replace_mod.Workspace;
 pub const ReplaceFn = @import("regex/replace.zig").ReplaceFn;
 pub const RegexSet = @import("regex/set.zig").RegexSet;
 pub const Match = @import("regex/replace.zig").Match;
@@ -324,6 +325,10 @@ pub const Regex = struct {
         }
         try parts.append(gpa, input[last..]);
         return parts.toOwnedSlice(gpa);
+    }
+    /// Expand a replacement template for one match without searching again.
+    pub fn expandMatch(self: *const Regex, gpa: std.mem.Allocator, input: []const u8, match: Match, substitution: []const u8) Error![]u8 {
+        return replace_mod.expandMatch(gpa, self.program, input, match.slots, substitution, self.limits.full_case_mapping);
     }
     pub fn replaceAll(self: *const Regex, gpa: std.mem.Allocator, input: []const u8, substitution: []const u8) Error![]u8 {
         var workspace = try ReplaceWorkspace.init(gpa, self.program, self.limits);

@@ -1168,6 +1168,24 @@ fn appendSubstitution(
     }
 }
 
+/// Expand `substitution` for a single match without searching. `slots` must
+/// hold the whole-match and capture slots for `input` (as returned by `find`).
+pub fn expandMatch(
+    allocator: std.mem.Allocator,
+    program: Program,
+    input: []const u8,
+    slots: []const usize,
+    substitution: []const u8,
+    full_case: bool,
+) Error![]u8 {
+    try validateSubstitutionFor(program, substitution);
+    var out: std.ArrayList(u8) = .empty;
+    errdefer out.deinit(allocator);
+    var writer = ListWriter{ .list = &out, .allocator = allocator };
+    try appendSubstitution(&writer, input, substitution, slots, program, full_case);
+    return out.toOwnedSlice(allocator);
+}
+
 const ListWriter = struct {
     list: *std.ArrayList(u8),
     allocator: std.mem.Allocator,

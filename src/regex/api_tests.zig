@@ -197,3 +197,16 @@ test "splitn and replacen honor their limits" {
     defer gpa.free(replaced_all);
     try std.testing.expectEqualStrings("a-b-c", replaced_all);
 }
+
+test "expand a replacement template for one match" {
+    var value = try regex.Regex.init(gpa, "(?<word>\\w+)@(\\w+)\\.com", .{});
+    defer value.deinit();
+    var captures = try regex.Captures.init(gpa, value.program);
+    defer captures.deinit(gpa);
+    const input = "mail me at user@example.com!";
+    const match = (try value.find(gpa, input, &captures)).?;
+    const expanded = try value.expandMatch(gpa, input, match, "[$1|$<2>|$&|$`|$']");
+    defer gpa.free(expanded);
+    try std.testing.expectEqualStrings("[user|example|user@example.com|mail me at |!]", expanded);
+    try std.testing.expectError(error.InvalidRegex, value.expandMatch(gpa, input, match, "$9"));
+}
