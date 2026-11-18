@@ -327,22 +327,27 @@ pub fn parse(p: anytype, in_class: bool, fold: bool) m.Error!Atom {
     }
     if (byte == 'C' and !in_class) return .byte;
     if (byte == 'N') {
-        // PCRE2 `\N{U+hhhh}` names a code point explicitly; bare `\N` is the
-        // "not newline" set.
-        if (p.peek() == '{' and p.cursor + 2 < p.pattern.len and
-            p.pattern[p.cursor + 1] == 'U' and p.pattern[p.cursor + 2] == '+')
-        {
-            p.cursor += 3;
-            const start = p.cursor;
-            while (p.peek()) |digit| {
-                if (digit == '}') break;
-                p.cursor += 1;
+        // `\N{U+hhhh}` is an explicit code point; `\N{NAME}` is a Unicode
+        // character name. Bare `\N` is the "not newline" set. A brace that
+        // starts with a digit or comma stays for the quantifier parser.
+        if (p.peek() == '{') {
+            const start = p.cursor + 1;
+            var end = start;
+            while (end < p.pattern.len and p.pattern[end] != '}') end += 1;
+            if (end < p.pattern.len) {
+                const name = p.pattern[start..end];
+                const quantifier = name.len > 0 and (std.ascii.isDigit(name[0]) or name[0] == ',');
+                if (!quantifier) {
+                    p.cursor = end + 1;
+                    if (name.len > 2 and name[0] == 'U' and name[1] == '+') {
+                        const value = std.fmt.parseInt(u21, name[2..], 16) catch return error.InvalidRegex;
+                        if (value > 0x10ffff) return error.InvalidRegex;
+                        return .{ .set = try literal(p, value, fold) };
+                    }
+                    const value = m.unicode.lookupCharName(name) orelse return error.InvalidRegex;
+                    return .{ .set = try literal(p, value, fold) };
+                }
             }
-            const hex = p.pattern[start..p.cursor];
-            if (hex.len == 0 or !p.take('}')) return error.InvalidRegex;
-            const value = std.fmt.parseInt(u21, hex, 16) catch return error.InvalidRegex;
-            if (value > 0x10ffff) return error.InvalidRegex;
-            return .{ .set = try literal(p, value, fold) };
         }
         return .{ .set = .{ .ranges = &.{.{ .first = '\n', .last = '\n' }}, .negate = true, .fold = false } };
     }

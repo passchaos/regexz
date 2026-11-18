@@ -24,6 +24,7 @@ const word_break_data = @embedFile("unicode/word_break.bin");
 pub const Wb = @import("unicode/word_break.zig").Wb;
 const wb_count = @import("unicode/word_break.zig").wb_count;
 const sentence_break_data = @embedFile("unicode/sentence_break.bin");
+const char_names_data = @embedFile("unicode/char_names.bin");
 pub const Sb = @import("unicode/sentence_break.zig").Sb;
 const sb_count = @import("unicode/sentence_break.zig").sb_count;
 pub const fold_range_count = fold_data.len / 12;
@@ -340,6 +341,44 @@ pub fn sbOf(rune: u21) Sb {
         if (rune < low) last = middle else if (rune > high) first = middle + 1 else return @enumFromInt(bytes[8]);
     }
     return .other;
+}
+
+/// Look up an explicit Unicode character name (`\N{LATIN SMALL LETTER A}`).
+/// Matching is case-insensitive and ignores spaces, hyphens, and underscores.
+/// Algorithmic names for CJK/Hangul ranges are not included.
+pub fn lookupCharName(query: []const u8) ?u21 {
+    var buffer: [128]u8 = undefined;
+    var length: usize = 0;
+    for (query) |byte| {
+        if (byte == ' ' or byte == '-' or byte == '_' or byte == '\t') continue;
+        if (byte >= 0x80) return null;
+        if (length == buffer.len) return null;
+        buffer[length] = std.ascii.toUpper(byte);
+        length += 1;
+    }
+    if (length == 0) return null;
+    const key = buffer[0..length];
+    const count = std.mem.readInt(u32, char_names_data[0..4], .little);
+    const names_start = 4 + @as(usize, count) * 10;
+    var low: usize = 0;
+    var high: usize = count;
+    while (low < high) {
+        const middle = low + (high - low) / 2;
+        const entry = char_names_data[4 + middle * 10 ..];
+        const offset = std.mem.readInt(u32, entry[0..4], .little);
+        const name_length = std.mem.readInt(u16, entry[4..6], .little);
+        const cp = std.mem.readInt(u32, entry[6..10], .little);
+        const name = char_names_data[names_start + offset ..][0..name_length];
+        const order = std.mem.order(u8, key, name);
+        if (order == .lt) {
+            high = middle;
+        } else if (order == .gt) {
+            low = middle + 1;
+        } else {
+            return @intCast(cp);
+        }
+    }
+    return null;
 }
 
 /// Extended_Pictographic property.

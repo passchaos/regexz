@@ -61,8 +61,9 @@ Implemented functionality:
   classes such as `[a-z&&[^aeiou]]`.
 - Numeric/relative backreferences and subroutine calls via `\g{1}`,
   `\g{-1}`, `\g<1>`, `\g<-1>`, and `\g<+1>`.
-- `\N{U+hhhh}` explicit code points, `\cX` control characters, `\o{...}`
-  octal code points, and class-aware `\Q...\E` quoting.
+- `\N{U+hhhh}` explicit code points, `\N{NAME}` Unicode character names,
+  `\cX` control characters, `\o{...}` octal code points, and class-aware
+  `\Q...\E` quoting.
 - UAX #29 boundary assertions: grapheme clusters `\b{gcb}` / `\B{gcb}`
   (alias `\b{g}`), word boundaries `\b{wb}` / `\B{wb}`, and sentence
   boundaries `\b{sb}` / `\B{sb}`.
@@ -78,7 +79,7 @@ Implemented functionality:
 - Replacement syntax: `\0`..`\9`, `$0`..`$99`, `$&`, `$$`, `${name}`,
   case transforms `\U`/`\L`/`\E`/`\u`/`\l` (simple Unicode), and callback
   replacement via `replaceAllWithFn`.
-- 124 tests, including recursion, branch reset, conditional assertions,
+- 125 tests, including recursion, branch reset, conditional assertions,
   grapheme clusters, binary properties, Unicode blocks, partial matching,
   control verbs, thread safety, allocation-failure, and differential coverage
   against V8 for the supported subset.
@@ -117,6 +118,7 @@ Strengths:
 | `\b{gcb}` / `\b{wb}` / `\b{sb}` | yes (extended) | no | no | no |
 | Backtracking verbs | yes (subset) | yes | no | no |
 | Callouts / `(*THEN)` | numeric + string + auto callouts, `(*THEN)`, MARK | yes | no | no |
+| `\N{NAME}` named characters | yes (explicit names) | no | no | no |
 | `\p{Xan}`/`\p{Xwd}` specials | yes | yes | no | no |
 | `\p{Xuc}` | yes | yes | no | no |
 | Binary Unicode properties | yes (63) | yes | partial | yes |
