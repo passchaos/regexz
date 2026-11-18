@@ -56,6 +56,7 @@ const Tag = enum(u8) {
     lookbehind_next,
     lookbehind_accept,
     script_run_check,
+    scan_substring,
 };
 
 const Writer = struct {
@@ -365,12 +366,19 @@ fn writeInstruction(writer: *Writer, instruction: model.Instruction) !void {
             try writer.u16v(check.slot);
             try writer.u32v(@intCast(check.next));
         },
+        .scan_substring => |scan| {
+            try writer.byte(@intFromEnum(Tag.scan_substring));
+            try writer.u32v(@intCast(scan.child));
+            try writer.u32v(@intCast(scan.next));
+            try writer.u32v(@intCast(scan.groups.len));
+            for (scan.groups) |group| try writer.u16v(group);
+        },
     }
 }
 
 fn readInstruction(reader: *Reader, allocator: std.mem.Allocator) !model.Instruction {
     const tag_value = try reader.byte();
-    if (tag_value > @intFromEnum(Tag.script_run_check)) return error.InvalidRegex;
+    if (tag_value > @intFromEnum(Tag.scan_substring)) return error.InvalidRegex;
     const tag: Tag = @enumFromInt(tag_value);
     return switch (tag) {
         .accept => .accept,
@@ -465,6 +473,15 @@ fn readInstruction(reader: *Reader, allocator: std.mem.Allocator) !model.Instruc
             .slot = try reader.u16v(),
             .next = @intCast(try reader.u32v()),
         } },
+        .scan_substring => blk: {
+            const child: usize = @intCast(try reader.u32v());
+            const next: usize = @intCast(try reader.u32v());
+            const group_count = try reader.u32v();
+            if (group_count > 65535) return error.RegexLimitExceeded;
+            const groups = try allocator.alloc(u16, group_count);
+            for (groups) |*group| group.* = try reader.u16v();
+            break :blk .{ .scan_substring = .{ .child = child, .groups = groups, .next = next } };
+        },
     };
 }
 
@@ -653,6 +670,10 @@ fn validate(program: Program) model.Error!void {
         .lookbehind_next => |look| if (look.child >= count or look.target_slot >= slot_count or look.start_slot >= slot_count) return error.InvalidRegex,
         .lookbehind_accept => |look| if (look.next >= count or look.target_slot >= slot_count) return error.InvalidRegex,
         .script_run_check => |check| if (check.next >= count or check.slot >= slot_count) return error.InvalidRegex,
+        .scan_substring => |scan| {
+            if (scan.child >= count or scan.next >= count) return error.InvalidRegex;
+            for (scan.groups) |group| if (group == 0 or group > program.capture_count) return error.InvalidRegex;
+        },
     };
     for (program.dispatches) |dispatch| {
         for (dispatch.branches) |branch| {

@@ -251,6 +251,10 @@ pub const Node = union(enum) {
     /// PCRE2 `(*sr:...)`/`(*asr:...)`: the child's matched text must be a
     /// script run. `atomic` commits to the child's first match.
     script_run: struct { child: *const Node, atomic: bool },
+    /// PCRE2 `(*scs:...)`: match the child against the first captured group
+    /// in `groups` that has participated. The scan is anchored at the start of
+    /// the captured substring and bounded by its end.
+    scan_substring: struct { child: *const Node, groups: []const u16 },
     /// Numeric or named backreference. Names are resolved to an index at
     /// parse time.
     backref: struct { index: u16 },
@@ -377,6 +381,8 @@ pub const Instruction = union(enum) {
     lookbehind_accept: struct { target_slot: u16, next: usize },
     /// Validate that the text since the saved slot is a script run.
     script_run_check: struct { slot: u16, next: usize },
+    /// Scan a captured substring with `child`, anchored at its start.
+    scan_substring: struct { child: usize, groups: []const u16, next: usize },
     /// Recursion/subroutine call. `child` is the subroutine body start and
     /// `next` is the return continuation.
     call: struct { group: u16, child: usize, next: usize },

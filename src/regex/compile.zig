@@ -138,6 +138,7 @@ const Builder = struct {
             .atomic => |child| collectCaptureSlots(child, range),
             .lookaround => |look| collectCaptureSlots(look.child, range),
             .script_run => |run| collectCaptureSlots(run.child, range),
+            .scan_substring => |scan| collectCaptureSlots(scan.child, range),
             .conditional => |cond| {
                 collectCaptureSlots(cond.yes, range);
                 if (cond.no) |no| collectCaptureSlots(no, range);
@@ -338,6 +339,15 @@ const Builder = struct {
                     try self.node(run.child, check);
                 break :blk try self.emit(.{ .save = .{ .slot = @intCast(slot), .next = inner } });
             },
+            .scan_substring => |scan| blk: {
+                for (scan.groups) |group| if (group > self.capture_count) return error.InvalidRegex;
+                const child = try self.node(scan.child, self.sub_accept);
+                break :blk self.emit(.{ .scan_substring = .{
+                    .child = child,
+                    .groups = scan.groups,
+                    .next = continuation,
+                } });
+            },
             .atomic => |child| blk: {
                 const start = try self.node(child, self.sub_accept);
                 break :blk self.emit(.{ .atomic = .{ .child = start, .next = continuation } });
@@ -463,7 +473,7 @@ fn terminalFirst(instruction: model.Instruction) model.FirstSet {
         .byte, .grapheme, .string_property => .{ .ascii = .{ ~@as(u64, 0), ~@as(u64, 0) }, .nonascii = true },
         .accept, .sub_accept, .accept_verb => .{ .empty = true },
         .fail => .{},
-        .split, .save, .restore_pos, .assertion, .lookahead, .reset_start, .prune, .skip, .commit, .then, .mark, .callout, .auto_callout, .reset_captures, .dispatch, .lookaround, .conditional, .conditional_assert, .conditional_recursion, .lookbehind_non_atomic, .lookbehind_next, .lookbehind_accept, .script_run_check => .{},
+        .split, .save, .restore_pos, .assertion, .lookahead, .reset_start, .prune, .skip, .commit, .then, .mark, .callout, .auto_callout, .reset_captures, .dispatch, .lookaround, .conditional, .conditional_assert, .conditional_recursion, .lookbehind_non_atomic, .lookbehind_next, .lookbehind_accept, .script_run_check, .scan_substring => .{},
         .backref, .atomic, .call, .ret => conservative_first,
     };
 }
@@ -492,6 +502,8 @@ fn computeFirstSets(allocator: std.mem.Allocator, instructions: []const model.In
             .restore_pos => |restore| try edges.append(allocator, .{ .from = from, .to = @intCast(restore.next) }),
             .lookbehind_non_atomic => |look| try edges.append(allocator, .{ .from = from, .to = @intCast(look.next) }),
             .lookbehind_accept => |look| try edges.append(allocator, .{ .from = from, .to = @intCast(look.next) }),
+            .script_run_check => |check| try edges.append(allocator, .{ .from = from, .to = @intCast(check.next) }),
+            .scan_substring => |scan| try edges.append(allocator, .{ .from = from, .to = @intCast(scan.next) }),
             .assertion => |assertion| try edges.append(allocator, .{ .from = from, .to = @intCast(assertion.next) }),
             .lookahead => |look| try edges.append(allocator, .{ .from = from, .to = @intCast(look.next) }),
             .star => |star| try edges.append(allocator, .{ .from = from, .to = @intCast(star.next) }),

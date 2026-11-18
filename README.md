@@ -57,6 +57,9 @@ The engine picks the execution strategy automatically:
     `(*asr:...)`/`(*atomic_script_run:...)`, following UAX #24/UTS #39:
     `Script_Extensions` intersection, Han virtual scripts, and a single
     decimal-digit set.
+  - Scan-substring assertions `(*scs:(list)...)`/`(*scan_substring:...)`:
+    match a subpattern against the first participating group in the list,
+    anchored at the substring start with the subject end temporarily reset.
   - Numeric and named backreferences: `\1`..`\99`, `\k<name>`, `\k'name'`,
     `\k{name}`, `\g{name}`, `\g{1}`, relative `\g{-1}`, `(?P=name)`.
   - Subroutine calls by number, name, and relative offset: `(?1)`, `(?+1)`,

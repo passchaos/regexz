@@ -152,6 +152,62 @@ pub const Parser = struct {
                 .atomic = std.mem.eql(u8, name, "asr") or std.mem.eql(u8, name, "atomic_script_run"),
             } });
         }
+        if (std.mem.eql(u8, name, "scs") or std.mem.eql(u8, name, "scan_substring")) {
+            if (!self.take(':')) return error.InvalidRegex;
+            if (!self.take('(')) return error.InvalidRegex;
+            var groups: std.ArrayList(u16) = .empty;
+            defer groups.deinit(self.allocator);
+            while (true) {
+                const byte = self.peek() orelse return error.InvalidRegex;
+                if (byte == '\'' or byte == '<') {
+                    const close: u8 = if (byte == '\'') '\'' else '>';
+                    self.cursor += 1;
+                    const name_start = self.cursor;
+                    while (self.peek()) |next| {
+                        if (next == close) break;
+                        self.cursor += 1;
+                    }
+                    const group_name = self.pattern[name_start..self.cursor];
+                    if (!self.take(close)) return error.InvalidRegex;
+                    var matched = false;
+                    for (self.group_names.items) |entry| {
+                        if (!std.mem.eql(u8, entry.name, group_name)) continue;
+                        try groups.append(self.allocator, entry.index);
+                        matched = true;
+                    }
+                    if (!matched) return error.InvalidRegex;
+                } else {
+                    const number_start = self.cursor;
+                    if (byte == '-' or byte == '+') self.cursor += 1;
+                    const digits = self.cursor;
+                    while (self.peek()) |next| {
+                        if (!std.ascii.isDigit(next)) break;
+                        self.cursor += 1;
+                    }
+                    if (self.cursor == digits) return error.InvalidRegex;
+                    const value = std.fmt.parseInt(i32, self.pattern[number_start..self.cursor], 10) catch return error.InvalidRegex;
+                    // Relative references count from the most recently opened
+                    // group: -1 is that group, +1 is the next one.
+                    const index = if (byte == '-' or byte == '+') blk: {
+                        const base: i32 = if (value < 0) @as(i32, self.captures) + 1 else @as(i32, self.captures);
+                        break :blk base + value;
+                    } else value;
+                    if (index <= 0 or index > 32767) return error.InvalidRegex;
+                    try groups.append(self.allocator, @intCast(index));
+                }
+                if (self.take(',')) continue;
+                break;
+            }
+            if (!self.take(')')) return error.InvalidRegex;
+            if (groups.items.len == 0) return error.InvalidRegex;
+            self.extended = true;
+            const child = try self.expression(depth + 1);
+            if (!self.take(')')) return error.InvalidRegex;
+            return self.node(.{ .scan_substring = .{
+                .child = child,
+                .groups = try groups.toOwnedSlice(self.allocator),
+            } });
+        }
         const Look = struct { negative: bool, behind: bool, non_atomic: bool };
         const alias: ?Look = if (std.mem.eql(u8, name, "pla") or std.mem.eql(u8, name, "positive_lookahead"))
             .{ .negative = false, .behind = false, .non_atomic = false }

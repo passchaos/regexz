@@ -51,6 +51,7 @@ const Position = struct {
     next_rune: ?u21,
     input: []const u8,
     offset: usize,
+    subject_end: usize,
     fn asciiWord(rune: ?u21) bool {
         const value = rune orelse return false;
         return value == '_' or (value >= 'a' and value <= 'z') or (value >= 'A' and value <= 'Z') or (value >= '0' and value <= '9');
@@ -109,21 +110,22 @@ fn runeBefore(input: []const u8, offset: usize) ?u21 {
     return if (runeAt(input, start)) |rune| rune.value else null;
 }
 
-fn position(input: []const u8, offset: usize, attempt_start: usize) Position {
-    const final_newline = offset == input.len or
-        (offset + 1 == input.len and input[offset] == '\n') or
-        (offset + 2 == input.len and input[offset] == '\r' and input[offset + 1] == '\n');
+fn position(input: []const u8, offset: usize, attempt_start: usize, subject_end: usize) Position {
+    const final_newline = offset == subject_end or
+        (offset + 1 == subject_end and input[offset] == '\n') or
+        (offset + 2 == subject_end and input[offset] == '\r' and input[offset + 1] == '\n');
     return .{
         .start = offset == 0,
-        .end = offset == input.len,
+        .end = offset == subject_end,
         .final_newline = final_newline,
         .start_match = offset == attempt_start,
         .previous = if (offset == 0) null else input[offset - 1],
-        .next = if (offset == input.len) null else input[offset],
+        .next = if (offset == subject_end) null else input[offset],
         .previous_rune = runeBefore(input, offset),
         .input = input,
         .offset = offset,
-        .next_rune = if (runeAt(input, offset)) |rune| rune.value else null,
+        .subject_end = subject_end,
+        .next_rune = if (offset < subject_end) (if (runeAt(input, offset)) |rune| rune.value else null) else null,
     };
 }
 
@@ -148,6 +150,9 @@ pub const Workspace = struct {
     mark_pos: usize = 0,
     best_mark: ?u16 = null,
     attempt_start: usize = 0,
+    /// End of the current subject. Normally `input.len`; scan-substring
+    /// assertions temporarily shorten it to the captured substring end.
+    subject_end: usize = 0,
     skip_pos: usize = 0,
     skip_armed: bool = false,
     commit_failed: bool = false,
@@ -293,6 +298,46 @@ pub const Workspace = struct {
         return true;
     }
 
+    /// Match `child` against the first captured substring in `groups` that has
+    /// participated. The scan is anchored at the substring start with the
+    /// subject end temporarily shortened. The assertion is atomic: the child's
+    /// choices are discarded, while captures from a successful scan remain.
+    fn scanSubstring(self: *Workspace, input: []const u8, child: usize, groups: []const u16) Error!bool {
+        var start: usize = 0;
+        var end: usize = 0;
+        var found = false;
+        for (groups) |group| {
+            const begin = self.slots[@as(usize, group) * 2];
+            const finish = self.slots[@as(usize, group) * 2 + 1];
+            if (begin != unset and finish != unset and finish >= begin) {
+                start = begin;
+                end = finish;
+                found = true;
+                break;
+            }
+        }
+        if (!found) return false;
+        const saved_end = self.subject_end;
+        const saved_partial = self.partial;
+        const trail_base = self.trail.items.len;
+        const choice_base = self.choices.items.len;
+        self.subject_end = end;
+        self.partial = false;
+        const result = self.run(input, child, start, .{ .sub = null }, choice_base, trail_base) catch |err| {
+            self.subject_end = saved_end;
+            self.partial = saved_partial;
+            return err;
+        };
+        self.subject_end = saved_end;
+        self.partial = saved_partial;
+        self.choices.shrinkRetainingCapacity(choice_base);
+        if (result == null) {
+            self.restoreTrail(trail_base);
+            return false;
+        }
+        return true;
+    }
+
     /// Prepare the next start position for a non-atomic lookbehind. Returns
     /// the start to run the child from, or null when every start up to the
     /// target has been tried. The resume choice is pushed before the child
@@ -344,7 +389,7 @@ pub const Workspace = struct {
         }
         if (end < begin) return null;
         const captured = input[begin..end];
-        const available = input.len - pos;
+        const available = self.subject_end - pos;
         if (captured.len > available) {
             // The input ends inside the expected backreference text. It is a
             // partial match only when the available bytes are a prefix.
@@ -378,7 +423,7 @@ pub const Workspace = struct {
             if (self.steps > self.limits.max_execution_steps) return error.RegexLimitExceeded;
             switch (self.program.instructions[pc]) {
                 .accept => switch (stop) {
-                    .full => if (pos == input.len) return pos,
+                    .full => if (pos == self.subject_end) return pos,
                     .find => {
                         if (!self.limits.longest) return pos;
                         if (best_end == null or pos > best_end.?) {
@@ -390,7 +435,7 @@ pub const Workspace = struct {
                     .sub => unreachable,
                 },
                 .accept_verb => switch (stop) {
-                    .full => if (pos == input.len) return pos,
+                    .full => if (pos == self.subject_end) return pos,
                     .find, .sub => return pos,
                 },
                 .fail => {},
@@ -399,7 +444,7 @@ pub const Workspace = struct {
                     else => unreachable,
                 },
                 .byte => |next| {
-                    if (pos < input.len) {
+                    if (pos < self.subject_end) {
                         pos += 1;
                         pc = next;
                         continue;
@@ -407,7 +452,7 @@ pub const Workspace = struct {
                     self.partial = true;
                 },
                 .literal_byte => |literal| {
-                    if (pos < input.len) {
+                    if (pos < self.subject_end) {
                         if (input[pos] == literal.value) {
                             pos += 1;
                             pc = literal.next;
@@ -416,28 +461,32 @@ pub const Workspace = struct {
                     } else self.partial = true;
                 },
                 .literal_rune => |literal| {
-                    if (runeAt(input, pos)) |rune| {
-                        if (rune.value == literal.value) {
-                            pos += rune.len;
-                            pc = literal.next;
-                            continue;
+                    if (pos < self.subject_end) {
+                        if (runeAt(input, pos)) |rune| {
+                            if (rune.value == literal.value) {
+                                pos += rune.len;
+                                pc = literal.next;
+                                continue;
+                            }
                         }
-                    } else if (pos >= input.len) self.partial = true;
+                    } else self.partial = true;
                 },
                 .consume => |*consume| {
-                    if (runeAt(input, pos)) |rune| {
-                        if (consume.set.matches(rune.value)) {
-                            pos += rune.len;
-                            pc = consume.next;
-                            continue;
+                    if (pos < self.subject_end) {
+                        if (runeAt(input, pos)) |rune| {
+                            if (consume.set.matches(rune.value)) {
+                                pos += rune.len;
+                                pc = consume.next;
+                                continue;
+                            }
                         }
-                    } else if (pos >= input.len and consume.set.ranges.len != 0) self.partial = true;
+                    } else if (consume.set.ranges.len != 0) self.partial = true;
                 },
                 .star => |*star| {
                     // Linear programs use the counting star in replace.zig;
                     // this per-iteration form keeps the VM exhaustive if a
                     // star ever reaches the extended engine.
-                    if (runeAt(input, pos)) |rune| {
+                    if (pos < self.subject_end) if (runeAt(input, pos)) |rune| {
                         if (star.set.matches(rune.value)) {
                             if (self.choices.items.len >= self.limits.max_backtrack_choices) {
                                 return error.RegexLimitExceeded;
@@ -453,7 +502,7 @@ pub const Workspace = struct {
                             pos += rune.len;
                             continue;
                         }
-                    }
+                    };
                     pc = star.next;
                     continue;
                 },
@@ -485,13 +534,13 @@ pub const Workspace = struct {
                     continue;
                 },
                 .assertion => |*assertion| {
-                    if (position(input, pos, self.attempt_start).allows(assertion.kind, self.program.ucp_word)) {
+                    if (position(input, pos, self.attempt_start, self.subject_end).allows(assertion.kind, self.program.ucp_word)) {
                         pc = assertion.next;
                         continue;
                     }
                 },
                 .lookahead => |look| {
-                    const next = runeAt(input, pos);
+                    const next = if (pos < self.subject_end) runeAt(input, pos) else null;
                     const matched = if (next) |rune| look.set.matches(rune.value) else false;
                     if (matched != look.negative) {
                         pc = look.next;
@@ -535,6 +584,12 @@ pub const Workspace = struct {
                         continue;
                     }
                 },
+                .scan_substring => |scan| {
+                    if (try self.scanSubstring(input, scan.child, scan.groups)) {
+                        pc = scan.next;
+                        continue;
+                    }
+                },
                 .backref => |ref| {
                     if (self.backref(input, ref.group, pos)) |end| {
                         pos = end;
@@ -570,10 +625,13 @@ pub const Workspace = struct {
                     continue;
                 },
                 .grapheme => |next| {
-                    if (pos < input.len) {
-                        pos = grapheme.next(input, pos);
-                        pc = next;
-                        continue;
+                    if (pos < self.subject_end) {
+                        const next_pos = grapheme.next(input, pos);
+                        if (next_pos <= self.subject_end) {
+                            pos = next_pos;
+                            pc = next;
+                            continue;
+                        }
                     }
                     self.partial = true;
                 },
@@ -723,6 +781,7 @@ pub const Workspace = struct {
     pub fn partialMatch(self: *Workspace, input: []const u8) Error!model.PartialResult {
         self.steps = 0;
         self.resetRun(0);
+        self.subject_end = input.len;
         self.attempt_start = 0;
         self.commit_failed = false;
         self.skip_armed = false;
@@ -735,6 +794,7 @@ pub const Workspace = struct {
     pub fn fullMatch(self: *Workspace, input: []const u8) Error!bool {
         self.steps = 0;
         self.resetRun(0);
+        self.subject_end = input.len;
         self.attempt_start = 0;
         self.commit_failed = false;
         self.skip_armed = false;
@@ -746,6 +806,7 @@ pub const Workspace = struct {
     pub fn find(self: *Workspace, input: []const u8, search_start: usize) Error!?Match {
         if (search_start > input.len) return null;
         self.steps = 0;
+        self.subject_end = input.len;
         self.attempt_start = search_start;
         self.commit_failed = false;
         var start = search_start;

@@ -85,7 +85,7 @@ Implemented functionality:
   case transforms `\U`/`\L`/`\E`/`\u`/`\l` (simple Unicode by default;
   `Limits.full_case_mapping` enables full SpecialCasing), and callback
   replacement via `replaceAllWithFn`.
-- 141 tests, including recursion, branch reset, conditional assertions,
+- 145 tests, including recursion, branch reset, conditional assertions,
   grapheme clusters, binary properties, Unicode blocks, partial matching,
   control verbs, thread safety, allocation-failure, and differential coverage
   against V8 for the supported subset.
@@ -109,6 +109,7 @@ Strengths:
 | General lookaround | yes (extended) | yes | no | yes |
 | Non-atomic lookaround `(?*...)`/`(?<*...)` | yes (extended) | yes (10.43+) | no | no |
 | Script runs `(*sr:...)`/`(*asr:...)` | yes (extended) | yes (10.43+) | no | no |
+| Scan substring `(*scs:...)` | yes (extended) | yes (10.43+) | no | no |
 | Backreferences | yes (extended) | yes | no | yes |
 | Atomic/possessive | yes (extended) | yes | no | no |
 | Conditionals | group + assertion + `(?(R1))`/`(?(R&name))` + DEFINE | full | no | no |
@@ -285,6 +286,11 @@ For the workloads in `tools/bench/main.zig`, on an idle host:
 Backreferences, general lookaround, recursion, atomic groups, and possessive
 quantifiers are non-goals for the linear engine because they break the
 linear-time guarantee. They are supported only in the extended backtracking
+mode, which is explicitly bounded and fail-closed.
+reak the
+linear-time guarantee. They are supported only in the extended backtracking
+mode, which is explicitly bounded and fail-closed.
+xtended backtracking
 mode, which is explicitly bounded and fail-closed.
 reak the
 linear-time guarantee. They are supported only in the extended backtracking
