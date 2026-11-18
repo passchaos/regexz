@@ -171,6 +171,10 @@ test "streaming simple-run fast path handles chunk boundaries" {
         .{ .pattern = "\\d+", .input = "12 345 6" },
         .{ .pattern = "\\p{Han}+", .input = "a\u{4f60}\u{597d}\u{ff0c}\u{4e16}\u{754c}b" },
         .{ .pattern = "\\p{Han}+", .input = "\u{4f60}\u{597d}\u{4e16}\u{754c}" },
+        .{ .pattern = "(?i)[a-z]+", .input = "AbC dEf" },
+        .{ .pattern = "\\w+", .input = "ab_12 cd" },
+        .{ .pattern = "\\s+", .input = "a \t b\n" },
+        .{ .pattern = "[\\p{L}\\p{N}]+", .input = "caf\u{00e9} 12 \u{4f60}\u{597d}" },
     };
     for (cases) |case| {
         for ([_]usize{ 1, 2, 3, 4, 5, 8 }) |chunk| {
