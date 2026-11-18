@@ -182,7 +182,8 @@ Measured on an Apple Silicon macOS host. "Before" is the initial commit state;
 | Full match, ASCII loop, 216 KiB | — | ~376 µs (~555 MiB/s) | — | — |
 | Full match, backref `(a)\1` (reuse) | ~5.5 µs | ~17 ns | — | — |
 | Full match, atomic `(?>a+)a` (reuse) | ~5.2 µs | ~23 ns | — | — |
-| `StreamScanner` `[a-z]+`, 216 KiB in 4 KiB chunks | ~31 ms | ~0.33 ms (630 MiB/s) | — | — |
+| `StreamScanner` `[a-z]+`, 216 KiB in 4 KiB chunks | ~31 ms | ~0.32 ms (650 MiB/s) | — | — |
+| `StreamScanner` `[a-z]+ [a-z]+`, 216 KiB in 4 KiB chunks | — | ~0.36 ms (585 MiB/s) | — | — |
 | Byte escape scan `\C+`, 23 KiB | — | ~8 ns/pass (one full-span match) | not supported | — |
 | Shared-prefix alternation no-match, 23 KiB | — | ~1.55 µs (15.5 GiB/s) | ~2.1 µs (11.4 GiB/s) | — |
 | `find` selective pattern (`\p{N}`) | — | ~36 ns/piece | — | — |
@@ -215,9 +216,9 @@ Qwen search is ~68–74 µs (~330–353 MiB/s), CJK tokenizer search is ~200–2
 Unicode full matches scan at ~800 MiB/s and ASCII full matches at ~2.7 GiB/s
 (direct-mapped transition cache), and extended full matches reuse a
 persistent backtracking workspace (~17 ns for a backreference pattern), and
-shared-prefix no-match scans are ~1.55 µs (15.5 GiB/s). The bench gate now covers 33 cases;
+shared-prefix no-match scans are ~1.55 µs (15.5 GiB/s). The bench gate now covers 34 cases;
 `RegexSet` ~97 µs, `replaceAll` ~85 µs, compile ~1.5 µs with `smp_allocator`,
-and all 195 tests plus the V8/Rust/extended/replacement differential fuzzers pass. On the
+and all 196 tests plus the V8/Rust/extended/replacement differential fuzzers pass. On the
 feature side, PCRE2 forward numeric/named references, `\e` and isolated `\E`,
 the full substitution reference syntax (`$<name>`, `$+`, `$_`, `` $` ``, `$'`),
 `escape`/`splitn`/`replacen`, and compile diagnostics (`diagnose`) are covered.

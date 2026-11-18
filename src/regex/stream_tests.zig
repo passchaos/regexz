@@ -188,3 +188,28 @@ test "streaming simple-run fast path handles chunk boundaries" {
     defer scanner.deinit();
     try std.testing.expect(scanner.simple_set != null);
 }
+
+test "streaming chain fast path handles chunk boundaries" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const cases = [_]struct { pattern: []const u8, input: []const u8 }{
+        .{ .pattern = "[a-z]+ [a-z]+", .input = "ab cd  ef" },
+        .{ .pattern = "[a-z]+ [a-z]+", .input = "one two three" },
+        .{ .pattern = "\\d+\\.\\d+", .input = "1.23 456.7 8" },
+        .{ .pattern = "\\w+:\\w+", .input = "a:b cc:dd ee" },
+        .{ .pattern = "[a-z]+ [a-z]+", .input = "  lead and trail  " },
+    };
+    for (cases) |case| {
+        for ([_]usize{ 1, 2, 3, 4, 5, 8 }) |chunk| {
+            try expectScannerMatches(allocator, case.pattern, case.input, chunk, .{});
+        }
+    }
+
+    var value = try regex.Regex.init(allocator, "[a-z]+ [a-z]+", .{});
+    defer value.deinit();
+    var scanner = try regex.StreamScanner.init(allocator, value.program, .{});
+    defer scanner.deinit();
+    try std.testing.expect(scanner.simple_chain != null);
+}

@@ -309,7 +309,8 @@ busy Apple Silicon host (absolute numbers vary with load):
 | Reused workspace, `(?i)` literal | ~72 ns | ~5 ns |
 | Full match, backref `(a)\1` (reuse) | ~5.5 µs | ~17 ns |
 | Full match, atomic `(?>a+)a` (reuse) | ~5.2 µs | ~23 ns |
-| `StreamScanner` `[a-z]+` (216 KiB, 4 KiB chunks) | ~31 ms | ~0.33 ms (630 MiB/s) |
+| `StreamScanner` `[a-z]+` (216 KiB, 4 KiB chunks) | ~31 ms | ~0.32 ms (650 MiB/s) |
+| `StreamScanner` `[a-z]+ [a-z]+` (216 KiB, 4 KiB chunks) | — | ~0.36 ms (585 MiB/s) |
 | Qwen tokenizer `find` (22 KiB) | ~842 µs | ~68 µs (350 MiB/s) |
 | CJK tokenizer `find` (191 KiB) | — | ~200–230 µs (~850–980 MiB/s) |
 | `\p{Han}+` class scan (191 KiB) | ~635 µs | ~173–200 µs (~940–1080 MiB/s) |

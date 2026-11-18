@@ -209,6 +209,7 @@ pub fn main() !void {
     try benchMatches(io, out, "fullmatch ASCII class (216 KiB)", "[a-z0-9 \n]+", ascii_text.items, 50, true);
     try benchMatches(io, out, "fullmatch ASCII loop (216 KiB)", "(?:[a-z0-9]+[ \n])+", ascii_text.items, 50, true);
     try benchStream(io, out, "stream [a-z]+ (216 KiB, 4 KiB chunks)", "[a-z]+", ascii_text.items, 4096, 20, .{});
+    try benchStream(io, out, "stream [a-z]+ [a-z]+ (216 KiB, 4 KiB chunks)", "[a-z]+ [a-z]+", ascii_text.items, 4096, 20, .{});
 
     {
         const set_patterns = [_][]const u8{
