@@ -641,6 +641,17 @@ pub const Workspace = struct {
                 recordMatch(&best_end, &best_priority, offset, accept);
                 break;
             }
+            const byte = input[offset];
+            if (byte < 0x80) {
+                const cached = self.states.items[state].ascii[byte];
+                if (cached != 0) {
+                    recordMatch(&best_end, &best_priority, offset, self.states.items[state].accept_ascii[byte]);
+                    state = if (cached == dead_state) dead_state else cached - 1;
+                    if (state == dead_state) break;
+                    offset += 1;
+                    continue;
+                }
+            }
             const rune = runeAt(input, offset) orelse {
                 // Invalid UTF-8 cannot continue a rune-based path; the
                 // position may still accept an empty match.

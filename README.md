@@ -253,13 +253,13 @@ busy Apple Silicon host (absolute numbers vary with load):
 | Reused workspace, class pattern | ~171 ns | ~8 ns |
 | Reused workspace, xDS-like pattern | ~233 ns | ~16 ns |
 | Reused workspace, `(?i)` literal | ~72 ns | ~5 ns |
-| Qwen tokenizer `find` (22 KiB) | ~842 µs | ~110 µs (215 MiB/s) |
+| Qwen tokenizer `find` (22 KiB) | ~842 µs | ~95 µs (250 MiB/s) |
 | `replaceAll` `a+` (32 KiB) | ~265 µs | ~64 µs |
 | `find` literal after a 4 KiB prefix | — | ~55 ns |
 | `find` xDS-like after a 4 KiB prefix | — | ~94 ns |
 | `find` multi-literal after a 4 KiB prefix | ~2.0 µs | ~0.22 µs |
-| `find` capture email tokens (18 KiB) | ~161 µs | ~85 µs |
-| `find` capture no-match scan (23 KiB) | ~617 µs | ~124 µs |
+| `find` capture email tokens (18 KiB) | ~161 µs | ~68 µs |
+| `find` capture no-match scan (23 KiB) | ~617 µs | ~84 µs |
 | `find` loop-exit no-match (23 KiB) | ~120 µs | ~4.7 µs |
 | `find` suffix no-match (23 KiB) | ~238 µs | ~14 µs |
 | `find` extended no-match (23 KiB) | ~275 µs | ~2.5 µs |

@@ -143,11 +143,11 @@ Measured on an Apple Silicon macOS host. "Before" is the initial commit state;
 | Full match, class pattern (reused workspace) | ~171 ns | ~8 ns | ~10 ns | ~14 ns |
 | Full match, xDS-like (reused) | ~233 ns | ~15–17 ns | ~11 ns | ~11 ns |
 | Full match, Unicode (reused) | ~64 ns | ~12 ns | ~8 ns | ~13 ns |
-| Qwen tokenizer search, 22 KiB | ~842 µs | ~110 µs (215 MiB/s) | ~67 µs* | ~195 µs |
+| Qwen tokenizer search, 22 KiB | ~842 µs | ~95 µs (250 MiB/s) | ~67 µs* | ~195 µs |
 | `find` selective pattern (`\p{N}`) | — | ~36 ns/piece | — | — |
 | `find` multi-literal after a 4 KiB prefix | ~2.0 µs | ~0.22 µs | — | — |
-| `find` capture email tokens, 18 KiB | ~161 µs | ~85 µs | — | — |
-| `find` capture no-match scan, 23 KiB | ~617 µs | ~124 µs | — | — |
+| `find` capture email tokens, 18 KiB | ~161 µs | ~68 µs | — | — |
+| `find` capture no-match scan, 23 KiB | ~617 µs | ~84 µs | — | — |
 | `find` loop-exit no-match, 23 KiB | ~120 µs | ~4.7 µs | ~31.8 µs | — |
 | `find` suffix no-match, 23 KiB | ~238 µs | ~14 µs | ~155 µs | — |
 | `find` extended no-match, 23 KiB | ~275 µs | ~2.5 µs | — | — |
@@ -264,7 +264,7 @@ For the workloads in `tools/bench/main.zig`, on an idle host:
   (achieved: ~8–17 ns).
 - Full match, reused workspace: **≤ 20 ns** for ASCII class patterns
   (achieved: ~8 ns).
-- Qwen tokenizer search: **≥ 200 MiB/s** (achieved: ~210 MiB/s).
+- Qwen tokenizer search: **≥ 200 MiB/s** (achieved: ~250 MiB/s).
 - `replaceAll` `a+`: **≥ 400 MiB/s** (achieved: ~450–480 MiB/s).
 - Compile xDS-like pattern: **≤ 2 µs** (current: ~3.1 µs).
 - Workspace memory: **≤ 48 bytes/instruction** (achieved: 44).
