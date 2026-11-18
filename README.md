@@ -355,7 +355,9 @@ recursion-depth limits and fail closed with `error.RegexLimitExceeded`.
   that use `&&`, `--`, or `~~` as literal class characters must escape them.
 - `\v` defaults to vertical tab (RE2/Go compatibility); set
   `Limits.pcre_vertical_whitespace` for PCRE2 vertical-whitespace semantics.
-- Replacement references groups `\0`..`\9` (RE2) and `$0`..`$99`/`${name}`.
+- Replacement references groups `\0`..`\9` (RE2), `$0`..`$99`,
+  `${name}`/`$<name>`, `$&`, `$$`, and the PCRE2/Perl `$+`, `$_`, `$``, `$'`
+  forms.
 - UCP applies to `\s` only when `unicode_perl_space` is set, or to
   `\d`/`\w`/`\s` and word boundaries when `unicode_perl_classes` is set.
 - Invalid UTF-8 bytes are not decoded as U+FFFD; only `\C` can consume them.
