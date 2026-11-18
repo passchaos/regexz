@@ -265,6 +265,9 @@ find call.
 ## Build and test
 
 ```sh
+python3 tools/check.py               # full local gate: fmt, tests, codegen, differential fuzz
+python3 tools/check.py --bench       # also enforce the benchmark baseline
+python3 tools/check.py --fuzz 100 --skip-codegen
 zig build test
 zig build test-lib -Dtest-filter="..."
 zig build bench -Doptimize=ReleaseFast
