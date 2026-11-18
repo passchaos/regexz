@@ -173,7 +173,7 @@ Measured on an Apple Silicon macOS host. "Before" is the initial commit state;
 | Full match, class pattern (reused workspace) | ~171 ns | ~8 ns | ~10 ns | ~14 ns |
 | Full match, xDS-like (reused) | ~233 ns | ~15–17 ns | ~11 ns | ~11 ns |
 | Full match, Unicode (reused) | ~64 ns | ~12 ns | ~8 ns | ~13 ns |
-| Qwen tokenizer search, 22 KiB | ~842 µs | ~95 µs (250 MiB/s) | ~67 µs* | ~195 µs |
+| Qwen tokenizer search, 22 KiB | ~842 µs | ~73 µs (330 MiB/s) | ~56 µs* (427 MiB/s) | ~195 µs |
 | `find` selective pattern (`\p{N}`) | — | ~36 ns/piece | — | — |
 | `find` multi-literal after a 4 KiB prefix | ~2.0 µs | ~0.22 µs | — | — |
 | `find` capture email tokens, 18 KiB | ~161 µs | ~68 µs | — | — |
@@ -187,15 +187,17 @@ Measured on an Apple Silicon macOS host. "Before" is the initial commit state;
 | Compile xDS-like (smp allocator) | — | ~1.5 µs | — | — |
 
 \* Rust baseline omits the `\s+(?!\S)` branch because Rust `regex` has no
-lookaround; the Node baseline uses the full pattern.
+lookaround; the Node baseline uses the full pattern. The current same-host
+Rust 1.13.1 reference for that branch-less equivalent is ~56 µs.
 
 † Node's repeated `new RegExp` benchmark likely benefits from V8's compile
 cache for identical sources.
 
-Latest verification on a busy macOS host (2026-11): full-pattern Qwen search
-is ~89–92 µs (~260 MiB/s), `RegexSet` ~96 µs, `replaceAll` ~76 µs, compile
-~1.5 µs with `smp_allocator`, and all 170 tests plus the V8/Rust/extended
-differential fuzzers pass. Treat absolute numbers as host-noise-sensitive;
+Latest verification on a busy macOS host (2026-11): after flattening the
+search-DFA transition tables, full-pattern Qwen search is ~72–74 µs
+(~330 MiB/s), `RegexSet` ~97 µs, `replaceAll` ~85 µs, compile ~1.5 µs with
+`smp_allocator`, and all 170 tests plus the V8/Rust/extended differential
+fuzzers pass. Treat absolute numbers as host-noise-sensitive;
 the bench gate compares ratios against `tools/bench/baseline.json`.
 
 Where the remaining time goes:
@@ -239,9 +241,10 @@ Where the remaining time goes:
 6. **DFA-backed leftmost search** (`execute.zig`, `compile.zig`): the
    priority-annotated lazy search DFA (`search_dfa.zig`) now covers linear
    programs including capture programs (bounds from the DFA, slots replayed
-   on the matched slice) and lifted Qwen tokenizer search from ~123 MiB/s to
-   ~215 MiB/s. Remaining: iteration-aware priorities for loops whose exits
-   compete with later choices, and closing the gap to Rust's ~330 MiB/s. An
+   on the matched slice). Flattening the state transition tables lifted Qwen
+   tokenizer search to ~330 MiB/s, against a same-host Rust reference of
+   ~427 MiB/s. Remaining: iteration-aware priorities for loops whose exits
+   compete with later choices, and closing the remaining Rust gap. An
    ordered-subset DFA prototype was evaluated and reverted: list position
    captures loop-iteration order but cannot compare an accept with an earlier
    accept from a different branch. A sound solution needs tagged priorities
@@ -301,7 +304,7 @@ For the workloads in `tools/bench/main.zig`, on an idle host:
   (achieved: ~8–17 ns).
 - Full match, reused workspace: **≤ 20 ns** for ASCII class patterns
   (achieved: ~8 ns).
-- Qwen tokenizer search: **≥ 200 MiB/s** (achieved: ~250 MiB/s).
+- Qwen tokenizer search: **≥ 200 MiB/s** (achieved: ~330 MiB/s).
 - `replaceAll` `a+`: **≥ 400 MiB/s** (achieved: ~450–480 MiB/s).
 - Compile xDS-like pattern: **≤ 2 µs** (achieved: ~1.5 µs with
   `std.heap.smp_allocator`; ~3.1–3.9 µs with `page_allocator`).
