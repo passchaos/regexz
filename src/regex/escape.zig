@@ -290,6 +290,7 @@ fn namedBackref(p: anytype, open: u8) m.Error!Atom {
         .absolute => |index| {
             if (index == 0) return error.InvalidRegex;
             p.extended = true;
+            p.noteReference(index, p.cursor);
             return .{ .backref = .{ .index = index } };
         },
         .relative, .not_number => {},
@@ -534,6 +535,7 @@ pub fn parse(p: anytype, in_class: bool, fold: m.Fold) m.Error!Atom {
                 .absolute => |index| {
                     if (index == 0) return error.InvalidRegex;
                     p.extended = true;
+                    p.noteReference(index, p.cursor);
                     return .{ .backref = .{ .index = index } };
                 },
                 .relative => |offset| {
@@ -543,6 +545,7 @@ pub fn parse(p: anytype, in_class: bool, fold: m.Fold) m.Error!Atom {
                     const value = base + offset;
                     if (value <= 0 or value > 32767) return error.InvalidRegex;
                     p.extended = true;
+                    p.noteReference(@intCast(value), p.cursor);
                     return .{ .backref = .{ .index = @intCast(value) } };
                 },
                 .not_number => {},
