@@ -183,7 +183,10 @@ fn graphemeBoundarySuffix(p: anytype) m.Error!?m.Assertion {
         p.cursor = end + 1;
         return .word_boundary_uax29;
     }
-    if (nameEqual(name, "sb")) return error.UnsupportedRegexFeature;
+    if (nameEqual(name, "sb")) {
+        p.cursor = end + 1;
+        return .sentence_boundary;
+    }
     return null;
 }
 
@@ -397,6 +400,7 @@ pub fn parse(p: anytype, in_class: bool, fold: bool) m.Error!Atom {
                 const negated: m.Assertion = switch (kind) {
                     .grapheme_boundary => .no_grapheme_boundary,
                     .word_boundary_uax29 => .no_word_boundary_uax29,
+                    .sentence_boundary => .no_sentence_boundary,
                     else => unreachable,
                 };
                 return .{ .assertion = negated };

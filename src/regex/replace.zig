@@ -1024,7 +1024,7 @@ const Position = struct {
             .no_word_boundary, .no_word_boundary_unicode => !boundary,
             // Grapheme boundary assertions are extended-only and evaluated by
             // the backtracking VM.
-            .grapheme_boundary, .no_grapheme_boundary, .word_boundary_uax29, .no_word_boundary_uax29 => false,
+            .grapheme_boundary, .no_grapheme_boundary, .word_boundary_uax29, .no_word_boundary_uax29, .sentence_boundary, .no_sentence_boundary => false,
         };
     }
 };

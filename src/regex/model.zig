@@ -198,6 +198,9 @@ pub const Assertion = enum {
     /// UAX #29 word boundary (`\b{wb}`).
     word_boundary_uax29,
     no_word_boundary_uax29,
+    /// UAX #29 sentence boundary (`\b{sb}`).
+    sentence_boundary,
+    no_sentence_boundary,
 };
 /// Condition for `(?(cond)yes|no)`.
 pub const Condition = union(enum) {

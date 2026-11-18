@@ -82,8 +82,8 @@ The engine picks the execution strategy automatically:
     (PCRE2-style auto-callouts; the compiler-level insertion is approximate
     for quantified atoms).
   - UAX #29 boundary assertions: grapheme cluster `\b{gcb}` / `\B{gcb}`
-    (alias `\b{g}`) and word boundaries `\b{wb}` / `\B{wb}`, evaluated by
-    the extended engine.
+    (alias `\b{g}`), word boundaries `\b{wb}` / `\B{wb}`, and sentence
+    boundaries `\b{sb}` / `\B{sb}`, evaluated by the extended engine.
   - `\R` (atomic newline sequence), `\N` (not newline), `\N{U+hhhh}`
     (explicit code point), `\h`/`\H` (horizontal whitespace), `\cX`
     (control characters), and `\o{...}` (octal code points).

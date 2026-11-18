@@ -37,5 +37,4 @@ test "word boundary regex assertions" {
         defer value.deinit();
         try std.testing.expectEqual(case.matches, try value.matches(allocator, case.input));
     }
-    try std.testing.expectError(error.UnsupportedRegexFeature, regex.Regex.init(allocator, "\\b{sb}", .{}));
 }
