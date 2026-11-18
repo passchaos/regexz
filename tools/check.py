@@ -43,6 +43,7 @@ def main() -> int:
         steps.append(("codegen", [sys.executable, "tools/codegen/generate.py", "--verify"]))
     steps.append(("v8 fuzz", [sys.executable, "tools/fuzz/run.py", "--cases", str(args.fuzz), "--seed", SEED]))
     steps.append(("extended fuzz", [sys.executable, "tools/fuzz/extended.py", "--cases", str(args.fuzz), "--seed", SEED]))
+    steps.append(("replace fuzz", [sys.executable, "tools/fuzz/replace.py", "--cases", str(args.fuzz), "--seed", SEED]))
     if shutil.which("cargo"):
         steps.append(("rust fuzz", [sys.executable, "tools/fuzz/rust.py", "--cases", str(args.fuzz), "--seed", SEED]))
     else:

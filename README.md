@@ -283,6 +283,7 @@ zig build bench -Doptimize=ReleaseFast
 python3 tools/bench/check.py         # compare against tools/bench/baseline.json (--update to refresh)
 python3 tools/fuzz/run.py            # fuzz full match, find spans, and captures against V8
 python3 tools/fuzz/extended.py       # fuzz lookaround/backref/capture semantics against V8
+python3 tools/fuzz/replace.py        # fuzz replacement expansion against V8
 python3 tools/fuzz/rust.py           # three-way Rust regex / Node / regexz differential
 python3 tools/codegen/generate.py --verify
 ```
