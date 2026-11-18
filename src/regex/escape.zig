@@ -519,11 +519,10 @@ pub fn parse(p: anytype, in_class: bool, fold: m.Fold) m.Error!Atom {
                     return .{ .backref = index };
                 },
                 .relative => |offset| {
-                    // PCRE2 relative backreferences are anchored at the most
-                    // recently opened group; forward references are not
-                    // supported for backreferences.
-                    if (offset >= 0) return error.InvalidRegex;
-                    const value = @as(i32, p.captures) + 1 + offset;
+                    // Relative to the most recently opened group; positive
+                    // offsets reference groups that are still to be opened.
+                    const base: i32 = @as(i32, p.captures) + @as(i32, if (offset < 0) 1 else 0);
+                    const value = base + offset;
                     if (value <= 0 or value > 32767) return error.InvalidRegex;
                     p.extended = true;
                     return .{ .backref = @intCast(value) };

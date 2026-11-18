@@ -288,11 +288,15 @@ test "duplicate group names with (?J)" {
 }
 
 test "relative subroutine calls" {
-    try expectFull("(ab)(?+1)", "abab", .{}, true);
-    try expectFull("(ab)(cd(?-1))", "abcdab", .{}, true);
+    // Relative references count from the most recently started group.
+    try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, "(ab)(?+1)", .{}));
+    try expectFull("(ab)(cd(?-1))", "abcdab", .{}, false);
+    try expectFull("(a)(b(?-1))", "aba", .{}, false);
     try expectFull("(a(?+1)b)(c)", "acbc", .{}, true);
     try expectFull("(a(?-1)?b)", "aabb", .{}, true);
     try expectFull("(a(?-1)?b)", "aab", .{}, false);
+    try expectFull("(a)(?-1)", "aa", .{}, true);
+    try expectFull("(?+1)(a)", "aa", .{}, true);
 }
 
 test "recursion condition (?(R))" {
@@ -682,4 +686,12 @@ test "named SKIP resumes at the mark position" {
     try expectFind("ab(*MARK:m)(*SKIP:m)xy|b", "abxy", .{}, .{ .start = 0, .end = 4 });
     // A missing mark behaves like an unnamed skip.
     try expectFind("a(*SKIP:missing)b", "ab", .{}, .{ .start = 0, .end = 2 });
+}
+
+test "relative conditional group references" {
+    try expectFull("(a)(?(-1)b|c)", "ab", .{}, true);
+    try expectFull("(a)(?(-1)b|c)", "ac", .{}, false);
+    try expectFull("(a)(?(+1)b|c)(b)", "acb", .{}, true);
+    try expectFull("(?(+1)a|b)(a)", "ba", .{}, true);
+    try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, "(?(-1)a|b)", .{}));
 }

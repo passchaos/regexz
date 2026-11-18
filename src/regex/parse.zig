@@ -419,16 +419,30 @@ pub const Parser = struct {
             if (!self.take(')')) return error.InvalidRegex;
             return .{ .group = self.lookupName(name) orelse return error.InvalidRegex };
         }
+        var negative = false;
+        var signed = false;
+        if (self.peek()) |byte| {
+            if (byte == '+' or byte == '-') {
+                negative = byte == '-';
+                signed = true;
+                self.cursor += 1;
+            }
+        }
         const start = self.cursor;
         while (self.peek()) |byte| {
             if (!std.ascii.isDigit(byte)) break;
             self.cursor += 1;
         }
         if (start == self.cursor) return error.UnsupportedRegexFeature;
-        const value = std.fmt.parseInt(u16, self.pattern[start..self.cursor], 10) catch return error.InvalidRegex;
-        if (value == 0 or value > self.captures) return error.InvalidRegex;
+        const magnitude = std.fmt.parseInt(i32, self.pattern[start..self.cursor], 10) catch return error.InvalidRegex;
+        const value: i32 = if (signed) blk: {
+            const base: i32 = @as(i32, self.captures) + @as(i32, if (negative) 1 else 0);
+            break :blk base + (if (negative) -magnitude else magnitude);
+        } else magnitude;
+        if (value <= 0 or value > 32767) return error.InvalidRegex;
+        if (!signed and value > self.captures) return error.InvalidRegex;
         if (!self.take(')')) return error.InvalidRegex;
-        return .{ .group = value };
+        return .{ .group = @intCast(value) };
     }
     fn conditional(self: *Parser, depth: usize) m.Error!*const m.Node {
         const condition_value = try self.condition(depth);
@@ -496,8 +510,9 @@ pub const Parser = struct {
                 }
                 if (start == self.cursor) return error.InvalidRegex;
                 const offset = std.fmt.parseInt(i32, self.pattern[start..self.cursor], 10) catch return error.InvalidRegex;
-                const value = @as(i32, self.current_group) + (if (negative) -offset else offset);
-                if (value < 0 or value > 32767) return error.InvalidRegex;
+                const base: i32 = @as(i32, self.captures) + @as(i32, if (negative) 1 else 0);
+                const value = base + (if (negative) -offset else offset);
+                if (value <= 0 or value > 32767) return error.InvalidRegex;
                 if (!self.take(')')) return error.InvalidRegex;
                 return self.subroutine(@intCast(value));
             }

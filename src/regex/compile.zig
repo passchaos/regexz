@@ -329,7 +329,10 @@ const Builder = struct {
                     .next = continuation,
                 } });
             },
-            .backref => |ref| self.emit(.{ .backref = .{ .group = ref.index, .next = continuation } }),
+            .backref => |ref| blk: {
+                if (ref.index > self.capture_count) return error.InvalidRegex;
+                break :blk self.emit(.{ .backref = .{ .group = ref.index, .next = continuation } });
+            },
             .script_run => |run| blk: {
                 const base = 2 * (@as(usize, self.capture_count) + 1);
                 const slot = base + self.extra_slots;
@@ -362,7 +365,10 @@ const Builder = struct {
                 const yes = try self.node(cond.yes, continuation);
                 const no = if (cond.no) |no_node| try self.node(no_node, continuation) else continuation;
                 switch (cond.condition) {
-                    .group => |group| break :blk self.emit(.{ .conditional = .{ .group = group, .yes = yes, .no = no } }),
+                    .group => |group| {
+                        if (group > self.capture_count) return error.InvalidRegex;
+                        break :blk self.emit(.{ .conditional = .{ .group = group, .yes = yes, .no = no } });
+                    },
                     .recursion => |group| break :blk self.emit(.{ .conditional_recursion = .{ .group = group, .yes = yes, .no = no } }),
                     .version => |satisfied| break :blk if (satisfied) yes else no,
                     .assertion => |assertion_node| {
