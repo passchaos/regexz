@@ -198,3 +198,17 @@ test "regex set exposes its patterns" {
     try std.testing.expectEqualStrings("\\d+", sources[0]);
     try std.testing.expectEqualStrings("abc", sources[1]);
 }
+
+test "regex set match indices handles more than 64 patterns" {
+    const allocator = std.testing.allocator;
+    var patterns: [70][]const u8 = undefined;
+    for (&patterns, 0..) |*pattern, index| pattern.* = if (index % 2 == 0) "a" else "b";
+    var set = try regex.RegexSet.init(allocator, &patterns, .{});
+    defer set.deinit();
+    var indices: std.ArrayList(usize) = .empty;
+    defer indices.deinit(allocator);
+    try set.matchIndices("a", &indices);
+    try std.testing.expectEqual(@as(usize, 35), indices.items.len);
+    try std.testing.expectEqual(@as(usize, 0), indices.items[0]);
+    try std.testing.expectEqual(@as(usize, 68), indices.items[34]);
+}

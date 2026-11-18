@@ -121,8 +121,13 @@ pub const RegexSet = struct {
     /// Append the indices of matching patterns to `indices`, preserving
     /// pattern order.
     pub fn matchIndices(self: *RegexSet, input: []const u8, indices: *std.ArrayList(usize)) Error!void {
-        const matched = try self.allocator.alloc(bool, self.programs.len);
-        defer self.allocator.free(matched);
+        var stack: [64]bool = undefined;
+        const pattern_count = self.programs.len;
+        const matched = if (pattern_count <= stack.len)
+            stack[0..pattern_count]
+        else
+            try self.allocator.alloc(bool, pattern_count);
+        defer if (pattern_count > stack.len) self.allocator.free(matched);
         try self.matches(input, matched);
         for (matched, 0..) |value, index| {
             if (value) try indices.append(self.allocator, index);
