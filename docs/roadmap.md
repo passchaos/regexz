@@ -173,7 +173,11 @@ Measured on an Apple Silicon macOS host. "Before" is the initial commit state;
 | Full match, class pattern (reused workspace) | ~171 ns | ~8 ns | ~10 ns | ~14 ns |
 | Full match, xDS-like (reused) | ~233 ns | ~15–17 ns | ~11 ns | ~11 ns |
 | Full match, Unicode (reused) | ~64 ns | ~12 ns | ~8 ns | ~13 ns |
-| Qwen tokenizer search, 22 KiB | ~842 µs | ~73 µs (330 MiB/s) | ~56 µs* (427 MiB/s) | ~195 µs |
+| Qwen tokenizer search, 22 KiB | ~842 µs | ~68 µs (353 MiB/s) | ~56 µs* (427 MiB/s) | ~195 µs |
+| CJK tokenizer search, 191 KiB | — | ~284 µs (659 MiB/s) | ~216 µs* (864 MiB/s) | — |
+| Han class scan, 191 KiB | — | ~635 µs (294 MiB/s) | ~169 µs (1104 MiB/s) | — |
+| Byte escape scan `\C+`, 23 KiB | — | ~95 µs (252 MiB/s) | not supported | — |
+| Shared-prefix alternation no-match, 23 KiB | — | ~9.4 µs (2.56 GiB/s) | ~2.1 µs (11.4 GiB/s) | — |
 | `find` selective pattern (`\p{N}`) | — | ~36 ns/piece | — | — |
 | `find` multi-literal after a 4 KiB prefix | ~2.0 µs | ~0.22 µs | — | — |
 | `find` capture email tokens, 18 KiB | ~161 µs | ~68 µs | — | — |
@@ -194,11 +198,12 @@ Rust 1.13.1 reference for that branch-less equivalent is ~56 µs.
 cache for identical sources.
 
 Latest verification on a busy macOS host (2026-11): after flattening the
-search-DFA transition tables and adding a capture-free `find` fast path,
-full-pattern Qwen search is ~69–73 µs (~330–350 MiB/s) and per-call `find`
-overhead is ~4.3 ns. `RegexSet` ~97 µs, `replaceAll` ~85 µs, compile ~1.5 µs
-with `smp_allocator`, and all 170 tests plus the V8/Rust/extended differential
-fuzzers pass. Treat absolute numbers as host-noise-sensitive;
+search-DFA transition tables, adding a capture-free `find` fast path, and
+replacing the Unicode hash map with a direct-mapped cache plus a fast UTF-8
+decoder, full-pattern Qwen search is ~68 µs (~353 MiB/s) and CJK tokenizer
+search is ~284 µs (~659 MiB/s). The bench gate now covers 26 cases;
+`RegexSet` ~97 µs, `replaceAll` ~85 µs, compile ~1.5 µs with `smp_allocator`,
+and all 170 tests plus the V8/Rust/extended differential fuzzers pass. Treat absolute numbers as host-noise-sensitive;
 the bench gate compares ratios against `tools/bench/baseline.json`.
 
 Where the remaining time goes:

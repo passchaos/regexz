@@ -154,6 +154,14 @@ pub fn main() !void {
     try benchFindFirst(io, out, "find loop-exit no-match", "[a-z]*(?:foo|bar)", text.items, 200, .{});
     try benchFindFirst(io, out, "find extended no-match", "(?=foo)bar", text.items, 2000, .{});
     try benchFindFirst(io, out, "find suffix no-match", "[a-z]+(?:ing|ed)\\b", text.items, 200, .{});
+    try benchFind(io, out, "find byte escape scan", "\\C+", text.items, 50, .{});
+    try benchFindFirst(io, out, "find shared-prefix no-match", "(?:sunday|saturday|september)", text.items, 500, .{});
+
+    var cjk_text: std.ArrayList(u8) = .empty;
+    defer cjk_text.deinit(gpa);
+    for (0..4000) |_| try cjk_text.appendSlice(gpa, "\u{4f60}\u{597d}\u{4e16}\u{754c}\u{ff0c}\u{8fd9}\u{662f}\u{4e00}\u{4e2a}\u{4e2d}\u{6587}\u{5206}\u{8bcd}\u{6d4b}\u{8bd5}\u{3002}\n");
+    try benchFind(io, out, "find CJK tokenizer", qwen, cjk_text.items, 50, ucp);
+    try benchFind(io, out, "find Han class scan", "\\p{Han}+", cjk_text.items, 50, .{});
 
     {
         const set_patterns = [_][]const u8{
