@@ -110,6 +110,10 @@ pub const ParseResult = struct {
     notempty: bool = false,
     /// `(*NOTEMPTY_ATSTART)`: empty matches are not allowed at the start.
     notempty_atstart: bool = false,
+    /// Pattern-level resource caps from `(*LIMIT_MATCH/DEPTH/HEAP=...)`.
+    limit_match: usize = std.math.maxInt(usize),
+    limit_depth: usize = std.math.maxInt(usize),
+    limit_heap_kib: usize = std.math.maxInt(usize),
 };
 pub const Range = unicode.Range;
 /// Pre-materialization set: positive ranges plus the requested fold/negate.

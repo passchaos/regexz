@@ -21,6 +21,9 @@ pub const Parser = struct {
     bsr_anycrlf: bool = false,
     notempty: bool = false,
     notempty_atstart: bool = false,
+    limit_match: usize = std.math.maxInt(usize),
+    limit_depth: usize = std.math.maxInt(usize),
+    limit_heap_kib: usize = std.math.maxInt(usize),
     group_names: std.ArrayList(m.GroupName) = .empty,
     group_nodes: std.ArrayList(?*const m.Node) = .empty,
     marks: std.ArrayList([]const u8) = .empty,
@@ -159,6 +162,13 @@ pub const Parser = struct {
     fn subroutine(self: *Parser, group_index: u16) m.Error!*const m.Node {
         self.extended = true;
         return self.node(.{ .subroutine = .{ .group = group_index } });
+    }
+    fn limitDirective(name: []const u8, prefix: []const u8) ?usize {
+        if (!std.mem.startsWith(u8, name, prefix)) return null;
+        const text = name[prefix.len..];
+        if (text.len == 0) return null;
+        for (text) |byte| if (!std.ascii.isDigit(byte)) return null;
+        return std.fmt.parseInt(usize, text, 10) catch null;
     }
     fn verb(self: *Parser, depth: usize) m.Error!*const m.Node {
         self.cursor += 1; // '*'
@@ -338,6 +348,18 @@ pub const Parser = struct {
         if (std.mem.eql(u8, name, "NO_AUTO_POSSESS") or
             std.mem.eql(u8, name, "NO_START_OPT") or
             std.mem.eql(u8, name, "NO_DOTSTAR_ANCHOR")) return self.node(.empty);
+        if (limitDirective(name, "LIMIT_MATCH=")) |value| {
+            self.limit_match = @min(self.limit_match, value);
+            return self.node(.empty);
+        }
+        if (limitDirective(name, "LIMIT_DEPTH=") orelse limitDirective(name, "LIMIT_RECURSION=")) |value| {
+            self.limit_depth = @min(self.limit_depth, value);
+            return self.node(.empty);
+        }
+        if (limitDirective(name, "LIMIT_HEAP=")) |value| {
+            self.limit_heap_kib = @min(self.limit_heap_kib, value);
+            return self.node(.empty);
+        }
         self.extended = true;
         if (std.mem.eql(u8, name, "FAIL") or std.mem.eql(u8, name, "F")) return self.node(.fail);
         if (std.mem.eql(u8, name, "ACCEPT")) return self.node(.accept_verb);
@@ -1148,5 +1170,8 @@ pub fn parse(gpa: std.mem.Allocator, pattern: []const u8, limits: m.Limits) m.Er
         .newline = parser.newline,
         .notempty = parser.notempty,
         .notempty_atstart = parser.notempty_atstart,
+        .limit_match = parser.limit_match,
+        .limit_depth = parser.limit_depth,
+        .limit_heap_kib = parser.limit_heap_kib,
     };
 }

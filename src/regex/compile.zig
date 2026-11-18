@@ -35,6 +35,10 @@ pub const Program = struct {
     notempty: bool = false,
     /// `(*NOTEMPTY_ATSTART)`: empty matches are not allowed at the start.
     notempty_atstart: bool = false,
+    /// Pattern-level resource caps.
+    limit_match: usize = std.math.maxInt(usize),
+    limit_depth: usize = std.math.maxInt(usize),
+    limit_heap_choices: usize = std.math.maxInt(usize),
     group_names: []const model.GroupName = &.{},
     /// UCP word set, present when the pattern uses Unicode `\b`/`\B`.
     ucp_word: ?model.Set = null,
@@ -754,6 +758,12 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         .newline = parsed.newline,
         .notempty = parsed.notempty,
         .notempty_atstart = parsed.notempty_atstart,
+        .limit_match = parsed.limit_match,
+        .limit_depth = parsed.limit_depth,
+        .limit_heap_choices = if (parsed.limit_heap_kib == std.math.maxInt(usize))
+            std.math.maxInt(usize)
+        else
+            @max((std.math.mul(usize, parsed.limit_heap_kib, 1024) catch std.math.maxInt(usize)) / 64, 1),
         .group_names = parsed.group_names,
         .ucp_word = ucp_word,
         .marks = parsed.marks,

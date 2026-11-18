@@ -471,3 +471,28 @@ test "unbounded assertion repetition is capped" {
         try std.testing.expectEqual(case.matches, try value.matches(gpa, case.input));
     }
 }
+
+test "pattern resource limit directives" {
+    const runaway = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaac";
+    var lowered = try regex.Regex.init(gpa, "(*LIMIT_MATCH=50)(a+)+b\\1", .{ .max_execution_steps = 10_000_000 });
+    defer lowered.deinit();
+    try std.testing.expectError(error.RegexLimitExceeded, lowered.matches(gpa, runaway));
+
+    // A caller limit below the pattern's cap still wins.
+    var caller = try regex.Regex.init(gpa, "(*LIMIT_MATCH=1000000)(a+)+b\\1", .{ .max_execution_steps = 40 });
+    defer caller.deinit();
+    try std.testing.expectError(error.RegexLimitExceeded, caller.matches(gpa, runaway));
+
+    // Repeated settings take the lower value.
+    var repeated = try regex.Regex.init(gpa, "(*LIMIT_MATCH=100000)(*LIMIT_MATCH=30)(a+)+b\\1", .{ .max_execution_steps = 10_000_000 });
+    defer repeated.deinit();
+    try std.testing.expectError(error.RegexLimitExceeded, repeated.matches(gpa, runaway));
+
+    // Depth and heap caps.
+    var depth = try regex.Regex.init(gpa, "(*LIMIT_DEPTH=2)(a(?1)?b)", .{ .max_recursion_depth = 100 });
+    defer depth.deinit();
+    try std.testing.expectError(error.RegexLimitExceeded, depth.matches(gpa, "aaabbb"));
+    var heap = try regex.Regex.init(gpa, "(*LIMIT_HEAP=1)(a+)+b\\1", .{ .max_backtrack_choices = 1_000_000 });
+    defer heap.deinit();
+    try std.testing.expectError(error.RegexLimitExceeded, heap.matches(gpa, runaway));
+}

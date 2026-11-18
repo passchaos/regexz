@@ -163,6 +163,11 @@ pub const Workspace = struct {
     pending_pos: usize = 0,
 
     pub fn init(allocator: std.mem.Allocator, program: Program, limits: model.Limits) std.mem.Allocator.Error!Workspace {
+        var effective = limits;
+        effective.max_execution_steps = @min(effective.max_execution_steps, program.limit_match);
+        effective.max_recursion_depth = @min(effective.max_recursion_depth, program.limit_depth);
+        effective.max_backtrack_choices = @min(effective.max_backtrack_choices, program.limit_heap_choices);
+        effective.max_capture_trail = @min(effective.max_capture_trail, program.limit_heap_choices);
         const user_slot_count = 2 * (@as(usize, program.capture_count) + 1);
         const slot_count = user_slot_count + program.extra_slots;
         const slots = try allocator.alloc(usize, slot_count);
@@ -173,14 +178,14 @@ pub const Workspace = struct {
         errdefer allocator.free(best_slots);
         var calls: std.ArrayList(CallFrame) = .empty;
         errdefer calls.deinit(allocator);
-        try calls.ensureTotalCapacity(allocator, limits.max_recursion_depth);
+        try calls.ensureTotalCapacity(allocator, effective.max_recursion_depth);
         var returns: std.ArrayList(CallFrame) = .empty;
         errdefer returns.deinit(allocator);
-        try returns.ensureTotalCapacity(allocator, limits.max_recursion_depth);
+        try returns.ensureTotalCapacity(allocator, effective.max_recursion_depth);
         return .{
             .allocator = allocator,
             .program = program,
-            .limits = limits,
+            .limits = effective,
             .slots = slots,
             .user_slot_count = user_slot_count,
             .best_slots = best_slots,

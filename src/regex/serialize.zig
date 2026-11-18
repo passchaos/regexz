@@ -546,6 +546,9 @@ pub fn serialize(program: Program, allocator: std.mem.Allocator) model.Error![]u
     flags |= @as(u16, @intFromEnum(program.newline)) << 3;
     if (program.notempty) flags |= 1 << 6;
     if (program.notempty_atstart) flags |= 1 << 7;
+    if (program.limit_match != std.math.maxInt(usize)) flags |= 1 << 8;
+    if (program.limit_depth != std.math.maxInt(usize)) flags |= 1 << 9;
+    if (program.limit_heap_choices != std.math.maxInt(usize)) flags |= 1 << 10;
     try writer.u16v(flags);
     try writer.u32v(@intCast(program.instructions.len));
     try writer.u32v(@intCast(program.start));
@@ -586,6 +589,9 @@ pub fn serialize(program: Program, allocator: std.mem.Allocator) model.Error![]u
         try writer.u16v(dispatch.nonascii);
         try writer.u16v(dispatch.eof);
     }
+    if (program.limit_match != std.math.maxInt(usize)) try writer.u64v(program.limit_match);
+    if (program.limit_depth != std.math.maxInt(usize)) try writer.u64v(program.limit_depth);
+    if (program.limit_heap_choices != std.math.maxInt(usize)) try writer.u64v(program.limit_heap_choices);
     for (program.instructions) |instruction| try writeInstruction(&writer, instruction);
     return writer.list.toOwnedSlice(allocator);
 }
@@ -650,6 +656,9 @@ pub fn deserialize(allocator: std.mem.Allocator, bytes: []const u8) model.Error!
         dispatch.nonascii = try reader.u16v();
         dispatch.eof = try reader.u16v();
     }
+    const limit_match: usize = if (flags & (1 << 8) != 0) @intCast(try reader.u64v()) else std.math.maxInt(usize);
+    const limit_depth: usize = if (flags & (1 << 9) != 0) @intCast(try reader.u64v()) else std.math.maxInt(usize);
+    const limit_heap_choices: usize = if (flags & (1 << 10) != 0) @intCast(try reader.u64v()) else std.math.maxInt(usize);
     const instructions = try allocator.alloc(model.Instruction, count);
     for (instructions) |*instruction| instruction.* = try readInstruction(&reader, allocator);
     if (reader.pos != bytes.len) return error.InvalidRegex;
@@ -675,6 +684,9 @@ pub fn deserialize(allocator: std.mem.Allocator, bytes: []const u8) model.Error!
         .newline = @enumFromInt(newline_value),
         .notempty = flags & (1 << 6) != 0,
         .notempty_atstart = flags & (1 << 7) != 0,
+        .limit_match = limit_match,
+        .limit_depth = limit_depth,
+        .limit_heap_choices = limit_heap_choices,
     };
     try validate(program);
     return program;

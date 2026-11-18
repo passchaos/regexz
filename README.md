@@ -117,7 +117,9 @@ The engine picks the execution strategy automatically:
   - Newline conventions `(*CR)`, `(*LF)`, `(*CRLF)`, `(*ANYCRLF)`, `(*ANY)`,
     and `(*NUL)`, which drive `^`, `$`, `\Z`, dot, and bare `\N`; `\R` is
     controlled separately by `(*BSR_ANYCRLF)`/`(*BSR_UNICODE)`.
-  - Empty-match locks `(*NOTEMPTY)` and `(*NOTEMPTY_ATSTART)`.
+  - Empty-match locks `(*NOTEMPTY)` and `(*NOTEMPTY_ATSTART)`, and pattern
+    resource caps `(*LIMIT_MATCH=...)`, `(*LIMIT_DEPTH=...)`
+    (alias `(*LIMIT_RECURSION=...)`), and `(*LIMIT_HEAP=...)`.
   - Character-class set operations `&&`, `--`, and `~~`, including nested
     classes such as `[a-z&&[^aeiou]]`.
   - POSIX classes `[[:alpha:]]`, `[[:digit:]]`, `[[:word:]]`, ...; under UCP

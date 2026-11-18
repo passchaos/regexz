@@ -84,6 +84,11 @@ pub const Workspace = struct {
         program: Program,
         limits: model.Limits,
     ) std.mem.Allocator.Error!Workspace {
+        var effective = limits;
+        effective.max_execution_steps = @min(effective.max_execution_steps, program.limit_match);
+        effective.max_recursion_depth = @min(effective.max_recursion_depth, program.limit_depth);
+        effective.max_backtrack_choices = @min(effective.max_backtrack_choices, program.limit_heap_choices);
+        effective.max_capture_trail = @min(effective.max_capture_trail, program.limit_heap_choices);
         const slot_count = 2 * (@as(usize, program.trackedCaptures()) + 1);
         const slots = try allocator.alloc(usize, slot_count);
         @memset(slots, unset);
@@ -94,7 +99,7 @@ pub const Workspace = struct {
         return .{
             .allocator = allocator,
             .program = program,
-            .limits = limits,
+            .limits = effective,
             .slots = slots,
             .best_slots = best_slots,
             .pike_eligible = pike.eligible(program),

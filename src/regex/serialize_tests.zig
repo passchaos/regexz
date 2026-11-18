@@ -23,6 +23,7 @@ const patterns = [_][]const u8{
     "(?i)(a)\\1",
     "(?J)(?:(?<n>foo)|(?<n>bar))\\k<n>",
     "(?|(?<AA>aa)|(?<AA>bb))\\k<AA>",
+    "(*LIMIT_MATCH=1000000)a+",
     "a|ab",
     "(?:ab|cd)+",
     "(a)(b)?",
@@ -77,6 +78,9 @@ fn expectSameProgram(a: regex.Program, b: regex.Program) !void {
     try std.testing.expectEqual(a.newline, b.newline);
     try std.testing.expectEqual(a.notempty, b.notempty);
     try std.testing.expectEqual(a.notempty_atstart, b.notempty_atstart);
+    try std.testing.expectEqual(a.limit_match, b.limit_match);
+    try std.testing.expectEqual(a.limit_depth, b.limit_depth);
+    try std.testing.expectEqual(a.limit_heap_choices, b.limit_heap_choices);
     try std.testing.expectEqual(a.skip_start, b.skip_start);
     try std.testing.expectEqual(a.first.ascii, b.first.ascii);
     try std.testing.expectEqual(a.first.nonascii, b.first.nonascii);
