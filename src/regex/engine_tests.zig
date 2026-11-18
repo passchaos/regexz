@@ -196,6 +196,12 @@ test "partial matching reports prefixes of possible matches" {
         .{ .pattern = "\\C", .input = "", .expected = .partial },
         .{ .pattern = "\\C", .input = "a", .expected = .full },
         .{ .pattern = "\\C", .input = "ab", .expected = .none },
+        // A positive lookahead at EOF makes the subject a partial match.
+        .{ .pattern = "a(?=b)", .input = "a", .expected = .partial },
+        .{ .pattern = "a(?=b)", .input = "", .expected = .partial },
+        .{ .pattern = "a(?=b)", .input = "ab", .expected = .none },
+        .{ .pattern = "a(?!b)", .input = "a", .expected = .full },
+        .{ .pattern = "a(?=\\p{Han})", .input = "a", .expected = .partial },
     }) |case| {
         var value = try regex.Regex.init(gpa, case.pattern, .{});
         defer value.deinit();

@@ -623,6 +623,9 @@ pub const Workspace = struct {
                 .lookahead => |look| {
                     const next = if (pos < self.subject_end) runeAt(input, pos) else null;
                     const matched = if (next) |rune| look.set.matches(rune.value) else false;
+                    if (next == null and pos == self.subject_end and !look.negative and look.set.ranges.len != 0) {
+                        self.partial = true;
+                    }
                     if (matched != look.negative) {
                         pc = look.next;
                         continue;

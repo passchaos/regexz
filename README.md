@@ -357,8 +357,9 @@ recursion-depth limits and fail closed with `error.RegexLimitExceeded`.
 - `StreamScanner` covers non-extended, rune-based programs. Extended
   patterns (lookaround, backreferences, ...) and `\C` return
   `UnsupportedRegexFeature`.
-- `partialMatch` prefix detection is conservative around zero-width
-  assertions.
+- `partialMatch` evaluates positive lookaheads at EOF as partial when a
+  future rune could satisfy them; other zero-width assertions remain
+  conservative.
 - Character-class set operations follow the Rust `regex` spelling; patterns
   that use `&&`, `--`, or `~~` as literal class characters must escape them.
 - `\v` defaults to vertical tab (RE2/Go compatibility); set

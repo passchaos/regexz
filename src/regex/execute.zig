@@ -168,6 +168,11 @@ pub const Workspace = struct {
                 .lookahead => |look| {
                     const next = if (offset < input.len) runeAt(input, offset) else null;
                     const matched = if (next) |value| look.set.matches(value.value) else false;
+                    // A positive lookahead at EOF could be satisfied by a
+                    // future rune, so the subject is a partial match.
+                    if (next == null and offset == input.len and !look.negative and look.set.ranges.len != 0) {
+                        self.partial = true;
+                    }
                     if (matched != look.negative) self.push(seen, stack, &pending, look.next);
                 },
                 else => unreachable,
