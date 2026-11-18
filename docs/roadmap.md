@@ -176,7 +176,7 @@ Measured on an Apple Silicon macOS host. "Before" is the initial commit state;
 | Full match, Unicode (reused) | ~64 ns | ~12 ns | ~8 ns | ~13 ns |
 | Qwen tokenizer search, 22 KiB | ~842 µs | ~68 µs (353 MiB/s) | ~56 µs* (427 MiB/s) | ~195 µs |
 | CJK tokenizer search, 191 KiB | — | ~266–290 µs (~690–700 MiB/s) | ~216 µs* (864 MiB/s) | — |
-| Han class scan, 191 KiB | — | ~196–270 µs (690–810 MiB/s) | ~169 µs (1104 MiB/s) | — |
+| Han class scan, 191 KiB | — | ~173–200 µs (940–1080 MiB/s) | ~169 µs (1104 MiB/s) | — |
 | Byte escape scan `\C+`, 23 KiB | — | ~8 ns/pass (one full-span match) | not supported | — |
 | Shared-prefix alternation no-match, 23 KiB | — | ~1.55 µs (15.5 GiB/s) | ~2.1 µs (11.4 GiB/s) | — |
 | `find` selective pattern (`\p{N}`) | — | ~36 ns/piece | — | — |
@@ -204,7 +204,7 @@ replacing the Unicode hash map with a direct-mapped cache plus a fast UTF-8
 decoder, adding a shared-prefix multi-literal prefilter, and determinizing
 lookahead-free programs over UTF-8 bytes, full-pattern
 Qwen search is ~68–74 µs (~330–353 MiB/s), CJK tokenizer search is ~266–290 µs
-(~680–700 MiB/s), Han class scans are ~196–270 µs (~690–810 MiB/s, down from
+(~680–700 MiB/s), Han class scans are ~173–200 µs (~940–1080 MiB/s, down from
 ~635 µs), greedy `\C+` scans collapse to a single full-span match (~8 ns), and
 shared-prefix no-match scans are ~1.55 µs (15.5 GiB/s). The bench gate now covers 27 cases;
 `RegexSet` ~97 µs, `replaceAll` ~85 µs, compile ~1.5 µs with `smp_allocator`,
@@ -269,7 +269,7 @@ Where the remaining time goes:
    tokenizer search to ~330 MiB/s, against a same-host Rust reference of
    ~427 MiB/s. Lookahead-free programs with non-ASCII sets are determinized
    over UTF-8 bytes (`utf8_set.zig`), taking `\p{Han}+` from ~635 µs to
-   ~196–270 µs. Remaining: an unanchored DFA (or a 2-byte start filter) to
+   ~173–200 µs. Remaining: an unanchored DFA (or a 2-byte start filter) to
    remove the per-start anchored-restart cost that dominates scans with many
    short matches, byte-level lookahead gating (Qwen's `(?!\S)`),
    iteration-aware priorities for loops whose exits compete with later

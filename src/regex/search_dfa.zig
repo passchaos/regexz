@@ -31,11 +31,12 @@ const Error = std.mem.Allocator.Error || error{RegexLimitExceeded};
 
 const no_priority = std.math.maxInt(u64);
 const dead_state = std.math.maxInt(u32);
-/// Byte-mode table entries: 0 = not prepared, `dead_state_byte` = dead,
-/// otherwise `next id + 1` with `accept_bit` set when the target state
-/// accepts. The bit lets the scan loop skip the priority load for the common
-/// mid-rune case.
-const dead_state_byte: u16 = 0x7FFF;
+/// Byte-mode table entries: `unprepared_byte` = not prepared,
+/// `dead_state_byte` = dead, otherwise `next id + 1` with `accept_bit` set
+/// when the target state accepts. Both sentinels are >= `dead_state_byte`,
+/// so the scan loop checks them with one comparison.
+const unprepared_byte: u16 = 0xFFFF;
+const dead_state_byte: u16 = 0xFFFE;
 const accept_bit: u16 = 0x8000;
 const state_mask: u16 = 0x7FFF;
 const rune_max_states: usize = 64;
@@ -697,7 +698,7 @@ pub const Workspace = struct {
                 try self.accept_table.appendNTimes(self.allocator, no_priority, 128);
             },
             .byte => {
-                try self.byte_table.appendNTimes(self.allocator, 0, 256);
+                try self.byte_table.appendNTimes(self.allocator, unprepared_byte, 256);
                 try self.state_accept.append(self.allocator, accept);
                 if (accept != no_priority) {
                     if (self.uniform_accept == no_priority) {
@@ -892,12 +893,13 @@ pub const Workspace = struct {
         while (offset < input.len) {
             const index = @as(usize, state) * 256 + input[offset];
             var cached = self.byte_table.items[index];
-            if (cached == 0) {
+            if (cached >= dead_state_byte) {
+                if (cached == dead_state_byte) break;
                 cached = try self.prepareByte(state, input[offset]);
                 // A newly built state may introduce a second accept priority.
                 uniform = !self.mixed_accept;
+                if (cached == dead_state_byte) break;
             }
-            if (cached == dead_state_byte) break;
             offset += 1;
             const next = (cached & state_mask) - 1;
             if (cached & accept_bit != 0) {
