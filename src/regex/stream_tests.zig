@@ -156,3 +156,31 @@ test "streaming scanner rejects extended programs" {
     defer value.deinit();
     try std.testing.expectError(error.UnsupportedRegexFeature, regex.StreamScanner.init(gpa, value.program, .{}));
 }
+
+test "streaming simple-run fast path handles chunk boundaries" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // The set+ shape takes the direct run scan; chunk boundaries may split
+    // ASCII runs, multi-byte runes, and run/non-member transitions.
+    const cases = [_]struct { pattern: []const u8, input: []const u8 }{
+        .{ .pattern = "[a-z]+", .input = "ab cd  ef" },
+        .{ .pattern = "[a-z]+", .input = "aaaa" },
+        .{ .pattern = "[a-z]+", .input = "!!!aaa???" },
+        .{ .pattern = "\\d+", .input = "12 345 6" },
+        .{ .pattern = "\\p{Han}+", .input = "a\u{4f60}\u{597d}\u{ff0c}\u{4e16}\u{754c}b" },
+        .{ .pattern = "\\p{Han}+", .input = "\u{4f60}\u{597d}\u{4e16}\u{754c}" },
+    };
+    for (cases) |case| {
+        for ([_]usize{ 1, 2, 3, 4, 5, 8 }) |chunk| {
+            try expectScannerMatches(allocator, case.pattern, case.input, chunk, .{});
+        }
+    }
+
+    var value = try regex.Regex.init(allocator, "[a-z]+", .{});
+    defer value.deinit();
+    var scanner = try regex.StreamScanner.init(allocator, value.program, .{});
+    defer scanner.deinit();
+    try std.testing.expect(scanner.simple_set != null);
+}

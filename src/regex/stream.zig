@@ -85,6 +85,9 @@ pub const Scanner = struct {
     /// start/end are reported.
     capture_free: bool = false,
     capture_free_slots: [2]usize = .{ unset, unset },
+    /// A `set+` program can stream with a direct run scan instead of the NFA.
+    simple_set: ?model.Set = null,
+    simple_pending_start: ?usize = null,
     seen: []u32,
     epoch: u32 = 0,
     reset_trail: std.ArrayList(ResetEntry) = .empty,
@@ -142,6 +145,7 @@ pub const Scanner = struct {
             .scratch = scratch,
             .best_slots = best_slots,
             .capture_free = program.capture_count == 0,
+            .simple_set = if (limits.longest) null else detectSimpleRun(program),
             .seen = seen,
         };
     }
@@ -175,6 +179,10 @@ pub const Scanner = struct {
         if (self.finished) return error.InvalidRegex;
         try self.buffer.appendSlice(self.allocator, chunk);
         self.total_len += chunk.len;
+        if (self.simple_set != null) {
+            try self.processSimple(context, emit, false);
+            return;
+        }
         try self.process(context, emit);
     }
 
@@ -182,6 +190,15 @@ pub const Scanner = struct {
     pub fn finish(self: *Scanner, context: ?*anyopaque, emit: EmitFn) model.Error!void {
         if (self.finished) return;
         self.eof = true;
+        if (self.simple_set != null) {
+            try self.processSimple(context, emit, true);
+            if (self.simple_pending_start) |start| {
+                self.emitSimple(context, emit, start, self.total_len);
+                self.simple_pending_start = null;
+            }
+            self.finished = true;
+            return;
+        }
         try self.process(context, emit);
         self.finished = true;
     }
@@ -369,6 +386,86 @@ pub const Scanner = struct {
                 else => unreachable,
             }
         }
+    }
+
+    /// Recognize the compiled shape of `set+`: save0 -> consume(set) ->
+    /// star(set) -> save1 -> accept.
+    fn detectSimpleRun(program: Program) ?model.Set {
+        if (program.capture_count != 0 or program.extended) return null;
+        const ins = program.instructions;
+        if (ins.len != 7) return null;
+        if (std.meta.activeTag(ins[0]) != .accept or std.meta.activeTag(ins[1]) != .sub_accept or std.meta.activeTag(ins[2]) != .ret) return null;
+        if (std.meta.activeTag(ins[3]) != .save or std.meta.activeTag(ins[4]) != .star or
+            std.meta.activeTag(ins[5]) != .consume or std.meta.activeTag(ins[6]) != .save) return null;
+        if (program.start != 6 or program.body != 5) return null;
+        const save1 = ins[3].save;
+        if (save1.slot != 1 or save1.next != program.accept) return null;
+        const star = ins[4].star;
+        if (star.next != 3 or star.backtrack) return null;
+        const consume = ins[5].consume;
+        if (consume.next != 4) return null;
+        const save0 = ins[6].save;
+        if (save0.slot != 0 or save0.next != 5) return null;
+        if (star.set.ranges.len == 0 or star.set.ranges.len != consume.set.ranges.len) return null;
+        for (star.set.ranges, consume.set.ranges) |a, b| {
+            if (a.first != b.first or a.last != b.last) return null;
+        }
+        return star.set;
+    }
+
+    fn emitSimple(self: *Scanner, context: ?*anyopaque, emit: EmitFn, start: usize, end: usize) void {
+        self.best_slots[0] = start;
+        self.best_slots[1] = end;
+        emit(context, .{ .start = start, .end = end, .slots = self.best_slots[0..self.slot_count] });
+    }
+
+    fn processSimple(self: *Scanner, context: ?*anyopaque, emit: EmitFn, at_eof: bool) model.Error!void {
+        const set = self.simple_set.?;
+        while (true) {
+            if (self.scan >= self.buffer.items.len) break;
+            const status = self.runeStatus(self.buffer_base + self.scan);
+            if (self.simple_pending_start == null) {
+                switch (status) {
+                    .valid => |rune| {
+                        if (set.matches(rune.value)) self.simple_pending_start = self.buffer_base + self.scan;
+                        self.scan += rune.len;
+                    },
+                    .invalid => self.scan += 1,
+                    .incomplete => {
+                        if (!at_eof) break;
+                        self.scan += 1;
+                    },
+                }
+                continue;
+            }
+            switch (status) {
+                .valid => |rune| {
+                    if (set.matches(rune.value)) {
+                        self.scan += rune.len;
+                        continue;
+                    }
+                    self.emitSimple(context, emit, self.simple_pending_start.?, self.buffer_base + self.scan);
+                    self.simple_pending_start = null;
+                },
+                .invalid => {
+                    self.emitSimple(context, emit, self.simple_pending_start.?, self.buffer_base + self.scan);
+                    self.simple_pending_start = null;
+                    self.scan += 1;
+                },
+                .incomplete => {
+                    if (!at_eof) break;
+                    self.emitSimple(context, emit, self.simple_pending_start.?, self.buffer_base + self.scan);
+                    self.simple_pending_start = null;
+                    self.scan += 1;
+                },
+            }
+        }
+        // Consumed run bytes are no longer needed: only the unprocessed tail
+        // (which may hold an incomplete rune) has to survive.
+        const keep = self.buffer_base + self.scan;
+        self.discardBefore(keep);
+        self.scan = keep - self.buffer_base;
+        self.offset = keep;
     }
 
     fn discardBefore(self: *Scanner, absolute: usize) void {
