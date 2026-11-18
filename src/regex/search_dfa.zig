@@ -71,7 +71,10 @@ const UnicodeEntry = extern struct {
 };
 
 inline fn unicodeSlot(key: u64) usize {
-    return @intCast((key *% 0x9E3779B97F4A7C15) >> 52);
+    // The key packs (state << 21) | rune; folding the high bits down keeps
+    // the state and the rune's high bits in the slot without a multiply,
+    // which is on the per-rune dependency chain.
+    return @intCast((key ^ (key >> 12)) & (unicode_cache_size - 1));
 }
 
 const State = struct {
