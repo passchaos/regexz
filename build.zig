@@ -43,4 +43,18 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Compile and run the regexz unit tests");
     test_step.dependOn(&run_lib_tests.step);
+
+    const bench_mod = b.createModule(.{
+        .root_source_file = b.path("tools/bench/main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    bench_mod.addImport("regexz", regexz_mod);
+    const bench_exe = b.addExecutable(.{
+        .name = "regexz-bench",
+        .root_module = bench_mod,
+    });
+    const run_bench = b.addRunArtifact(bench_exe);
+    const bench_step = b.step("bench", "Run regexz microbenchmarks (use -Doptimize=ReleaseFast)");
+    bench_step.dependOn(&run_bench.step);
 }

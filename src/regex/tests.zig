@@ -141,7 +141,7 @@ test "UCP Qwen pre-tokenizer matches PCRE2 on Unicode whitespace" {
     }
 }
 test "gRPC xDS safe regex rejects invalid syntax and bounds nested repetitions" {
-    for ([_][]const u8{ "(", "[a-z", "[z-a]", "a**", "a++", "(?!a+)", "(?!a|b)", "(?!ab)", "(?=)", "(?<=a)", "(?<!a)", "(?=a)*", "(?=", "(?=[a-z)", "(a)\\1", "(?x)a", "(?i-)a", "(?i)*", "{1}", "a{1}{2}", "\\p{Unknown}", "\\x{110000}", "a{2,1}", "a{1001}", "[a-\\d]", "[\\b]", "\\" }) |pattern| try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, pattern, .{}));
+    for ([_][]const u8{ "(", "[a-z", "[z-a]", "a**", "(?=", "(?=[a-z)", "(?i-)a", "(?i)*", "{1}", "a{1}{2}", "\\p{Unknown}", "\\x{110000}", "a{2,1}", "a{1001}", "[a-\\d]", "[\\b]", "\\" }) |pattern| try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, pattern, .{}));
     try std.testing.expectError(error.RegexLimitExceeded, regex.Regex.init(gpa, "abcdef", .{ .max_pattern_bytes = 5 }));
     try std.testing.expectError(error.RegexLimitExceeded, regex.Regex.init(gpa, "a{5}", .{ .max_repeat = 4 }));
     try std.testing.expectError(error.RegexLimitExceeded, regex.Regex.init(gpa, "(a{100}){100}", .{ .max_instructions = 64 }));
@@ -168,4 +168,23 @@ test "gRPC xDS safe regex keeps adversarial matching linear and rolls back alloc
         }
     };
     try std.testing.checkAllAllocationFailures(gpa, Harness.run, .{});
+}
+
+test "control and octal escapes" {
+    const Case = struct { pattern: []const u8, yes: []const []const u8, no: []const []const u8 };
+    for ([_]Case{
+        .{ .pattern = "\\cA", .yes = &.{"\x01"}, .no = &.{ "A", "\x02" } },
+        .{ .pattern = "\\c?", .yes = &.{"\x7f"}, .no = &.{ "?", "\x1f" } },
+        .{ .pattern = "[\\cA-\\cC]+", .yes = &.{"\x01\x02\x03"}, .no = &.{ "\x04", "ABC" } },
+        .{ .pattern = "\\o{101}", .yes = &.{"A"}, .no = &.{ "a", "B" } },
+        .{ .pattern = "\\o{777}", .yes = &.{"\u{1ff}"}, .no = &.{"A"} },
+    }) |case| {
+        var value = try regex.Regex.init(gpa, case.pattern, .{});
+        defer value.deinit();
+        for (case.yes) |input| try std.testing.expect(try value.matches(gpa, input));
+        for (case.no) |input| try std.testing.expect(!try value.matches(gpa, input));
+    }
+    for ([_][]const u8{ "\\o{8}", "\\o{}", "\\o{7777777}", "\\c", "\\c\u{00e9}" }) |pattern| {
+        try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, pattern, .{}));
+    }
 }

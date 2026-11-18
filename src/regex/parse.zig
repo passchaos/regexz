@@ -1,10 +1,12 @@
-//! Bounded RE2 boolean-match syntax with balanced concatenation/alternation.
-//! Set-lookahead `(?=set)` / `(?!set)` is a deliberate extension; the body
-//! must be a single set atom, not a general expression.
+//! Bounded RE2/PCRE-style syntax. Patterns that use backtracking-only
+//! features (general lookaround, backreferences, atomic groups, possessive
+//! quantifiers, conditionals, `\G`, UCP word boundaries) are marked
+//! `extended` and executed by the bounded backtracking VM.
 const std = @import("std");
 const m = @import("model.zig");
 const classes = @import("classes.zig");
 const escape = @import("escape.zig");
+
 pub const Parser = struct {
     allocator: std.mem.Allocator,
     pattern: []const u8,
@@ -12,7 +14,14 @@ pub const Parser = struct {
     cursor: usize = 0,
     nodes: usize = 0,
     captures: u16 = 0,
+    current_group: u16 = 0,
     flags: m.Flags = .{},
+    group_names: std.ArrayList(m.GroupName) = .empty,
+    group_nodes: std.ArrayList(?*const m.Node) = .empty,
+    marks: std.ArrayList([]const u8) = .empty,
+    callouts: std.ArrayList(m.CalloutSpec) = .empty,
+    extended: bool = false,
+
     pub fn peek(self: *Parser) ?u8 {
         return if (self.cursor < self.pattern.len) self.pattern[self.cursor] else null;
     }
@@ -29,6 +38,12 @@ pub const Parser = struct {
         self.cursor += len;
         return value;
     }
+    pub fn lookupName(self: *Parser, name: []const u8) ?u16 {
+        for (self.group_names.items) |entry| {
+            if (std.mem.eql(u8, entry.name, name)) return entry.index;
+        }
+        return null;
+    }
     fn node(self: *Parser, value: m.Node) m.Error!*const m.Node {
         if (self.nodes >= self.limits.max_nodes) return error.RegexLimitExceeded;
         self.nodes += 1;
@@ -44,42 +59,381 @@ pub const Parser = struct {
         const right = try self.join(values[split..], alternate);
         return self.node(if (alternate) .{ .alternate = .{ .left = left, .right = right } } else .{ .pair = .{ .left = left, .right = right } });
     }
+    fn skipExtended(self: *Parser) void {
+        if (!self.flags.extended) return;
+        while (self.peek()) |byte| {
+            switch (byte) {
+                ' ', '\t', '\n', '\r', 0x0b, 0x0c => self.cursor += 1,
+                '#' => {
+                    while (self.peek()) |comment| {
+                        self.cursor += 1;
+                        if (comment == '\n') break;
+                    }
+                },
+                else => return,
+            }
+        }
+    }
+    fn expressionNoBar(self: *Parser, depth: usize) m.Error!*const m.Node {
+        if (depth > self.limits.max_depth) return error.RegexLimitExceeded;
+        var sequence: std.ArrayList(*const m.Node) = .empty;
+        defer sequence.deinit(self.allocator);
+        while (true) {
+            self.skipExtended();
+            const byte = self.peek() orelse break;
+            if (byte == '|' or byte == ')') break;
+            if (byte == '*' or byte == '+' or byte == '?') return error.InvalidRegex;
+            const value = try self.atom(depth);
+            try sequence.append(self.allocator, try self.repetition(value));
+        }
+        return self.join(sequence.items, false);
+    }
     fn expression(self: *Parser, depth: usize) m.Error!*const m.Node {
         if (depth > self.limits.max_depth) return error.RegexLimitExceeded;
         var alternatives: std.ArrayList(*const m.Node) = .empty;
         defer alternatives.deinit(self.allocator);
         while (true) {
-            var sequence: std.ArrayList(*const m.Node) = .empty;
-            defer sequence.deinit(self.allocator);
-            while (self.peek()) |byte| {
-                if (byte == '|' or byte == ')') break;
-                if (byte == '*' or byte == '+' or byte == '?') return error.InvalidRegex;
-                const value = try self.atom(depth);
-                try sequence.append(self.allocator, try self.repetition(value));
-            }
-            try alternatives.append(self.allocator, try self.join(sequence.items, false));
+            try alternatives.append(self.allocator, try self.expressionNoBar(depth));
+            self.skipExtended();
             if (!self.take('|')) break;
         }
         return self.join(alternatives.items, true);
     }
+    fn nameAngle(self: *Parser) m.Error![]const u8 {
+        const start = self.cursor;
+        while (self.peek()) |byte| {
+            if (byte == '>') break;
+            if (!std.ascii.isAlphanumeric(byte) and byte != '_') return error.InvalidRegex;
+            self.cursor += 1;
+        }
+        if (self.cursor == start or !self.take('>')) return error.InvalidRegex;
+        return self.pattern[start .. self.cursor - 1];
+    }
+    fn addGroupName(self: *Parser, name: []const u8, index: u16) m.Error!void {
+        if (!self.flags.duplicate_names and self.lookupName(name) != null) return error.InvalidRegex;
+        try self.group_names.append(self.allocator, .{ .name = name, .index = index });
+    }
+    fn setGroupNode(self: *Parser, index: u16, value: *const m.Node) m.Error!void {
+        while (self.group_nodes.items.len <= index) try self.group_nodes.append(self.allocator, null);
+        self.group_nodes.items[index] = value;
+    }
+    fn nameUntil(self: *Parser, close: u8) m.Error![]const u8 {
+        const start = self.cursor;
+        while (self.peek()) |byte| {
+            if (byte == close) break;
+            self.cursor += 1;
+        }
+        if (self.cursor == start or !self.take(close)) return error.InvalidRegex;
+        return self.pattern[start .. self.cursor - 1];
+    }
+    fn subroutine(self: *Parser, group_index: u16) m.Error!*const m.Node {
+        self.extended = true;
+        return self.node(.{ .subroutine = .{ .group = group_index } });
+    }
+    fn verb(self: *Parser) m.Error!*const m.Node {
+        self.cursor += 1; // '*'
+        const start = self.cursor;
+        while (self.peek()) |byte| {
+            if (byte == ')' or byte == ':') break;
+            self.cursor += 1;
+        }
+        const name = self.pattern[start..self.cursor];
+        if (self.peek() == ':') {
+            self.cursor += 1;
+            const mark_start = self.cursor;
+            while (self.peek()) |byte| {
+                if (byte == ')') break;
+                self.cursor += 1;
+            }
+            if (!self.take(')')) return error.InvalidRegex;
+            self.extended = true;
+            if (std.mem.eql(u8, name, "SKIP")) {
+                const mark_name = self.pattern[mark_start .. self.cursor - 1];
+                if (mark_name.len == 0) return error.InvalidRegex;
+                return self.node(.{ .skip_named = mark_name });
+            }
+            if (std.mem.eql(u8, name, "MARK")) {
+                if (self.marks.items.len >= 65535) return error.RegexLimitExceeded;
+                try self.marks.append(self.allocator, self.pattern[mark_start .. self.cursor - 1]);
+                return self.node(.{ .mark = @intCast(self.marks.items.len - 1) });
+            }
+            // Other argument verbs (`(*SKIP:name)`, `(*PRUNE:name)`, ...)
+            // accept a mark name but do not expose it.
+            return self.node(.empty);
+        }
+        if (!self.take(')')) return error.InvalidRegex;
+        self.extended = true;
+        if (std.mem.eql(u8, name, "FAIL") or std.mem.eql(u8, name, "F")) return self.node(.fail);
+        if (std.mem.eql(u8, name, "ACCEPT")) return self.node(.accept_verb);
+        if (std.mem.eql(u8, name, "PRUNE")) return self.node(.prune);
+        if (std.mem.eql(u8, name, "SKIP")) return self.node(.skip);
+        if (std.mem.eql(u8, name, "COMMIT")) return self.node(.commit);
+        if (std.mem.eql(u8, name, "THEN")) return self.node(.then_verb);
+        if (std.mem.eql(u8, name, "UCP")) {
+            self.limits.unicode_perl_classes = true;
+            return self.node(.empty);
+        }
+        if (std.mem.eql(u8, name, "UTF") or std.mem.eql(u8, name, "NO_JIT")) return self.node(.empty);
+        return error.UnsupportedRegexFeature;
+    }
+    fn lookaround(self: *Parser, negative: bool, behind: bool, depth: usize) m.Error!*const m.Node {
+        const child = try self.expression(depth + 1);
+        if (!self.take(')')) return error.InvalidRegex;
+        self.extended = true;
+        return self.node(.{ .lookaround = .{ .child = child, .negative = negative, .behind = behind } });
+    }
+    fn condition(self: *Parser, depth: usize) m.Error!m.Condition {
+        if (self.peek() == 'R') {
+            self.cursor += 1;
+            var group_index: ?u16 = null;
+            if (self.take('&')) {
+                const start = self.cursor;
+                while (self.peek()) |byte| {
+                    if (byte == ')') break;
+                    self.cursor += 1;
+                }
+                const name = self.pattern[start..self.cursor];
+                group_index = self.lookupName(name) orelse return error.InvalidRegex;
+            } else if (self.peek()) |byte| {
+                if (std.ascii.isDigit(byte)) {
+                    const start = self.cursor;
+                    while (self.peek()) |digit| {
+                        if (!std.ascii.isDigit(digit)) break;
+                        self.cursor += 1;
+                    }
+                    group_index = std.fmt.parseInt(u16, self.pattern[start..self.cursor], 10) catch return error.InvalidRegex;
+                }
+            }
+            if (!self.take(')')) return error.InvalidRegex;
+            self.extended = true;
+            return .{ .recursion = group_index };
+        }
+        if (self.take('?')) {
+            var negative = false;
+            var behind = false;
+            if (self.take('=')) {} else if (self.take('!')) {
+                negative = true;
+            } else if (self.take('<')) {
+                behind = true;
+                if (self.take('=')) {} else if (self.take('!')) {
+                    negative = true;
+                } else return error.InvalidRegex;
+            } else return error.InvalidRegex;
+            const child = try self.expression(depth + 1);
+            if (!self.take(')')) return error.InvalidRegex;
+            self.extended = true;
+            const look = try self.node(.{ .lookaround = .{ .child = child, .negative = negative, .behind = behind } });
+            return .{ .assertion = look };
+        }
+        if (self.take('<')) {
+            const start = self.cursor;
+            while (self.peek()) |byte| {
+                if (byte == '>') break;
+                self.cursor += 1;
+            }
+            const name = self.pattern[start..self.cursor];
+            if (!self.take('>')) return error.InvalidRegex;
+            if (!self.take(')')) return error.InvalidRegex;
+            return .{ .group = self.lookupName(name) orelse return error.InvalidRegex };
+        }
+        if (self.take('\'')) {
+            const start = self.cursor;
+            while (self.peek()) |byte| {
+                if (byte == '\'') break;
+                self.cursor += 1;
+            }
+            const name = self.pattern[start..self.cursor];
+            if (!self.take('\'')) return error.InvalidRegex;
+            if (!self.take(')')) return error.InvalidRegex;
+            return .{ .group = self.lookupName(name) orelse return error.InvalidRegex };
+        }
+        const start = self.cursor;
+        while (self.peek()) |byte| {
+            if (!std.ascii.isDigit(byte)) break;
+            self.cursor += 1;
+        }
+        if (start == self.cursor) return error.UnsupportedRegexFeature;
+        const value = std.fmt.parseInt(u16, self.pattern[start..self.cursor], 10) catch return error.InvalidRegex;
+        if (value == 0 or value > self.captures) return error.InvalidRegex;
+        if (!self.take(')')) return error.InvalidRegex;
+        return .{ .group = value };
+    }
+    fn conditional(self: *Parser, depth: usize) m.Error!*const m.Node {
+        const condition_value = try self.condition(depth);
+        const yes = try self.expressionNoBar(depth + 1);
+        const no = if (self.take('|')) try self.expression(depth + 1) else null;
+        if (!self.take(')')) return error.InvalidRegex;
+        self.extended = true;
+        return self.node(.{ .conditional = .{ .condition = condition_value, .yes = yes, .no = no } });
+    }
     fn group(self: *Parser, depth: usize) m.Error!*const m.Node {
         const saved = self.flags;
-        var capturing = true;
+        var capturing = !self.flags.no_auto_capture;
         var capture_index: ?u16 = null;
+        var capture_name: ?[]const u8 = null;
         if (self.take('?')) {
+            if (self.take('C')) {
+                var spec = m.CalloutSpec{};
+                if (self.peek()) |byte| {
+                    if (std.ascii.isDigit(byte)) {
+                        var value: u32 = 0;
+                        while (self.peek()) |digit| {
+                            if (!std.ascii.isDigit(digit)) break;
+                            value = value * 10 + (digit - '0');
+                            if (value > 65535) return error.RegexLimitExceeded;
+                            self.cursor += 1;
+                        }
+                        spec.number = value;
+                    } else if (byte == '"' or byte == '\'') {
+                        self.cursor += 1;
+                        const start = self.cursor;
+                        while (self.peek()) |inner| {
+                            if (inner == byte) break;
+                            self.cursor += 1;
+                        }
+                        spec.name = self.pattern[start..self.cursor];
+                        if (!self.take(byte)) return error.InvalidRegex;
+                    } else if (byte == '{') {
+                        self.cursor += 1;
+                        const start = self.cursor;
+                        while (self.peek()) |inner| {
+                            if (inner == '}') break;
+                            self.cursor += 1;
+                        }
+                        spec.name = self.pattern[start..self.cursor];
+                        if (!self.take('}')) return error.InvalidRegex;
+                    } else if (byte != ')') return error.InvalidRegex;
+                }
+                if (!self.take(')')) return error.InvalidRegex;
+                self.extended = true;
+                if (self.callouts.items.len >= 65535) return error.RegexLimitExceeded;
+                try self.callouts.append(self.allocator, spec);
+                return self.node(.{ .callout = @intCast(self.callouts.items.len - 1) });
+            }
+            // `(?+1)`/`(?-1)` are relative subroutine calls; a `-` followed
+            // by a flag letter instead starts negative inline flags.
+            if (self.peek() == '+' or
+                (self.peek() == '-' and self.cursor + 1 < self.pattern.len and std.ascii.isDigit(self.pattern[self.cursor + 1])))
+            {
+                const negative = self.peek() == '-';
+                self.cursor += 1;
+                const start = self.cursor;
+                while (self.peek()) |byte| {
+                    if (!std.ascii.isDigit(byte)) break;
+                    self.cursor += 1;
+                }
+                if (start == self.cursor) return error.InvalidRegex;
+                const offset = std.fmt.parseInt(i32, self.pattern[start..self.cursor], 10) catch return error.InvalidRegex;
+                const value = @as(i32, self.current_group) + (if (negative) -offset else offset);
+                if (value < 0 or value > 32767) return error.InvalidRegex;
+                if (!self.take(')')) return error.InvalidRegex;
+                return self.subroutine(@intCast(value));
+            }
+            if (self.take('#')) {
+                while (self.peek()) |byte| {
+                    self.cursor += 1;
+                    if (byte == ')') break;
+                }
+                if (self.cursor == 0 or self.pattern[self.cursor - 1] != ')') return error.InvalidRegex;
+                return self.node(.empty);
+            }
             if (self.take(':')) {
                 capturing = false;
             } else if (self.take('P')) {
-                if (!self.take('<')) return error.InvalidRegex;
-                try self.name();
+                if (self.take('<')) {
+                    capture_name = try self.nameAngle();
+                    capturing = true;
+                } else if (self.take('=')) {
+                    const start = self.cursor;
+                    while (self.peek()) |byte| {
+                        if (byte == ')') break;
+                        self.cursor += 1;
+                    }
+                    const name = self.pattern[start..self.cursor];
+                    const index = self.lookupName(name) orelse return error.InvalidRegex;
+                    if (!self.take(')')) return error.InvalidRegex;
+                    self.extended = true;
+                    return self.node(.{ .backref = .{ .index = index } });
+                } else if (self.take('>')) {
+                    const name = try self.nameUntil(')');
+                    const index = self.lookupName(name) orelse return error.InvalidRegex;
+                    return self.subroutine(index);
+                } else return error.InvalidRegex;
+            } else if (self.take('R')) {
+                if (!self.take(')')) return error.InvalidRegex;
+                return self.subroutine(0);
+            } else if (self.take('&')) {
+                const name = try self.nameUntil(')');
+                const index = self.lookupName(name) orelse return error.InvalidRegex;
+                return self.subroutine(index);
+            } else if (self.peek() != null and std.ascii.isDigit(self.peek().?)) {
+                const start = self.cursor;
+                while (self.peek()) |byte| {
+                    if (!std.ascii.isDigit(byte)) break;
+                    self.cursor += 1;
+                }
+                const value = std.fmt.parseInt(u16, self.pattern[start..self.cursor], 10) catch return error.InvalidRegex;
+                if (value > self.captures) return error.InvalidRegex;
+                if (!self.take(')')) return error.InvalidRegex;
+                return self.subroutine(value);
             } else if (self.take('<')) {
-                try self.name();
+                if (self.peek() == '=' or self.peek() == '!') {
+                    const negative = self.peek() == '!';
+                    self.cursor += 1;
+                    return self.lookaround(negative, true, depth);
+                }
+                capture_name = try self.nameAngle();
+                capturing = true;
             } else if (self.peek() == '=' or self.peek() == '!') {
                 const negative = self.peek() == '!';
                 self.cursor += 1;
-                const set = try self.lookaheadSet();
+                // Keep the narrow, linear set-lookahead when the body is one
+                // set atom. Otherwise rewind and parse a general expression.
+                const attempt_cursor = self.cursor;
+                const attempt_nodes = self.nodes;
+                const attempt_flags = self.flags;
+                const maybe_set: ?m.Set = self.lookaheadSet() catch |err| switch (err) {
+                    error.InvalidRegex => null,
+                    else => return err,
+                };
+                if (maybe_set) |set| {
+                    if (self.take(')')) return self.node(.{ .lookahead_set = .{ .set = set, .negative = negative } });
+                }
+                self.cursor = attempt_cursor;
+                self.nodes = attempt_nodes;
+                self.flags = attempt_flags;
+                return self.lookaround(negative, false, depth);
+            } else if (self.take('>')) {
+                self.extended = true;
+                const child = try self.expression(depth + 1);
                 if (!self.take(')')) return error.InvalidRegex;
-                return self.node(.{ .lookahead_set = .{ .set = set, .negative = negative } });
+                return self.node(.{ .atomic = child });
+            } else if (self.take('(')) {
+                if (std.mem.startsWith(u8, self.pattern[self.cursor..], "DEFINE)")) {
+                    self.cursor += "DEFINE)".len;
+                    _ = try self.expression(depth + 1);
+                    if (!self.take(')')) return error.InvalidRegex;
+                    return self.node(.empty);
+                }
+                return self.conditional(depth);
+            } else if (self.take('|')) {
+                // Branch reset: capture numbering restarts in each
+                // alternative and the group's final count is the maximum.
+                const base = self.captures;
+                var maximum = base;
+                var alternatives: std.ArrayList(*const m.Node) = .empty;
+                defer alternatives.deinit(self.allocator);
+                while (true) {
+                    self.captures = base;
+                    const alternative = try self.expressionNoBar(depth + 1);
+                    maximum = @max(maximum, self.captures);
+                    try alternatives.append(self.allocator, alternative);
+                    self.skipExtended();
+                    if (!self.take('|')) break;
+                }
+                self.captures = maximum;
+                if (!self.take(')')) return error.InvalidRegex;
+                return self.node(.{ .group = try self.join(alternatives.items, true) });
             } else {
                 var negative = false;
                 var flag_count: usize = 0;
@@ -95,7 +449,10 @@ pub const Parser = struct {
                         'i' => self.flags.fold = !negative,
                         'm' => self.flags.multiline = !negative,
                         's' => self.flags.dot_newline = !negative,
-                        'U' => {}, // greedy/lazy affects captures, not membership
+                        'x' => self.flags.extended = !negative,
+                        'J' => self.flags.duplicate_names = !negative,
+                        'U' => self.flags.ungreedy = !negative,
+                        'n' => self.flags.no_auto_capture = !negative,
                         else => break,
                     }
                     self.cursor += 1;
@@ -109,30 +466,42 @@ pub const Parser = struct {
             }
         }
         if (capturing) {
-            if (self.captures == std.math.maxInt(u16)) return error.RegexLimitExceeded;
+            // Capture slots are u16: index*2+1 must fit, so 32767 is the
+            // largest group index that can be represented.
+            if (self.captures >= 32767) return error.RegexLimitExceeded;
             self.captures += 1;
             capture_index = self.captures;
         }
+        // Register the name before parsing the body so recursive named
+        // subroutine calls inside the group can resolve it.
+        if (capture_index) |index| {
+            if (capture_name) |name| try self.addGroupName(name, index);
+        }
+        const saved_group = self.current_group;
+        if (capture_index) |index| self.current_group = index;
+        defer self.current_group = saved_group;
         defer self.flags = saved;
         const value = try self.expression(depth + 1);
         if (!self.take(')')) return error.InvalidRegex;
         if (capture_index) |index| {
-            return self.node(.{ .capture = .{ .index = index, .child = value } });
+            const result = try self.node(.{ .capture = .{ .index = index, .name = capture_name, .child = value } });
+            try self.setGroupNode(index, result);
+            return result;
         }
         return self.node(.{ .group = value });
     }
-    fn name(self: *Parser) m.Error!void {
-        const start = self.cursor;
-        while (self.peek()) |byte| {
-            if (byte == '>') break;
-            if (!std.ascii.isAlphanumeric(byte) and byte != '_') return error.InvalidRegex;
-            self.cursor += 1;
+    fn materialize(self: *Parser, parsed: m.ParsedSet) m.Error!m.Set {
+        // Parsed single-range sets are already canonical and owned by the
+        // parser arena or static tables, so avoid a duplicate allocation.
+        if (parsed.ranges.len == 1 and !parsed.negate and !parsed.fold) {
+            if (parsed.ranges[0].first > parsed.ranges[0].last) return error.InvalidRegex;
+            return classes.fromRanges(parsed.ranges);
         }
-        if (self.cursor == start or !self.take('>')) return error.InvalidRegex;
+        return classes.normalize(self.allocator, parsed.ranges, parsed.negate, parsed.fold, self.limits.max_ranges);
     }
-    fn element(self: *Parser) m.Error!m.Set {
+    fn element(self: *Parser, fold: bool) m.Error!m.ParsedSet {
         if (self.take('\\')) {
-            const escaped = try escape.parse(self, true);
+            const escaped = try escape.parse(self, true, fold);
             return if (escaped == .set) escaped.set else error.InvalidRegex;
         }
         if (self.peek() == '[' and std.mem.startsWith(u8, self.pattern[self.cursor..], "[:")) {
@@ -145,9 +514,19 @@ pub const Parser = struct {
             }
             const name_value = self.pattern[start..self.cursor];
             if (!self.take(':') or !self.take(']')) return error.InvalidRegex;
-            return classes.normalize(self.allocator, classes.ascii(name_value) orelse return error.InvalidRegex, negate, self.flags.fold, self.limits.max_ranges);
+            return .{ .ranges = classes.ascii(name_value) orelse return error.InvalidRegex, .negate = negate, .fold = fold };
         }
-        return escape.literal(self, try self.rune());
+        if (self.peek() == '[') {
+            // Nested class used as an operand (`[a-z&&[^aeiou]]`). The nested
+            // class is already folded and materialized.
+            self.cursor += 1;
+            const nested = try self.characterClass();
+            return switch (nested.*) {
+                .set => |set| .{ .ranges = set.ranges, .negate = false, .fold = false },
+                else => error.InvalidRegex,
+            };
+        }
+        return escape.literal(self, try self.rune(), fold);
     }
     fn dotSet(self: *Parser) m.Error!m.Set {
         return classes.normalize(self.allocator, if (self.flags.dot_newline) &.{.{ .first = 0, .last = 0x10ffff }} else &.{.{ .first = '\n', .last = '\n' }}, !self.flags.dot_newline, false, self.limits.max_ranges);
@@ -166,51 +545,129 @@ pub const Parser = struct {
             self.cursor += 1;
             return self.dotSet();
         }
-        return self.element();
+        return self.materialize(try self.element(true));
+    }
+    /// Recognize `&&`, `--`, and `~~` between class operands. A `-` that is
+    /// part of a range or a literal is consumed by the element parser first,
+    /// so only a doubled operator reaches this point.
+    fn takeClassOp(self: *Parser) ?classes.SetOp {
+        if (self.cursor + 1 >= self.pattern.len) return null;
+        const pair = self.pattern[self.cursor..][0..2];
+        if (std.mem.eql(u8, pair, "&&")) {
+            self.cursor += 2;
+            return .intersection;
+        }
+        if (std.mem.eql(u8, pair, "--")) {
+            self.cursor += 2;
+            return .difference;
+        }
+        if (std.mem.eql(u8, pair, "~~")) {
+            self.cursor += 2;
+            return .symmetric_difference;
+        }
+        return null;
     }
     fn characterClass(self: *Parser) m.Error!*const m.Node {
         const negate = self.take('^');
-        var ranges: std.ArrayList(m.Range) = .empty;
-        defer ranges.deinit(self.allocator);
+        var accumulator: ?m.Set = null;
+        var pending: classes.SetOp = .intersection;
+        var operand: std.ArrayList(m.Range) = .empty;
+        defer operand.deinit(self.allocator);
         var first = true;
         while (self.peek()) |_| {
-            if (!first and self.take(']')) return self.node(.{ .set = try classes.normalize(self.allocator, ranges.items, negate, self.flags.fold, self.limits.max_ranges) });
+            if (!first and self.take(']')) {
+                const right = try classes.normalize(self.allocator, operand.items, false, self.flags.fold, self.limits.max_ranges);
+                const combined = if (accumulator) |left|
+                    try classes.combine(self.allocator, left, pending, right, self.limits.max_ranges)
+                else
+                    right;
+                return self.node(.{ .set = try classes.normalize(self.allocator, combined.ranges, negate, false, self.limits.max_ranges) });
+            }
+            if (!first) {
+                if (self.takeClassOp()) |op| {
+                    const right = try classes.normalize(self.allocator, operand.items, false, self.flags.fold, self.limits.max_ranges);
+                    operand.clearRetainingCapacity();
+                    accumulator = if (accumulator) |left|
+                        try classes.combine(self.allocator, left, pending, right, self.limits.max_ranges)
+                    else
+                        right;
+                    pending = op;
+                    continue;
+                }
+            }
             first = false;
-            const start = try self.element();
-            if (self.peek() == '-' and self.cursor + 1 < self.pattern.len and self.pattern[self.cursor + 1] != ']') {
+            // Parse the first element unfolded so `[a-z]` endpoints stay
+            // single runes even when `(?i)` is active. The operand
+            // normalization folds the union.
+            const start = try self.element(false);
+            if (self.peek() == '-' and self.cursor + 1 < self.pattern.len and
+                self.pattern[self.cursor + 1] != ']' and self.pattern[self.cursor + 1] != '-')
+            {
                 self.cursor += 1;
-                const end = try self.element();
+                const end = try self.element(false);
                 if (start.negate or end.negate or start.ranges.len != 1 or end.ranges.len != 1 or start.ranges[0].first != start.ranges[0].last or end.ranges[0].first != end.ranges[0].last) return error.InvalidRegex;
-                if (ranges.items.len >= self.limits.max_ranges) return error.RegexLimitExceeded;
-                try ranges.append(self.allocator, .{ .first = start.ranges[0].first, .last = end.ranges[0].first });
-            } else try classes.append(&ranges, self.allocator, start, self.limits.max_ranges);
+                if (operand.items.len >= self.limits.max_ranges) return error.RegexLimitExceeded;
+                try operand.append(self.allocator, .{ .first = start.ranges[0].first, .last = end.ranges[0].first });
+            } else {
+                const folded = try classes.normalize(self.allocator, start.ranges, start.negate, self.flags.fold, self.limits.max_ranges);
+                try classes.append(&operand, self.allocator, folded, self.limits.max_ranges);
+            }
         }
         return error.InvalidRegex;
+    }
+    fn literalNode(self: *Parser, value: u21) m.Error!*const m.Node {
+        return self.node(.{ .set = try self.materialize(try escape.literal(self, value, false)) });
+    }
+    fn newlineSequence(self: *Parser) m.Error!*const m.Node {
+        const crlf = try self.node(.{ .pair = .{ .left = try self.literalNode('\r'), .right = try self.literalNode('\n') } });
+        const single = try self.node(.{ .set = try self.materialize(.{ .ranges = &.{
+            .{ .first = '\n', .last = '\n' },
+            .{ .first = 0x0b, .last = 0x0c },
+            .{ .first = '\r', .last = '\r' },
+            .{ .first = 0x85, .last = 0x85 },
+            .{ .first = 0x2028, .last = 0x2029 },
+        } }) });
+        const alternate = try self.node(.{ .alternate = .{ .left = crlf, .right = single } });
+        self.extended = true;
+        return self.node(.{ .atomic = alternate });
     }
     fn atom(self: *Parser, depth: usize) m.Error!*const m.Node {
         const byte = self.peek() orelse return error.InvalidRegex;
         self.cursor += 1;
         return switch (byte) {
-            '(' => self.group(depth),
+            '(' => if (self.peek() == '*') self.verb() else self.group(depth),
             '[' => self.characterClass(),
             '.' => self.node(.{ .set = try self.dotSet() }),
             '^' => self.node(.{ .assertion = if (self.flags.multiline) .start_line else .start_text }),
             '$' => self.node(.{ .assertion = if (self.flags.multiline) .end_line else .end_text }),
             '\\' => blk: {
-                break :blk switch (try escape.parse(self, false)) {
-                    .set => |set| self.node(.{ .set = set }),
+                if (self.peek() == 'R') {
+                    self.cursor += 1;
+                    break :blk try self.newlineSequence();
+                }
+                if (self.peek() == 'X') {
+                    self.cursor += 1;
+                    self.extended = true;
+                    break :blk self.node(.grapheme);
+                }
+                break :blk switch (try escape.parse(self, false, self.flags.fold)) {
+                    .set => |parsed| self.node(.{ .set = try self.materialize(parsed) }),
                     .byte => self.node(.byte),
                     .assertion => |assertion| self.node(.{ .assertion = assertion }),
+                    .backref => |index| self.node(.{ .backref = .{ .index = index } }),
+                    .subroutine => |index| self.node(.{ .subroutine = .{ .group = index } }),
+                    .reset_start => self.node(.reset_start),
+                    .string_property => |property| self.node(.{ .string_property = property }),
                 };
             },
             '{' => blk: {
                 self.cursor -= 1;
                 if (try self.counted() != null) return error.InvalidRegex;
-                break :blk self.node(.{ .set = try escape.literal(self, try self.rune()) });
+                break :blk self.node(.{ .set = try self.materialize(try escape.literal(self, try self.rune(), self.flags.fold)) });
             },
             else => blk: {
                 self.cursor -= 1;
-                break :blk self.node(.{ .set = try escape.literal(self, try self.rune()) });
+                break :blk self.node(.{ .set = try self.materialize(try escape.literal(self, try self.rune(), self.flags.fold)) });
             },
         };
     }
@@ -241,6 +698,7 @@ pub const Parser = struct {
         return .{ .minimum = minimum, .maximum = maximum };
     }
     fn repetition(self: *Parser, child: *const m.Node) m.Error!*const m.Node {
+        self.skipExtended();
         var minimum: usize = 0;
         var maximum: ?usize = null;
         if (self.take('*')) {} else if (self.take('+')) {
@@ -252,17 +710,29 @@ pub const Parser = struct {
             minimum = count.minimum;
             maximum = count.maximum;
         } else return child;
-        if (child.* == .flag_change or child.* == .lookahead_set) return error.InvalidRegex;
-        const lazy = self.take('?');
+        if (child.* == .flag_change or child.* == .lookahead_set or child.* == .fail or child.* == .accept_verb or child.* == .prune or child.* == .skip or child.* == .commit) return error.InvalidRegex;
+        var lazy = false;
+        var possessive = false;
+        if (self.take('?')) {
+            lazy = true;
+        } else if (self.take('+')) {
+            possessive = true;
+            self.extended = true;
+        }
+        // `(?U)` swaps the default: bare quantifiers become lazy and `?`
+        // makes them greedy again. Possessive quantifiers are unaffected.
+        if (self.flags.ungreedy and !possessive) lazy = !lazy;
         if (self.peek()) |byte| if (byte == '*' or byte == '+' or byte == '?') return error.InvalidRegex;
         return self.node(.{ .repeat = .{
             .child = child,
             .minimum = minimum,
             .maximum = maximum,
             .lazy = lazy,
+            .possessive = possessive,
         } });
     }
 };
+
 fn unquote(gpa: std.mem.Allocator, pattern: []const u8) m.Error![]const u8 {
     var bytes: std.ArrayList(u8) = .empty;
     defer bytes.deinit(gpa);
@@ -282,16 +752,35 @@ fn unquote(gpa: std.mem.Allocator, pattern: []const u8) m.Error![]const u8 {
                 continue;
             }
         }
-        if (quoted and std.mem.indexOfScalar(u8, "\\.^$[]{}()*+?|", byte) != null) try bytes.append(gpa, '\\');
+        if (quoted and std.mem.indexOfScalar(u8, "\\.^$[]{}()*+?|-", byte) != null) try bytes.append(gpa, '\\');
         try bytes.append(gpa, byte);
     }
     return bytes.toOwnedSlice(gpa);
 }
-pub fn parse(gpa: std.mem.Allocator, pattern: []const u8, limits: m.Limits) m.Error!*const m.Node {
+
+pub fn parse(gpa: std.mem.Allocator, pattern: []const u8, limits: m.Limits) m.Error!m.ParseResult {
     if (pattern.len > limits.max_pattern_bytes) return error.RegexLimitExceeded;
     if (!std.unicode.utf8ValidateSlice(pattern)) return error.InvalidRegex;
     var parser = Parser{ .allocator = gpa, .pattern = try unquote(gpa, pattern), .limits = limits };
-    const result = try parser.expression(0);
+    defer parser.group_names.deinit(gpa);
+    defer parser.group_nodes.deinit(gpa);
+    defer parser.marks.deinit(gpa);
+    defer parser.callouts.deinit(gpa);
+    const root = try parser.expression(0);
     if (parser.cursor != parser.pattern.len) return error.InvalidRegex;
-    return result;
+    const nodes = try gpa.alloc(*const m.Node, @as(usize, parser.captures) + 1);
+    nodes[0] = root;
+    for (1..@as(usize, parser.captures) + 1) |index| {
+        if (index >= parser.group_nodes.items.len) return error.InvalidRegex;
+        nodes[index] = parser.group_nodes.items[index] orelse return error.InvalidRegex;
+    }
+    return .{
+        .root = root,
+        .group_names = try parser.group_names.toOwnedSlice(gpa),
+        .marks = try parser.marks.toOwnedSlice(gpa),
+        .callouts = try parser.callouts.toOwnedSlice(gpa),
+        .group_nodes = nodes,
+        .capture_count = parser.captures,
+        .extended = parser.extended,
+    };
 }

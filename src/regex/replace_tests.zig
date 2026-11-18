@@ -96,11 +96,75 @@ test "regex replacement enforces the backtracking budget" {
     var workspace = try regex.ReplaceWorkspace.init(
         allocator,
         program,
-        .{ .max_execution_steps = 32 },
+        .{ .max_execution_steps = 32, .linear_fallback = false },
     );
     defer workspace.deinit();
     try std.testing.expectError(
         error.RegexLimitExceeded,
         workspace.replaceAll("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "x"),
     );
+}
+
+fn wrapCapture(
+    context: ?*anyopaque,
+    allocator: std.mem.Allocator,
+    input: []const u8,
+    match: regex.Match,
+) regex.Error![]u8 {
+    _ = context;
+    const text = match.group(input, 1) orelse return allocator.dupe(u8, "?");
+    var out: std.ArrayList(u8) = .empty;
+    errdefer out.deinit(allocator);
+    try out.appendSlice(allocator, "[");
+    try out.appendSlice(allocator, text);
+    try out.appendSlice(allocator, "]");
+    return out.toOwnedSlice(allocator);
+}
+
+fn boundaryMarker(
+    context: ?*anyopaque,
+    allocator: std.mem.Allocator,
+    input: []const u8,
+    match: regex.Match,
+) regex.Error![]u8 {
+    _ = context;
+    _ = input;
+    _ = match;
+    return allocator.dupe(u8, "|");
+}
+
+test "regex callback replacement builds dynamic output" {
+    const allocator = std.testing.allocator;
+    var value = try regex.Regex.init(allocator, "([a-z]+)", .{});
+    defer value.deinit();
+    const output = try value.replaceAllWithFn(allocator, "one two", null, wrapCapture);
+    defer allocator.free(output);
+    try std.testing.expectEqualStrings("[one] [two]", output);
+}
+
+test "regex callback replacement handles zero-width matches" {
+    const allocator = std.testing.allocator;
+    var value = try regex.Regex.init(allocator, "\\b", .{});
+    defer value.deinit();
+    const output = try value.replaceAllWithFn(allocator, "ab cd", null, boundaryMarker);
+    defer allocator.free(output);
+    try std.testing.expectEqualStrings("|ab| |cd|", output);
+}
+
+test "regex replacement applies case transforms" {
+    try expectReplace("([A-Za-z]+)", "\\U$1", "abc", "ABC");
+    try expectReplace("([A-Za-z]+)", "\\L$1", "ABC", "abc");
+    try expectReplace("([A-Za-z]+)", "\\u$1", "abc", "Abc");
+    try expectReplace("([A-Za-z]+)", "\\l$1", "ABC", "aBC");
+    try expectReplace("([A-Za-z]+)", "\\U$1\\E-$1", "abc", "ABC-abc");
+    try expectReplace("([A-Za-z]+)", "\\U<\\u$1>", "abc", "<ABC>");
+    try expectReplace("([A-Za-z]+)", "\\Uabc", "xyz", "ABC");
+    try expectReplace("([A-Za-z]+)", "\\U\u{00e9}$1", "abc", "\u{00c9}ABC");
+    try expectReplace("(.)", "\\U$1", "\u{00e9}", "\u{00c9}");
+    try expectReplace("(.)", "\\L$1", "\u{00c9}", "\u{00e9}");
+    try expectReplace("(.)", "\\U$1", "\u{03c3}", "\u{03a3}");
+    try expectReplace("(.)", "\\L$1", "\u{03a3}", "\u{03c3}");
+    try expectReplace("(.)", "\\u$1", "\u{00e9}", "\u{00c9}");
+    try expectReplace("(.)", "\\l$1", "\u{00c9}", "\u{00e9}");
+    try expectReplace("(.)", "\\U$1", "\u{00df}", "\u{00df}");
 }
