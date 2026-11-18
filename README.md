@@ -325,6 +325,11 @@ recursion-depth limits and fail closed with `error.RegexLimitExceeded`.
 - UCP applies to `\s` only when `unicode_perl_space` is set, or to
   `\d`/`\w`/`\s` and word boundaries when `unicode_perl_classes` is set.
 - Invalid UTF-8 bytes are not decoded as U+FFFD; only `\C` can consume them.
+- Newline handling uses LF (with a final CRLF recognized by `\Z`/`$`);
+  PCRE2 newline-convention and BSR directives (`(*CRLF)`, `(*ANYCRLF)`,
+  `(*ANY)`, `(*BSR_...)`) are not implemented.
+- PCRE2 `(*NOTEMPTY)`/`(*NOTEMPTY_ATSTART)` and the `(?r)`/`(?aD)`/`(?aS)`/
+  `(?aW)`/`(?aP)`/`(?aT)`/`(?xx)` option letters are not implemented.
 - `\x{D800}`–`\x{DFFF}` parse but can never match, because inputs are decoded
   as Unicode scalar values.
 - Lookbehind is evaluated by scanning start positions, so it is O(n) per

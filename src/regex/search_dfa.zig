@@ -643,9 +643,16 @@ pub const Workspace = struct {
             }
             const byte = input[offset];
             if (byte < 0x80) {
-                const cached = self.states.items[state].ascii[byte];
+                const current = &self.states.items[state];
+                const cached = current.ascii[byte];
                 if (cached != 0) {
-                    recordMatch(&best_end, &best_priority, offset, self.states.items[state].accept_ascii[byte]);
+                    const accept = current.accept_ascii[byte];
+                    if (accept != no_priority) {
+                        if (best_end == null or accept < best_priority) {
+                            best_end = offset;
+                            best_priority = accept;
+                        } else if (accept == best_priority) best_end = offset;
+                    }
                     state = if (cached == dead_state) dead_state else cached - 1;
                     if (state == dead_state) break;
                     offset += 1;
