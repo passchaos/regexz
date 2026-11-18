@@ -287,6 +287,16 @@ pub const Workspace = struct {
         var state = try self.dfaStartState(program);
         var offset: usize = 0;
         while (offset < input.len) {
+            const byte = input[offset];
+            if (byte < 0x80) {
+                const cached = dfa.states.items[state].ascii[byte];
+                if (cached != 0) {
+                    state = if (cached == dfa_dead) dfa_dead else cached - 1;
+                    if (state == dfa_dead) return false;
+                    offset += 1;
+                    continue;
+                }
+            }
             const rune = runeAt(input, offset) orelse return false;
             state = try self.dfaTransition(program, state, rune.value);
             if (state == dfa_dead) return false;

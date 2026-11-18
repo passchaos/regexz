@@ -139,10 +139,10 @@ Measured on an Apple Silicon macOS host. "Before" is the initial commit state;
 | Case | Before | After | Rust `regex` 1.13 | Node 26 |
 | --- | ---: | ---: | ---: | ---: |
 | Full match, 13-byte literal | ~3.6 µs | ~1.6 ns | ~10 ns | ~10 ns |
-| Full match, class pattern (one-shot) | ~3.7 µs | ~15 ns | ~10 ns | ~14 ns |
-| Full match, class pattern (reused workspace) | ~171 ns | ~14 ns | ~10 ns | ~14 ns |
-| Full match, xDS-like (reused) | ~233 ns | ~50–60 ns | ~11 ns | ~11 ns |
-| Full match, Unicode (reused) | ~64 ns | ~10 ns | ~8 ns | ~13 ns |
+| Full match, class pattern (one-shot) | ~3.7 µs | ~9 ns | ~10 ns | ~14 ns |
+| Full match, class pattern (reused workspace) | ~171 ns | ~8 ns | ~10 ns | ~14 ns |
+| Full match, xDS-like (reused) | ~233 ns | ~15–17 ns | ~11 ns | ~11 ns |
+| Full match, Unicode (reused) | ~64 ns | ~12 ns | ~8 ns | ~13 ns |
 | Qwen tokenizer search, 22 KiB | ~842 µs | ~110 µs (215 MiB/s) | ~67 µs* | ~195 µs |
 | `find` selective pattern (`\p{N}`) | — | ~36 ns/piece | — | — |
 | `find` multi-literal after a 4 KiB prefix | ~2.0 µs | ~0.22 µs | — | — |

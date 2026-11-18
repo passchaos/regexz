@@ -248,11 +248,11 @@ busy Apple Silicon host (absolute numbers vary with load):
 | Case | Before | After |
 | --- | ---: | ---: |
 | `Regex.matches`, 13-byte literal | ~3.6 µs | ~1.6 ns |
-| `Regex.matches`, class pattern | ~3.7 µs | ~15 ns |
-| `Regex.matches`, xDS-like pattern | ~3.6 µs | ~60 ns |
-| Reused workspace, class pattern | ~171 ns | ~14 ns |
-| Reused workspace, xDS-like pattern | ~233 ns | ~61 ns |
-| Reused workspace, `(?i)` literal | ~72 ns | ~12 ns |
+| `Regex.matches`, class pattern | ~3.7 µs | ~9 ns |
+| `Regex.matches`, xDS-like pattern | ~3.6 µs | ~15 ns |
+| Reused workspace, class pattern | ~171 ns | ~8 ns |
+| Reused workspace, xDS-like pattern | ~233 ns | ~16 ns |
+| Reused workspace, `(?i)` literal | ~72 ns | ~5 ns |
 | Qwen tokenizer `find` (22 KiB) | ~842 µs | ~110 µs (215 MiB/s) |
 | `replaceAll` `a+` (32 KiB) | ~265 µs | ~64 µs |
 | `find` literal after a 4 KiB prefix | — | ~55 ns |
