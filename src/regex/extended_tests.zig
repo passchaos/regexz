@@ -447,14 +447,15 @@ test "numeric and relative backreferences via \\g" {
 }
 
 test "relative subroutine calls via \\g<...>" {
-    // Relative calls are anchored at the enclosing group.
-    try expectFull("(a)(b\\g<-1>)", "aba", .{}, true);
-    try expectFull("(a)\\g<+1>", "aa", .{}, true);
+    // Relative calls count from the most recently started group.
+    try expectFull("(a)(b\\g<-1>)", "aba", .{}, false);
+    try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, "(a)\\g<+1>", .{}));
     try expectFull("\\g<+1>(a)", "aa", .{}, true);
     try expectFull("(a)\\g<1>", "aa", .{}, true);
-    // Outside a group a negative relative call has no anchor.
+    try expectFull("(abc)(?i:\\g<-1>)", "abcabc", .{}, true);
+    // Before any group a negative relative call has no anchor.
     try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, "\\g<-1>", .{}));
-    try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, "(a)\\g<-1>", .{}));
+    try expectFull("(a)\\g<-1>", "aa", .{}, true);
 }
 
 test "backtracking THEN verb" {

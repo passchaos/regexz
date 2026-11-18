@@ -493,7 +493,8 @@ pub fn parse(p: anytype, in_class: bool, fold: m.Fold) m.Error!Atom {
                         return .{ .subroutine = index };
                     },
                     .relative => |offset| {
-                        const value = @as(i32, p.current_group) + offset;
+                        const base: i32 = @as(i32, p.captures) + @as(i32, if (offset < 0) 1 else 0);
+                        const value = base + offset;
                         if (value <= 0 or value > 32767) return error.InvalidRegex;
                         p.extended = true;
                         return .{ .subroutine = @intCast(value) };
