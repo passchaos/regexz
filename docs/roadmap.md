@@ -157,7 +157,8 @@ Measured on an Apple Silicon macOS host. "Before" is the initial commit state;
 | `find` extended no-match, 23 KiB | ~275 µs | ~2.5 µs | — | — |
 | `RegexSet`, 9 no-match patterns, 23 KiB | ~1.7 ms | ~63 µs | ~104 µs | — |
 | `replaceAll` `a+`, 32 KiB | ~265 µs | ~64 µs (480 MiB/s) | ~91 µs | ~47 µs |
-| Compile xDS-like pattern | ~2.9 µs | ~3.1 µs | ~10.8 µs | ~61 ns† |
+| Compile xDS-like pattern | ~2.9 µs | ~3.1–3.9 µs | ~10.8 µs | ~61 ns† |
+| Compile xDS-like (smp allocator) | — | ~1.5 µs | — | — |
 
 \* Rust baseline omits the `\s+(?!\S)` branch because Rust `regex` has no
 lookaround; the Node baseline uses the full pattern.
@@ -270,7 +271,8 @@ For the workloads in `tools/bench/main.zig`, on an idle host:
   (achieved: ~8 ns).
 - Qwen tokenizer search: **≥ 200 MiB/s** (achieved: ~250 MiB/s).
 - `replaceAll` `a+`: **≥ 400 MiB/s** (achieved: ~450–480 MiB/s).
-- Compile xDS-like pattern: **≤ 2 µs** (current: ~3.1 µs).
+- Compile xDS-like pattern: **≤ 2 µs** (achieved: ~1.5 µs with
+  `std.heap.smp_allocator`; ~3.1–3.9 µs with `page_allocator`).
 - Workspace memory: **≤ 48 bytes/instruction** (achieved: 44).
 - Linear mode: **O(input × program)**; extended mode: bounded by the
   configured step/choice/trail/depth limits.

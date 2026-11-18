@@ -267,7 +267,8 @@ busy Apple Silicon host (absolute numbers vary with load):
 | `find` suffix no-match (23 KiB) | ~238 µs | ~14 µs |
 | `find` extended no-match (23 KiB) | ~275 µs | ~2.5 µs |
 | `RegexSet`, 9 no-match patterns (23 KiB) | ~1.7 ms | ~63 µs |
-| Compile xDS-like pattern | ~2.9 µs | ~3.1 µs |
+| Compile xDS-like pattern | ~2.9 µs | ~3.1–3.9 µs |
+| Compile xDS-like (smp allocator) | — | ~1.5 µs |
 
 `Regex` now owns a persistent workspace and lazy-DFA cache (guarded by a
 spin mutex), so repeated `matches`/`find`/`isMatch` calls do not rebuild

@@ -117,6 +117,17 @@ pub fn main() !void {
         }
         try report(out, "compile xDS-like", iterations, pattern.len, elapsed(io, .{ .nanoseconds = start }));
     }
+    {
+        const smp = std.heap.smp_allocator;
+        const pattern = "/(?:demo|test)\\.[A-Z][A-Za-z]+/(Get|List)";
+        const iterations = 20000;
+        const start = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds;
+        for (0..iterations) |_| {
+            var value = try regexz.Regex.init(smp, pattern, .{});
+            value.deinit();
+        }
+        try report(out, "compile xDS-like (smp allocator)", iterations, pattern.len, elapsed(io, .{ .nanoseconds = start }));
+    }
 
     try benchMatches(io, out, "fullmatch literal (alloc)", "hello, world!", literal_input, 200000, false);
     try benchMatches(io, out, "fullmatch literal (reuse)", "hello, world!", literal_input, 200000, true);
