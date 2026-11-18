@@ -23,7 +23,8 @@ regexz now has two execution engines:
 
 Implemented functionality:
 
-- General lookahead/lookbehind, including variable-length lookbehind.
+- General lookahead/lookbehind, including variable-length lookbehind, and
+  PCRE2 non-atomic positive lookahead `(?*...)`.
 - Numeric/named backreferences.
 - Named captures and group-name lookup; duplicate names with `(?J)`.
 - Atomic groups and possessive quantifiers.
@@ -77,7 +78,7 @@ Implemented functionality:
 - Replacement syntax: `\0`..`\9`, `$0`..`$99`, `$&`, `$$`, `${name}`,
   case transforms `\U`/`\L`/`\E`/`\u`/`\l` (simple Unicode), and callback
   replacement via `replaceAllWithFn`.
-- 121 tests, including recursion, branch reset, conditional assertions,
+- 124 tests, including recursion, branch reset, conditional assertions,
   grapheme clusters, binary properties, Unicode blocks, partial matching,
   control verbs, thread safety, allocation-failure, and differential coverage
   against V8 for the supported subset.
@@ -99,6 +100,7 @@ Strengths:
 | Capability | regexz | PCRE2 | Rust `regex` | Node/V8 |
 | --- | --- | --- | --- | --- |
 | General lookaround | yes (extended) | yes | no | yes |
+| Non-atomic lookahead `(?*...)` | yes (extended) | yes (10.43+) | no | no |
 | Backreferences | yes (extended) | yes | no | yes |
 | Atomic/possessive | yes (extended) | yes | no | no |
 | Conditionals | group + assertion + `(?(R1))`/`(?(R&name))` + DEFINE | full | no | no |

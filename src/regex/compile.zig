@@ -17,6 +17,8 @@ pub const Program = struct {
     /// Index of the whole-program accept instruction.
     accept: usize = 0,
     capture_count: u16 = 0,
+    /// Hidden slots used by non-atomic lookaround position saves.
+    extra_slots: u16 = 0,
     /// Exact UTF-8 bytes when the whole pattern is a plain literal. Full
     /// matching can then bypass the NFA entirely.
     literal: ?[]const u8 = null,
@@ -101,6 +103,8 @@ const Builder = struct {
     capture_reset: bool = false,
     /// Insert callout 255 before consuming atoms.
     auto_callout: bool = false,
+    capture_count: u16 = 0,
+    extra_slots: u16 = 0,
     pending_dispatches: std.ArrayList(PendingDispatch) = .empty,
     const PendingDispatch = struct { instruction: usize, branches: []const usize };
     fn emit(self: *Builder, value: model.Instruction) model.Error!usize {
@@ -272,6 +276,16 @@ const Builder = struct {
                 break :blk self.repeatNode(repeat, continuation);
             },
             .lookaround => |look| blk: {
+                if (look.non_atomic) {
+                    if (look.negative or look.behind) return error.UnsupportedRegexFeature;
+                    const base = 2 * (@as(usize, self.capture_count) + 1);
+                    const slot = base + self.extra_slots;
+                    if (slot > 65535) return error.RegexLimitExceeded;
+                    self.extra_slots += 1;
+                    const restore = try self.emit(.{ .restore_pos = .{ .slot = @intCast(slot), .next = continuation } });
+                    const child = try self.node(look.child, restore);
+                    break :blk try self.emit(.{ .save = .{ .slot = @intCast(slot), .next = child } });
+                }
                 const child = try self.node(look.child, self.sub_accept);
                 break :blk self.emit(.{ .lookaround = .{
                     .child = child,
@@ -406,7 +420,7 @@ fn terminalFirst(instruction: model.Instruction) model.FirstSet {
         .byte, .grapheme, .string_property => .{ .ascii = .{ ~@as(u64, 0), ~@as(u64, 0) }, .nonascii = true },
         .accept, .sub_accept, .accept_verb => .{ .empty = true },
         .fail => .{},
-        .split, .save, .assertion, .lookahead, .reset_start, .prune, .skip, .commit, .then, .mark, .callout, .auto_callout, .reset_captures, .dispatch, .lookaround, .conditional, .conditional_assert, .conditional_recursion => .{},
+        .split, .save, .restore_pos, .assertion, .lookahead, .reset_start, .prune, .skip, .commit, .then, .mark, .callout, .auto_callout, .reset_captures, .dispatch, .lookaround, .conditional, .conditional_assert, .conditional_recursion => .{},
         .backref, .atomic, .call, .ret => conservative_first,
     };
 }
@@ -432,6 +446,7 @@ fn computeFirstSets(allocator: std.mem.Allocator, instructions: []const model.In
                 try edges.append(allocator, .{ .from = from, .to = @intCast(split.right) });
             },
             .save => |save| try edges.append(allocator, .{ .from = from, .to = @intCast(save.next) }),
+            .restore_pos => |restore| try edges.append(allocator, .{ .from = from, .to = @intCast(restore.next) }),
             .assertion => |assertion| try edges.append(allocator, .{ .from = from, .to = @intCast(assertion.next) }),
             .lookahead => |look| try edges.append(allocator, .{ .from = from, .to = @intCast(look.next) }),
             .star => |star| try edges.append(allocator, .{ .from = from, .to = @intCast(star.next) }),
@@ -544,6 +559,7 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         .specialize_loops = !extended,
         .capture_reset = limits.capture_reset,
         .auto_callout = limits.auto_callout,
+        .capture_count = parsed.capture_count,
     };
     defer builder.instructions.deinit(allocator);
     defer builder.pending_calls.deinit(allocator);
@@ -636,7 +652,7 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
                 else => {},
             }
         },
-        .lookahead, .lookaround, .backref, .atomic, .conditional, .conditional_assert, .conditional_recursion, .byte, .reset_start, .grapheme, .string_property, .fail, .accept_verb, .prune, .skip, .commit, .then, .mark, .call => dfa_eligible = false,
+        .lookahead, .lookaround, .backref, .atomic, .conditional, .conditional_assert, .conditional_recursion, .byte, .reset_start, .grapheme, .string_property, .restore_pos, .fail, .accept_verb, .prune, .skip, .commit, .then, .mark, .call => dfa_eligible = false,
         else => {},
     };
     const ucp_word: ?model.Set = if (needs_ucp_word) blk: {
@@ -650,6 +666,7 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         .body = body,
         .accept = accept,
         .capture_count = parsed.capture_count,
+        .extra_slots = builder.extra_slots,
         .literal = literal,
         .literal_prefix = literal_prefix,
         .dfa_eligible = dfa_eligible,

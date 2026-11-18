@@ -377,6 +377,7 @@ pub const Parser = struct {
                 if (!self.take(')')) return error.InvalidRegex;
                 return self.subroutine(value);
             } else if (self.take('<')) {
+                if (self.peek() == '*') return error.UnsupportedRegexFeature;
                 if (self.peek() == '=' or self.peek() == '!') {
                     const negative = self.peek() == '!';
                     self.cursor += 1;
@@ -384,6 +385,18 @@ pub const Parser = struct {
                 }
                 capture_name = try self.nameAngle();
                 capturing = true;
+            } else if (self.take('*')) {
+                // PCRE2 non-atomic positive lookahead: the engine may
+                // backtrack into the child if the continuation fails.
+                self.extended = true;
+                const child = try self.expression(depth + 1);
+                if (!self.take(')')) return error.InvalidRegex;
+                return self.node(.{ .lookaround = .{
+                    .child = child,
+                    .negative = false,
+                    .behind = false,
+                    .non_atomic = true,
+                } });
             } else if (self.peek() == '=' or self.peek() == '!') {
                 const negative = self.peek() == '!';
                 self.cursor += 1;

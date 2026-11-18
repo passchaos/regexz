@@ -123,6 +123,8 @@ pub const Workspace = struct {
     program: Program,
     limits: model.Limits,
     slots: []usize,
+    /// Number of user-visible capture slots (hidden lookaround slots follow).
+    user_slot_count: usize,
     best_slots: []usize,
     choices: std.ArrayList(Choice) = .empty,
     trail: std.ArrayList(Trail) = .empty,
@@ -145,7 +147,8 @@ pub const Workspace = struct {
     pending_pos: usize = 0,
 
     pub fn init(allocator: std.mem.Allocator, program: Program, limits: model.Limits) std.mem.Allocator.Error!Workspace {
-        const slot_count = 2 * (@as(usize, program.capture_count) + 1);
+        const user_slot_count = 2 * (@as(usize, program.capture_count) + 1);
+        const slot_count = user_slot_count + program.extra_slots;
         const slots = try allocator.alloc(usize, slot_count);
         @memset(slots, unset);
         errdefer allocator.free(slots);
@@ -163,6 +166,7 @@ pub const Workspace = struct {
             .program = program,
             .limits = limits,
             .slots = slots,
+            .user_slot_count = user_slot_count,
             .best_slots = best_slots,
             .calls = calls,
             .returns = returns,
@@ -425,6 +429,11 @@ pub const Workspace = struct {
                     pc = save.next;
                     continue;
                 },
+                .restore_pos => |*restore| {
+                    pos = self.slots[restore.slot];
+                    pc = restore.next;
+                    continue;
+                },
                 .split => |*split| {
                     if (self.choices.items.len >= self.limits.max_backtrack_choices) {
                         return error.RegexLimitExceeded;
@@ -679,7 +688,7 @@ pub const Workspace = struct {
             self.resetRun(start);
             if (try self.run(input, self.program.body, start, .find, 0, 0)) |end| {
                 const match_start = if (self.slots[0] == unset) start else self.slots[0];
-                return .{ .start = match_start, .end = end, .slots = self.slots, .mark = self.mark };
+                return .{ .start = match_start, .end = end, .slots = self.slots[0..self.user_slot_count], .mark = self.mark };
             }
             if (self.commit_failed) return null;
             if (self.skip_armed) {

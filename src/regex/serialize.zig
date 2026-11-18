@@ -12,7 +12,7 @@ const Program = @import("compile.zig").Program;
 const required_literals = @import("required_literals.zig");
 
 const magic = "RGXZ";
-const version: u16 = 3;
+const version: u16 = 4;
 const max_instructions: u32 = 1 << 20;
 const max_ranges: u32 = 1 << 20;
 const max_names: u32 = 1 << 16;
@@ -51,6 +51,7 @@ const Tag = enum(u8) {
     ret,
     save,
     string_property,
+    restore_pos,
 };
 
 const Writer = struct {
@@ -331,12 +332,17 @@ fn writeInstruction(writer: *Writer, instruction: model.Instruction) !void {
             try writer.byte(@intFromEnum(property.property));
             try writer.u32v(@intCast(property.next));
         },
+        .restore_pos => |restore| {
+            try writer.byte(@intFromEnum(Tag.restore_pos));
+            try writer.u16v(restore.slot);
+            try writer.u32v(@intCast(restore.next));
+        },
     }
 }
 
 fn readInstruction(reader: *Reader, allocator: std.mem.Allocator) !model.Instruction {
     const tag_value = try reader.byte();
-    if (tag_value > @intFromEnum(Tag.string_property)) return error.InvalidRegex;
+    if (tag_value > @intFromEnum(Tag.restore_pos)) return error.InvalidRegex;
     const tag: Tag = @enumFromInt(tag_value);
     return switch (tag) {
         .accept => .accept,
@@ -407,6 +413,10 @@ fn readInstruction(reader: *Reader, allocator: std.mem.Allocator) !model.Instruc
                 .next = @intCast(try reader.u32v()),
             } };
         },
+        .restore_pos => .{ .restore_pos = .{
+            .slot = try reader.u16v(),
+            .next = @intCast(try reader.u32v()),
+        } },
     };
 }
 
@@ -433,6 +443,7 @@ pub fn serialize(program: Program, allocator: std.mem.Allocator) model.Error![]u
     try writer.u32v(@intCast(program.body));
     try writer.u32v(@intCast(program.accept));
     try writer.u16v(program.capture_count);
+    try writer.u16v(program.extra_slots);
     try writer.firstSet(program.first);
     try writer.optionalBytes(program.literal);
     try writer.optionalBytes(program.literal_prefix);
@@ -482,6 +493,7 @@ pub fn deserialize(allocator: std.mem.Allocator, bytes: []const u8) model.Error!
     const body = try reader.u32v();
     const accept = try reader.u32v();
     const capture_count = try reader.u16v();
+    const extra_slots = try reader.u16v();
     const first = try reader.firstSet();
     const literal = try reader.optionalBytes(allocator);
     const literal_prefix = try reader.optionalBytes(allocator);
@@ -536,6 +548,7 @@ pub fn deserialize(allocator: std.mem.Allocator, bytes: []const u8) model.Error!
         .body = @intCast(body),
         .accept = @intCast(accept),
         .capture_count = capture_count,
+        .extra_slots = extra_slots,
         .literal = literal,
         .literal_prefix = literal_prefix,
         .required_literals = required,
@@ -555,7 +568,7 @@ pub fn deserialize(allocator: std.mem.Allocator, bytes: []const u8) model.Error!
 
 fn validate(program: Program) model.Error!void {
     const count = program.instructions.len;
-    const slot_count = 2 * (@as(usize, program.capture_count) + 1);
+    const slot_count = 2 * (@as(usize, program.capture_count) + 1) + program.extra_slots;
     if (program.start >= count or program.body >= count or program.accept >= count) return error.InvalidRegex;
     for (program.instructions) |instruction| switch (instruction) {
         .accept, .sub_accept, .fail, .accept_verb, .ret => {},
@@ -587,6 +600,7 @@ fn validate(program: Program) model.Error!void {
         .call => |call| if (call.child >= count or call.next >= count) return error.InvalidRegex,
         .save => |save| if (save.next >= count or save.slot >= slot_count) return error.InvalidRegex,
         .string_property => |property| if (property.next >= count) return error.InvalidRegex,
+        .restore_pos => |restore| if (restore.next >= count or restore.slot >= slot_count) return error.InvalidRegex,
     };
     for (program.dispatches) |dispatch| {
         for (dispatch.branches) |branch| {

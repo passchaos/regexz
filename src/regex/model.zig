@@ -231,8 +231,9 @@ pub const Node = union(enum) {
     assertion: Assertion,
     /// Zero-width set assertion. `negative` is true for `(?!set)`.
     lookahead_set: struct { set: Set, negative: bool },
-    /// General lookaround. `behind` selects lookbehind.
-    lookaround: struct { child: *const Node, negative: bool, behind: bool },
+    /// General lookaround. `behind` selects lookbehind. `non_atomic` is
+    /// PCRE2 `(?*...)`: the engine may backtrack into the lookaround.
+    lookaround: struct { child: *const Node, negative: bool, behind: bool, non_atomic: bool = false },
     /// Numeric or named backreference. Names are resolved to an index at
     /// parse time.
     backref: struct { index: u16 },
@@ -341,6 +342,10 @@ pub const Instruction = union(enum) {
     reset_captures: struct { first: u16, last: u16, next: usize },
     /// Multi-way alternation dispatch; `table` indexes `Program.dispatches`.
     dispatch: struct { table: u16 },
+    /// Restore the current position from a hidden slot. Used by non-atomic
+    /// lookahead: the child consumes input, then the position is reset before
+    /// the continuation, while the child's choices stay backtrackable.
+    restore_pos: struct { slot: u16, next: usize },
     /// Recursion/subroutine call. `child` is the subroutine body start and
     /// `next` is the return continuation.
     call: struct { group: u16, child: usize, next: usize },
