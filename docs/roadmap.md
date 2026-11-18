@@ -234,8 +234,9 @@ on the tokenizer and xDS workloads.
 
 ### P2 — performance and process
 
-11. 256-byte lookup tables for mixed sets; `u32` + bitset workspace memory
-    (the 128-bit ASCII bitmap is already implemented).
+11. ~~`u32` workspace instruction/epoch arrays~~: done, reducing the linear
+    full-match workspace to 44 bytes/instruction. 256-byte lookup tables for
+    mixed sets remain.
 12. SIMD prefilters: the first-byte vector prefilter for small selective sets
     is done and its byte table is cached per workspace; Teddy-style
     multi-byte/multi-literal filtering remains.
@@ -264,7 +265,7 @@ For the workloads in `tools/bench/main.zig`, on an idle host:
 - Qwen tokenizer search: **≥ 200 MiB/s** (achieved: ~210 MiB/s).
 - `replaceAll` `a+`: **≥ 400 MiB/s**.
 - Compile xDS-like pattern: **≤ 2 µs**.
-- Workspace memory: **≤ 48 bytes/instruction**.
+- Workspace memory: **≤ 48 bytes/instruction** (achieved: 44).
 - Linear mode: **O(input × program)**; extended mode: bounded by the
   configured step/choice/trail/depth limits.
 

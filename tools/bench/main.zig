@@ -195,7 +195,7 @@ pub fn main() !void {
             workspace.deinit();
         }
         try report(out, "Workspace.init Qwen program", iterations, 0, elapsed(io, .{ .nanoseconds = start }));
-        try out.print("instructions={d} workspace_bytes={d}\n", .{ value.program.instructions.len, value.program.instructions.len * 11 * @sizeOf(usize) });
+        try out.print("instructions={d} workspace_bytes={d}\n", .{ value.program.instructions.len, value.program.instructions.len * 11 * @sizeOf(u32) });
     }
     try out.flush();
 }

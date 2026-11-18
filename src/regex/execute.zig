@@ -79,9 +79,9 @@ const Dfa = struct {
 /// not be shared between threads.
 pub const Workspace = struct {
     allocator: std.mem.Allocator,
-    storage: []usize,
-    seen: []usize,
-    epoch: usize = 0,
+    storage: []u32,
+    seen: []u32,
+    epoch: u32 = 0,
     stats: Stats = .{},
     budget: ?budget_mod.Budget = null,
     partial: bool = false,
@@ -89,9 +89,9 @@ pub const Workspace = struct {
     dfa_calls: usize = 0,
     dfa_failed: bool = false,
     pub fn init(allocator: std.mem.Allocator, program: Program) std.mem.Allocator.Error!Workspace {
-        const storage = try allocator.alloc(usize, program.instructions.len * 6);
+        const storage = try allocator.alloc(u32, program.instructions.len * 6);
         errdefer allocator.free(storage);
-        const seen = try allocator.alloc(usize, program.instructions.len * 5);
+        const seen = try allocator.alloc(u32, program.instructions.len * 5);
         @memset(seen, 0);
         return .{ .allocator = allocator, .storage = storage, .seen = seen };
     }
@@ -101,13 +101,13 @@ pub const Workspace = struct {
         self.allocator.free(self.seen);
         self.* = undefined;
     }
-    fn push(self: *Workspace, seen: []usize, stack: []usize, count: *usize, index: usize) void {
+    fn push(self: *Workspace, seen: []u32, stack: []u32, count: *usize, index: usize) void {
         if (seen[index] == self.epoch) return;
         seen[index] = self.epoch;
-        stack[count.*] = index;
+        stack[count.*] = @intCast(index);
         count.* += 1;
     }
-    fn add(self: *Workspace, program: Program, index: usize, input: []const u8, offset: usize, context: Position, list: []usize, count: *usize, stack: []usize, seen: []usize) budget_mod.Error!void {
+    fn add(self: *Workspace, program: Program, index: usize, input: []const u8, offset: usize, context: Position, list: []u32, count: *usize, stack: []u32, seen: []u32) budget_mod.Error!void {
         var pending: usize = 0;
         self.push(seen, stack, &pending, index);
         while (pending != 0) {
@@ -167,14 +167,14 @@ pub const Workspace = struct {
         const value = std.unicode.utf8Decode(input[offset..][0..len]) catch return null;
         return .{ .value = value, .len = len };
     }
-    fn dfaPush(self: *Workspace, index: usize, stack: []usize, count: *usize) void {
+    fn dfaPush(self: *Workspace, index: usize, stack: []u32, count: *usize) void {
         const dfa = &self.dfa.?;
         if (dfa.seen[index] == dfa.epoch) return;
         dfa.seen[index] = dfa.epoch;
-        stack[count.*] = index;
+        stack[count.*] = @intCast(index);
         count.* += 1;
     }
-    fn dfaClosure(self: *Workspace, program: Program, index: usize, list: []usize, count: *usize) void {
+    fn dfaClosure(self: *Workspace, program: Program, index: usize, list: []u32, count: *usize) void {
         const n = program.instructions.len;
         const stack = self.storage[n * 5 ..][0..n];
         var pending: usize = 0;
@@ -213,15 +213,15 @@ pub const Workspace = struct {
             dfa.epoch = 1;
         }
     }
-    fn dfaGetState(self: *Workspace, program: Program, list: []usize) std.mem.Allocator.Error!u32 {
+    fn dfaGetState(self: *Workspace, program: Program, list: []u32) std.mem.Allocator.Error!u32 {
         const dfa = &self.dfa.?;
-        std.mem.sort(usize, list, {}, struct {
-            fn less(_: void, a: usize, b: usize) bool {
+        std.mem.sort(u32, list, {}, struct {
+            fn less(_: void, a: u32, b: u32) bool {
                 return a < b;
             }
         }.less);
         const scratch = dfa.scratch[0..list.len];
-        for (list, 0..) |value, index| scratch[index] = @intCast(value);
+        for (list, 0..) |value, index| scratch[index] = value;
         const key = std.mem.sliceAsBytes(scratch);
         if (dfa.index.get(key)) |id| return id;
         if (dfa.states.items.len >= dfa_max_states) return error.OutOfMemory;
@@ -387,7 +387,12 @@ pub const Workspace = struct {
                 };
                 const destination = offset + advance;
                 const bucket = destination % 5;
-                self.epoch = destination + 1;
+                if (destination >= std.math.maxInt(u32)) {
+                    @memset(self.seen, 0);
+                    self.epoch = 1;
+                } else {
+                    self.epoch = @intCast(destination + 1);
+                }
                 try self.add(program, continuation, input, destination, position(input, destination), self.storage[bucket * n ..][0..n], &counts[bucket], stack, self.seen[bucket * n ..][0..n]);
             }
         }

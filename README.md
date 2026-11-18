@@ -269,7 +269,8 @@ busy Apple Silicon host (absolute numbers vary with load):
 `Regex` now owns a persistent workspace and lazy-DFA cache (guarded by a
 spin mutex), so repeated `matches`/`find`/`isMatch` calls do not rebuild
 matching state. Small patterns compile into a single fixed block, avoiding
-the arena's multiple page allocations. Sets carry a 128-bit ASCII membership bitmap, the VM binds
+the arena's multiple page allocations. The linear full-match workspace uses
+`u32` instruction/epoch arrays (44 bytes per instruction). Sets carry a 128-bit ASCII membership bitmap, the VM binds
 instruction payloads by reference, greedy single-set loops scan without
 per-character choice records, and search uses literal/prefix prefilters, a
 workspace-cached SIMD first-byte prefilter for small selective sets, a
