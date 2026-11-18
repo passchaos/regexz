@@ -167,6 +167,11 @@ pub fn main() !void {
     try benchFind(io, out, "find CJK tokenizer (no lookahead)", qwen_no_lookahead, cjk_text.items, 50, ucp);
     try benchFind(io, out, "find Han class scan", "\\p{Han}+", cjk_text.items, 50, .{});
 
+    var han_text: std.ArrayList(u8) = .empty;
+    defer han_text.deinit(gpa);
+    for (0..4000) |_| try han_text.appendSlice(gpa, "\u{4f60}\u{597d}\u{4e16}\u{754c}\u{8fd9}\u{662f}\u{4e00}\u{4e2a}\u{4e2d}\u{6587}\u{5206}\u{8bcd}\u{6d4b}\u{8bd5}\n");
+    try benchMatches(io, out, "fullmatch Han class (191 KiB)", "(?:\\p{Han}+\n)+", han_text.items, 50, true);
+
     {
         const set_patterns = [_][]const u8{
             "[a-z]+@", "[a-z]+#", "[a-z]+%", "[a-z]+&", "[a-z]+!",

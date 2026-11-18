@@ -177,6 +177,7 @@ Measured on an Apple Silicon macOS host. "Before" is the initial commit state;
 | Qwen tokenizer search, 22 KiB | ~842 µs | ~68 µs (353 MiB/s) | ~56 µs* (427 MiB/s) | ~195 µs |
 | CJK tokenizer search, 191 KiB | — | ~229–250 µs (~790–850 MiB/s) | ~216 µs* (864 MiB/s) | — |
 | Han class scan, 191 KiB | — | ~173–200 µs (940–1080 MiB/s) | ~169 µs (1104 MiB/s) | — |
+| Full match, Han class, 191 KiB | — | ~208 µs (~790 MiB/s) | — | — |
 | Byte escape scan `\C+`, 23 KiB | — | ~8 ns/pass (one full-span match) | not supported | — |
 | Shared-prefix alternation no-match, 23 KiB | — | ~1.55 µs (15.5 GiB/s) | ~2.1 µs (11.4 GiB/s) | — |
 | `find` selective pattern (`\p{N}`) | — | ~36 ns/piece | — | — |
@@ -205,8 +206,9 @@ decoder, adding a shared-prefix multi-literal prefilter, and determinizing
 lookahead-free programs over UTF-8 bytes, full-pattern
 Qwen search is ~68–74 µs (~330–353 MiB/s), CJK tokenizer search is ~229–250 µs
 (~790–850 MiB/s), Han class scans are ~173–200 µs (~940–1080 MiB/s, down from
-~635 µs), greedy `\C+` scans collapse to a single full-span match (~8 ns), and
-shared-prefix no-match scans are ~1.55 µs (15.5 GiB/s). The bench gate now covers 27 cases;
+~635 µs), greedy `\C+` scans collapse to a single full-span match (~8 ns), large
+Unicode full matches scan at ~790 MiB/s (direct-mapped transition cache), and
+shared-prefix no-match scans are ~1.55 µs (15.5 GiB/s). The bench gate now covers 28 cases;
 `RegexSet` ~97 µs, `replaceAll` ~85 µs, compile ~1.5 µs with `smp_allocator`,
 and all 191 tests plus the V8/Rust/extended/replacement differential fuzzers pass. On the
 feature side, PCRE2 forward numeric/named references, `\e` and isolated `\E`,

@@ -309,6 +309,7 @@ busy Apple Silicon host (absolute numbers vary with load):
 | Qwen tokenizer `find` (22 KiB) | ~842 µs | ~68 µs (350 MiB/s) |
 | CJK tokenizer `find` (191 KiB) | — | ~229–250 µs (~790–850 MiB/s) |
 | `\p{Han}+` class scan (191 KiB) | ~635 µs | ~173–200 µs (~940–1080 MiB/s) |
+| Full match, Han class (191 KiB) | — | ~208 µs (~790 MiB/s) |
 | `replaceAll` `a+` (32 KiB) | ~265 µs | ~64 µs |
 | `find` literal after a 4 KiB prefix | — | ~55 ns |
 | `find` xDS-like after a 4 KiB prefix | — | ~94 ns |

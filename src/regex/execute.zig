@@ -38,6 +38,16 @@ const Position = struct {
 };
 const dfa_dead: u32 = std.math.maxInt(u32);
 const dfa_max_states: usize = 64;
+/// Direct-mapped cache for non-ASCII (state, rune) transitions.
+const unicode_cache_size: usize = 4096;
+const UnicodeEntry = extern struct {
+    key: u64 = std.math.maxInt(u64),
+    next: u32 = 0,
+    pad: u32 = 0,
+};
+inline fn unicodeSlot(key: u64) usize {
+    return @intCast((key ^ (key >> 12)) & (unicode_cache_size - 1));
+}
 /// Inputs at least this long use the DFA on the first call. Shorter inputs
 /// use it after a few calls so one-shot matching does not pay construction.
 const dfa_min_input: usize = 4096;
@@ -53,7 +63,7 @@ const Dfa = struct {
     arena: std.heap.ArenaAllocator,
     states: std.ArrayList(DfaState) = .empty,
     index: std.StringHashMapUnmanaged(u32) = .empty,
-    unicode: std.AutoHashMapUnmanaged(u64, u32) = .empty,
+    unicode_cache: []UnicodeEntry,
     scratch: []u32,
     seen: []u32,
     epoch: u32 = 0,
@@ -65,12 +75,21 @@ const Dfa = struct {
         errdefer allocator.free(scratch);
         const seen = try allocator.alloc(u32, instruction_count);
         @memset(seen, 0);
-        return .{ .allocator = allocator, .arena = arena, .scratch = scratch, .seen = seen };
+        const unicode_cache = try allocator.alloc(UnicodeEntry, unicode_cache_size);
+        errdefer allocator.free(unicode_cache);
+        @memset(unicode_cache, .{});
+        return .{
+            .allocator = allocator,
+            .arena = arena,
+            .unicode_cache = unicode_cache,
+            .scratch = scratch,
+            .seen = seen,
+        };
     }
     fn deinit(self: *Dfa) void {
         self.states.deinit(self.allocator);
         self.index.deinit(self.allocator);
-        self.unicode.deinit(self.allocator);
+        self.allocator.free(self.unicode_cache);
         self.allocator.free(self.scratch);
         self.allocator.free(self.seen);
         self.arena.deinit();
@@ -259,7 +278,8 @@ pub const Workspace = struct {
             if (cached != 0) return if (cached == dfa_dead) dfa_dead else cached - 1;
         } else {
             const key = (@as(u64, state_id) << 21) | rune;
-            if (dfa.unicode.get(key)) |cached| return if (cached == dfa_dead) dfa_dead else cached - 1;
+            const entry = &dfa.unicode_cache[unicodeSlot(key)];
+            if (entry.key == key) return if (entry.next == dfa_dead) dfa_dead else entry.next - 1;
         }
         const instructions = dfa.states.items[state_id].instructions;
         self.dfaNextEpoch();
@@ -280,7 +300,11 @@ pub const Workspace = struct {
         if (rune < 128) {
             dfa.states.items[state_id].ascii[@intCast(rune)] = cached;
         } else {
-            try dfa.unicode.put(dfa.allocator, (@as(u64, state_id) << 21) | rune, cached);
+            dfa.unicode_cache[unicodeSlot((@as(u64, state_id) << 21) | rune)] = .{
+                .key = (@as(u64, state_id) << 21) | rune,
+                .next = cached,
+                .pad = 0,
+            };
         }
         return next;
     }
