@@ -314,6 +314,13 @@ pub const Workspace = struct {
     /// the replay disagrees with the DFA bounds or exhausts the budget; the
     /// caller then falls back to a full interpreter search.
     fn extractCaptures(self: *Workspace, input: []const u8, start: usize, end: usize) ?Match {
+        if (self.replayLinear(input, start, end)) |matched| {
+            if (matched) {
+                self.slots[0] = start;
+                self.slots[1] = end;
+                return .{ .start = start, .end = end, .slots = self.slots };
+            }
+        }
         @memset(self.slots, unset);
         self.slots[0] = start;
         const replay_end = self.run(input, start) catch return null;
@@ -321,6 +328,99 @@ pub const Workspace = struct {
         self.slots[0] = start;
         self.slots[1] = end;
         return .{ .start = start, .end = end, .slots = self.slots };
+    }
+
+    /// Deterministic replay for a straight-line program of saves, literals,
+    /// and greedy set runs whose continuation cannot start with a member.
+    /// Such a run is forced to its maximal length, so no choice or trail
+    /// bookkeeping is needed. Returns null when the shape is not covered;
+    /// otherwise whether the walk ended exactly at `end`.
+    fn replayLinear(self: *Workspace, input: []const u8, start: usize, end: usize) ?bool {
+        const instructions = self.program.instructions;
+        const max_steps = self.limits.max_execution_steps;
+        var steps = self.steps;
+        defer self.steps = steps;
+        @memset(self.slots, unset);
+        var pc = self.program.body;
+        var pos = start;
+        // Belt-and-braces cap for malformed zero-width cycles; the real
+        // limit is the interpreter budget, which the fallback path enforces.
+        const step_limit = (end - start) + instructions.len + 16;
+        var walked: usize = 0;
+        while (true) {
+            walked += 1;
+            if (walked > step_limit) return null;
+            steps += 1;
+            if (steps > max_steps) return null;
+            switch (instructions[pc]) {
+                .save => |save| {
+                    self.slots[save.slot] = pos;
+                    pc = save.next;
+                },
+                .literal_byte => |literal| {
+                    if (pos >= input.len or input[pos] != literal.value) return false;
+                    pos += 1;
+                    pc = literal.next;
+                },
+                .literal_rune => |literal| {
+                    const rune = runeAt(input, pos) orelse return false;
+                    if (rune.value != literal.value) return false;
+                    pos += rune.len;
+                    pc = literal.next;
+                },
+                .byte => |next| {
+                    if (pos >= input.len) return false;
+                    pos += 1;
+                    pc = next;
+                },
+                .consume => |consume| {
+                    if (consume.set.ascii_only) {
+                        if (pos >= input.len or !consume.set.matches(input[pos])) return false;
+                        pos += 1;
+                    } else {
+                        pos = consume.set.matchAdvance(input, pos) orelse return false;
+                    }
+                    pc = consume.next;
+                },
+                .star => |star| {
+                    // The greedy run is forced when the next consuming
+                    // instruction is the accept or a literal outside the set.
+                    var next = star.next;
+                    while (true) {
+                        switch (instructions[next]) {
+                            .save => |save| next = save.next,
+                            .accept => break,
+                            .literal_byte => |literal| {
+                                if (star.set.matches(literal.value)) return null;
+                                break;
+                            },
+                            .literal_rune => |literal| {
+                                if (star.set.matches(literal.value)) return null;
+                                break;
+                            },
+                            else => return null,
+                        }
+                    }
+                    var consumed: usize = 0;
+                    if (star.set.ascii_only) {
+                        while (pos < input.len and star.set.matches(input[pos])) {
+                            pos += 1;
+                            consumed += 1;
+                        }
+                    } else {
+                        while (star.set.matchAdvance(input, pos)) |advanced| {
+                            pos = advanced;
+                            consumed += 1;
+                        }
+                    }
+                    steps += consumed;
+                    if (steps > max_steps) return null;
+                    pc = star.next;
+                },
+                .accept => return pos == end,
+                else => return null,
+            }
+        }
     }
 
     /// True when a multi-byte literal required by every match is absent from
@@ -682,16 +782,23 @@ pub const Workspace = struct {
         self.choices.clearRetainingCapacity();
         self.trail.clearRetainingCapacity();
         const capture_free = self.program.capture_count == 0;
+        // Keep the hot loop's budget and instruction table in locals: the
+        // choice/trail appends may alias `self`, which would otherwise force
+        // a reload on every step.
+        const instructions = self.program.instructions;
+        const max_steps = self.limits.max_execution_steps;
+        var steps = self.steps;
+        defer self.steps = steps;
         // Slot 0 was set by the caller; the initial save is redundant.
         var pc = self.program.body;
         var pos = start;
         var best_end: ?usize = null;
         while (true) {
-            self.steps += 1;
-            if (self.steps > self.limits.max_execution_steps) {
+            steps += 1;
+            if (steps > max_steps) {
                 return error.RegexLimitExceeded;
             }
-            switch (self.program.instructions[pc]) {
+            switch (instructions[pc]) {
                 .accept => {
                     if (!self.limits.longest) return pos;
                     if (best_end == null or pos > best_end.?) {
@@ -723,7 +830,15 @@ pub const Workspace = struct {
                     }
                 },
                 .consume => |*consume| {
-                    if (consume.set.matchAdvance(input, pos)) |next| {
+                    // ASCII-only sets never match a non-ASCII byte, so the
+                    // common case skips the UTF-8 decode in `matchAdvance`.
+                    if (consume.set.ascii_only) {
+                        if (pos < input.len and consume.set.matches(input[pos])) {
+                            pos += 1;
+                            pc = consume.next;
+                            continue;
+                        }
+                    } else if (consume.set.matchAdvance(input, pos)) |next| {
                         pos = next;
                         pc = consume.next;
                         continue;
@@ -731,7 +846,7 @@ pub const Workspace = struct {
                 },
                 .star => |*star| {
                     const scan_start = pos;
-                    const scan_budget = self.limits.max_execution_steps -| self.steps;
+                    const scan_budget = max_steps -| steps;
                     var consumed: usize = 0;
                     if (star.set.ascii_only) {
                         while (consumed < scan_budget and pos < input.len and input[pos] < 128 and star.set.matches(input[pos])) {
@@ -746,7 +861,7 @@ pub const Workspace = struct {
                         }
                     }
                     if (consumed == scan_budget and star.set.matchAdvance(input, pos) != null) return error.RegexLimitExceeded;
-                    self.steps += consumed;
+                    steps += consumed;
                     if (pos != scan_start and star.backtrack) {
                         if (self.choices.items.len >= self.limits.max_backtrack_choices) {
                             return error.RegexLimitExceeded;
@@ -825,7 +940,7 @@ pub const Workspace = struct {
                 .split => |*split| {
                     // Greedy `\C+` loop: consume the tail with one choice.
                     if (!split.alternation) {
-                        const body = self.program.instructions[split.left];
+                        const body = instructions[split.left];
                         if (body == .byte and body.byte == pc) {
                             const scan_start = pos;
                             if (pos < input.len) {
@@ -919,7 +1034,7 @@ pub const Workspace = struct {
                         .limit = choice.limit,
                     });
                 }
-                pc = self.program.instructions[choice.pc].star.next;
+                pc = instructions[choice.pc].star.next;
                 pos = prev;
                 continue;
             }

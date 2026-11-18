@@ -572,6 +572,38 @@ test "counting star scan respects the step budget" {
     try std.testing.expectError(error.RegexLimitExceeded, workspace.find(&input, 0));
 }
 
+test "linear capture replay fills the same slots as the interpreter" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // The first cases take the deterministic replay (forced greedy runs);
+    // the later ones are shapes it must reject and hand to the VM.
+    const cases = [_]struct { pattern: []const u8, input: []const u8, groups: []const []const u8 }{
+        .{ .pattern = "(\\w+)@(\\w+)\\.com", .input = "user.name@example.com", .groups = &.{ "name@example.com", "name", "example" } },
+        .{ .pattern = "(\\d+)-(\\d+)", .input = "12-345", .groups = &.{ "12-345", "12", "345" } },
+        .{ .pattern = "(a+)b", .input = "aaab", .groups = &.{ "aaab", "aaa" } },
+        .{ .pattern = "(\\p{Han}+)-(\\p{Han}+)", .input = "a\u{4f60}\u{597d}-\u{4e16}\u{754c}b", .groups = &.{ "\u{4f60}\u{597d}-\u{4e16}\u{754c}", "\u{4f60}\u{597d}", "\u{4e16}\u{754c}" } },
+        .{ .pattern = "(?i)([a-z]+)(\\d+)", .input = "AbC12", .groups = &.{ "AbC12", "AbC", "12" } },
+        .{ .pattern = "(a+)ab", .input = "aaab", .groups = &.{ "aaab", "aa" } },
+        .{ .pattern = "(\\w+)(\\w+)", .input = "abcd", .groups = &.{ "abcd", "abc", "d" } },
+        .{ .pattern = "(a*)(a*)", .input = "aaa", .groups = &.{ "aaa", "aaa", "" } },
+        .{ .pattern = "(a|aa)*b", .input = "aaab", .groups = &.{ "aaab", "a" } },
+        .{ .pattern = "(a+)(a+)(a*)", .input = "aaaa", .groups = &.{ "aaaa", "aaa", "a", "" } },
+    };
+    for (cases) |case| {
+        var value = try regex.Regex.init(allocator, case.pattern, .{});
+        defer value.deinit();
+        var workspace = try regex.ReplaceWorkspace.init(allocator, value.program, .{});
+        defer workspace.deinit();
+        const found = (try workspace.find(case.input, 0)).?;
+        for (case.groups, 0..) |want, index| {
+            const got = found.group(case.input, index) orelse "";
+            try std.testing.expectEqualStrings(want, got);
+        }
+    }
+}
+
 test "capture-aware linear fallback matches the backtracking VM" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
