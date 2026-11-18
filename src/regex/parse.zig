@@ -52,6 +52,14 @@ pub const Parser = struct {
         }
         if (list.items.len == 0) return null;
         std.mem.sort(u16, list.items, {}, std.sort.asc(u16));
+        var count: usize = 0;
+        for (list.items) |index| {
+            if (count == 0 or list.items[count - 1] != index) {
+                list.items[count] = index;
+                count += 1;
+            }
+        }
+        list.shrinkRetainingCapacity(count);
         return try list.toOwnedSlice(self.allocator);
     }
     pub fn lookupName(self: *Parser, name: []const u8) ?u16 {
@@ -126,7 +134,13 @@ pub const Parser = struct {
         return self.pattern[start .. self.cursor - 1];
     }
     fn addGroupName(self: *Parser, name: []const u8, index: u16) m.Error!void {
-        if (!self.flags.duplicate_names and self.lookupName(name) != null) return error.InvalidRegex;
+        // PCRE2 permits duplicate names on the same number (branch reset);
+        // distinct numbers need (?J).
+        if (!self.flags.duplicate_names) {
+            for (self.group_names.items) |entry| {
+                if (entry.index != index and std.mem.eql(u8, entry.name, name)) return error.InvalidRegex;
+            }
+        }
         try self.group_names.append(self.allocator, .{ .name = name, .index = index });
     }
     fn setGroupNode(self: *Parser, index: u16, value: *const m.Node) m.Error!void {

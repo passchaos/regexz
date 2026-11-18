@@ -735,3 +735,10 @@ test "undelimited name conditions" {
     try expectFull("(?<R>a)(?(R)b|c)", "ab", .{}, true);
     try expectFull("(?<R>a)(?(R)b|c)", "ac", .{}, false);
 }
+
+test "branch reset allows duplicate names on the same number" {
+    try expectFull("(?|(?<AA>aa)|(?<AA>bb))\\k<AA>", "aaaa", .{}, true);
+    try expectFull("(?|(?<AA>aa)|(?<AA>bb))\\k<AA>", "bbbb", .{}, true);
+    try expectFull("(?|(?<AA>aa)|(?<AA>bb))\\k<AA>", "aabb", .{}, false);
+    try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, "(?<x>a)(?<x>b)", .{}));
+}
