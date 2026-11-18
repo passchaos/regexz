@@ -81,6 +81,10 @@ pub const Scanner = struct {
     terminal_used: usize = 0,
     scratch: []usize,
     best_slots: []usize,
+    /// Capture-free programs ignore per-thread slot copies; only the match
+    /// start/end are reported.
+    capture_free: bool = false,
+    capture_free_slots: [2]usize = .{ unset, unset },
     seen: []u32,
     epoch: u32 = 0,
     reset_trail: std.ArrayList(ResetEntry) = .empty,
@@ -137,6 +141,7 @@ pub const Scanner = struct {
             .terminal_slots = terminal_slots,
             .scratch = scratch,
             .best_slots = best_slots,
+            .capture_free = program.capture_count == 0,
             .seen = seen,
         };
     }
@@ -194,6 +199,11 @@ pub const Scanner = struct {
         self.seen[index] = self.epoch;
     }
 
+    fn terminalSlots(self: *Scanner, slots: []const usize) model.Error![]usize {
+        if (self.capture_free) return &self.capture_free_slots;
+        return self.copySlots(self.terminal_slots, &self.terminal_used, slots);
+    }
+
     fn copySlots(self: *Scanner, region: []usize, used: *usize, slots: []const usize) model.Error![]usize {
         if (used.* + self.slot_count > region.len) return error.RegexLimitExceeded;
         const destination = region[used.*..][0..self.slot_count];
@@ -220,7 +230,7 @@ pub const Scanner = struct {
                 self.terminal[self.terminal_count] = .{
                     .pc = @intCast(index),
                     .start = start,
-                    .slots = try self.copySlots(self.terminal_slots, &self.terminal_used, slots),
+                    .slots = try self.terminalSlots(slots),
                 };
                 self.terminal_count += 1;
             },
@@ -228,7 +238,7 @@ pub const Scanner = struct {
                 self.terminal[self.terminal_count] = .{
                     .pc = @intCast(index),
                     .start = start,
-                    .slots = try self.copySlots(self.terminal_slots, &self.terminal_used, slots),
+                    .slots = try self.terminalSlots(slots),
                 };
                 self.terminal_count += 1;
                 try self.add(@intCast(star.next), start, offset, rune, slots);
@@ -334,8 +344,13 @@ pub const Scanner = struct {
         for (self.terminal[0..self.terminal_count]) |thread| {
             switch (self.program.instructions[thread.pc]) {
                 .accept => {
-                    @memcpy(self.best_slots, thread.slots);
-                    self.best_slots[1] = self.offset;
+                    if (self.capture_free) {
+                        self.best_slots[0] = thread.start;
+                        self.best_slots[1] = self.offset;
+                    } else {
+                        @memcpy(self.best_slots, thread.slots);
+                        self.best_slots[1] = self.offset;
+                    }
                     self.recorded = .{ .start = thread.start, .end = self.offset };
                     break;
                 },

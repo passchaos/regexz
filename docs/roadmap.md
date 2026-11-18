@@ -182,7 +182,7 @@ Measured on an Apple Silicon macOS host. "Before" is the initial commit state;
 | Full match, ASCII loop, 216 KiB | — | ~376 µs (~555 MiB/s) | — | — |
 | Full match, backref `(a)\1` (reuse) | ~5.5 µs | ~17 ns | — | — |
 | Full match, atomic `(?>a+)a` (reuse) | ~5.2 µs | ~23 ns | — | — |
-| `StreamScanner` `[a-z]+`, 216 KiB in 4 KiB chunks | ~31 ms | ~3.3 ms (64 MiB/s) | — | — |
+| `StreamScanner` `[a-z]+`, 216 KiB in 4 KiB chunks | ~31 ms | ~2.7 ms (71 MiB/s) | — | — |
 | Byte escape scan `\C+`, 23 KiB | — | ~8 ns/pass (one full-span match) | not supported | — |
 | Shared-prefix alternation no-match, 23 KiB | — | ~1.55 µs (15.5 GiB/s) | ~2.1 µs (11.4 GiB/s) | — |
 | `find` selective pattern (`\p{N}`) | — | ~36 ns/piece | — | — |
