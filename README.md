@@ -100,9 +100,11 @@ The engine picks the execution strategy automatically:
     properties `\p{Xan}`, `\p{Xwd}`, `\p{Xps}`, `\p{Xsp}`, `\p{Xuc}`.
   - Unicode blocks: `\p{InBasic_Latin}`, `\p{InGreek}`, `\p{InEmoticons}`,
     `\p{Block=Basic_Latin}` (underscores are optional and case-insensitive).
-  - Unicode string property `\p{RGI_Emoji}` matches any RGI emoji sequence:
-    single emoji, keycaps, flags, tag sequences, skin-tone variants, and ZWJ
-    sequences. It is a sequence atom and runs on the extended engine.
+  - Unicode string properties: `\p{RGI_Emoji}` (all RGI sequences) plus
+    `\p{Basic_Emoji}`, `\p{Emoji_Keycap_Sequence}`,
+    `\p{RGI_Emoji_Flag_Sequence}`, `\p{RGI_Emoji_Tag_Sequence}`,
+    `\p{RGI_Emoji_Modifier_Sequence}`, and `\p{RGI_Emoji_ZWJ_Sequence}`.
+    These are sequence atoms and run on the extended engine.
   - PCRE2 `\v`/`\V` vertical whitespace via
     `Limits.pcre_vertical_whitespace`; the default remains RE2/Go vertical
     tab for `\v`.

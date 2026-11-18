@@ -14,6 +14,20 @@ test "RGI emoji string property matches sequences" {
         .{ .pattern = "x\\p{RGI_Emoji}y", .input = "x\u{1f600}y", .matches = true },
         .{ .pattern = "x\\p{RGI_Emoji}y", .input = "xy", .matches = false },
         .{ .pattern = "\\p{RGI_Emoji}+", .input = "\u{1f600}\u{1f600}", .matches = true },
+        .{ .pattern = "\\p{Basic_Emoji}", .input = "\u{231a}", .matches = true },
+        .{ .pattern = "\\p{Basic_Emoji}", .input = "\u{00a9}\u{fe0f}", .matches = true },
+        .{ .pattern = "\\p{Basic_Emoji}", .input = "\u{00a9}", .matches = false },
+        .{ .pattern = "\\p{Basic_Emoji}", .input = "\u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}\u{200d}\u{1f466}", .matches = false },
+        .{ .pattern = "\\p{Emoji_Keycap_Sequence}", .input = "1\u{fe0f}\u{20e3}", .matches = true },
+        .{ .pattern = "\\p{Emoji_Keycap_Sequence}", .input = "1", .matches = false },
+        .{ .pattern = "\\p{RGI_Emoji_Flag_Sequence}", .input = "\u{1f1e8}\u{1f1f3}", .matches = true },
+        .{ .pattern = "\\p{RGI_Emoji_Flag_Sequence}", .input = "\u{1f600}", .matches = false },
+        .{ .pattern = "\\p{RGI_Emoji_Tag_Sequence}", .input = "\u{1f3f4}\u{e0067}\u{e0062}\u{e0065}\u{e006e}\u{e0067}\u{e007f}", .matches = true },
+        .{ .pattern = "\\p{RGI_Emoji_Tag_Sequence}", .input = "\u{1f600}", .matches = false },
+        .{ .pattern = "\\p{RGI_Emoji_Modifier_Sequence}", .input = "\u{1f44d}\u{1f3fd}", .matches = true },
+        .{ .pattern = "\\p{RGI_Emoji_Modifier_Sequence}", .input = "\u{1f44d}", .matches = false },
+        .{ .pattern = "\\p{RGI_Emoji_ZWJ_Sequence}", .input = "\u{1f468}\u{200d}\u{1f469}\u{200d}\u{1f467}\u{200d}\u{1f466}", .matches = true },
+        .{ .pattern = "\\p{RGI_Emoji_ZWJ_Sequence}", .input = "\u{1f600}", .matches = false },
     };
     for (cases) |case| {
         var value = try regex.Regex.init(allocator, case.pattern, .{});

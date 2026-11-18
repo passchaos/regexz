@@ -52,8 +52,9 @@ Implemented functionality:
   properties (`Alphabetic`, `White_Space`, `Emoji`, `Extended_Pictographic`,
   `Lowercase`, `Hex_Digit`, `ID_Start`, ...), Unicode blocks (`In...`/
   `Block=...`), PCRE2 `Xan`/`Xwd`/`Xps`/`Xsp`/`Xuc`, and the Unicode string
-  property `\p{RGI_Emoji}` (single emoji, keycaps, flags, tag sequences,
-  skin-tone variants, and ZWJ sequences).
+  properties `\p{RGI_Emoji}`, `\p{Basic_Emoji}`, `\p{Emoji_Keycap_Sequence}`,
+  `\p{RGI_Emoji_Flag_Sequence}`, `\p{RGI_Emoji_Tag_Sequence}`,
+  `\p{RGI_Emoji_Modifier_Sequence}`, and `\p{RGI_Emoji_ZWJ_Sequence}`.
 - PCRE2 `\v`/`\V` vertical whitespace via `Limits.pcre_vertical_whitespace`.
 - Character-class set operations `&&`, `--`, and `~~`, including nested
   classes such as `[a-z&&[^aeiou]]`.
@@ -113,7 +114,7 @@ Strengths:
 | `\p{Xan}`/`\p{Xwd}` specials | yes | yes | no | no |
 | `\p{Xuc}` | yes | yes | no | no |
 | Binary Unicode properties | yes (63) | yes | partial | yes |
-| Unicode string properties | `\p{RGI_Emoji}` | yes (10.43+) | no | no |
+| Unicode string properties | 7 properties | yes (10.43+) | no | no |
 | Leftmost-longest mode | yes | partial | yes | no |
 | Partial match (prefix) | yes (linear + extended, conservative) | yes | yes | yes |
 | True streaming scanner | yes (linear, rune-based) | partial | partial | yes |

@@ -168,6 +168,17 @@ fn property(p: anytype, negative: bool, fold: bool) m.Error!m.ParsedSet {
     return .{ .ranges = ranges, .negate = negate, .fold = fold };
 }
 
+fn stringPropertyName(name: []const u8) ?m.StringProperty {
+    if (nameEqual(name, "RGI_Emoji")) return .rgi_emoji;
+    if (nameEqual(name, "Basic_Emoji")) return .basic_emoji;
+    if (nameEqual(name, "Emoji_Keycap_Sequence")) return .emoji_keycap_sequence;
+    if (nameEqual(name, "RGI_Emoji_Flag_Sequence")) return .rgi_emoji_flag_sequence;
+    if (nameEqual(name, "RGI_Emoji_Tag_Sequence")) return .rgi_emoji_tag_sequence;
+    if (nameEqual(name, "RGI_Emoji_Modifier_Sequence")) return .rgi_emoji_modifier_sequence;
+    if (nameEqual(name, "RGI_Emoji_ZWJ_Sequence")) return .rgi_emoji_zwj_sequence;
+    return null;
+}
+
 fn stringProperty(p: anytype, negative: bool, in_class: bool) m.Error!?Atom {
     const saved = p.cursor;
     var name: []const u8 = undefined;
@@ -189,14 +200,14 @@ fn stringProperty(p: anytype, negative: bool, in_class: bool) m.Error!?Atom {
         negated = !negated;
         name = name[1..];
     }
-    if (!nameEqual(name, "RGI_Emoji")) {
+    const found = stringPropertyName(name) orelse {
         p.cursor = saved;
         return null;
-    }
+    };
     if (negated) return error.UnsupportedRegexFeature;
     if (in_class) return error.InvalidRegex;
     p.extended = true;
-    return .{ .string_property = .rgi_emoji };
+    return .{ .string_property = found };
 }
 
 fn namedBackref(p: anytype, open: u8) m.Error!Atom {

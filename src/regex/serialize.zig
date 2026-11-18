@@ -401,7 +401,7 @@ fn readInstruction(reader: *Reader, allocator: std.mem.Allocator) !model.Instruc
         .save => .{ .save = .{ .slot = try reader.u16v(), .next = @intCast(try reader.u32v()) } },
         .string_property => blk: {
             const property_value = try reader.byte();
-            if (property_value > @intFromEnum(model.StringProperty.rgi_emoji)) return error.InvalidRegex;
+            if (property_value > @intFromEnum(model.StringProperty.rgi_emoji_zwj_sequence)) return error.InvalidRegex;
             break :blk .{ .string_property = .{
                 .property = @enumFromInt(property_value),
                 .next = @intCast(try reader.u32v()),

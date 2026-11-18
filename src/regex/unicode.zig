@@ -7,8 +7,7 @@ const group_data = @embedFile("unicode/groups.bin");
 const fold_data = @embedFile("unicode/fold.bin");
 const upper_data = @embedFile("unicode/upper.bin");
 const lower_data = @embedFile("unicode/lower.bin");
-const emoji_nodes_data = @embedFile("unicode/emoji_nodes.bin");
-const emoji_edges_data = @embedFile("unicode/emoji_edges.bin");
+const string_props_data = @embedFile("unicode/string_props.bin");
 const properties = @import("unicode/props.zig").entries;
 const property_data = @embedFile("unicode/props.bin");
 const blocks = @import("unicode/blocks.zig").entries;
@@ -202,17 +201,32 @@ pub fn foldNext(rune: u21) u21 {
 }
 
 /// Unicode string properties that match a sequence of code points.
-pub const StringProperty = enum { rgi_emoji };
+pub const StringProperty = enum {
+    rgi_emoji,
+    basic_emoji,
+    emoji_keycap_sequence,
+    rgi_emoji_flag_sequence,
+    rgi_emoji_tag_sequence,
+    rgi_emoji_modifier_sequence,
+    rgi_emoji_zwj_sequence,
+};
 
 /// Match a string property at `offset`, returning the end of the longest
 /// matching sequence, or null.
 pub fn matchStringProperty(property: StringProperty, input: []const u8, offset: usize) ?usize {
-    return switch (property) {
-        .rgi_emoji => matchEmojiSequence(input, offset),
-    };
+    const index: usize = @intFromEnum(property);
+    const header = string_props_data[2 + index * 16 ..];
+    const node_offset = std.mem.readInt(u32, header[0..4], .little);
+    const edge_offset = std.mem.readInt(u32, header[8..12], .little);
+    return matchSequence(
+        string_props_data[@as(usize, node_offset)..],
+        string_props_data[@as(usize, edge_offset)..],
+        input,
+        offset,
+    );
 }
 
-fn matchEmojiSequence(input: []const u8, offset: usize) ?usize {
+fn matchSequence(nodes: []const u8, edges: []const u8, input: []const u8, offset: usize) ?usize {
     var node: u32 = 0;
     var pos = offset;
     var best: ?usize = null;
@@ -220,22 +234,22 @@ fn matchEmojiSequence(input: []const u8, offset: usize) ?usize {
         const length = std.unicode.utf8ByteSequenceLength(input[pos]) catch return best;
         if (length > input.len - pos) return best;
         const rune = std.unicode.utf8Decode(input[pos..][0..length]) catch return best;
-        const node_bytes = emoji_nodes_data[@as(usize, node) * 8 ..];
+        const node_bytes = nodes[@as(usize, node) * 8 ..];
         const first = std.mem.readInt(u32, node_bytes[0..4], .little);
         const count = std.mem.readInt(u16, node_bytes[4..6], .little);
-        node = findEmojiChild(first, count, rune) orelse return best;
+        node = findChild(edges, first, count, rune) orelse return best;
         pos += length;
-        if (emoji_nodes_data[@as(usize, node) * 8 + 6] != 0) best = pos;
+        if (nodes[@as(usize, node) * 8 + 6] != 0) best = pos;
     }
     return best;
 }
 
-fn findEmojiChild(first: u32, count: u16, rune: u21) ?u32 {
+fn findChild(edges: []const u8, first: u32, count: u16, rune: u21) ?u32 {
     var low: usize = 0;
     var high: usize = count;
     while (low < high) {
         const middle = low + (high - low) / 2;
-        const bytes = emoji_edges_data[(first + @as(u32, @intCast(middle))) * 8 ..];
+        const bytes = edges[(first + @as(u32, @intCast(middle))) * 8 ..];
         const edge_rune = std.mem.readInt(u32, bytes[0..4], .little);
         if (rune < edge_rune) {
             high = middle;

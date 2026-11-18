@@ -137,39 +137,89 @@ def unicode_case_mappings(unicode_files):
         'case_mappings':len(upper)+len(lower)}
 
 
-def unicode_emoji_sequences(unicode_files):
+def unicode_string_properties(unicode_files):
+    names=['rgi_emoji','basic_emoji','emoji_keycap_sequence','rgi_emoji_flag_sequence','rgi_emoji_tag_sequence','rgi_emoji_modifier_sequence','rgi_emoji_zwj_sequence']
+    sequences={name:set() for name in names}
     text=unicode_files['emoji/emoji-test.txt'].decode()
-    sequences=set()
     for line in text.splitlines():
         line=line.split('#',1)[0].strip()
         if not line: continue
         parts=[p.strip() for p in line.split(';')]
         if len(parts)<2 or parts[1]!='fully-qualified': continue
-        sequences.add(tuple(int(cp,16) for cp in parts[0].split()))
-    trie={}
-    for seq in sorted(sequences):
-        node=trie
-        for cp in seq:
-            node=node.setdefault(cp,{})
-        node[0]=True
-    nodes=[]
-    edges=[]
-    def flatten(node):
-        node_id=len(nodes)
-        nodes.append([0,0,1 if 0 in node else 0])
-        children=sorted((cp,child) for cp,child in node.items() if cp!=0)
-        first_edge=len(edges)
-        for cp,_ in children: edges.append((cp,0))
-        nodes[node_id][0]=first_edge
-        nodes[node_id][1]=len(children)
-        for index,(cp,child) in enumerate(children):
-            edges[first_edge+index]=(cp,flatten(child))
-        return node_id
-    flatten(trie)
-    node_blob=b''.join(struct.pack('<IHB1x',first,count,accept) for first,count,accept in nodes)
-    edge_blob=b''.join(struct.pack('<II',cp,child) for cp,child in edges)
-    return {'emoji_nodes.bin':node_blob,'emoji_edges.bin':edge_blob}, {
-        'emoji_sequences':len(sequences),'emoji_nodes':len(nodes),'emoji_edges':len(edges)}
+        sequences['rgi_emoji'].add(tuple(int(cp,16) for cp in parts[0].split()))
+    sequence_sources=[('emoji/emoji-sequences.txt',False),('emoji/emoji-zwj-sequences.txt',True)]
+    for source,is_zwj in sequence_sources:
+        text=unicode_files[source].decode()
+        for line in text.splitlines():
+            line=line.split('#',1)[0].strip()
+            if not line: continue
+            parts=[p.strip() for p in line.split(';')]
+            if len(parts)<2: continue
+            prop=parts[1]
+            if prop=='RGI_Emoji_ZWJ_Sequence': key='rgi_emoji_zwj_sequence'
+            elif prop=='Basic_Emoji': key='basic_emoji'
+            elif prop=='Emoji_Keycap_Sequence': key='emoji_keycap_sequence'
+            elif prop=='RGI_Emoji_Flag_Sequence': key='rgi_emoji_flag_sequence'
+            elif prop=='RGI_Emoji_Tag_Sequence': key='rgi_emoji_tag_sequence'
+            elif prop=='RGI_Emoji_Modifier_Sequence': key='rgi_emoji_modifier_sequence'
+            else: continue
+            field=parts[0]
+            if '..' in field:
+                first,last=field.split('..')
+                for cp in range(int(first,16),int(last,16)+1):
+                    sequences[key].add((cp,))
+            else:
+                sequences[key].add(tuple(int(cp,16) for cp in field.split()))
+    def build_trie(values):
+        root={}
+        for seq in sorted(values):
+            node=root
+            for cp in seq:
+                node=node.setdefault(cp,{})
+            node[0]=True
+        nodes=[]
+        edges=[]
+        def flatten(node):
+            node_id=len(nodes)
+            nodes.append([0,0,1 if 0 in node else 0])
+            children=sorted((cp,child) for cp,child in node.items() if cp!=0)
+            first_edge=len(edges)
+            for cp,_ in children: edges.append((cp,0))
+            nodes[node_id][0]=first_edge
+            nodes[node_id][1]=len(children)
+            for index,(cp,child) in enumerate(children):
+                edges[first_edge+index]=(cp,flatten(child))
+            return node_id
+        flatten(root)
+        return nodes,edges
+    tables={}
+    for name in names:
+        tables[name]=build_trie(sequences[name])
+    header=bytearray(struct.pack('<H',len(names)))
+    nodes_blob=bytearray()
+    edges_blob=bytearray()
+    node_offsets=[]
+    edge_offsets=[]
+    for name in names:
+        nodes,edges=tables[name]
+        node_offsets.append((len(nodes_blob),len(nodes)))
+        nodes_blob.extend(b''.join(struct.pack('<IHB1x',first,count,accept) for first,count,accept in nodes))
+        edge_offsets.append((len(edges_blob),len(edges)))
+        edges_blob.extend(b''.join(struct.pack('<II',cp,child) for cp,child in edges))
+    header_start=2+len(names)*16
+    nodes_start=header_start
+    edges_start=nodes_start+len(nodes_blob)
+    for index,name in enumerate(names):
+        node_offset,node_count=node_offsets[index]
+        edge_offset,edge_count=edge_offsets[index]
+        header.extend(struct.pack('<IIII',nodes_start+node_offset,node_count,edges_start+edge_offset,edge_count))
+    blob=bytes(header)+bytes(nodes_blob)+bytes(edges_blob)
+    return {'string_props.bin':blob}, {
+        'string_properties':len(names),
+        'string_property_sequences':sum(len(sequences[name]) for name in names),
+        'string_property_nodes':sum(len(tables[name][0]) for name in names),
+        'string_property_edges':sum(len(tables[name][1]) for name in names)}
+
 
 def subtract_ranges(base, cut):
     out=[]
@@ -300,9 +350,11 @@ def main():
   value={'EvenOdd':1,'OddEven':-1}.get(delta)
   if value is None:value=int(delta)
   fold.extend(struct.pack('<IIi',int(a),int(b),value))
- unicode_names=['auxiliary/GraphemeBreakProperty.txt','emoji/emoji-data.txt','DerivedCoreProperties.txt','PropList.txt','Blocks.txt','ScriptExtensions.txt','PropertyValueAliases.txt','UnicodeData.txt','emoji/emoji-test.txt']
+ unicode_names=['auxiliary/GraphemeBreakProperty.txt','emoji/emoji-data.txt','DerivedCoreProperties.txt','PropList.txt','Blocks.txt','ScriptExtensions.txt','PropertyValueAliases.txt','UnicodeData.txt','emoji/emoji-test.txt','emoji/emoji-sequences.txt','emoji/emoji-zwj-sequences.txt']
  unicode_urls={name:f'https://www.unicode.org/Public/{UNICODE_VERSION}/ucd/{name}' for name in unicode_names}
  unicode_urls['emoji/emoji-test.txt']=f'https://www.unicode.org/Public/emoji/{EMOJI_VERSION}/emoji-test.txt'
+ unicode_urls['emoji/emoji-sequences.txt']=f'https://www.unicode.org/Public/emoji/{EMOJI_VERSION}/emoji-sequences.txt'
+ unicode_urls['emoji/emoji-zwj-sequences.txt']=f'https://www.unicode.org/Public/emoji/{EMOJI_VERSION}/emoji-zwj-sequences.txt'
  unicode_files={name:urllib.request.urlopen(url,timeout=30).read() for name,url in unicode_urls.items()}
  grapheme_files,grapheme_counts=unicode_grapheme_data(unicode_files)
  property_files,property_counts=unicode_binary_properties(unicode_files)
@@ -313,7 +365,7 @@ def main():
  script_files,script_counts=unicode_script_extensions(unicode_files,group_ranges)
  alias_files,alias_counts=unicode_property_aliases(unicode_files)
  case_files,case_counts=unicode_case_mappings(unicode_files)
- emoji_files,emoji_counts=unicode_emoji_sequences(unicode_files)
+ emoji_files,emoji_counts=unicode_string_properties(unicode_files)
  generated={
  'groups.bin':bytes(blob),'fold.bin':bytes(fold),'LICENSE.re2':files['LICENSE'],
  'groups.zig':('// Generated by tools/codegen/generate.py. RE2 BSD license: LICENSE.re2.\n'+
