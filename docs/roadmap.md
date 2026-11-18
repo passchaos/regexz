@@ -48,8 +48,10 @@ Implemented functionality:
 - `\K`, `\G`, `\Z`, `\R`, `\N`, `\h`, `\H`.
 - Backtracking control verbs `(*FAIL)`, `(*ACCEPT)`, `(*PRUNE)`,
   `(*SKIP)`/`(*SKIP:name)`, `(*COMMIT)`, `(*THEN)`; `(*MARK:name)` is
-  recorded and exposed through `Match.mark`; `(*UCP)`/`(*UTF)` directives are
-  accepted.
+  recorded and exposed through `Match.mark`, and named
+  `(*PRUNE:name)`/`(*THEN:name)`/`(*COMMIT:name)`/`(*ACCEPT:name)` verbs
+  record their name as the current mark like PCRE2; `(*UCP)`/`(*UTF)`
+  directives are accepted.
 - Numeric and string callouts `(?C...)` through `Limits.callout`, plus
   `Limits.auto_callout` (callout 255 before consuming atoms).
 - Extended mode `(?x)`, extended-more `(?xx)`, ungreedy mode `(?U)`,
@@ -97,7 +99,7 @@ Implemented functionality:
   case transforms `\U`/`\L`/`\E`/`\u`/`\l` (simple Unicode by default;
   `Limits.full_case_mapping` enables full SpecialCasing), and callback
   replacement via `replaceAllWithFn`.
-- 203 tests, including recursion, branch reset, conditional assertions,
+- 204 tests, including recursion, branch reset, conditional assertions,
   grapheme clusters, binary properties, Unicode blocks, partial matching,
   control verbs, thread safety, allocation-failure, and differential coverage
   against V8 for the supported subset.
@@ -139,7 +141,7 @@ Strengths:
 | `\X` grapheme cluster | yes (extended) | yes | no | no |
 | `\b{gcb}` / `\b{wb}` / `\b{sb}` | yes (extended) | no | no | no |
 | `\b{start}` / `\b{end}` variants | yes (extended) | no | no | no |
-| Backtracking verbs | yes (subset) | yes | no | no |
+| Backtracking verbs | all; named verbs record MARK | yes | no | no |
 | Callouts / `(*THEN)` | numeric + string + auto callouts, `(*THEN)`, MARK | yes | no | no |
 | `\N{NAME}` named characters | yes (explicit + algorithmic) | no | no | no |
 | Full SpecialCasing | optional (`full_case_mapping`) | no | no | no |
@@ -228,7 +230,7 @@ at ~650 MiB/s, `[a-z]+ [a-z]+` at ~585 MiB/s, and the `set*` scan (which must
 also report the empty matches between runs) at ~416 MiB/s, 6.9× faster than
 the generic thread list. The bench gate now covers 37 cases; `RegexSet`
 ~97 µs, `replaceAll` ~85 µs, compile ~1.5 µs with `smp_allocator`, and all
-203 tests plus the V8/Rust/extended/replacement differential fuzzers pass. On the
+204 tests plus the V8/Rust/extended/replacement differential fuzzers pass. On the
 feature side, PCRE2 forward numeric/named references, `\e` and isolated `\E`,
 the full substitution reference syntax (`$<name>`, `$+`, `$_`, `` $` ``, `$'`),
 `escape`/`splitn`/`replacen`, and compile diagnostics (`diagnose`) are covered.

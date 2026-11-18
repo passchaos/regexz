@@ -226,6 +226,28 @@ test "Regex.find and findAll expose MARK names" {
     try std.testing.expect((try iterator.next()) == null);
 }
 
+test "named control verbs record the current mark" {
+    const cases = [_]struct { pattern: []const u8, input: []const u8, span: [2]usize, mark: []const u8 }{
+        .{ .pattern = "a(*PRUNE:p)b", .input = "ab", .span = .{ 0, 2 }, .mark = "p" },
+        .{ .pattern = "a(*THEN:t)b", .input = "ab", .span = .{ 0, 2 }, .mark = "t" },
+        .{ .pattern = "a(*COMMIT:c)b", .input = "ab", .span = .{ 0, 2 }, .mark = "c" },
+        // `(*ACCEPT:k)` ends the match immediately and keeps the mark.
+        .{ .pattern = "a(*ACCEPT:k)b", .input = "ab", .span = .{ 0, 1 }, .mark = "k" },
+        // A later plain MARK still wins.
+        .{ .pattern = "a(*PRUNE:p)(*MARK:m)b", .input = "ab", .span = .{ 0, 2 }, .mark = "m" },
+    };
+    for (cases) |case| {
+        var value = try regex.Regex.init(gpa, case.pattern, .{});
+        defer value.deinit();
+        var captures = try regex.Captures.init(gpa, value.program);
+        defer captures.deinit(gpa);
+        const found = (try value.find(gpa, case.input, &captures)).?;
+        try std.testing.expectEqual(case.span[0], found.start);
+        try std.testing.expectEqual(case.span[1], found.end);
+        try std.testing.expectEqualStrings(case.mark, found.mark.?);
+    }
+}
+
 test "compileOwned releases the program arena" {
     var owned = try regex.compileOwned(gpa, "(?<word>\\p{L}+)@(\\p{L}+)", .{});
     defer owned.deinit();

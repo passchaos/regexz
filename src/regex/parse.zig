@@ -112,6 +112,12 @@ pub const Parser = struct {
         result.* = value;
         return result;
     }
+    /// Register a mark name and return its index in `program.marks`.
+    fn markIndex(self: *Parser, name: []const u8) m.Error!u16 {
+        if (self.marks.items.len >= 65535) return error.RegexLimitExceeded;
+        try self.marks.append(self.allocator, name);
+        return @intCast(self.marks.items.len - 1);
+    }
     fn join(self: *Parser, values: []const *const m.Node, alternate: bool) m.Error!*const m.Node {
         if (values.len == 0) return self.node(.empty);
         if (values.len == 1) return values[0];
@@ -353,18 +359,35 @@ pub const Parser = struct {
             }
             if (!self.take(')')) return error.InvalidRegex;
             self.extended = true;
+            const mark_name = self.pattern[mark_start .. self.cursor - 1];
             if (std.mem.eql(u8, name, "SKIP")) {
-                const mark_name = self.pattern[mark_start .. self.cursor - 1];
                 if (mark_name.len == 0) return error.InvalidRegex;
                 return self.node(.{ .skip_named = mark_name });
             }
             if (std.mem.eql(u8, name, "MARK")) {
                 if (self.marks.items.len >= 65535) return error.RegexLimitExceeded;
-                try self.marks.append(self.allocator, self.pattern[mark_start .. self.cursor - 1]);
+                try self.marks.append(self.allocator, mark_name);
                 return self.node(.{ .mark = @intCast(self.marks.items.len - 1) });
             }
-            // Other argument verbs (`(*SKIP:name)`, `(*PRUNE:name)`, ...)
-            // accept a mark name but do not expose it.
+            // PCRE2 records the name of a passed named control verb as the
+            // current MARK, so `match.mark` reports it on success.
+            const control: ?m.Node = if (std.mem.eql(u8, name, "PRUNE"))
+                m.Node{ .prune = {} }
+            else if (std.mem.eql(u8, name, "THEN"))
+                m.Node{ .then_verb = {} }
+            else if (std.mem.eql(u8, name, "COMMIT"))
+                m.Node{ .commit = {} }
+            else if (std.mem.eql(u8, name, "ACCEPT"))
+                m.Node{ .accept_verb = {} }
+            else
+                null;
+            if (control) |value| {
+                if (mark_name.len == 0) return self.node(value);
+                const mark = try self.node(.{ .mark = try self.markIndex(mark_name) });
+                const body = try self.node(value);
+                return self.node(.{ .pair = .{ .left = mark, .right = body } });
+            }
+            // Other argument verbs accept a mark name but do not expose it.
             return self.node(.empty);
         }
         if (!self.take(')')) return error.InvalidRegex;
