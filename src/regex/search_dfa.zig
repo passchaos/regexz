@@ -345,10 +345,12 @@ pub const Workspace = struct {
             }
         }
         if (choices > 64) return null;
-        // Byte-level determinization only pays off when rune sets need UTF-8
-        // decoding; ASCII-only programs keep the tighter rune transition
-        // tables, and single-rune lookaheads keep the rune construction.
-        return if (has_lookahead or !hasNonAsciiConsumer(program)) .rune else .byte;
+        // Byte-level determinization only pays off for simple scans over
+        // non-ASCII sets: it removes per-rune decoding but pays one accept
+        // check per byte. Tokenizer-shaped programs (many alternation
+        // branches) keep the rune construction, whose states accept per rune.
+        if (has_lookahead or !hasNonAsciiConsumer(program) or choices > 8) return .rune;
+        return .byte;
     }
 
     /// Assign a priority bit to every choice instruction. Pre-order, left

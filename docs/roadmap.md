@@ -205,7 +205,7 @@ lookahead-free programs over UTF-8 bytes, full-pattern
 Qwen search is ~68–74 µs (~330–353 MiB/s), CJK tokenizer search is ~284–310 µs
 (~630–660 MiB/s), Han class scans are ~196–270 µs (~690–810 MiB/s, down from
 ~635 µs), greedy `\C+` scans collapse to a single full-span match (~8 ns), and
-shared-prefix no-match scans are ~1.55 µs (15.5 GiB/s). The bench gate now covers 26 cases;
+shared-prefix no-match scans are ~1.55 µs (15.5 GiB/s). The bench gate now covers 27 cases;
 `RegexSet` ~97 µs, `replaceAll` ~85 µs, compile ~1.5 µs with `smp_allocator`,
 and all 178 tests plus the V8/Rust/extended differential fuzzers pass. Treat absolute numbers as host-noise-sensitive;
 the bench gate compares ratios against `tools/bench/baseline.json`.

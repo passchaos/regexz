@@ -143,6 +143,9 @@ pub fn main() !void {
     const sample = "Hello, world!  This is a test of the Qwen pre-tokenizer. Numbers 12345 and symbols !@#$%^&*() and Unicode 你好世界 café.\n";
     for (0..200) |_| try text.appendSlice(gpa, sample);
     const qwen = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+";
+    // Same pattern without the lookahead branch: the exact shape Rust `regex`
+    // can compile, so the CJK comparison isolates the engine, not the feature.
+    const qwen_no_lookahead = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+";
     const ucp = regexz.Limits{ .unicode_perl_space = true, .max_execution_steps = 16_000_000 };
     try benchFind(io, out, "find Qwen tokenizer", qwen, text.items, 50, ucp);
 
@@ -161,6 +164,7 @@ pub fn main() !void {
     defer cjk_text.deinit(gpa);
     for (0..4000) |_| try cjk_text.appendSlice(gpa, "\u{4f60}\u{597d}\u{4e16}\u{754c}\u{ff0c}\u{8fd9}\u{662f}\u{4e00}\u{4e2a}\u{4e2d}\u{6587}\u{5206}\u{8bcd}\u{6d4b}\u{8bd5}\u{3002}\n");
     try benchFind(io, out, "find CJK tokenizer", qwen, cjk_text.items, 50, ucp);
+    try benchFind(io, out, "find CJK tokenizer (no lookahead)", qwen_no_lookahead, cjk_text.items, 50, ucp);
     try benchFind(io, out, "find Han class scan", "\\p{Han}+", cjk_text.items, 50, .{});
 
     {
