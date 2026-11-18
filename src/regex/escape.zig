@@ -285,6 +285,15 @@ fn namedBackref(p: anytype, open: u8) m.Error!Atom {
     }
     const name = p.pattern[start..p.cursor];
     if (!p.take(close)) return error.InvalidRegex;
+    // PCRE2/Oniguruma: a number inside `\k<...>` names a group by number.
+    switch (try parseGroupSpec(name)) {
+        .absolute => |index| {
+            if (index == 0) return error.InvalidRegex;
+            p.extended = true;
+            return .{ .backref = .{ .index = index } };
+        },
+        .relative, .not_number => {},
+    }
     const groups = try p.nameIndices(name) orelse return error.InvalidRegex;
     p.extended = true;
     return .{ .backref = .{ .index = groups[0], .groups = groups } };

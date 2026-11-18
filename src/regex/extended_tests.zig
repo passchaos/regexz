@@ -49,6 +49,12 @@ test "numeric and named backreferences" {
     try expectFull("(?<x>a)\\k'x'", "aa", .{}, true);
     try expectFull("(?<x>a)\\k{x}", "aa", .{}, true);
     try expectFull("(?<x>a)\\g{x}", "aa", .{}, true);
+    // PCRE2 accepts a group number in every `\k` form.
+    try expectFull("(a)\\k<1>", "aa", .{}, true);
+    try expectFull("(a)\\k'1'", "aa", .{}, true);
+    try expectFull("(a)\\k{1}", "aa", .{}, true);
+    try expectFull("(a)\\k<1>", "ab", .{}, false);
+    try expectFull("(a)(b)\\k{2}", "abb", .{}, true);
 }
 
 test "atomic groups and possessive quantifiers" {
