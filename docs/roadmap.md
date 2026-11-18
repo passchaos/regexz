@@ -231,7 +231,10 @@ Where the remaining time goes:
   matched slice, which removes the failed-start scans that dominated patterns
   like `(\w+)@(\w+)`. Interpreter fallbacks with a multi-byte required
   literal run one literal prefilter, so no-match scans of patterns like
-  `[a-z]*(?:foo|bar)` are ~25x faster. Loops whose exits can compete with
+  `[a-z]*(?:foo|bar)` are ~25x faster. Running the required-literal absence
+  check before the DFA was evaluated and reverted: it regressed shared-prefix
+  scans (1.55 µs -> 19.7 µs) because the start-literal MultiFilter is cheaper,
+  and it does not help when the literal occurs somewhere in the input. Loops whose exits can compete with
   later choices still use the interpreter; a fully dynamic leftmost-first DFA
   (iteration-aware priorities) is the next large step.
 - **Replacement** uses budgeted backtracking first and a capture-aware Pike
