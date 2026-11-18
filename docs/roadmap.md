@@ -118,7 +118,7 @@ Strengths:
 | `\b{gcb}` / `\b{wb}` / `\b{sb}` | yes (extended) | no | no | no |
 | Backtracking verbs | yes (subset) | yes | no | no |
 | Callouts / `(*THEN)` | numeric + string + auto callouts, `(*THEN)`, MARK | yes | no | no |
-| `\N{NAME}` named characters | yes (explicit names) | no | no | no |
+| `\N{NAME}` named characters | yes (explicit + CJK) | no | no | no |
 | `\p{Xan}`/`\p{Xwd}` specials | yes | yes | no | no |
 | `\p{Xuc}` | yes | yes | no | no |
 | Binary Unicode properties | yes (63) | yes | partial | yes |

@@ -378,6 +378,39 @@ pub fn lookupCharName(query: []const u8) ?u21 {
             return @intCast(cp);
         }
     }
+    return algorithmicName(key);
+}
+
+fn hexNameSuffix(key: []const u8, prefix: []const u8) ?u21 {
+    if (!std.mem.startsWith(u8, key, prefix)) return null;
+    const suffix = key[prefix.len..];
+    if (suffix.len < 4 or suffix.len > 6) return null;
+    return std.fmt.parseInt(u21, suffix, 16) catch null;
+}
+
+fn isCjkIdeograph(cp: u21) bool {
+    return (cp >= 0x3400 and cp <= 0x4dbf) or
+        (cp >= 0x4e00 and cp <= 0x9fff) or
+        (cp >= 0x20000 and cp <= 0x2a6df) or
+        (cp >= 0x2a700 and cp <= 0x2b73f) or
+        (cp >= 0x2b740 and cp <= 0x2b81f) or
+        (cp >= 0x2b820 and cp <= 0x2ceaf) or
+        (cp >= 0x2ceb0 and cp <= 0x2ebef) or
+        (cp >= 0x30000 and cp <= 0x3134f) or
+        (cp >= 0x31350 and cp <= 0x323af);
+}
+
+fn isCjkCompatibility(cp: u21) bool {
+    return (cp >= 0xf900 and cp <= 0xfaff) or (cp >= 0x2f800 and cp <= 0x2fa1f);
+}
+
+fn algorithmicName(key: []const u8) ?u21 {
+    if (hexNameSuffix(key, "CJKUNIFIEDIDEOGRAPH")) |cp| {
+        if (isCjkIdeograph(cp)) return cp;
+    }
+    if (hexNameSuffix(key, "CJKCOMPATIBILITYIDEOGRAPH")) |cp| {
+        if (isCjkCompatibility(cp)) return cp;
+    }
     return null;
 }
 

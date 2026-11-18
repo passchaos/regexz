@@ -13,6 +13,8 @@ test "Unicode character names" {
         .{ .pattern = "\\N{2}", .yes = &.{"ab"}, .no = &.{ "a\n", "a" } },
         .{ .pattern = "[\\N{SNOWMAN}]", .yes = &.{"\u{2603}"}, .no = &.{"a"} },
         .{ .pattern = "\\N{LATIN SMALL LETTER A}+", .yes = &.{ "aaa", "aa" }, .no = &.{"bbb"} },
+        .{ .pattern = "\\N{CJK UNIFIED IDEOGRAPH-4E00}", .yes = &.{"\u{4e00}"}, .no = &.{"a"} },
+        .{ .pattern = "\\N{CJK COMPATIBILITY IDEOGRAPH-F900}", .yes = &.{"\u{f900}"}, .no = &.{"a"} },
     };
     for (cases) |case| {
         var value = try regex.Regex.init(allocator, case.pattern, .{});
@@ -21,4 +23,5 @@ test "Unicode character names" {
         for (case.no) |input| try std.testing.expect(!try value.matches(allocator, input));
     }
     try std.testing.expectError(error.InvalidRegex, regex.Regex.init(allocator, "\\N{NOT A REAL NAME}", .{}));
+    try std.testing.expectError(error.InvalidRegex, regex.Regex.init(allocator, "\\N{CJK UNIFIED IDEOGRAPH-0041}", .{}));
 }
