@@ -286,3 +286,21 @@ test "Unicode 16 case folding" {
         try std.testing.expectEqual(case.matches, try value.matches(gpa, case.input));
     }
 }
+
+test "option reset and start-up directives" {
+    const Case = struct { pattern: []const u8, input: []const u8, matches: bool };
+    for ([_]Case{
+        .{ .pattern = "(?i)a(?^)b", .input = "Ab", .matches = true },
+        .{ .pattern = "(?i)a(?^)b", .input = "AB", .matches = false },
+        .{ .pattern = "(?i)(?^i)a", .input = "A", .matches = true },
+        .{ .pattern = "(?i)(?^)a", .input = "A", .matches = false },
+        .{ .pattern = "(*NO_START_OPT)(?i)a", .input = "A", .matches = true },
+        .{ .pattern = "(*NO_AUTO_POSSESS)a+", .input = "aaa", .matches = true },
+        .{ .pattern = "(*NO_DOTSTAR_ANCHOR)a", .input = "a", .matches = true },
+    }) |case| {
+        var value = try regex.Regex.init(gpa, case.pattern, .{});
+        defer value.deinit();
+        try std.testing.expectEqual(case.matches, try value.matches(gpa, case.input));
+    }
+    try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, "(?^-i)a", .{}));
+}

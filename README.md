@@ -106,6 +106,8 @@ The engine picks the execution strategy automatically:
   - Extended mode `(?x)` with whitespace and `#` comments outside classes.
   - Ungreedy mode `(?U)` and no-auto-capture mode `(?n)`, including scoped
     `(?U:...)`, `(?-U:...)`, `(?n:...)`, and `(?-n:...)` forms.
+  - PCRE2 `(?^)` option reset, plus the `(*NO_START_OPT)`,
+    `(*NO_AUTO_POSSESS)`, and `(*NO_DOTSTAR_ANCHOR)` start-up directives.
   - Character-class set operations `&&`, `--`, and `~~`, including nested
     classes such as `[a-z&&[^aeiou]]`.
   - UCP `\d`/`\w`/`\s` and Unicode `\b`/`\B` via

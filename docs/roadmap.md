@@ -44,8 +44,9 @@ Implemented functionality:
   accepted.
 - Numeric and string callouts `(?C...)` through `Limits.callout`, plus
   `Limits.auto_callout` (callout 255 before consuming atoms).
-- Extended mode `(?x)`, ungreedy mode `(?U)`, no-auto-capture `(?n)`, and
-  `(?#...)` comments.
+- Extended mode `(?x)`, ungreedy mode `(?U)`, no-auto-capture `(?n)`,
+  `(?^)` option reset, `(*NO_START_OPT)`/`(*NO_AUTO_POSSESS)`/
+  `(*NO_DOTSTAR_ANCHOR)` start-up directives, and `(?#...)` comments.
 - UCP `\d`/`\w`/`\s` and Unicode `\b`/`\B`; property aliases
   (`Script=`, `sc=`, `gc=`, `General_Category=`, `Is...`), long
   General_Category names (`Letter`, `Uppercase_Letter`, `Decimal_Number`,
@@ -85,7 +86,7 @@ Implemented functionality:
   case transforms `\U`/`\L`/`\E`/`\u`/`\l` (simple Unicode by default;
   `Limits.full_case_mapping` enables full SpecialCasing), and callback
   replacement via `replaceAllWithFn`.
-- 145 tests, including recursion, branch reset, conditional assertions,
+- 146 tests, including recursion, branch reset, conditional assertions,
   grapheme clusters, binary properties, Unicode blocks, partial matching,
   control verbs, thread safety, allocation-failure, and differential coverage
   against V8 for the supported subset.

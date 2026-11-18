@@ -271,6 +271,10 @@ pub const Parser = struct {
             return self.node(.empty);
         }
         if (std.mem.eql(u8, name, "UTF") or std.mem.eql(u8, name, "NO_JIT")) return self.node(.empty);
+        // Start-up optimization switches; they do not change match results.
+        if (std.mem.eql(u8, name, "NO_AUTO_POSSESS") or
+            std.mem.eql(u8, name, "NO_START_OPT") or
+            std.mem.eql(u8, name, "NO_DOTSTAR_ANCHOR")) return self.node(.empty);
         return error.UnsupportedRegexFeature;
     }
     fn lookaround(self: *Parser, negative: bool, behind: bool, depth: usize) m.Error!*const m.Node {
@@ -558,11 +562,22 @@ pub const Parser = struct {
                 return self.node(.{ .group = try self.join(alternatives.items, true) });
             } else {
                 var negative = false;
+                var caret = false;
                 var flag_count: usize = 0;
                 var negative_count: usize = 0;
+                if (self.take('^')) {
+                    // PCRE2 `(?^)`: unset the Perl-compatible options.
+                    caret = true;
+                    self.flags.fold = false;
+                    self.flags.multiline = false;
+                    self.flags.dot_newline = false;
+                    self.flags.extended = false;
+                    self.flags.no_auto_capture = false;
+                    flag_count += 1;
+                }
                 while (self.peek()) |byte| {
                     if (byte == '-') {
-                        if (negative) return error.InvalidRegex;
+                        if (negative or caret) return error.InvalidRegex;
                         negative = true;
                         self.cursor += 1;
                         continue;
