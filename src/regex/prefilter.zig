@@ -9,6 +9,25 @@ const model = @import("model.zig");
 const max_simd_bytes = 8;
 const Vec = @Vector(16, u8);
 
+/// First offset at or after `start` holding `byte`, scanned 16 bytes at a
+/// time. Returns null when the byte is absent.
+pub fn indexOfByte(input: []const u8, start: usize, byte: u8) ?usize {
+    if (start >= input.len) return null;
+    const needle: Vec = @splat(byte);
+    var offset = start;
+    while (offset + 16 <= input.len) : (offset += 16) {
+        const chunk: Vec = input[offset..][0..16].*;
+        if (@reduce(.Or, chunk == needle)) {
+            while (input[offset] != byte) offset += 1;
+            return offset;
+        }
+    }
+    while (offset < input.len) : (offset += 1) {
+        if (input[offset] == byte) return offset;
+    }
+    return null;
+}
+
 /// Cached first-byte filter. Building the ASCII byte list costs 128 set
 /// probes, so workspaces construct this once instead of on every search.
 pub const FirstFilter = struct {

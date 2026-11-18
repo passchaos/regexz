@@ -56,7 +56,7 @@ pub const ReplaceFn = *const fn (
 fn indexOfLiteral(input: []const u8, start: usize, needle: []const u8) ?usize {
     if (needle.len == 0) return if (start <= input.len) start else null;
     var offset = start;
-    while (std.mem.indexOfScalarPos(u8, input, offset, needle[0])) |found| {
+    while (prefilter.indexOfByte(input, offset, needle[0])) |found| {
         if (needle.len <= input.len - found and std.mem.eql(u8, input[found..][0..needle.len], needle)) return found;
         offset = found + 1;
     }
@@ -83,6 +83,9 @@ pub const Workspace = struct {
     /// A `set+` program over an ASCII-only set scans runs directly instead of
     /// entering the DFA.
     simple_set: ?model.Set = null,
+    /// A `set+ separator set+ tail` program is found by scanning for the
+    /// separator instead of running the DFA over the whole input.
+    simple_chain: ?shapes.Chain = null,
     first_filter: prefilter.FirstFilter,
 
     pub fn init(
@@ -114,6 +117,7 @@ pub const Workspace = struct {
                 if (!set.ascii_only) break :blk null;
                 break :blk set;
             },
+            .simple_chain = if (limits.longest) null else shapes.chain(program),
             .first_filter = prefilter.FirstFilter.init(program.first),
         };
     }
@@ -154,7 +158,9 @@ pub const Workspace = struct {
     ) Error!?Match {
         self.steps = 0;
         if (self.simple_set) |set| return self.findSetRun(set, input, search_start);
+        if (self.simple_chain) |*chain| return self.findChain(chain, input, search_start);
         if (self.fast_dfa) |dfa| {
+            if (self.requiredByteMiss(input, search_start)) return null;
             const found = (try dfa.find(input, search_start)) orelse return null;
             self.slots[0] = found.start;
             self.slots[1] = found.end;
@@ -439,6 +445,17 @@ pub const Workspace = struct {
         return !required_literals.containsAny(input, search_start, literals);
     }
 
+    /// Absence check for the DFA path: a single one-byte required literal is
+    /// ruled out with one SIMD byte scan. On no-match input that replaces the
+    /// whole engine pass; on match-heavy input the scan stops at the first
+    /// occurrence, so the per-call cost stays small.
+    fn requiredByteMiss(self: *Workspace, input: []const u8, search_start: usize) bool {
+        const literals = self.program.required_literals orelse return false;
+        if (literals.len != 1 or literals[0].len != 1) return false;
+        if (input.len - search_start < 256) return false;
+        return !required_literals.containsByte(input, search_start, literals[0][0]);
+    }
+
     /// Leftmost-first search honoring `(*NOTEMPTY)` and
     /// `(*NOTEMPTY_ATSTART)`: rejected empty matches advance by one rune.
     fn findInternal(self: *Workspace, input: []const u8, search_start: usize) Error!?Match {
@@ -463,6 +480,7 @@ pub const Workspace = struct {
     ) Error!?Match {
         if (search_start > input.len) return null;
         if (self.simple_set) |set| return self.findSetRun(set, input, search_start);
+        if (self.simple_chain) |*chain| return self.findChain(chain, input, search_start);
         if (self.program.literal) |literal| {
             if (self.program.capture_count == 0) {
                 const found = indexOfLiteral(input, search_start, literal) orelse return null;
@@ -489,6 +507,7 @@ pub const Workspace = struct {
         // instructions, so replay the winning path to fill the slots; a
         // disagreement falls back to the interpreter below.
         if (!self.limits.longest and !self.search_dfa_failed and !self.search_dfa_ineligible) {
+            if (self.requiredByteMiss(input, search_start)) return null;
             if (self.search_dfa_workspace == null) {
                 self.search_dfa_workspace = search_dfa.Workspace.init(self.allocator, self.program) catch blk: {
                     self.search_dfa_failed = true;
@@ -587,6 +606,37 @@ pub const Workspace = struct {
         self.slots[0] = start;
         self.slots[1] = offset;
         return .{ .start = start, .end = offset, .slots = self.slots };
+    }
+
+    /// `setA+ separator setB+ tail` search. The separator cannot start a
+    /// `setA` run and the tail cannot start a `setB` run, so each separator
+    /// occurrence determines the match: the first non-`setA` rune before it
+    /// is the start, and the first non-`setB` rune after it is the end.
+    fn findChain(self: *Workspace, chain: *const shapes.Chain, input: []const u8, search_start: usize) ?Match {
+        var scan = search_start;
+        while (true) {
+            const separator_at = indexOfLiteral(input, scan, chain.separator[0..chain.separator_len]) orelse return null;
+            if (separator_at > search_start) {
+                const start = chainRunStart(input, chain.set_a, separator_at, search_start);
+                if (start < separator_at) {
+                    const run_from = separator_at + chain.separator_len;
+                    const end = chainRunEnd(input, chain.set_b, run_from);
+                    if (end > run_from and tailMatches(input, end, chain.tail[0..chain.tail_len])) {
+                        const match_end = end + chain.tail_len;
+                        self.slots[0] = start;
+                        self.slots[1] = match_end;
+                        if (chain.slot_a != 0) {
+                            self.slots[chain.slot_a] = start;
+                            self.slots[chain.slot_a + 1] = separator_at;
+                            self.slots[chain.slot_b] = run_from;
+                            self.slots[chain.slot_b + 1] = end;
+                        }
+                        return .{ .start = start, .end = match_end, .slots = self.slots };
+                    }
+                }
+            }
+            scan = separator_at + 1;
+        }
     }
 
     /// Capture-free fast path: no slot trail, no per-instruction capture
@@ -1444,6 +1494,41 @@ fn runeLenAt(input: []const u8, offset: usize) usize {
     if (offset >= input.len) return 1;
     if (input[offset] < 0x80) return 1;
     return if (runeAt(input, offset)) |rune| rune.len else 1;
+}
+
+/// Start of the maximal `set` run ending at `separator_at`, clamped to
+/// `floor`. Bytes outside an ASCII-only set never match, so the backward
+/// scan is byte-wise in that case.
+fn chainRunStart(input: []const u8, set: model.Set, separator_at: usize, floor: usize) usize {
+    var pos = separator_at;
+    if (set.ascii_only) {
+        while (pos > floor and set.matches(input[pos - 1])) pos -= 1;
+        return pos;
+    }
+    while (pos > floor) {
+        const prev = previousRuneStart(input, pos);
+        if (prev < floor) break;
+        const rune = runeAt(input, prev) orelse break;
+        if (!set.matches(rune.value)) break;
+        pos = prev;
+    }
+    return pos;
+}
+
+/// End of the maximal `set` run starting at `from`.
+fn chainRunEnd(input: []const u8, set: model.Set, from: usize) usize {
+    var pos = from;
+    if (set.ascii_only) {
+        while (pos < input.len and set.matches(input[pos])) pos += 1;
+    } else {
+        while (set.matchAdvance(input, pos)) |advanced| pos = advanced;
+    }
+    return pos;
+}
+
+fn tailMatches(input: []const u8, at: usize, tail: []const u8) bool {
+    if (tail.len > input.len - at) return false;
+    return std.mem.eql(u8, input[at..][0..tail.len], tail);
 }
 
 /// Start of the rune immediately before `offset`, or `offset` when the byte

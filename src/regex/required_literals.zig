@@ -10,6 +10,7 @@
 //! branches only when both branches have a required set.
 const std = @import("std");
 const model = @import("model.zig");
+const prefilter = @import("prefilter.zig");
 
 pub const max_literals: usize = 8;
 pub const max_literal_len: usize = 32;
@@ -36,6 +37,11 @@ pub fn containsAny(input: []const u8, start: usize, literals: []const []const u8
         if (indexOfLiteral(input, start, literal) != null) return true;
     }
     return false;
+}
+
+/// Whether `byte` occurs at or after `start`, scanned 16 bytes at a time.
+pub fn containsByte(input: []const u8, start: usize, byte: u8) bool {
+    return prefilter.indexOfByte(input, start, byte) != null;
 }
 
 fn indexOfLiteral(input: []const u8, start: usize, needle: []const u8) ?usize {

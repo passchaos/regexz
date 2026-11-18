@@ -26,6 +26,12 @@ test "regex replacement expands numbered capture groups" {
     );
 }
 
+test "chain search drives replacement captures" {
+    try expectReplace("(\\w+)@(\\w+)", "\\2@\\1", "ab@cd", "cd@ab");
+    try expectReplace("(\\w+)@(\\w+)\\.com", "\\2 <\\1>", "user.name@example.com", "user.example <name>");
+    try expectReplace("(\\d+)\\.(\\d+)ms", "\\2.\\1s", "12.34ms", "34.12s");
+}
+
 test "regex replacement replaces every non-overlapping match" {
     try expectReplace(
         "one",

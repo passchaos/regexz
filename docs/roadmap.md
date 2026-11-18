@@ -97,7 +97,7 @@ Implemented functionality:
   case transforms `\U`/`\L`/`\E`/`\u`/`\l` (simple Unicode by default;
   `Limits.full_case_mapping` enables full SpecialCasing), and callback
   replacement via `replaceAllWithFn`.
-- 201 tests, including recursion, branch reset, conditional assertions,
+- 203 tests, including recursion, branch reset, conditional assertions,
   grapheme clusters, binary properties, Unicode blocks, partial matching,
   control verbs, thread safety, allocation-failure, and differential coverage
   against V8 for the supported subset.
@@ -228,7 +228,7 @@ at ~650 MiB/s, `[a-z]+ [a-z]+` at ~585 MiB/s, and the `set*` scan (which must
 also report the empty matches between runs) at ~416 MiB/s, 6.9× faster than
 the generic thread list. The bench gate now covers 37 cases; `RegexSet`
 ~97 µs, `replaceAll` ~85 µs, compile ~1.5 µs with `smp_allocator`, and all
-201 tests plus the V8/Rust/extended/replacement differential fuzzers pass. On the
+203 tests plus the V8/Rust/extended/replacement differential fuzzers pass. On the
 feature side, PCRE2 forward numeric/named references, `\e` and isolated `\E`,
 the full substitution reference syntax (`$<name>`, `$+`, `$_`, `` $` ``, `$'`),
 `escape`/`splitn`/`replacen`, and compile diagnostics (`diagnose`) are covered.
@@ -292,20 +292,19 @@ Where the remaining time goes:
    ~173–200 µs. The CJK tokenizer is now ~1.05x the same-host Rust reference
    after the byte-keyed transition cache and inlined start-state lookup, so
    the remaining gap is per-transition cost rather than per-start restart
-   overhead. Match-dense capture searches remain the largest gap:
-   `(\w+)@(\w+)\.com` over repeated `user.name@example.com` runs at
-   ~2.4 ns/byte against ~1.6 ns/byte for the same-host Rust reference. The
-   replay VM was the biggest per-match cost, so `extractCaptures` now tries a
-   deterministic walk first: a straight-line program of saves, literals, and
-   greedy set runs whose continuation cannot start with a member needs no
-   choice or trail bookkeeping. That took the email benchmark from ~68 µs to
-   ~42 µs; shapes that need backtracking (`(a+)ab`, adjacent runs, loops
-   with competing exits) still use the VM. Failed-start restarts are cheap
-   (a dotted versus plain local part differs by ~15 ns per match), so the
-   remaining gap is the find call chain plus rune-DFA transitions (two table
-   loads each). Rust pays less because its forward DFA finds the end in one
-   unanchored pass and a reverse DFA recovers the start; adding that pair is
-   the next large search step. Remaining:
+   overhead. Match-dense capture searches are no longer the largest gap:
+   `(\w+)@(\w+)\.com` over repeated `user.name@example.com` runs scans for
+   the separator and derives both run boundaries directly, at ~11 µs for the
+   18 KiB sample against ~29 µs for the same-host Rust reference (2.6x
+   faster), and the no-match form `(\p{L}+)@(\p{L}+)` is ~2.2 µs against
+   ~2.0 µs. The shape detector (`shapes.zig`) recognizes
+   `setA+ separator setB+ tail`, requires the separator to end the first run
+   and the tail to end the second, and reports the capture slots directly.
+   `extractCaptures` also tries a deterministic replay for straight-line
+   programs of saves, literals, and forced greedy runs, which took the email
+   benchmark from ~68 µs to ~42 µs before the chain path; shapes that need
+   backtracking (`(a+)ab`, adjacent runs, loops with competing exits) still
+   use the VM. Remaining:
    byte-level lookahead gating (Qwen's `(?!\S)`), iteration-aware priorities
    for loops whose exits compete with later choices, and closing the last few
    percent. An

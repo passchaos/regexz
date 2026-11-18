@@ -581,6 +581,83 @@ test "character class set operations" {
     try expectMatches(allocator, "[a-z-]+", &.{ "a-z", "---" }, &.{ "1", "" }, .{});
 }
 
+test "chain search finds matches from the separator" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const cases = [_]struct {
+        pattern: []const u8,
+        input: []const u8,
+        spans: []const [2]usize,
+        groups: []const []const u8,
+    }{
+        // The first separator wins; a later '@' cannot start a new run.
+        .{ .pattern = "(\\w+)@(\\w+)", .input = "ab@cd@ef", .spans = &.{.{ 0, 5 }}, .groups = &.{ "ab@cd", "ab", "cd" } },
+        .{ .pattern = "(\\w+)@(\\w+)\\.com", .input = "user.name@example.com x a@b.com", .spans = &.{ .{ 5, 21 }, .{ 24, 31 } }, .groups = &.{ "name@example.com", "name", "example" } },
+        // Separators without a run on the left are skipped.
+        .{ .pattern = "(\\w+)@(\\w+)", .input = "@@ab@cd", .spans = &.{.{ 2, 7 }}, .groups = &.{ "ab@cd", "ab", "cd" } },
+        // A failed tail skips to the next separator.
+        .{ .pattern = "(\\w+)@(\\w+)\\.com", .input = "ab@cd@ef.com", .spans = &.{.{ 3, 12 }}, .groups = &.{ "cd@ef.com", "cd", "ef" } },
+        // Multi-byte sets and separators.
+        .{ .pattern = "(\\p{Han}+)-(\\p{Han}+)", .input = "a\u{4f60}\u{597d}-\u{4e16}\u{754c}b", .spans = &.{.{ 1, 14 }}, .groups = &.{ "\u{4f60}\u{597d}-\u{4e16}\u{754c}", "\u{4f60}\u{597d}", "\u{4e16}\u{754c}" } },
+        .{ .pattern = "(\\w+)::(\\w+)", .input = "ab::cd", .spans = &.{.{ 0, 6 }}, .groups = &.{ "ab::cd", "ab", "cd" } },
+        .{ .pattern = "(\\d+)\\.(\\d+)ms", .input = "12.34ms", .spans = &.{.{ 0, 7 }}, .groups = &.{ "12.34ms", "12", "34" } },
+        .{ .pattern = "(\\w+)@(\\w+)", .input = "abc", .spans = &.{}, .groups = &.{} },
+        // Shapes the detector rejects (separator or tail inside a set) must
+        // still search correctly through the general engine.
+        .{ .pattern = "([a-z]+)a([a-z]+)", .input = "xay", .spans = &.{.{ 0, 3 }}, .groups = &.{ "xay", "x", "y" } },
+        .{ .pattern = "(\\w+)@(\\w+)x", .input = "a@bx", .spans = &.{.{ 0, 4 }}, .groups = &.{ "a@bx", "a", "b" } },
+    };
+    for (cases) |case| {
+        var value = try regex.Regex.init(allocator, case.pattern, .{});
+        defer value.deinit();
+        var workspace = try regex.ReplaceWorkspace.init(allocator, value.program, .{});
+        defer workspace.deinit();
+        var offset: usize = 0;
+        var index: usize = 0;
+        while (offset <= case.input.len and index < case.spans.len) {
+            const found = (try workspace.find(case.input, offset)) orelse break;
+            try std.testing.expectEqual(case.spans[index][0], found.start);
+            try std.testing.expectEqual(case.spans[index][1], found.end);
+            if (index == 0) {
+                for (case.groups, 0..) |want, group| {
+                    try std.testing.expectEqualStrings(want, found.group(case.input, group) orelse "");
+                }
+            }
+            index += 1;
+            offset = found.end;
+        }
+        try std.testing.expectEqual(case.spans.len, index);
+    }
+
+    // A search start inside the first run keeps the run suffix.
+    var value = try regex.Regex.init(allocator, "(\\w+)@(\\w+)", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(allocator, value.program, .{});
+    defer workspace.deinit();
+    const found = (try workspace.find("abcdef@gh", 3)).?;
+    try std.testing.expectEqual(@as(usize, 3), found.start);
+    try std.testing.expectEqual(@as(usize, 9), found.end);
+    try std.testing.expectEqualStrings("def", found.group("abcdef@gh", 1) orelse "");
+    try std.testing.expectEqualStrings("gh", found.group("abcdef@gh", 2) orelse "");
+
+    // The chain shapes are recognized; a capture-free chain has no group
+    // slots and still reports the whole span.
+    var chain = try regex.Regex.init(allocator, "(\\w+)@(\\w+)", .{});
+    defer chain.deinit();
+    var chain_workspace = try regex.ReplaceWorkspace.init(allocator, chain.program, .{});
+    defer chain_workspace.deinit();
+    try std.testing.expect(chain_workspace.simple_chain != null);
+    var bare = try regex.Regex.init(allocator, "\\w+@\\w+", .{});
+    defer bare.deinit();
+    var bare_workspace = try regex.ReplaceWorkspace.init(allocator, bare.program, .{});
+    defer bare_workspace.deinit();
+    try std.testing.expect(bare_workspace.simple_chain != null);
+    const bare_found = (try bare_workspace.find("ab@cd", 0)).?;
+    try std.testing.expectEqualSlices(usize, &.{ 0, 5 }, bare_found.slots);
+}
+
 test "counting star scan respects the step budget" {
     // A capture keeps this on the interpreter path so the star scan itself is
     // subject to the step budget.
