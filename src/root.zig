@@ -103,6 +103,9 @@ pub fn compile(gpa: std.mem.Allocator, pattern: []const u8, limits: Limits) Erro
 }
 pub const Regex = struct {
     arena: std.heap.ArenaAllocator,
+    /// Fast-path storage for small compilations; null when `arena` owns the
+    /// program instead.
+    block: ?[]u8 = null,
     allocator: std.mem.Allocator,
     program: Program,
     limits: Limits,
@@ -117,16 +120,48 @@ pub const Regex = struct {
     fn unlock(self: *Regex) void {
         self.mutex.unlock();
     }
+    const compile_block_size: usize = 16 * 1024;
+
     pub fn init(gpa: std.mem.Allocator, pattern: []const u8, limits: Limits) Error!Regex {
+        // Small patterns fit in one fixed block, avoiding the arena's multiple
+        // page allocations. Fall back to an arena when the block is too small
+        // or cannot be allocated.
+        if (gpa.alloc(u8, compile_block_size)) |block| {
+            var fba = std.heap.FixedBufferAllocator.init(block);
+            const parsed = parse_mod.parse(fba.allocator(), pattern, limits) catch |err| {
+                gpa.free(block);
+                if (err == error.OutOfMemory) return initArena(gpa, pattern, limits);
+                return err;
+            };
+            const program = compile_mod.compile(fba.allocator(), parsed, limits) catch |err| {
+                gpa.free(block);
+                if (err == error.OutOfMemory) return initArena(gpa, pattern, limits);
+                return err;
+            };
+            return .{
+                .arena = std.heap.ArenaAllocator.init(gpa),
+                .block = block,
+                .allocator = gpa,
+                .program = program,
+                .limits = limits,
+            };
+        } else |_| {
+            return initArena(gpa, pattern, limits);
+        }
+    }
+
+    fn initArena(gpa: std.mem.Allocator, pattern: []const u8, limits: Limits) Error!Regex {
         var arena = std.heap.ArenaAllocator.init(gpa);
         errdefer arena.deinit();
         const parsed = try parse_mod.parse(arena.allocator(), pattern, limits);
         const program = try compile_mod.compile(arena.allocator(), parsed, limits);
         return .{ .arena = arena, .allocator = gpa, .program = program, .limits = limits };
     }
+
     pub fn deinit(self: *Regex) void {
         if (self.workspace) |*workspace| workspace.deinit();
         if (self.replace_workspace) |*workspace| workspace.deinit();
+        if (self.block) |block| self.allocator.free(block);
         self.arena.deinit();
         self.* = undefined;
     }

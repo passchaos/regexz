@@ -503,6 +503,7 @@ const CalloutState = struct {
     last_position: usize = 0,
     last_index: u32 = 0,
     last_name: ?[]const u8 = null,
+    name_buffer: [64]u8 = undefined,
 };
 
 fn resumeCallout(context: ?*anyopaque, callout: regex.CalloutSpec, position: usize) regex.CalloutAction {
@@ -510,7 +511,14 @@ fn resumeCallout(context: ?*anyopaque, callout: regex.CalloutSpec, position: usi
     state.count += 1;
     state.last_position = position;
     state.last_index = callout.number;
-    state.last_name = callout.name;
+    if (callout.name) |name| {
+        // `name` is valid only during the callback; keep a copy for the test.
+        const length = @min(name.len, state.name_buffer.len);
+        @memcpy(state.name_buffer[0..length], name[0..length]);
+        state.last_name = state.name_buffer[0..length];
+    } else {
+        state.last_name = null;
+    }
     return .proceed;
 }
 
