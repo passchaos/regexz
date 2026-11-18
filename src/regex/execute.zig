@@ -68,14 +68,19 @@ const Dfa = struct {
     index: std.StringHashMapUnmanaged(u32) = .empty,
     /// Flat [state][byte] table: `ascii_unprepared` = unknown,
     /// `ascii_dead` = dead, otherwise the target's row offset
-    /// (`state id * 128`), which keeps the scan loop's address on one add.
+    /// (`state id * stride`), which keeps the scan loop's address on one add.
+    /// ASCII-only programs use 256-entry rows whose high half is dead, so the
+    /// scan needs no `byte < 0x80` branch; other programs use 128-entry rows
+    /// and decode non-ASCII runes.
     ascii_table: std.ArrayList(u32) = .empty,
     unicode_cache: []UnicodeEntry,
     scratch: []u32,
     seen: []u32,
     epoch: u32 = 0,
     start_state: ?u32 = null,
-    fn init(allocator: std.mem.Allocator, instruction_count: usize) std.mem.Allocator.Error!Dfa {
+    ascii_only: bool = false,
+    row_shift: u5 = 7,
+    fn init(allocator: std.mem.Allocator, instruction_count: usize, ascii_only: bool) std.mem.Allocator.Error!Dfa {
         var arena = std.heap.ArenaAllocator.init(allocator);
         errdefer arena.deinit();
         const scratch = try allocator.alloc(u32, instruction_count);
@@ -91,6 +96,8 @@ const Dfa = struct {
             .unicode_cache = unicode_cache,
             .scratch = scratch,
             .seen = seen,
+            .ascii_only = ascii_only,
+            .row_shift = if (ascii_only) 8 else 7,
         };
     }
     fn deinit(self: *Dfa) void {
@@ -281,7 +288,14 @@ pub const Workspace = struct {
         };
         const id: u32 = @intCast(dfa.states.items.len);
         try dfa.states.append(dfa.allocator, state);
-        try dfa.ascii_table.appendNTimes(dfa.allocator, ascii_unprepared, 128);
+        if (dfa.ascii_only) {
+            // Non-ASCII bytes can never match, so pre-fill the high half as
+            // dead and keep the scan loop branch-free for ASCII input.
+            try dfa.ascii_table.appendNTimes(dfa.allocator, ascii_unprepared, 128);
+            try dfa.ascii_table.appendNTimes(dfa.allocator, ascii_dead, 128);
+        } else {
+            try dfa.ascii_table.appendNTimes(dfa.allocator, ascii_unprepared, 128);
+        }
         try dfa.index.put(dfa.allocator, std.mem.sliceAsBytes(owned), id);
         return id;
     }
@@ -296,11 +310,15 @@ pub const Workspace = struct {
         dfa.start_state = id;
         return id;
     }
-    fn dfaTransition(self: *Workspace, program: Program, state_id: u32, rune: u21) std.mem.Allocator.Error!u32 {
+    fn dfaTransition(self: *Workspace, comptime shift: u5, program: Program, state_id: u32, rune: u21) std.mem.Allocator.Error!u32 {
         const dfa = &self.dfa.?;
+        const stride: u32 = @as(u32, 1) << shift;
         if (rune < 128) {
-            const cached = dfa.ascii_table.items[@as(usize, state_id) * 128 + rune];
-            if (cached != ascii_unprepared) return if (cached == ascii_dead) dfa_dead else cached >> 7;
+            const cached = dfa.ascii_table.items[(@as(usize, state_id) << shift) + rune];
+            if (cached != ascii_unprepared) return if (cached == ascii_dead) dfa_dead else cached >> shift;
+        } else if (dfa.ascii_only) {
+            // Non-ASCII bytes are pre-filled dead; nothing can match.
+            return dfa_dead;
         } else {
             const key = (@as(u64, state_id) << 21) | rune;
             const entry = &dfa.unicode_cache[unicodeSlot(key)];
@@ -325,7 +343,7 @@ pub const Workspace = struct {
         if (rune < 128) {
             // Store the target's row offset so the scan loop can index with
             // one add instead of a shift plus add on the critical path.
-            dfa.ascii_table.items[@as(usize, state_id) * 128 + rune] = if (next == dfa_dead) ascii_dead else next * 128;
+            dfa.ascii_table.items[(@as(usize, state_id) << shift) + rune] = if (next == dfa_dead) ascii_dead else next * stride;
         } else {
             dfa.unicode_cache[unicodeSlot((@as(u64, state_id) << 21) | rune)] = .{
                 .key = (@as(u64, state_id) << 21) | rune,
@@ -337,10 +355,29 @@ pub const Workspace = struct {
     }
     fn executeDfa(self: *Workspace, program: Program, input: []const u8) std.mem.Allocator.Error!bool {
         const dfa = &self.dfa.?;
-        // Table entries are row offsets (state * 128), so the hot loop's next
-        // address is one add away from the loaded value.
-        var row: u32 = (try self.dfaStartState(program)) * 128;
+        // Table entries are row offsets, so the hot loop's next address is one
+        // add away from the loaded value.
+        const stride: u32 = @as(u32, 1) << dfa.row_shift;
+        var row: u32 = (try self.dfaStartState(program)) * stride;
         var offset: usize = 0;
+        if (dfa.ascii_only) {
+            // Rows cover all 256 byte values with the high half pre-filled
+            // dead, so the scan needs no ASCII branch or rune decoding.
+            while (offset < input.len) {
+                const cached = dfa.ascii_table.items[@as(usize, row) + input[offset]];
+                if (cached >= ascii_dead) {
+                    if (cached == ascii_dead) return false;
+                    const next = try self.dfaTransition(8, program, row >> 8, input[offset]);
+                    if (next == dfa_dead) return false;
+                    row = next * stride;
+                    offset += 1;
+                    continue;
+                }
+                row = cached;
+                offset += 1;
+            }
+            return dfa.states.items[row >> dfa.row_shift].accept;
+        }
         while (offset < input.len) {
             const byte = input[offset];
             if (byte < 0x80) {
@@ -354,16 +391,30 @@ pub const Workspace = struct {
                 }
             }
             const rune = runeAt(input, offset) orelse return false;
-            const next = try self.dfaTransition(program, row >> 7, rune.value);
+            const next = try self.dfaTransition(7, program, row >> 7, rune.value);
             if (next == dfa_dead) return false;
-            row = next * 128;
+            row = next * stride;
             offset += rune.len;
         }
-        return dfa.states.items[row >> 7].accept;
+        return dfa.states.items[row >> dfa.row_shift].accept;
     }
     fn tryDfa(self: *Workspace, program: Program, input: []const u8) ?bool {
         if (self.dfa == null) {
-            self.dfa = Dfa.init(self.allocator, program.instructions.len) catch {
+            var ascii_only = true;
+            for (program.instructions) |instruction| switch (instruction) {
+                .consume => |consume| if (!consume.set.ascii_only) {
+                    ascii_only = false;
+                },
+                .star => |star| if (!star.set.ascii_only) {
+                    ascii_only = false;
+                },
+                .literal_rune => |literal| if (literal.value >= 0x80) {
+                    ascii_only = false;
+                },
+                .byte => ascii_only = false,
+                else => {},
+            };
+            self.dfa = Dfa.init(self.allocator, program.instructions.len, ascii_only) catch {
                 self.dfa_failed = true;
                 return null;
             };
