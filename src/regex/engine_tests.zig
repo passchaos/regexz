@@ -372,6 +372,9 @@ test "byte-level DFA searches non-ASCII sets" {
     try expectFindSpans(allocator, "(\\p{Han}+)-(\\p{Han}+)", "a你好-世界b", &.{.{ 1, 14 }}, .{});
     // Lazy quantifiers and non-matching starts.
     try expectFindSpans(allocator, "\\p{Han}+?", "你好", &.{ .{ 0, 3 }, .{ 3, 6 } }, .{});
+    // Competing accept priorities must not use the uniform-accept fast path.
+    try expectFindSpans(allocator, "\\p{Han}+?|\\p{Han}+", "你好", &.{ .{ 0, 3 }, .{ 3, 6 } }, .{});
+    try expectFindSpans(allocator, "\\p{Han}+|\\p{Greek}+", "αβ", &.{.{ 0, 4 }}, .{});
     try expectFindSpans(allocator, "\\p{Han}+", "abc", &.{}, .{});
     // Invalid UTF-8 cannot extend a rune-based match.
     try expectFindSpans(allocator, "\\p{Han}+", "a\xE4\xB8", &.{}, .{});

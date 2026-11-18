@@ -116,6 +116,11 @@ pub const Workspace = struct {
     arena: std.heap.ArenaAllocator,
     start_state: ?u32 = null,
     max_states: usize,
+    /// Byte mode: priority shared by every accepting state so far. When all
+    /// accepts tie, the scan records the last accepting offset without loading
+    /// the priority; `mixed_accept` disables that fast path.
+    uniform_accept: u64 = no_priority,
+    mixed_accept: bool = false,
     first_filter: prefilter.FirstFilter,
     start_filter: ?prefilter.MultiFilter = null,
 
@@ -691,6 +696,13 @@ pub const Workspace = struct {
             .byte => {
                 try self.byte_table.appendNTimes(self.allocator, 0, 256);
                 try self.state_accept.append(self.allocator, accept);
+                if (accept != no_priority) {
+                    if (self.uniform_accept == no_priority) {
+                        self.uniform_accept = accept;
+                    } else if (self.uniform_accept != accept) {
+                        self.mixed_accept = true;
+                    }
+                }
             },
         }
         try self.index.put(self.allocator, std.mem.sliceAsBytes(owned), id);
@@ -868,6 +880,7 @@ pub const Workspace = struct {
         var offset = start;
         var best_end: usize = std.math.maxInt(usize);
         var best_priority: u64 = no_priority;
+        var uniform = !self.mixed_accept;
         const initial = self.state_accept.items[state];
         if (initial != no_priority) {
             best_end = offset;
@@ -876,17 +889,27 @@ pub const Workspace = struct {
         while (offset < input.len) {
             const index = @as(usize, state) * 256 + input[offset];
             var cached = self.byte_table.items[index];
-            if (cached == 0) cached = try self.prepareByte(state, input[offset]);
+            if (cached == 0) {
+                cached = try self.prepareByte(state, input[offset]);
+                // A newly built state may introduce a second accept priority.
+                uniform = !self.mixed_accept;
+            }
             if (cached == dead_state_byte) break;
             offset += 1;
             const next = (cached & state_mask) - 1;
             if (cached & accept_bit != 0) {
-                const accept = self.state_accept.items[next];
-                if (accept < best_priority) {
+                if (uniform) {
+                    // All accepts tie, so the last accepting offset wins.
+                    if (best_priority == no_priority) best_priority = self.uniform_accept;
                     best_end = offset;
-                    best_priority = accept;
-                } else if (accept == best_priority) {
-                    best_end = offset;
+                } else {
+                    const accept = self.state_accept.items[next];
+                    if (accept < best_priority) {
+                        best_end = offset;
+                        best_priority = accept;
+                    } else if (accept == best_priority) {
+                        best_end = offset;
+                    }
                 }
             }
             state = next;
