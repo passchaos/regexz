@@ -179,9 +179,10 @@ The engine picks the execution strategy automatically:
   - Iteration and splitting: `Regex.findAll`, `Regex.split`, `Regex.splitn`
     (limited parts).
   - Multi-pattern matching: `RegexSet` compiles independent patterns and
-    reports which match anywhere in the input via `matches`, `isMatch`, or
-    `matchIndices`. Eligible patterns share one unanchored DFA scan; patterns
-    with assertions or extended features stay on their per-pattern engines.
+    reports which match anywhere in the input via `matches`/`matchesAt`,
+    `isMatch`, or `matchIndices`. Eligible patterns share one unanchored DFA
+    scan; patterns with assertions or extended features stay on their
+    per-pattern engines.
   - Replacement: `Regex.replaceAll`, `Regex.replacen` (limited matches), and
     `ReplaceWorkspace`. Dynamic
     replacement via `Regex.replaceAllWithFn` /

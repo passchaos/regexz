@@ -74,13 +74,19 @@ pub const RegexSet = struct {
     /// Only the first `matched.len` patterns are reported when the buffer is
     /// shorter than `count()`.
     pub fn matches(self: *RegexSet, input: []const u8, matched: []bool) Error!void {
+        return self.matchesAt(input, 0, matched);
+    }
+
+    /// Set `matched[i]` for every pattern that matches at or after `start`.
+    pub fn matchesAt(self: *RegexSet, input: []const u8, start: usize, matched: []bool) Error!void {
         const limit = @min(matched.len, self.programs.len);
         @memset(matched[0..limit], false);
+        if (start > input.len) return;
         const dfa_ptr: ?*set_dfa.Workspace = if (self.dfa) |*value| value else null;
         var use_dfa = false;
         if (!self.dfa_failed) {
             if (dfa_ptr) |dfa| {
-                if (dfa.scan(input, matched[0..limit])) |_| {
+                if (dfa.scanFrom(input, start, matched[0..limit])) |_| {
                     use_dfa = true;
                 } else |err| {
                     // Invalid UTF-8 is input-specific; keep the DFA for later
@@ -92,7 +98,7 @@ pub const RegexSet = struct {
         }
         for (self.workspaces[0..limit], 0..) |*workspace, index| {
             if (use_dfa and dfa_ptr.?.covers(index)) continue;
-            matched[index] = (try workspace.find(input, 0)) != null;
+            matched[index] = (try workspace.find(input, start)) != null;
         }
     }
 

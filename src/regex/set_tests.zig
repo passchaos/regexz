@@ -171,3 +171,19 @@ test "regex set falls back on invalid UTF-8" {
     try set.matches("abc", &matched);
     try std.testing.expectEqualSlices(bool, &.{ true, true, true }, &matched);
 }
+
+test "regex set searches from an offset" {
+    const allocator = std.testing.allocator;
+    const patterns = [_][]const u8{ "\\d+", "^foo", "bar" };
+    var set = try regex.RegexSet.init(allocator, &patterns, .{});
+    defer set.deinit();
+    var matched: [3]bool = undefined;
+    // "foo" is only at the start, so a scan from offset 1 must not match it.
+    try set.matchesAt("foo 123 bar", 1, &matched);
+    try std.testing.expectEqualSlices(bool, &.{ true, false, true }, &matched);
+    try set.matchesAt("foo 123 bar", 8, &matched);
+    try std.testing.expectEqualSlices(bool, &.{ false, false, true }, &matched);
+    // Offsets past the end report no matches.
+    try set.matchesAt("foo", 4, &matched);
+    try std.testing.expectEqualSlices(bool, &.{ false, false, false }, &matched);
+}

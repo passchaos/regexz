@@ -140,9 +140,14 @@ pub const Workspace = struct {
     /// Scan `input` once and OR the matched pattern indices into `matched`.
     /// Entries for patterns outside `included` are left untouched.
     pub fn scan(self: *Workspace, input: []const u8, matched: []bool) Error!void {
+        return self.scanFrom(input, 0, matched);
+    }
+
+    /// Scan for matches at or after `start` (a byte offset).
+    pub fn scanFrom(self: *Workspace, input: []const u8, start: usize, matched: []bool) Error!void {
         var state = self.start_state;
         var mask = self.states.items[state].accept_mask;
-        var offset: usize = 0;
+        var offset = start;
         while (offset < input.len) {
             const rune = runeAt(input, offset) orelse return error.InvalidUtf8;
             state = try self.transition(state, rune.value);
