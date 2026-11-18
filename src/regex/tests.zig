@@ -89,7 +89,7 @@ test "UCP Perl space matches Unicode White_Space" {
     const ucp = regex.Limits{ .unicode_perl_space = true };
     var space = try regex.Regex.init(gpa, "\\s+", ucp);
     defer space.deinit();
-    for ([_][]const u8{ " ", "\t", "\u{0085}", "\u{00A0}", "\u{1680}", "\u{2000}", "\u{2028}", "\u{202F}", "\u{205F}", "\u{3000}" }) |input|
+    for ([_][]const u8{ " ", "\t", "\u{0085}", "\u{00A0}", "\u{1680}", "\u{180E}", "\u{2000}", "\u{2028}", "\u{202F}", "\u{205F}", "\u{3000}" }) |input|
         try std.testing.expect(try space.matches(gpa, input));
     try std.testing.expect(!try space.matches(gpa, "a"));
 

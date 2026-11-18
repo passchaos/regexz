@@ -119,13 +119,14 @@ pub fn normalize(gpa: std.mem.Allocator, raw: []const m.Range, negate: bool, fol
     return fromRanges(owned[0..count]);
 }
 
-/// Unicode White_Space, the set PCRE2 uses for UCP `\s`.
+/// PCRE2's UCP `\s` set: Unicode White_Space plus U+180E from `\h`.
 pub const unicode_space_ranges = [_]m.Range{
     .{ .first = 0x09, .last = 0x0d },
     .{ .first = 0x20, .last = 0x20 },
     .{ .first = 0x85, .last = 0x85 },
     .{ .first = 0xa0, .last = 0xa0 },
     .{ .first = 0x1680, .last = 0x1680 },
+    .{ .first = 0x180e, .last = 0x180e },
     .{ .first = 0x2000, .last = 0x200a },
     .{ .first = 0x2028, .last = 0x2029 },
     .{ .first = 0x202f, .last = 0x202f },
