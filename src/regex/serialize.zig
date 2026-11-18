@@ -502,6 +502,9 @@ pub fn serialize(program: Program, allocator: std.mem.Allocator) model.Error![]u
     if (program.dfa_eligible) flags |= 1;
     if (program.extended) flags |= 2;
     if (program.skip_start) flags |= 4;
+    flags |= @as(u16, @intFromEnum(program.newline)) << 3;
+    if (program.notempty) flags |= 1 << 6;
+    if (program.notempty_atstart) flags |= 1 << 7;
     try writer.u16v(flags);
     try writer.u32v(@intCast(program.instructions.len));
     try writer.u32v(@intCast(program.start));
@@ -629,6 +632,8 @@ pub fn deserialize(allocator: std.mem.Allocator, bytes: []const u8) model.Error!
         .first = first,
         .skip_start = flags & 4 != 0,
         .newline = @enumFromInt(newline_value),
+        .notempty = flags & (1 << 6) != 0,
+        .notempty_atstart = flags & (1 << 7) != 0,
     };
     try validate(program);
     return program;

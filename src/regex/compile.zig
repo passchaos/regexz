@@ -31,6 +31,10 @@ pub const Program = struct {
     extended: bool = false,
     /// Newline convention for `^`, `$`, `\Z`, dot, and `\N`.
     newline: model.Newline = .lf,
+    /// `(*NOTEMPTY)`: empty matches are not allowed anywhere.
+    notempty: bool = false,
+    /// `(*NOTEMPTY_ATSTART)`: empty matches are not allowed at the start.
+    notempty_atstart: bool = false,
     group_names: []const model.GroupName = &.{},
     /// UCP word set, present when the pattern uses Unicode `\b`/`\B`.
     ucp_word: ?model.Set = null,
@@ -731,6 +735,8 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         .dfa_eligible = dfa_eligible,
         .extended = extended,
         .newline = parsed.newline,
+        .notempty = parsed.notempty,
+        .notempty_atstart = parsed.notempty_atstart,
         .group_names = parsed.group_names,
         .ucp_word = ucp_word,
         .marks = parsed.marks,

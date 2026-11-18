@@ -105,6 +105,10 @@ pub const ParseResult = struct {
     capture_count: u16,
     extended: bool,
     newline: Newline = .lf,
+    /// `(*NOTEMPTY)`: empty matches are not allowed anywhere.
+    notempty: bool = false,
+    /// `(*NOTEMPTY_ATSTART)`: empty matches are not allowed at the start.
+    notempty_atstart: bool = false,
 };
 pub const Range = unicode.Range;
 /// Pre-materialization set: positive ranges plus the requested fold/negate.

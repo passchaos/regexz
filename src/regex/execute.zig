@@ -319,6 +319,10 @@ pub const Workspace = struct {
         };
     }
     pub fn matches(self: *Workspace, program: Program, input: []const u8) bool {
+        if (!self.matchesUnchecked(program, input)) return false;
+        return !(input.len == 0 and (program.notempty or program.notempty_atstart));
+    }
+    fn matchesUnchecked(self: *Workspace, program: Program, input: []const u8) bool {
         self.stats = .{ .input_bytes = input.len };
         if (program.literal) |literal| return std.mem.eql(u8, literal, input);
         if (program.dfa_eligible and !self.dfa_failed) {
@@ -332,12 +336,14 @@ pub const Workspace = struct {
         return self.execute(program, input, null) catch unreachable;
     }
     pub fn matchesWithBudget(self: *Workspace, program: Program, input: []const u8, budget: budget_mod.Budget) budget_mod.Error!bool {
-        return self.execute(program, input, budget);
+        if (!try self.execute(program, input, budget)) return false;
+        return !(input.len == 0 and (program.notempty or program.notempty_atstart));
     }
     /// Force the Thompson NFA path, bypassing the lazy DFA. Useful for
     /// differential tests and for callers that want deterministic work.
     pub fn matchesNfa(self: *Workspace, program: Program, input: []const u8) bool {
-        return self.execute(program, input, null) catch unreachable;
+        if (!(self.execute(program, input, null) catch unreachable)) return false;
+        return !(input.len == 0 and (program.notempty or program.notempty_atstart));
     }
     /// Full-match partiality: `full` when the input matches, `partial` when
     /// it is a proper prefix of some match, `none` otherwise.

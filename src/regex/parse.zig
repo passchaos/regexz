@@ -19,6 +19,8 @@ pub const Parser = struct {
     flags: m.Flags = .{},
     newline: m.Newline = .lf,
     bsr_anycrlf: bool = false,
+    notempty: bool = false,
+    notempty_atstart: bool = false,
     group_names: std.ArrayList(m.GroupName) = .empty,
     group_nodes: std.ArrayList(?*const m.Node) = .empty,
     marks: std.ArrayList([]const u8) = .empty,
@@ -262,13 +264,6 @@ pub const Parser = struct {
             return self.node(.empty);
         }
         if (!self.take(')')) return error.InvalidRegex;
-        self.extended = true;
-        if (std.mem.eql(u8, name, "FAIL") or std.mem.eql(u8, name, "F")) return self.node(.fail);
-        if (std.mem.eql(u8, name, "ACCEPT")) return self.node(.accept_verb);
-        if (std.mem.eql(u8, name, "PRUNE")) return self.node(.prune);
-        if (std.mem.eql(u8, name, "SKIP")) return self.node(.skip);
-        if (std.mem.eql(u8, name, "COMMIT")) return self.node(.commit);
-        if (std.mem.eql(u8, name, "THEN")) return self.node(.then_verb);
         if (std.mem.eql(u8, name, "UCP")) {
             self.limits.unicode_perl_classes = true;
             return self.node(.empty);
@@ -306,10 +301,25 @@ pub const Parser = struct {
             self.bsr_anycrlf = false;
             return self.node(.empty);
         }
+        if (std.mem.eql(u8, name, "NOTEMPTY")) {
+            self.notempty = true;
+            return self.node(.empty);
+        }
+        if (std.mem.eql(u8, name, "NOTEMPTY_ATSTART")) {
+            self.notempty_atstart = true;
+            return self.node(.empty);
+        }
         // Start-up optimization switches; they do not change match results.
         if (std.mem.eql(u8, name, "NO_AUTO_POSSESS") or
             std.mem.eql(u8, name, "NO_START_OPT") or
             std.mem.eql(u8, name, "NO_DOTSTAR_ANCHOR")) return self.node(.empty);
+        self.extended = true;
+        if (std.mem.eql(u8, name, "FAIL") or std.mem.eql(u8, name, "F")) return self.node(.fail);
+        if (std.mem.eql(u8, name, "ACCEPT")) return self.node(.accept_verb);
+        if (std.mem.eql(u8, name, "PRUNE")) return self.node(.prune);
+        if (std.mem.eql(u8, name, "SKIP")) return self.node(.skip);
+        if (std.mem.eql(u8, name, "COMMIT")) return self.node(.commit);
+        if (std.mem.eql(u8, name, "THEN")) return self.node(.then_verb);
         return error.UnsupportedRegexFeature;
     }
     fn lookaround(self: *Parser, negative: bool, behind: bool, depth: usize) m.Error!*const m.Node {
@@ -1025,5 +1035,7 @@ pub fn parse(gpa: std.mem.Allocator, pattern: []const u8, limits: m.Limits) m.Er
         .capture_count = parser.captures,
         .extended = parser.extended,
         .newline = parser.newline,
+        .notempty = parser.notempty,
+        .notempty_atstart = parser.notempty_atstart,
     };
 }

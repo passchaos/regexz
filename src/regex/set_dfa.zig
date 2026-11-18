@@ -162,7 +162,7 @@ pub const Workspace = struct {
     }
 
     fn eligible(program: Program) bool {
-        if (program.extended) return false;
+        if (program.extended or program.notempty or program.notempty_atstart) return false;
         if (program.instructions.len == 0 or program.instructions.len > 2048) return false;
         for (program.instructions) |item| switch (item) {
             .accept, .consume, .literal_byte, .literal_rune, .split, .star, .save, .reset_captures, .sub_accept, .ret => {},

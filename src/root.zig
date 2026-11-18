@@ -176,7 +176,10 @@ pub const Regex = struct {
         return &self.replace_workspace.?;
     }
     pub fn matches(self: *Regex, gpa: std.mem.Allocator, input: []const u8) Error!bool {
-        if (self.program.literal) |literal| return std.mem.eql(u8, literal, input);
+        if (self.program.literal) |literal| {
+            if (!std.mem.eql(u8, literal, input)) return false;
+            return !(input.len == 0 and (self.program.notempty or self.program.notempty_atstart));
+        }
         if (self.program.extended) {
             var workspace = try backtrack.Workspace.init(gpa, self.program, self.limits);
             defer workspace.deinit();
@@ -297,6 +300,7 @@ test {
     _ = @import("regex/script_run_tests.zig");
     _ = @import("regex/scan_substring_tests.zig");
     _ = @import("regex/newline_tests.zig");
+    _ = @import("regex/notempty_tests.zig");
     _ = @import("regex/char_names_tests.zig");
     _ = @import("regex/replace.zig");
     _ = @import("regex/stream_tests.zig");

@@ -381,9 +381,12 @@ pub const Scanner = struct {
         while (true) {
             if (self.recorded) |record| {
                 if (self.raw_count == 0) {
-                    emit(context, .{ .start = record.start, .end = record.end, .slots = self.best_slots });
+                    const empty = record.end == record.start;
+                    const suppressed = empty and
+                        (self.program.notempty or (self.program.notempty_atstart and record.start == 0));
+                    if (!suppressed) emit(context, .{ .start = record.start, .end = record.end, .slots = self.best_slots });
                     var next_start = record.end;
-                    if (record.end == record.start) {
+                    if (empty) {
                         if (self.runeAtAbsolute(record.end)) |rune| {
                             next_start = record.end + rune.len;
                         } else if (self.eof) {

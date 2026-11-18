@@ -33,6 +33,8 @@ Implemented functionality:
 - Newline conventions `(*CR)`, `(*LF)`, `(*CRLF)`, `(*ANYCRLF)`, `(*ANY)`,
   and `(*NUL)` for `^`, `$`, `\Z`, dot, and `\N`; `(*BSR_ANYCRLF)` /
   `(*BSR_UNICODE)` control `\R`.
+- Empty-match locks `(*NOTEMPTY)`/`(*NOTEMPTY_ATSTART)` across full-match,
+  search, replace, and streaming paths.
 - Numeric/named backreferences.
 - Named captures and group-name lookup; duplicate names with `(?J)`.
 - Atomic groups and possessive quantifiers.
@@ -93,7 +95,7 @@ Implemented functionality:
   case transforms `\U`/`\L`/`\E`/`\u`/`\l` (simple Unicode by default;
   `Limits.full_case_mapping` enables full SpecialCasing), and callback
   replacement via `replaceAllWithFn`.
-- 152 tests, including recursion, branch reset, conditional assertions,
+- 156 tests, including recursion, branch reset, conditional assertions,
   grapheme clusters, binary properties, Unicode blocks, partial matching,
   control verbs, thread safety, allocation-failure, and differential coverage
   against V8 for the supported subset.
@@ -315,3 +317,4 @@ mode, which is explicitly bounded and fail-closed.
 reak the
 linear-time guarantee. They are supported only in the extended backtracking
 mode, which is explicitly bounded and fail-closed.
+

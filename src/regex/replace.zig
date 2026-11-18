@@ -284,7 +284,24 @@ pub const Workspace = struct {
         return !required_literals.containsAny(input, search_start, literals);
     }
 
-    fn findInternal(
+    /// Leftmost-first search honoring `(*NOTEMPTY)` and
+    /// `(*NOTEMPTY_ATSTART)`: rejected empty matches advance by one rune.
+    fn findInternal(self: *Workspace, input: []const u8, search_start: usize) Error!?Match {
+        var start = search_start;
+        while (true) {
+            const match = (try self.findOnce(input, start)) orelse return null;
+            if (match.start == match.end and
+                (self.program.notempty or (self.program.notempty_atstart and match.start == search_start)))
+            {
+                if (match.start >= input.len) return null;
+                start = match.start + runeLenAt(input, match.start);
+                continue;
+            }
+            return match;
+        }
+    }
+
+    fn findOnce(
         self: *Workspace,
         input: []const u8,
         search_start: usize,
@@ -1027,8 +1044,8 @@ const Position = struct {
             .start_text, .start_match => self.start,
             .end_text => self.end,
             .end_text_or_newline => self.end or self.final_newline,
-            .start_line => self.start or self.previous == '\n',
-            .end_line => self.end or self.next == '\n',
+            .start_line => self.start or self.line_before,
+            .end_line => self.end or self.line_after,
             .word_boundary, .word_boundary_unicode => boundary,
             .no_word_boundary, .no_word_boundary_unicode => !boundary,
             // Grapheme boundary assertions are extended-only and evaluated by

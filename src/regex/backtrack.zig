@@ -800,7 +800,8 @@ pub const Workspace = struct {
         self.attempt_start = 0;
         self.commit_failed = false;
         self.skip_armed = false;
-        return (try self.run(input, self.program.body, 0, .full, 0, 0)) != null;
+        if ((try self.run(input, self.program.body, 0, .full, 0, 0)) == null) return false;
+        return !(input.len == 0 and (self.program.notempty or self.program.notempty_atstart));
     }
 
     /// Leftmost-first search at or after `search_start`. `\G` anchors to

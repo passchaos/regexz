@@ -18,6 +18,8 @@ const patterns = [_][]const u8{
     "(?<w>ab)(*scs:('w')a.c)",
     "(*CRLF)a.b",
     "(*ANY)\\R",
+    "(*NOTEMPTY)a*",
+    "(*NOTEMPTY_ATSTART)a*",
     "a|ab",
     "(?:ab|cd)+",
     "(a)(b)?",
@@ -69,6 +71,9 @@ fn expectSameProgram(a: regex.Program, b: regex.Program) !void {
     try std.testing.expectEqual(a.capture_count, b.capture_count);
     try std.testing.expectEqual(a.dfa_eligible, b.dfa_eligible);
     try std.testing.expectEqual(a.extended, b.extended);
+    try std.testing.expectEqual(a.newline, b.newline);
+    try std.testing.expectEqual(a.notempty, b.notempty);
+    try std.testing.expectEqual(a.notempty_atstart, b.notempty_atstart);
     try std.testing.expectEqual(a.skip_start, b.skip_start);
     try std.testing.expectEqual(a.first.ascii, b.first.ascii);
     try std.testing.expectEqual(a.first.nonascii, b.first.nonascii);
