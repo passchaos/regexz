@@ -138,6 +138,12 @@ pub const Workspace = struct {
     mixed_accept: bool = false,
     first_filter: prefilter.FirstFilter,
     start_filter: ?prefilter.MultiFilter = null,
+    /// Program-derived search options. `find` is called once per match, so
+    /// rebuilding these from the program on every call is measurable on
+    /// match-dense input.
+    first: model.FirstSet,
+    use_prefix: bool,
+    skip_start: bool,
 
     /// Returns null when the program is not eligible for the search DFA.
     pub fn init(allocator: std.mem.Allocator, program: Program) std.mem.Allocator.Error!?Workspace {
@@ -267,6 +273,8 @@ pub const Workspace = struct {
         errdefer next_entries.deinit(allocator);
         try next_entries.ensureTotalCapacity(allocator, count * 2);
         const start_filter = if (program.start_literals) |literals| prefilter.MultiFilter.init(literals) else null;
+        const use_prefix = if (program.literal_prefix) |value| value.len != 0 else false;
+        const skip_start = !use_prefix and start_filter == null and program.skip_start;
         return .{
             .allocator = allocator,
             .program = program,
@@ -287,6 +295,9 @@ pub const Workspace = struct {
             .max_states = if (mode == .byte) byte_max_states else rune_max_states,
             .first_filter = prefilter.FirstFilter.init(program.first),
             .start_filter = start_filter,
+            .first = program.first,
+            .use_prefix = use_prefix,
+            .skip_start = skip_start,
         };
     }
 
@@ -984,16 +995,16 @@ pub const Workspace = struct {
     pub fn find(self: *Workspace, input: []const u8, search_start: usize) Error!?Match {
         if (search_start > input.len) return null;
         var start = search_start;
-        // Hoist the prefilter choice and the first-set summary out of the
-        // per-start loop.
+        // The prefilter choice and first-set summary were precomputed at
+        // init; this function runs once per match.
         const prefix = self.program.literal_prefix;
-        const use_prefix = if (prefix) |value| value.len != 0 else false;
+        const use_prefix = self.use_prefix;
         const filter: ?*prefilter.MultiFilter = if (!use_prefix)
             (if (self.start_filter) |*value| value else null)
         else
             null;
-        const skip_start = !use_prefix and filter == null and self.program.skip_start;
-        const first = self.program.first;
+        const skip_start = self.skip_start;
+        const first = self.first;
         while (start <= input.len) {
             if (use_prefix) {
                 start = indexOfLiteral(input, start, prefix.?) orelse return null;
