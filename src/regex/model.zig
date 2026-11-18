@@ -78,6 +78,8 @@ pub const Flags = struct {
     no_auto_capture: bool = false,
     /// `(?J)`: allow duplicate capture-group names.
     duplicate_names: bool = false,
+    /// `(?r)`: restrict caseless matching to ASCII pairs.
+    caseless_restrict: bool = false,
     /// `(?xx)`: also ignore space and horizontal tab inside character classes.
     extended_more: bool = false,
     /// PCRE2 `(?aD)`/`(?aS)`/`(?aW)`: keep `\d`, `\s`, `\w` ASCII even with UCP.
@@ -108,10 +110,13 @@ pub const Range = unicode.Range;
 /// Pre-materialization set: positive ranges plus the requested fold/negate.
 /// The parser keeps this form until a class is complete so folding happens
 /// before complementing.
+/// Case-folding mode for a parsed set. `ascii` is PCRE2 `(?r)`:
+/// only A-Z/a-z pairs fold, Unicode peers are ignored.
+pub const Fold = enum(u8) { none, unicode, ascii };
 pub const ParsedSet = struct {
     ranges: []const Range,
     negate: bool = false,
-    fold: bool = false,
+    fold: Fold = .none,
 };
 /// A positive, case-folded set. Negation and `(?i)` folding are materialized
 /// at compile time so matching is a binary search (plus a 128-bit ASCII

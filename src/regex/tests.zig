@@ -330,3 +330,25 @@ test "extended-more classes and ASCII option letters" {
         try std.testing.expectEqual(case.matches, try value.matches(gpa, case.input));
     }
 }
+
+test "caseless restrict folds only ASCII" {
+    const Case = struct { pattern: []const u8, input: []const u8, matches: bool };
+    for ([_]Case{
+        .{ .pattern = "(?i)k", .input = "\u{212a}", .matches = true },
+        .{ .pattern = "(?ir)k", .input = "\u{212a}", .matches = false },
+        .{ .pattern = "(?ir)k", .input = "K", .matches = true },
+        .{ .pattern = "(?ir:k)", .input = "K", .matches = true },
+        .{ .pattern = "(?i)s", .input = "\u{017f}", .matches = true },
+        .{ .pattern = "(?ir)s", .input = "\u{017f}", .matches = false },
+        .{ .pattern = "(?i)\u{00e9}", .input = "\u{00c9}", .matches = true },
+        .{ .pattern = "(?ir)\u{00e9}", .input = "\u{00c9}", .matches = false },
+        .{ .pattern = "(?i)[a-z]", .input = "\u{212a}", .matches = true },
+        .{ .pattern = "(?ir)[a-z]", .input = "\u{212a}", .matches = false },
+        .{ .pattern = "(?ir)[a-z]", .input = "A", .matches = true },
+        .{ .pattern = "(?ir)(?^i)k", .input = "\u{212a}", .matches = true },
+    }) |case| {
+        var value = try regex.Regex.init(gpa, case.pattern, .{});
+        defer value.deinit();
+        try std.testing.expectEqual(case.matches, try value.matches(gpa, case.input));
+    }
+}

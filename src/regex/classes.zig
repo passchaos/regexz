@@ -41,6 +41,26 @@ fn appendFolded(gpa: std.mem.Allocator, ranges: *std.ArrayList(m.Range)) m.Error
     }
 }
 
+/// Add ASCII case peers for `(?r)`; Unicode pairs stay unfolded.
+fn appendAsciiFolded(gpa: std.mem.Allocator, ranges: *std.ArrayList(m.Range)) m.Error!void {
+    const original_len = ranges.items.len;
+    for (0..original_len) |index| {
+        const range = ranges.items[index];
+        const upper_low = @max(range.first, 'A');
+        const upper_high = @min(range.last, 'Z');
+        if (upper_low <= upper_high) {
+            var rune: u32 = upper_low;
+            while (rune <= upper_high) : (rune += 1) try ranges.append(gpa, .{ .first = @intCast(rune + 32), .last = @intCast(rune + 32) });
+        }
+        const lower_low = @max(range.first, 'a');
+        const lower_high = @min(range.last, 'z');
+        if (lower_low <= lower_high) {
+            var rune: u32 = lower_low;
+            while (rune <= lower_high) : (rune += 1) try ranges.append(gpa, .{ .first = @intCast(rune - 32), .last = @intCast(rune - 32) });
+        }
+    }
+}
+
 fn complement(gpa: std.mem.Allocator, ranges: []const m.Range, limit: usize) m.Error![]const m.Range {
     var inverted: std.ArrayList(m.Range) = .empty;
     errdefer inverted.deinit(gpa);
@@ -74,12 +94,14 @@ pub fn fromRanges(ranges: []const m.Range) m.Set {
     return .{ .ranges = ranges, .ascii = bitmap, .ascii_only = ascii_only };
 }
 
-pub fn normalize(gpa: std.mem.Allocator, raw: []const m.Range, negate: bool, fold: bool, limit: usize) m.Error!m.Set {
+pub fn normalize(gpa: std.mem.Allocator, raw: []const m.Range, negate: bool, fold: m.Fold, limit: usize) m.Error!m.Set {
     if (raw.len > limit) return error.RegexLimitExceeded;
     var ranges: std.ArrayList(m.Range) = .empty;
     defer ranges.deinit(gpa);
     try ranges.appendSlice(gpa, raw);
-    if (fold) try appendFolded(gpa, &ranges);
+    if (fold != .none) {
+        if (fold == .ascii) try appendAsciiFolded(gpa, &ranges) else try appendFolded(gpa, &ranges);
+    }
     std.mem.sort(m.Range, ranges.items, {}, lessThan);
     var count: usize = 0;
     for (ranges.items) |range| {

@@ -51,9 +51,9 @@ Implemented functionality:
 - Numeric and string callouts `(?C...)` through `Limits.callout`, plus
   `Limits.auto_callout` (callout 255 before consuming atoms).
 - Extended mode `(?x)`, extended-more `(?xx)`, ungreedy mode `(?U)`,
-  no-auto-capture `(?n)`, ASCII option letters, `(?^)` option reset,
-  `(*NO_START_OPT)`/`(*NO_AUTO_POSSESS)`/`(*NO_DOTSTAR_ANCHOR)` start-up
-  directives, and `(?#...)` comments.
+  no-auto-capture `(?n)`, ASCII option letters, `(?r)` caseless-restrict,
+  `(?^)` option reset, `(*NO_START_OPT)`/`(*NO_AUTO_POSSESS)`/
+  `(*NO_DOTSTAR_ANCHOR)` start-up directives, and `(?#...)` comments.
 - UCP `\d`/`\w`/`\s` and Unicode `\b`/`\B`; property aliases
   (`Script=`, `sc=`, `gc=`, `General_Category=`, `Is...`), long
   General_Category names (`Letter`, `Uppercase_Letter`, `Decimal_Number`,
@@ -93,7 +93,7 @@ Implemented functionality:
   case transforms `\U`/`\L`/`\E`/`\u`/`\l` (simple Unicode by default;
   `Limits.full_case_mapping` enables full SpecialCasing), and callback
   replacement via `replaceAllWithFn`.
-- 151 tests, including recursion, branch reset, conditional assertions,
+- 152 tests, including recursion, branch reset, conditional assertions,
   grapheme clusters, binary properties, Unicode blocks, partial matching,
   control verbs, thread safety, allocation-failure, and differential coverage
   against V8 for the supported subset.
@@ -148,7 +148,7 @@ Strengths:
 | Multi-pattern `RegexSet` | yes | no (separate calls) | yes | no |
 | `\C` in DFA/Pike | fallback only | yes | no | no |
 | Newline conventions `(*CR)`/`(*CRLF)`/`(*ANY)`/`(*NUL)` | yes | yes | no | no |
-| `(?r)` caseless-restrict | no | yes | no | no |
+| `(?r)` caseless-restrict | yes | yes | no | no |
 | `(?aD)`/`(?aS)`/`(?aW)`/`(?aP)`/`(?aT)` | yes | yes | no | no |
 | `(?xx)` extended-more | yes | yes | no | no |
 | `(*NOTEMPTY)`/`(*NOTEMPTY_ATSTART)` | no | yes | no | no |

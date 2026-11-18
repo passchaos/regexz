@@ -40,7 +40,7 @@ fn scalar(value: u32) m.Error!u21 {
     if (value > 0x10ffff) return error.InvalidRegex;
     return @intCast(value);
 }
-pub fn literal(p: anytype, value: u21, fold: bool) m.Error!m.ParsedSet {
+pub fn literal(p: anytype, value: u21, fold: m.Fold) m.Error!m.ParsedSet {
     const ranges = try p.allocator.alloc(m.Range, 1);
     ranges[0] = .{ .first = value, .last = value };
     return .{ .ranges = ranges, .fold = fold };
@@ -65,7 +65,7 @@ fn hexadecimal(p: anytype) m.Error!u21 {
     }
     return scalar(value);
 }
-fn property(p: anytype, negative: bool, fold: bool) m.Error!m.ParsedSet {
+fn property(p: anytype, negative: bool, fold: m.Fold) m.Error!m.ParsedSet {
     var negate = negative;
     const start = p.cursor;
     var name: []const u8 = undefined;
@@ -327,7 +327,7 @@ fn parseGroupSpec(text: []const u8) m.Error!GroupSpec {
     return .{ .relative = if (negative) -@as(i16, @intCast(magnitude)) else @as(i16, @intCast(magnitude)) };
 }
 
-pub fn parse(p: anytype, in_class: bool, fold: bool) m.Error!Atom {
+pub fn parse(p: anytype, in_class: bool, fold: m.Fold) m.Error!Atom {
     const byte = p.peek() orelse return error.InvalidRegex;
     p.cursor += 1;
     if (std.mem.indexOfScalar(u8, "dDsSwW", byte) != null) {
@@ -387,8 +387,8 @@ pub fn parse(p: anytype, in_class: bool, fold: bool) m.Error!Atom {
         // using the active newline convention.
         return .dot;
     }
-    if (byte == 'h') return .{ .set = .{ .ranges = &classes.horizontal_space_ranges, .negate = false, .fold = false } };
-    if (byte == 'H') return .{ .set = .{ .ranges = &classes.horizontal_space_ranges, .negate = true, .fold = false } };
+    if (byte == 'h') return .{ .set = .{ .ranges = &classes.horizontal_space_ranges, .negate = false, .fold = .none } };
+    if (byte == 'H') return .{ .set = .{ .ranges = &classes.horizontal_space_ranges, .negate = true, .fold = .none } };
     if (byte == 'c') {
         // PCRE2 `\cX`: control character. `\c?` is DEL; other characters use
         // their low five bits.
@@ -414,7 +414,7 @@ pub fn parse(p: anytype, in_class: bool, fold: bool) m.Error!Atom {
         return .{ .set = try literal(p, try scalar(value), fold) };
     }
     if ((byte == 'v' or byte == 'V') and p.limits.pcre_vertical_whitespace) {
-        return .{ .set = .{ .ranges = &classes.vertical_space_ranges, .negate = byte == 'V', .fold = false } };
+        return .{ .set = .{ .ranges = &classes.vertical_space_ranges, .negate = byte == 'V', .fold = .none } };
     }
     if (!in_class) switch (byte) {
         'A' => return .{ .assertion = .start_text },

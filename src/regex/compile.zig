@@ -716,7 +716,7 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
     };
     const ucp_word: ?model.Set = if (needs_ucp_word) blk: {
         const raw = try classes.unicodeWordRanges(allocator, limits.max_ranges);
-        break :blk try classes.normalize(allocator, raw, false, false, limits.max_ranges);
+        break :blk try classes.normalize(allocator, raw, false, .none, limits.max_ranges);
     } else null;
     const required = try required_literals.analyze(allocator, parsed.root);
     return .{

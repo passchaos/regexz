@@ -610,6 +610,7 @@ pub const Parser = struct {
                     self.flags.extended = false;
                     self.flags.extended_more = false;
                     self.flags.no_auto_capture = false;
+                    self.flags.caseless_restrict = false;
                     flag_count += 1;
                 }
                 while (self.peek()) |byte| {
@@ -655,6 +656,7 @@ pub const Parser = struct {
                                 self.flags.ascii_posix = !negative;
                             }
                         },
+                        'r' => self.flags.caseless_restrict = !negative,
                         'J' => self.flags.duplicate_names = !negative,
                         'U' => self.flags.ungreedy = !negative,
                         'n' => self.flags.no_auto_capture = !negative,
@@ -698,13 +700,13 @@ pub const Parser = struct {
     fn materialize(self: *Parser, parsed: m.ParsedSet) m.Error!m.Set {
         // Parsed single-range sets are already canonical and owned by the
         // parser arena or static tables, so avoid a duplicate allocation.
-        if (parsed.ranges.len == 1 and !parsed.negate and !parsed.fold) {
+        if (parsed.ranges.len == 1 and !parsed.negate and parsed.fold == .none) {
             if (parsed.ranges[0].first > parsed.ranges[0].last) return error.InvalidRegex;
             return classes.fromRanges(parsed.ranges);
         }
         return classes.normalize(self.allocator, parsed.ranges, parsed.negate, parsed.fold, self.limits.max_ranges);
     }
-    fn element(self: *Parser, fold: bool) m.Error!m.ParsedSet {
+    fn element(self: *Parser, fold: m.Fold) m.Error!m.ParsedSet {
         if (self.take('\\')) {
             const escaped = try escape.parse(self, true, fold);
             return if (escaped == .set) escaped.set else error.InvalidRegex;
@@ -727,32 +729,36 @@ pub const Parser = struct {
             self.cursor += 1;
             const nested = try self.characterClass();
             return switch (nested.*) {
-                .set => |set| .{ .ranges = set.ranges, .negate = false, .fold = false },
+                .set => |set| .{ .ranges = set.ranges, .negate = false, .fold = .none },
                 else => error.InvalidRegex,
             };
         }
         return escape.literal(self, try self.rune(), fold);
     }
+    fn foldMode(self: *Parser) m.Fold {
+        if (!self.flags.fold) return .none;
+        return if (self.flags.caseless_restrict) .ascii else .unicode;
+    }
     /// `.` and bare `\N`: any rune except the configured line terminators.
     /// CRLF needs a composite node because an isolated CR or LF still matches.
     fn dotNode(self: *Parser) m.Error!*const m.Node {
         if (self.flags.dot_newline) {
-            return self.node(.{ .set = try classes.normalize(self.allocator, &.{.{ .first = 0, .last = 0x10ffff }}, false, false, self.limits.max_ranges) });
+            return self.node(.{ .set = try classes.normalize(self.allocator, &.{.{ .first = 0, .last = 0x10ffff }}, false, .none, self.limits.max_ranges) });
         }
         if (self.newline == .crlf) {
-            const not_cr = try self.node(.{ .set = try classes.normalize(self.allocator, &.{.{ .first = '\r', .last = '\r' }}, true, false, self.limits.max_ranges) });
+            const not_cr = try self.node(.{ .set = try classes.normalize(self.allocator, &.{.{ .first = '\r', .last = '\r' }}, true, .none, self.limits.max_ranges) });
             const cr = try self.literalNode('\r');
             const not_lf = try self.node(.{ .lookahead_set = .{
-                .set = try classes.normalize(self.allocator, &.{.{ .first = '\n', .last = '\n' }}, false, false, self.limits.max_ranges),
+                .set = try classes.normalize(self.allocator, &.{.{ .first = '\n', .last = '\n' }}, false, .none, self.limits.max_ranges),
                 .negative = true,
             } });
             const cr_only = try self.node(.{ .pair = .{ .left = cr, .right = not_lf } });
             return self.node(.{ .alternate = .{ .left = not_cr, .right = cr_only } });
         }
-        return self.node(.{ .set = try classes.normalize(self.allocator, newline.excluded(self.newline), true, false, self.limits.max_ranges) });
+        return self.node(.{ .set = try classes.normalize(self.allocator, newline.excluded(self.newline), true, .none, self.limits.max_ranges) });
     }
     fn dotSet(self: *Parser) m.Error!m.Set {
-        return classes.normalize(self.allocator, if (self.flags.dot_newline) &.{.{ .first = 0, .last = 0x10ffff }} else newline.excluded(self.newline), !self.flags.dot_newline, false, self.limits.max_ranges);
+        return classes.normalize(self.allocator, if (self.flags.dot_newline) &.{.{ .first = 0, .last = 0x10ffff }} else newline.excluded(self.newline), !self.flags.dot_newline, .none, self.limits.max_ranges);
     }
     fn lookaheadSet(self: *Parser) m.Error!m.Set {
         const byte = self.peek() orelse return error.InvalidRegex;
@@ -768,7 +774,7 @@ pub const Parser = struct {
             self.cursor += 1;
             return self.dotSet();
         }
-        return self.materialize(try self.element(true));
+        return self.materialize(try self.element(.unicode));
     }
     /// Recognize `&&`, `--`, and `~~` between class operands. A `-` that is
     /// part of a range or a literal is consumed by the element parser first,
@@ -806,16 +812,16 @@ pub const Parser = struct {
         while (self.peek()) |_| {
             if (self.flags.extended_more) self.skipClassSpace();
             if (!first and self.take(']')) {
-                const right = try classes.normalize(self.allocator, operand.items, false, self.flags.fold, self.limits.max_ranges);
+                const right = try classes.normalize(self.allocator, operand.items, false, self.foldMode(), self.limits.max_ranges);
                 const combined = if (accumulator) |left|
                     try classes.combine(self.allocator, left, pending, right, self.limits.max_ranges)
                 else
                     right;
-                return self.node(.{ .set = try classes.normalize(self.allocator, combined.ranges, negate, false, self.limits.max_ranges) });
+                return self.node(.{ .set = try classes.normalize(self.allocator, combined.ranges, negate, .none, self.limits.max_ranges) });
             }
             if (!first) {
                 if (self.takeClassOp()) |op| {
-                    const right = try classes.normalize(self.allocator, operand.items, false, self.flags.fold, self.limits.max_ranges);
+                    const right = try classes.normalize(self.allocator, operand.items, false, self.foldMode(), self.limits.max_ranges);
                     operand.clearRetainingCapacity();
                     accumulator = if (accumulator) |left|
                         try classes.combine(self.allocator, left, pending, right, self.limits.max_ranges)
@@ -829,26 +835,26 @@ pub const Parser = struct {
             // Parse the first element unfolded so `[a-z]` endpoints stay
             // single runes even when `(?i)` is active. The operand
             // normalization folds the union.
-            const start = try self.element(false);
+            const start = try self.element(.none);
             if (self.flags.extended_more) self.skipClassSpace();
             if (self.peek() == '-' and self.cursor + 1 < self.pattern.len and
                 self.pattern[self.cursor + 1] != ']' and self.pattern[self.cursor + 1] != '-')
             {
                 self.cursor += 1;
                 if (self.flags.extended_more) self.skipClassSpace();
-                const end = try self.element(false);
+                const end = try self.element(.none);
                 if (start.negate or end.negate or start.ranges.len != 1 or end.ranges.len != 1 or start.ranges[0].first != start.ranges[0].last or end.ranges[0].first != end.ranges[0].last) return error.InvalidRegex;
                 if (operand.items.len >= self.limits.max_ranges) return error.RegexLimitExceeded;
                 try operand.append(self.allocator, .{ .first = start.ranges[0].first, .last = end.ranges[0].first });
             } else {
-                const folded = try classes.normalize(self.allocator, start.ranges, start.negate, self.flags.fold, self.limits.max_ranges);
+                const folded = try classes.normalize(self.allocator, start.ranges, start.negate, self.foldMode(), self.limits.max_ranges);
                 try classes.append(&operand, self.allocator, folded, self.limits.max_ranges);
             }
         }
         return error.InvalidRegex;
     }
     fn literalNode(self: *Parser, value: u21) m.Error!*const m.Node {
-        return self.node(.{ .set = try self.materialize(try escape.literal(self, value, false)) });
+        return self.node(.{ .set = try self.materialize(try escape.literal(self, value, .none)) });
     }
     fn newlineSequence(self: *Parser) m.Error!*const m.Node {
         const crlf = try self.node(.{ .pair = .{ .left = try self.literalNode('\r'), .right = try self.literalNode('\n') } });
@@ -885,7 +891,7 @@ pub const Parser = struct {
                     self.extended = true;
                     break :blk self.node(.grapheme);
                 }
-                break :blk switch (try escape.parse(self, false, self.flags.fold)) {
+                break :blk switch (try escape.parse(self, false, self.foldMode())) {
                     .set => |parsed| self.node(.{ .set = try self.materialize(parsed) }),
                     .dot => self.dotNode(),
                     .byte => self.node(.byte),
@@ -899,11 +905,11 @@ pub const Parser = struct {
             '{' => blk: {
                 self.cursor -= 1;
                 if (try self.counted() != null) return error.InvalidRegex;
-                break :blk self.node(.{ .set = try self.materialize(try escape.literal(self, try self.rune(), self.flags.fold)) });
+                break :blk self.node(.{ .set = try self.materialize(try escape.literal(self, try self.rune(), self.foldMode())) });
             },
             else => blk: {
                 self.cursor -= 1;
-                break :blk self.node(.{ .set = try self.materialize(try escape.literal(self, try self.rune(), self.flags.fold)) });
+                break :blk self.node(.{ .set = try self.materialize(try escape.literal(self, try self.rune(), self.foldMode())) });
             },
         };
     }
