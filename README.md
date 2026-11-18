@@ -141,7 +141,7 @@ The engine picks the execution strategy automatically:
     plus `\p{ASCII}`, `\p{Cn}` (unassigned), and `\p{Assigned}`.
   - Case-insensitive matching uses simple Unicode case folding; Unicode 17
     `CaseFolding.txt` pairs missing from RE2's pinned tables are supplemented.
-    `(?r)` restricts folding to ASCII, and `(*TURKISH_CASING)` enables
+    `(?r)`/`(*CASELESS_RESTRICT)` restrict folding to ASCII, and `(*TURKISH_CASING)` enables
     Turkish/Azeri `i`/`İ` and `I`/`ı` pairing.
   - Unicode blocks: `\p{InBasic_Latin}`, `\p{InGreek}`, `\p{InEmoticons}`,
     `\p{Block=Basic_Latin}` (underscores are optional and case-insensitive).

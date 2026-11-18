@@ -373,6 +373,10 @@ pub const Parser = struct {
             self.turkish_casing = true;
             return self.node(.empty);
         }
+        if (std.mem.eql(u8, name, "CASELESS_RESTRICT")) {
+            self.flags.caseless_restrict = true;
+            return self.node(.empty);
+        }
         if (std.mem.eql(u8, name, "BSR_ANYCRLF")) {
             self.bsr_anycrlf = true;
             return self.node(.empty);

@@ -782,3 +782,13 @@ test "forward named references resolve after parsing" {
     try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, "\\k<missing>", .{}));
     try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, "(?(<missing>)a|b)", .{}));
 }
+
+test "caseless-restrict limits folding to ASCII" {
+    try expectFull("(?i)k", "\u{212A}", .{}, true);
+    try expectFull("(?r)(?i)k", "\u{212A}", .{}, false);
+    try expectFull("(*CASELESS_RESTRICT)(?i)k", "\u{212A}", .{}, false);
+    try expectFull("(?r)(?i)k", "K", .{}, true);
+    try expectFull("(*CASELESS_RESTRICT)(?i)k", "K", .{}, true);
+    try expectFull("(?i)s", "\u{017F}", .{}, true);
+    try expectFull("(*CASELESS_RESTRICT)(?i)s", "\u{017F}", .{}, false);
+}
