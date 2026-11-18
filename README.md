@@ -61,7 +61,8 @@ The engine picks the execution strategy automatically:
     match a subpattern against the first participating group in the list,
     anchored at the substring start with the subject end temporarily reset.
   - Numeric and named backreferences: `\1`..`\99`, `\k<name>`, `\k'name'`,
-    `\k{name}`, `\g{name}`, `\g{1}`, relative `\g{-1}`, `(?P=name)`.
+    `\k{name}`, `\g{name}`, `\g{1}`, relative `\g{-1}`, `(?P=name)`;
+    backreferences follow the caseless flag active at the reference site.
   - Subroutine calls by number, name, and relative offset: `(?1)`, `(?+1)`,
     `(?-1)`, `\g<1>`, `\g<-1>`, `\g<+1>`, `\g<name>`, `(?&name)`,
     `(?P>name)`.

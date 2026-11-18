@@ -540,7 +540,7 @@ pub const Parser = struct {
                     const index = self.lookupName(name) orelse return error.InvalidRegex;
                     if (!self.take(')')) return error.InvalidRegex;
                     self.extended = true;
-                    return self.node(.{ .backref = .{ .index = index } });
+                    return self.node(.{ .backref = .{ .index = index, .fold = self.foldMode() } });
                 } else if (self.take('>')) {
                     const name = try self.nameUntil(')');
                     const index = self.lookupName(name) orelse return error.InvalidRegex;
@@ -959,7 +959,7 @@ pub const Parser = struct {
                     .dot => self.dotNode(),
                     .byte => self.node(.byte),
                     .assertion => |assertion| self.node(.{ .assertion = assertion }),
-                    .backref => |index| self.node(.{ .backref = .{ .index = index } }),
+                    .backref => |index| self.node(.{ .backref = .{ .index = index, .fold = self.foldMode() } }),
                     .subroutine => |index| self.node(.{ .subroutine = .{ .group = index } }),
                     .reset_start => self.node(.reset_start),
                     .string_property => |property| self.node(.{ .string_property = property }),

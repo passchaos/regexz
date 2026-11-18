@@ -695,3 +695,17 @@ test "relative conditional group references" {
     try expectFull("(?(+1)a|b)(a)", "ba", .{}, true);
     try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, "(?(-1)a|b)", .{}));
 }
+
+test "caseless backreferences" {
+    try expectFull("(?i)(a)\\1", "aA", .{}, true);
+    try expectFull("(?i)(a)\\1", "Aa", .{}, true);
+    try expectFull("(?i)(a)\\1", "ab", .{}, false);
+    try expectFull("((?i)rah)\\s+\\1", "rah rah", .{}, true);
+    try expectFull("((?i)rah)\\s+\\1", "RAH RAH", .{}, true);
+    try expectFull("((?i)rah)\\s+\\1", "RAH rah", .{}, false);
+    try expectFull("((?i)rah)\\s+(?i:\\1)", "RAH rah", .{}, true);
+    try expectFull("(?i)(\u{00e9})\\1", "\u{00e9}\u{00c9}", .{}, true);
+    try expectFull("(?ir)(k)\\1", "kK", .{}, true);
+    try expectFull("(?ir)(k)\\1", "k\u{212a}", .{}, false);
+    try expectFull("(?i)(k)\\1", "k\u{212a}", .{}, true);
+}

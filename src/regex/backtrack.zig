@@ -381,7 +381,7 @@ pub const Workspace = struct {
         return result;
     }
 
-    fn backref(self: *Workspace, input: []const u8, group: u16, pos: usize) ?usize {
+    fn backref(self: *Workspace, input: []const u8, group: u16, fold: model.Fold, pos: usize) ?usize {
         const begin = self.slots[@as(usize, group) * 2];
         const end = self.slots[@as(usize, group) * 2 + 1];
         if (begin == unset or end == unset) {
@@ -391,15 +391,65 @@ pub const Workspace = struct {
         }
         if (end < begin) return null;
         const captured = input[begin..end];
-        const available = self.subject_end - pos;
-        if (captured.len > available) {
-            // The input ends inside the expected backreference text. It is a
-            // partial match only when the available bytes are a prefix.
-            if (std.mem.eql(u8, input[pos..], captured[0..available])) self.partial = true;
-            return null;
+        if (fold == .none) {
+            const available = self.subject_end - pos;
+            if (captured.len > available) {
+                // The input ends inside the expected backreference text. It is
+                // a partial match only when the available bytes are a prefix.
+                if (std.mem.eql(u8, input[pos..], captured[0..available])) self.partial = true;
+                return null;
+            }
+            if (!std.mem.eql(u8, input[pos..][0..captured.len], captured)) return null;
+            return pos + captured.len;
         }
-        if (!std.mem.eql(u8, input[pos..][0..captured.len], captured)) return null;
-        return pos + captured.len;
+        return self.caselessBackref(input, captured, fold, pos);
+    }
+
+    fn asciiFold(byte: u8) u8 {
+        return if (byte >= 'A' and byte <= 'Z') byte + 32 else byte;
+    }
+
+    fn foldEqual(a: u21, b: u21) bool {
+        if (a == b) return true;
+        var peer = model.unicode.foldNext(a);
+        var steps: usize = 0;
+        while (peer != a and steps < 8) : (steps += 1) {
+            if (peer == b) return true;
+            peer = model.unicode.foldNext(peer);
+        }
+        return false;
+    }
+
+    /// Caseless backreference comparison (`(?i)` active at the reference).
+    fn caselessBackref(self: *Workspace, input: []const u8, captured: []const u8, fold: model.Fold, pos: usize) ?usize {
+        if (fold == .ascii) {
+            var source: usize = 0;
+            var target = pos;
+            while (source < captured.len) {
+                if (target >= self.subject_end) {
+                    self.partial = true;
+                    return null;
+                }
+                if (asciiFold(captured[source]) != asciiFold(input[target])) return null;
+                source += 1;
+                target += 1;
+            }
+            return target;
+        }
+        var source: usize = 0;
+        var target = pos;
+        const bounded = input[0..self.subject_end];
+        while (source < captured.len) {
+            const a = runeAt(captured, source) orelse return null;
+            const b = runeAt(bounded, target) orelse {
+                self.partial = true;
+                return null;
+            };
+            if (!foldEqual(a.value, b.value)) return null;
+            source += a.len;
+            target += b.len;
+        }
+        return target;
     }
 
     fn run(
@@ -593,7 +643,7 @@ pub const Workspace = struct {
                     }
                 },
                 .backref => |ref| {
-                    if (self.backref(input, ref.group, pos)) |end| {
+                    if (self.backref(input, ref.group, ref.fold, pos)) |end| {
                         pos = end;
                         pc = ref.next;
                         continue;

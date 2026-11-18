@@ -20,6 +20,7 @@ const patterns = [_][]const u8{
     "(*ANY)\\R",
     "(*NOTEMPTY)a*",
     "(*NOTEMPTY_ATSTART)a*",
+    "(?i)(a)\\1",
     "a|ab",
     "(?:ab|cd)+",
     "(a)(b)?",

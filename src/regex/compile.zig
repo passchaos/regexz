@@ -331,7 +331,7 @@ const Builder = struct {
             },
             .backref => |ref| blk: {
                 if (ref.index > self.capture_count) return error.InvalidRegex;
-                break :blk self.emit(.{ .backref = .{ .group = ref.index, .next = continuation } });
+                break :blk self.emit(.{ .backref = .{ .group = ref.index, .fold = ref.fold, .next = continuation } });
             },
             .script_run => |run| blk: {
                 const base = 2 * (@as(usize, self.capture_count) + 1);

@@ -280,8 +280,8 @@ pub const Node = union(enum) {
     /// the captured substring and bounded by its end.
     scan_substring: struct { child: *const Node, groups: []const u16 },
     /// Numeric or named backreference. Names are resolved to an index at
-    /// parse time.
-    backref: struct { index: u16 },
+    /// parse time. `fold` reflects the caseless flag at the reference site.
+    backref: struct { index: u16, fold: Fold = .none },
     /// `(?>...)`: the first match of the child is committed.
     atomic: *const Node,
     /// `(?(cond)yes|no)`: `no` is null when the else branch is omitted.
@@ -346,7 +346,7 @@ pub const Instruction = union(enum) {
     /// `sub_accept`.
     lookaround: struct { child: usize, negative: bool, behind: bool, next: usize },
     /// Backreference to a captured group.
-    backref: struct { group: u16, next: usize },
+    backref: struct { group: u16, fold: Fold = .none, next: usize },
     /// Atomic sub-expression: commit to the first match of `child`.
     atomic: struct { child: usize, next: usize },
     /// Zero-width conditional branch on whether `group` participated.

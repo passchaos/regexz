@@ -57,6 +57,7 @@ const Tag = enum(u8) {
     lookbehind_accept,
     script_run_check,
     scan_substring,
+    backref_fold,
 };
 
 const Writer = struct {
@@ -235,9 +236,16 @@ fn writeInstruction(writer: *Writer, instruction: model.Instruction) !void {
             try writer.u32v(@intCast(look.next));
         },
         .backref => |ref| {
-            try writer.byte(@intFromEnum(Tag.backref));
-            try writer.u16v(ref.group);
-            try writer.u32v(@intCast(ref.next));
+            if (ref.fold == .none) {
+                try writer.byte(@intFromEnum(Tag.backref));
+                try writer.u16v(ref.group);
+                try writer.u32v(@intCast(ref.next));
+            } else {
+                try writer.byte(@intFromEnum(Tag.backref_fold));
+                try writer.u16v(ref.group);
+                try writer.byte(@intFromEnum(ref.fold));
+                try writer.u32v(@intCast(ref.next));
+            }
         },
         .atomic => |atom| {
             try writer.byte(@intFromEnum(Tag.atomic));
@@ -378,7 +386,7 @@ fn writeInstruction(writer: *Writer, instruction: model.Instruction) !void {
 
 fn readInstruction(reader: *Reader, allocator: std.mem.Allocator) !model.Instruction {
     const tag_value = try reader.byte();
-    if (tag_value > @intFromEnum(Tag.scan_substring)) return error.InvalidRegex;
+    if (tag_value > @intFromEnum(Tag.backref_fold)) return error.InvalidRegex;
     const tag: Tag = @enumFromInt(tag_value);
     return switch (tag) {
         .accept => .accept,
@@ -411,6 +419,16 @@ fn readInstruction(reader: *Reader, allocator: std.mem.Allocator) !model.Instruc
             .next = @intCast(try reader.u32v()),
         } },
         .backref => .{ .backref = .{ .group = try reader.u16v(), .next = @intCast(try reader.u32v()) } },
+        .backref_fold => blk: {
+            const group = try reader.u16v();
+            const fold_value = try reader.byte();
+            if (fold_value > @intFromEnum(model.Fold.ascii)) return error.InvalidRegex;
+            break :blk .{ .backref = .{
+                .group = group,
+                .fold = @enumFromInt(fold_value),
+                .next = @intCast(try reader.u32v()),
+            } };
+        },
         .atomic => .{ .atomic = .{ .child = @intCast(try reader.u32v()), .next = @intCast(try reader.u32v()) } },
         .conditional => .{ .conditional = .{ .group = try reader.u16v(), .yes = @intCast(try reader.u32v()), .no = @intCast(try reader.u32v()) } },
         .conditional_assert => .{ .conditional_assert = .{
