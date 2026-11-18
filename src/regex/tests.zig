@@ -436,3 +436,24 @@ test "ASCII digit options are scoped to Perl or POSIX digit" {
     defer posix_perl.deinit();
     try std.testing.expect(try posix_perl.matches(gpa, "\u{0663}"));
 }
+
+test "Bidi_Class properties" {
+    const Case = struct { pattern: []const u8, input: []const u8, matches: bool };
+    for ([_]Case{
+        .{ .pattern = "\\p{Bidi_Class:AL}", .input = "\u{0627}", .matches = true },
+        .{ .pattern = "\\p{Bidi_Class:AL}", .input = "A", .matches = false },
+        .{ .pattern = "\\p{BC:R}", .input = "\u{05d0}", .matches = true },
+        .{ .pattern = "\\p{bc:EN}", .input = "0", .matches = true },
+        .{ .pattern = "\\p{bc:EN}", .input = "A", .matches = false },
+        .{ .pattern = "\\P{Bidi_Class:L}", .input = "\u{0627}", .matches = true },
+        .{ .pattern = "\\P{Bidi_Class:L}", .input = "A", .matches = false },
+        .{ .pattern = "\\p{Bidi_Class:WS}", .input = " ", .matches = true },
+        .{ .pattern = "\\p{Bi-di class = Al}", .input = "\u{0627}", .matches = true },
+        .{ .pattern = "\\p{BC:NSM}", .input = "\u{0300}", .matches = true },
+    }) |case| {
+        var value = try regex.Regex.init(gpa, case.pattern, .{});
+        defer value.deinit();
+        try std.testing.expectEqual(case.matches, try value.matches(gpa, case.input));
+    }
+    try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, "\\p{BC:XX}", .{}));
+}

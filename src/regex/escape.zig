@@ -86,6 +86,7 @@ fn property(p: anytype, negative: bool, fold: m.Fold) m.Error!m.ParsedSet {
         negate = !negate;
         name = name[1..];
     }
+    name = std.mem.trim(u8, name, " \t\n\r\x0b\x0c");
     if (std.mem.eql(u8, name, "Any")) return .{ .ranges = &any_range, .negate = negate, .fold = fold };
     if (nameEqual(name, "ASCII")) return .{ .ranges = &ascii_range, .negate = negate, .fold = fold };
     if (nameEqual(name, "Assigned")) {
@@ -108,12 +109,19 @@ fn property(p: anytype, negative: bool, fold: m.Fold) m.Error!m.ParsedSet {
     const Kind = enum { any, gc, script };
     var kind: Kind = .any;
     if (std.mem.indexOfAny(u8, name, "=:")) |separator| {
-        const prefix = name[0..separator];
-        const value = name[separator + 1 ..];
+        const prefix = std.mem.trim(u8, name[0..separator], " \t\n\r\x0b\x0c");
+        const value = std.mem.trim(u8, name[separator + 1 ..], " \t\n\r\x0b\x0c");
         if (std.ascii.eqlIgnoreCase(prefix, "block")) {
             const block = m.unicode.lookupBlock(value) orelse return error.InvalidRegex;
             const ranges = try p.allocator.alloc(m.Range, block.count);
             for (ranges, 0..) |*range, index| range.* = block.range(index);
+            return .{ .ranges = ranges, .negate = negate, .fold = fold };
+        }
+        if (nameEqual(prefix, "bidi_class") or std.ascii.eqlIgnoreCase(prefix, "bc")) {
+            const group = m.unicode.lookupBidiClass(value) orelse return error.InvalidRegex;
+            if (group.count > p.limits.max_ranges) return error.RegexLimitExceeded;
+            const ranges = try p.allocator.alloc(m.Range, group.count);
+            for (ranges, 0..) |*range, index| range.* = group.range(index);
             return .{ .ranges = ranges, .negate = negate, .fold = fold };
         }
         if (nameEqual(prefix, "script_extensions") or std.ascii.eqlIgnoreCase(prefix, "scx")) {

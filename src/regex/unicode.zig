@@ -17,6 +17,8 @@ const script_extensions = @import("unicode/script_extensions.zig").entries;
 const script_extension_data = @embedFile("unicode/script_extensions.bin");
 const script_run = @import("unicode/script_run.zig");
 const script_run_data = @embedFile("unicode/script_run.bin");
+const bidi = @import("unicode/bidi.zig").entries;
+const bidi_data = @embedFile("unicode/bidi.bin");
 pub const Alias = struct { name: []const u8, canonical: []const u8 };
 const aliases = @import("unicode/aliases.zig");
 pub const grapheme = @import("unicode/grapheme.zig");
@@ -184,6 +186,22 @@ pub fn scriptSetFor(rune: u21) ?ScriptSet {
                 .mask = script_run.set_masks[id],
             };
         }
+    }
+    return null;
+}
+
+/// A `Bidi_Class` value such as `L`, `AL`, or `NSM`.
+pub const BidiClass = struct {
+    offset: usize,
+    count: usize,
+    pub fn range(self: BidiClass, index: usize) Range {
+        const bytes = bidi_data[self.offset + index * 8 ..];
+        return .{ .first = @intCast(std.mem.readInt(u32, bytes[0..4], .little)), .last = @intCast(std.mem.readInt(u32, bytes[4..8], .little)) };
+    }
+};
+pub fn lookupBidiClass(name: []const u8) ?BidiClass {
+    for (bidi) |entry| {
+        if (std.ascii.eqlIgnoreCase(name, entry.name)) return .{ .offset = entry.offset, .count = entry.count };
     }
     return null;
 }

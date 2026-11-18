@@ -126,6 +126,8 @@ The engine picks the execution strategy automatically:
     `\p{Script=Greek}`, `\p{sc=Greek}`, `\p{gc=Nd}`, `\p{IsGreek}`,
     and `Script_Extensions` via `\p{scx=Hiragana}` or ISO codes such as
     `\p{scx=Hira}`.
+  - `Bidi_Class` properties `\p{Bidi_Class:AL}`/`\p{BC:R}` with PCRE2's
+    23 short class names.
   - 63 binary Unicode properties such as `\p{Alphabetic}`,
     `\p{White_Space}`, `\p{Emoji}`, `\p{Extended_Pictographic}`,
     `\p{Lowercase}`, `\p{Hex_Digit}`, `\p{ID_Start}`, plus PCRE2 special
