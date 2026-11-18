@@ -176,7 +176,7 @@ Measured on an Apple Silicon macOS host. "Before" is the initial commit state;
 | Qwen tokenizer search, 22 KiB | ~842 µs | ~68 µs (353 MiB/s) | ~56 µs* (427 MiB/s) | ~195 µs |
 | CJK tokenizer search, 191 KiB | — | ~284 µs (659 MiB/s) | ~216 µs* (864 MiB/s) | — |
 | Han class scan, 191 KiB | — | ~196–270 µs (690–810 MiB/s) | ~169 µs (1104 MiB/s) | — |
-| Byte escape scan `\C+`, 23 KiB | — | ~95 µs (252 MiB/s) | not supported | — |
+| Byte escape scan `\C+`, 23 KiB | — | ~8 ns/pass (one full-span match) | not supported | — |
 | Shared-prefix alternation no-match, 23 KiB | — | ~1.55 µs (15.5 GiB/s) | ~2.1 µs (11.4 GiB/s) | — |
 | `find` selective pattern (`\p{N}`) | — | ~36 ns/piece | — | — |
 | `find` multi-literal after a 4 KiB prefix | ~2.0 µs | ~0.22 µs | — | — |
@@ -204,9 +204,10 @@ decoder, adding a shared-prefix multi-literal prefilter, and determinizing
 lookahead-free programs over UTF-8 bytes, full-pattern
 Qwen search is ~68–74 µs (~330–353 MiB/s), CJK tokenizer search is ~284–310 µs
 (~630–660 MiB/s), Han class scans are ~196–270 µs (~690–810 MiB/s, down from
-~635 µs), and shared-prefix no-match scans are ~1.55 µs (15.5 GiB/s). The bench gate now covers 26 cases;
+~635 µs), greedy `\C+` scans collapse to a single full-span match (~8 ns), and
+shared-prefix no-match scans are ~1.55 µs (15.5 GiB/s). The bench gate now covers 26 cases;
 `RegexSet` ~97 µs, `replaceAll` ~85 µs, compile ~1.5 µs with `smp_allocator`,
-and all 176 tests plus the V8/Rust/extended differential fuzzers pass. Treat absolute numbers as host-noise-sensitive;
+and all 178 tests plus the V8/Rust/extended differential fuzzers pass. Treat absolute numbers as host-noise-sensitive;
 the bench gate compares ratios against `tools/bench/baseline.json`.
 
 Where the remaining time goes:
@@ -277,8 +278,9 @@ summaries for alternation skipping and search prefilters, literal prefix and
 first-byte prefilter for small selective sets, pointer payload dispatch in the
 VMs, the capture-aware Pike fallback, no-backtrack marks on stars whose
 continuation always accepts, the priority-annotated search DFA for
-capture-free alternation/optional/simple-loop/set-lookahead programs, and the
-UTF-8 byte determinization for lookahead-free non-ASCII programs. A multi-way
+capture-free alternation/optional/simple-loop/set-lookahead programs, the
+UTF-8 byte determinization for lookahead-free non-ASCII programs, and the
+single-record greedy `\C` loop scan. A multi-way
 alternation dispatch table was implemented and benchmarked but is disabled
 (`alternation_dispatch = false`): the split + first-byte-skip chain is faster
 on the tokenizer and xDS workloads.

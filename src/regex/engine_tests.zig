@@ -377,6 +377,24 @@ test "byte-level DFA searches non-ASCII sets" {
     try expectFindSpans(allocator, "\\p{Han}+", "a\xE4\xB8", &.{}, .{});
 }
 
+test "byte loops scan without per-byte choices" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    try expectFindSpans(allocator, "\\C+", "abc", &.{.{ 0, 3 }}, .{});
+    try expectFindSpans(allocator, "\\C+", "\xFF\xFE\x80", &.{.{ 0, 3 }}, .{});
+    try expectFindSpans(allocator, "a\\C+", "abc", &.{.{ 0, 3 }}, .{});
+    // Greedy scan backtracks one byte at a time to the last possible exit.
+    try expectFindSpans(allocator, "\\C+b", "aab", &.{.{ 0, 3 }}, .{});
+    try expectFindSpans(allocator, "\\C+b", "aab b", &.{.{ 0, 5 }}, .{});
+    // Capture programs take the trail VM path.
+    try expectFindSpans(allocator, "(\\C+)b", "aab", &.{.{ 0, 3 }}, .{});
+    // Lazy loops keep the generic per-byte backtracking.
+    try expectFindSpans(allocator, "\\C+?b", "aab", &.{.{ 0, 3 }}, .{});
+    try expectFindSpans(allocator, "\\C*", "", &.{.{ 0, 0 }}, .{});
+}
+
 test "ungreedy flag swaps quantifier defaults" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

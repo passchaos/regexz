@@ -20,7 +20,7 @@ const unset = std.math.maxInt(usize);
 const max_tracked_captures: usize = 9;
 pub const Error = model.Error;
 
-const Choice = struct { pc: usize, pos: usize, trail_len: usize, limit: usize = unset };
+const Choice = struct { pc: usize, pos: usize, trail_len: usize, limit: usize = unset, byte_loop: bool = false };
 const Trail = struct { slot: u16, old: usize };
 
 pub const Match = struct {
@@ -528,6 +528,29 @@ pub const Workspace = struct {
                     continue;
                 },
                 .split => |*split| {
+                    // A greedy `\C+` loop is a split whose left branch is the
+                    // same single `.byte` looping back. Every byte matches, so
+                    // consume the whole tail with one backtrack record.
+                    if (!split.alternation) {
+                        const body = self.program.instructions[split.left];
+                        if (body == .byte and body.byte == pc) {
+                            const scan_start = pos;
+                            if (pos < input.len) {
+                                if (count == choices.len) return self.run(input, start);
+                                choices[count] = .{
+                                    .pc = split.right,
+                                    .pos = input.len,
+                                    .trail_len = 0,
+                                    .limit = scan_start,
+                                    .byte_loop = true,
+                                };
+                                count += 1;
+                                pos = input.len;
+                            }
+                            pc = split.right;
+                            continue;
+                        }
+                    }
                     if (split.skip and pos < input.len and !firstAllows(split.first, input[pos])) {
                         pc = split.right;
                         continue;
@@ -555,6 +578,25 @@ pub const Workspace = struct {
             if (count == 0) return null;
             count -= 1;
             const choice = choices[count];
+            if (choice.byte_loop) {
+                // Retry the loop exit one byte earlier.
+                if (choice.pos > choice.limit) {
+                    const prev = choice.pos - 1;
+                    if (count == choices.len) return self.run(input, start);
+                    choices[count] = .{
+                        .pc = choice.pc,
+                        .pos = prev,
+                        .trail_len = 0,
+                        .limit = choice.limit,
+                        .byte_loop = true,
+                    };
+                    count += 1;
+                    pc = choice.pc;
+                    pos = prev;
+                    continue;
+                }
+                continue;
+            }
             if (choice.limit != unset) {
                 // Retry the loop continuation one rune earlier.
                 const prev = previousRuneStart(input, choice.pos);
@@ -717,6 +759,28 @@ pub const Workspace = struct {
                     continue;
                 },
                 .split => |*split| {
+                    // Greedy `\C+` loop: consume the tail with one choice.
+                    if (!split.alternation) {
+                        const body = self.program.instructions[split.left];
+                        if (body == .byte and body.byte == pc) {
+                            const scan_start = pos;
+                            if (pos < input.len) {
+                                if (self.choices.items.len >= self.limits.max_backtrack_choices) {
+                                    return error.RegexLimitExceeded;
+                                }
+                                try self.choices.append(self.allocator, .{
+                                    .pc = split.right,
+                                    .pos = input.len,
+                                    .trail_len = self.trail.items.len,
+                                    .limit = scan_start,
+                                    .byte_loop = true,
+                                });
+                                pos = input.len;
+                            }
+                            pc = split.right;
+                            continue;
+                        }
+                    }
                     if (split.skip and pos < input.len and !firstAllows(split.first, input[pos])) {
                         pc = split.right;
                         continue;
@@ -758,6 +822,25 @@ pub const Workspace = struct {
             while (self.trail.items.len > choice.trail_len) {
                 const entry = self.trail.pop().?;
                 self.slots[entry.slot] = entry.old;
+            }
+            if (choice.byte_loop) {
+                if (choice.pos > choice.limit) {
+                    const prev = choice.pos - 1;
+                    if (self.choices.items.len >= self.limits.max_backtrack_choices) {
+                        return error.RegexLimitExceeded;
+                    }
+                    try self.choices.append(self.allocator, .{
+                        .pc = choice.pc,
+                        .pos = prev,
+                        .trail_len = choice.trail_len,
+                        .limit = choice.limit,
+                        .byte_loop = true,
+                    });
+                    pc = choice.pc;
+                    pos = prev;
+                    continue;
+                }
+                continue;
             }
             if (choice.limit != unset) {
                 const prev = previousRuneStart(input, choice.pos);
