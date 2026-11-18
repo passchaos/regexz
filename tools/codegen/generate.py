@@ -535,20 +535,13 @@ def main():
  groups_source=files['re2/unicode_groups.cc'].decode();fold_source=files['re2/unicode_casefold.cc'].decode()
  ranges={name:[tuple(map(int,pair)) for pair in re.findall(r'\{\s*(\d+),\s*(\d+)\s*\}',data)] for name,data in re.findall(r'static const URange(?:16|32) (\w+)\[\] = \{(.*?)\};',groups_source,re.S)}
  groups=re.findall(r'\{ "([^"]+)", \+1, (\w+), (\d+), (\w+), (\d+) \}',groups_source)
- blob=bytearray();entries=[]
- for name,low,nlow,high,nhigh in groups:
-  values=ranges.get(low,[])+ranges.get(high,[]);assert len(values)==int(nlow)+int(nhigh)
-  assert all(a<=b for a,b in values)
-  entries.append(f'    .{{ .name = "{name}", .offset = {len(blob)}, .count = {len(values)} }},')
-  blob.extend(b''.join(struct.pack('<II',a,b) for a,b in values))
- assert [x[0] for x in groups]==sorted(x[0] for x in groups)
  fold_data=re.search(r'const CaseFold unicode_casefold\[\] = \{(.*?)\};',fold_source,re.S)[1]
  fold=bytearray()
  for a,b,delta in re.findall(r'\{\s*(\d+),\s*(\d+),\s*([^ }]+)\s*\}',fold_data):
   value={'EvenOdd':1,'OddEven':-1}.get(delta)
   if value is None:value=int(delta)
   fold.extend(struct.pack('<IIi',int(a),int(b),value))
- unicode_names=['auxiliary/GraphemeBreakProperty.txt','emoji/emoji-data.txt','DerivedCoreProperties.txt','PropList.txt','Blocks.txt','ScriptExtensions.txt','PropertyValueAliases.txt','UnicodeData.txt','emoji/emoji-test.txt','emoji/emoji-sequences.txt','emoji/emoji-zwj-sequences.txt','auxiliary/WordBreakProperty.txt','auxiliary/WordBreakTest.txt','auxiliary/SentenceBreakProperty.txt','auxiliary/SentenceBreakTest.txt','SpecialCasing.txt']
+ unicode_names=['auxiliary/GraphemeBreakProperty.txt','emoji/emoji-data.txt','DerivedCoreProperties.txt','PropList.txt','Blocks.txt','ScriptExtensions.txt','PropertyValueAliases.txt','UnicodeData.txt','emoji/emoji-test.txt','emoji/emoji-sequences.txt','emoji/emoji-zwj-sequences.txt','auxiliary/WordBreakProperty.txt','auxiliary/WordBreakTest.txt','auxiliary/SentenceBreakProperty.txt','auxiliary/SentenceBreakTest.txt','SpecialCasing.txt','Scripts.txt']
  unicode_urls={name:f'https://www.unicode.org/Public/{UNICODE_VERSION}/ucd/{name}' for name in unicode_names}
  unicode_urls['emoji/emoji-test.txt']=f'https://www.unicode.org/Public/emoji/{EMOJI_VERSION}/emoji-test.txt'
  unicode_urls['emoji/emoji-sequences.txt']=f'https://www.unicode.org/Public/emoji/{EMOJI_VERSION}/emoji-sequences.txt'
@@ -560,6 +553,27 @@ def main():
  group_ranges={}
  for name,low,nlow,high,nhigh in groups:
   group_ranges[name]=ranges.get(low,[])+ranges.get(high,[])
+ # Unicode 16 scripts that RE2's pinned tables lack, and current ranges for
+ # existing scripts, come from UCD Scripts.txt.
+ ucd_scripts={}
+ for line in unicode_files['Scripts.txt'].decode().splitlines():
+  line=line.split('#',1)[0].strip()
+  if not line: continue
+  parts=[p.strip() for p in line.split(';')]
+  if len(parts)<2: continue
+  rng=parts[0]
+  if '..' in rng:
+   first,last=rng.split('..')
+  else:
+   first=last=rng
+  ucd_scripts.setdefault(parts[1],[]).append((int(first,16),int(last,16)))
+ for name,values in ucd_scripts.items():
+  group_ranges[name]=merge_ranges(values)
+ blob=bytearray();entries=[]
+ for name in sorted(group_ranges):
+  values=group_ranges[name]
+  entries.append(f'    .{{ .name = "{name}", .offset = {len(blob)}, .count = {len(values)} }},')
+  blob.extend(b''.join(struct.pack('<II',a,b) for a,b in values))
  script_files,script_counts=unicode_script_extensions(unicode_files,group_ranges)
  alias_files,alias_counts=unicode_property_aliases(unicode_files)
  case_files,case_counts=unicode_case_mappings(unicode_files)
@@ -587,10 +601,10 @@ def main():
  **sb_test_files,
  **name_files,
  **special_files,
- 'source.json':(json.dumps({'revision':REVISION,'source_sha256':{name:hashlib.sha256(data).hexdigest() for name,data in files.items()},'unicode_version':UNICODE_VERSION,'unicode_source_sha256':{name:hashlib.sha256(data).hexdigest() for name,data in unicode_files.items()},'unicode_groups':len(groups),'fold_ranges':len(fold)//12,**grapheme_counts,**property_counts,**block_counts,**script_counts,**alias_counts,**case_counts,**emoji_counts,**wb_counts,**wb_test_counts,**sb_counts,**sb_test_counts,**name_counts,**special_counts},indent=2)+'\n').encode()}
+ 'source.json':(json.dumps({'revision':REVISION,'source_sha256':{name:hashlib.sha256(data).hexdigest() for name,data in files.items()},'unicode_version':UNICODE_VERSION,'unicode_source_sha256':{name:hashlib.sha256(data).hexdigest() for name,data in unicode_files.items()},'unicode_groups':len(group_ranges),'fold_ranges':len(fold)//12,**grapheme_counts,**property_counts,**block_counts,**script_counts,**alias_counts,**case_counts,**emoji_counts,**wb_counts,**wb_test_counts,**sb_counts,**sb_test_counts,**name_counts,**special_counts},indent=2)+'\n').encode()}
  for name,data in generated.items():
   path=OUTPUT/name
   if args.verify:assert path.read_bytes()==data,name
   else:path.write_bytes(data)
- print(json.dumps({'groups':len(groups),'fold_ranges':len(fold)//12,**grapheme_counts,**property_counts,**block_counts,**script_counts,**alias_counts,**case_counts,**emoji_counts,**wb_counts,**wb_test_counts,**sb_counts,**sb_test_counts,**name_counts,**special_counts,'verified':args.verify}))
+ print(json.dumps({'groups':len(group_ranges),'fold_ranges':len(fold)//12,**grapheme_counts,**property_counts,**block_counts,**script_counts,**alias_counts,**case_counts,**emoji_counts,**wb_counts,**wb_test_counts,**sb_counts,**sb_test_counts,**name_counts,**special_counts,'verified':args.verify}))
 if __name__=='__main__':main()

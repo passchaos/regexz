@@ -49,7 +49,8 @@ Implemented functionality:
   General_Category names (`Letter`, `Uppercase_Letter`, `Decimal_Number`,
   `Cased_Letter`), ISO 15924 script codes (`Grek`), case/separator-insensitive
   names, `Script_Extensions`
-  (`scx=`/`Script_Extensions=`, long names or ISO 15924 codes), 63 binary Unicode
+  (`scx=`/`Script_Extensions=`, long names or ISO 15924 codes, including the
+  Unicode 16 scripts missing from RE2's pinned tables), 63 binary Unicode
   properties (`Alphabetic`, `White_Space`, `Emoji`, `Extended_Pictographic`,
   `Lowercase`, `Hex_Digit`, `ID_Start`, ...), Unicode blocks (`In...`/
   `Block=...`), PCRE2 `Xan`/`Xwd`/`Xps`/`Xsp`/`Xuc`, and the Unicode string
@@ -81,7 +82,7 @@ Implemented functionality:
   case transforms `\U`/`\L`/`\E`/`\u`/`\l` (simple Unicode by default;
   `Limits.full_case_mapping` enables full SpecialCasing), and callback
   replacement via `replaceAllWithFn`.
-- 128 tests, including recursion, branch reset, conditional assertions,
+- 129 tests, including recursion, branch reset, conditional assertions,
   grapheme clusters, binary properties, Unicode blocks, partial matching,
   control verbs, thread safety, allocation-failure, and differential coverage
   against V8 for the supported subset.

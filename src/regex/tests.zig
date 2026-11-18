@@ -188,3 +188,22 @@ test "control and octal escapes" {
         try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, pattern, .{}));
     }
 }
+
+test "Unicode 16 scripts missing from RE2 tables" {
+    const Case = struct { pattern: []const u8, input: []const u8, matches: bool };
+    for ([_]Case{
+        .{ .pattern = "\\p{Script=Garay}", .input = "\u{10d40}", .matches = true },
+        .{ .pattern = "\\p{sc=Garay}", .input = "\u{10d40}", .matches = true },
+        .{ .pattern = "\\p{sc=Gara}", .input = "\u{10d40}", .matches = true },
+        .{ .pattern = "\\p{Garay}", .input = "\u{10d40}", .matches = true },
+        .{ .pattern = "\\p{IsGaray}", .input = "\u{10d40}", .matches = true },
+        .{ .pattern = "\\p{scx=Garay}", .input = "\u{10d40}", .matches = true },
+        .{ .pattern = "\\p{Script=Garay}", .input = "a", .matches = false },
+        .{ .pattern = "\\p{Script=Gurung_Khema}", .input = "\u{16100}", .matches = true },
+        .{ .pattern = "\\p{Script=Kirat_Rai}", .input = "\u{16d40}", .matches = true },
+    }) |case| {
+        var value = try regex.Regex.init(gpa, case.pattern, .{});
+        defer value.deinit();
+        try std.testing.expectEqual(case.matches, try value.matches(gpa, case.input));
+    }
+}

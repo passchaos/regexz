@@ -110,7 +110,17 @@ fn property(p: anytype, negative: bool, fold: bool) m.Error!m.ParsedSet {
             return .{ .ranges = ranges, .negate = negate, .fold = fold };
         }
         if (nameEqual(prefix, "script_extensions") or std.ascii.eqlIgnoreCase(prefix, "scx")) {
-            const group = m.unicode.lookupScriptExtension(value) orelse return error.InvalidRegex;
+            if (m.unicode.lookupScriptExtension(value)) |group| {
+                if (group.count > p.limits.max_ranges) return error.RegexLimitExceeded;
+                const ranges = try p.allocator.alloc(m.Range, group.count);
+                for (ranges, 0..) |*range, index| range.* = group.range(index);
+                return .{ .ranges = ranges, .negate = negate, .fold = fold };
+            }
+            // Scripts without explicit extensions fall back to their own
+            // Scripts.txt ranges (this also covers new Unicode 16 scripts
+            // missing from RE2's pinned tables).
+            const canonical = m.unicode.lookupScriptAlias(value) orelse value;
+            const group = m.unicode.lookup(canonical) orelse return error.InvalidRegex;
             if (group.count > p.limits.max_ranges) return error.RegexLimitExceeded;
             const ranges = try p.allocator.alloc(m.Range, group.count);
             for (ranges, 0..) |*range, index| range.* = group.range(index);
