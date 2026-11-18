@@ -9,6 +9,7 @@ const patterns = [_][]const u8{
     "[a-z]+",
     "\\p{L}+",
     "\\p{RGI_Emoji}",
+    "\\b{gcb}a",
     "a|ab",
     "(?:ab|cd)+",
     "(a)(b)?",

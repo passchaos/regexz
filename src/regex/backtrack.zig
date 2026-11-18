@@ -46,6 +46,8 @@ const Position = struct {
     next: ?u21,
     previous_rune: ?u21,
     next_rune: ?u21,
+    input: []const u8,
+    offset: usize,
     fn asciiWord(rune: ?u21) bool {
         const value = rune orelse return false;
         return value == '_' or (value >= 'a' and value <= 'z') or (value >= 'A' and value <= 'Z') or (value >= '0' and value <= '9');
@@ -67,6 +69,8 @@ const Position = struct {
             .no_word_boundary => asciiWord(self.previous_rune) == asciiWord(self.next_rune),
             .word_boundary_unicode => unicodeWord(ucp_word, self.previous_rune) != unicodeWord(ucp_word, self.next_rune),
             .no_word_boundary_unicode => unicodeWord(ucp_word, self.previous_rune) == unicodeWord(ucp_word, self.next_rune),
+            .grapheme_boundary => grapheme.isBoundary(self.input, self.offset),
+            .no_grapheme_boundary => !grapheme.isBoundary(self.input, self.offset),
         };
     }
 };
@@ -102,6 +106,8 @@ fn position(input: []const u8, offset: usize, attempt_start: usize) Position {
         .previous = if (offset == 0) null else input[offset - 1],
         .next = if (offset == input.len) null else input[offset],
         .previous_rune = runeBefore(input, offset),
+        .input = input,
+        .offset = offset,
         .next_rune = if (runeAt(input, offset)) |rune| rune.value else null,
     };
 }

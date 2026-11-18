@@ -27,6 +27,9 @@ const Position = struct {
             .end_line => self.end or self.next == '\n',
             .word_boundary, .word_boundary_unicode => boundary,
             .no_word_boundary, .no_word_boundary_unicode => !boundary,
+            // Grapheme boundary assertions are extended-only and evaluated by
+            // the backtracking VM.
+            .grapheme_boundary, .no_grapheme_boundary => false,
         };
     }
 };

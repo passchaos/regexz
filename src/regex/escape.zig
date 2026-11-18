@@ -168,6 +168,21 @@ fn property(p: anytype, negative: bool, fold: bool) m.Error!m.ParsedSet {
     return .{ .ranges = ranges, .negate = negate, .fold = fold };
 }
 
+fn graphemeBoundarySuffix(p: anytype) m.Error!?m.Assertion {
+    if (p.peek() != '{') return null;
+    const start = p.cursor + 1;
+    var end = start;
+    while (end < p.pattern.len and p.pattern[end] != '}') end += 1;
+    if (end == p.pattern.len) return null;
+    const name = p.pattern[start..end];
+    if (nameEqual(name, "gcb") or nameEqual(name, "g")) {
+        p.cursor = end + 1;
+        return .grapheme_boundary;
+    }
+    if (nameEqual(name, "wb") or nameEqual(name, "sb")) return error.UnsupportedRegexFeature;
+    return null;
+}
+
 fn stringPropertyName(name: []const u8) ?m.StringProperty {
     if (nameEqual(name, "RGI_Emoji")) return .rgi_emoji;
     if (nameEqual(name, "Basic_Emoji")) return .basic_emoji;
@@ -362,6 +377,10 @@ pub fn parse(p: anytype, in_class: bool, fold: bool) m.Error!Atom {
             return .{ .assertion = .start_match };
         },
         'b' => {
+            if (try graphemeBoundarySuffix(p)) |kind| {
+                p.extended = true;
+                return .{ .assertion = kind };
+            }
             if (p.limits.unicode_perl_classes) {
                 p.extended = true;
                 return .{ .assertion = .word_boundary_unicode };
@@ -369,6 +388,10 @@ pub fn parse(p: anytype, in_class: bool, fold: bool) m.Error!Atom {
             return .{ .assertion = .word_boundary };
         },
         'B' => {
+            if (try graphemeBoundarySuffix(p)) |kind| {
+                p.extended = true;
+                return .{ .assertion = if (kind == .grapheme_boundary) .no_grapheme_boundary else .grapheme_boundary };
+            }
             if (p.limits.unicode_perl_classes) {
                 p.extended = true;
                 return .{ .assertion = .no_word_boundary_unicode };

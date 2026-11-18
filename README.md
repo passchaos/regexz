@@ -81,6 +81,8 @@ The engine picks the execution strategy automatically:
   - `Limits.auto_callout` inserts callout 255 before consuming atoms
     (PCRE2-style auto-callouts; the compiler-level insertion is approximate
     for quantified atoms).
+  - UAX #29 grapheme cluster boundary assertions `\b{gcb}` / `\B{gcb}`
+    (alias `\b{g}`), evaluated by the extended engine.
   - `\R` (atomic newline sequence), `\N` (not newline), `\N{U+hhhh}`
     (explicit code point), `\h`/`\H` (horizontal whitespace), `\cX`
     (control characters), and `\o{...}` (octal code points).

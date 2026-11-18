@@ -192,6 +192,9 @@ pub const Assertion = enum {
     /// Unicode word boundary (requires `Limits.unicode_perl_classes`).
     word_boundary_unicode,
     no_word_boundary_unicode,
+    /// UAX #29 extended grapheme cluster boundary (`\b{gcb}`).
+    grapheme_boundary,
+    no_grapheme_boundary,
 };
 /// Condition for `(?(cond)yes|no)`.
 pub const Condition = union(enum) {

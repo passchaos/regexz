@@ -55,6 +55,21 @@ fn shouldJoin(
     return false;
 }
 
+/// Whether `offset` is an extended grapheme cluster boundary. The scan starts
+/// at the beginning of the input, which is exact but O(offset); assertions are
+/// rare enough that this stays out of the hot matching paths.
+pub fn isBoundary(input: []const u8, offset: usize) bool {
+    if (offset == 0 or offset >= input.len) return true;
+    var pos: usize = 0;
+    while (pos < offset) {
+        const next_pos = next(input, pos);
+        if (next_pos > offset) return false;
+        if (next_pos == offset) return true;
+        pos = next_pos;
+    }
+    return pos == offset;
+}
+
 /// Returns the byte offset just past the extended grapheme cluster that
 /// starts at `offset`. Invalid UTF-8 is treated as a one-byte cluster.
 pub fn next(input: []const u8, offset: usize) usize {
