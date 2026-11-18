@@ -90,6 +90,10 @@ pub const Scanner = struct {
     /// A `set+` program can stream with a direct run scan instead of the NFA.
     simple_set: ?model.Set = null,
     simple_pending_start: ?usize = null,
+    /// A `set*` program scans runs and reports the empty matches between
+    /// them; `star_start` holds the start of the run being accumulated.
+    simple_star: ?model.Set = null,
+    star_start: ?usize = null,
     /// A `set+ literal set+` program (with the literal outside the first set)
     /// scans deterministically.
     simple_chain: ?SimpleChain = null,
@@ -154,6 +158,7 @@ pub const Scanner = struct {
             .best_slots = best_slots,
             .capture_free = program.capture_count == 0,
             .simple_set = if (limits.longest) null else detectSimpleRun(program),
+            .simple_star = if (limits.longest) null else detectSimpleStar(program),
             .simple_chain = if (limits.longest) null else detectSimpleChain(program),
             .seen = seen,
         };
@@ -192,6 +197,10 @@ pub const Scanner = struct {
             try self.processSimple(context, emit, false);
             return;
         }
+        if (self.simple_star != null) {
+            try self.processStar(context, emit, false);
+            return;
+        }
         if (self.simple_chain != null) {
             try self.processChain(context, emit, false);
             return;
@@ -209,6 +218,18 @@ pub const Scanner = struct {
                 self.emitSimple(context, emit, start, self.total_len);
                 self.simple_pending_start = null;
             }
+            self.finished = true;
+            return;
+        }
+        if (self.simple_star != null) {
+            try self.processStar(context, emit, true);
+            if (self.star_start) |start| {
+                self.emitSimple(context, emit, start, self.total_len);
+                self.star_start = null;
+            }
+            // A `set*` match attempt is due at EOF even when the last run
+            // already ended; it reports the trailing empty match.
+            self.emitStarEmpty(context, emit, self.total_len);
             self.finished = true;
             return;
         }
@@ -433,6 +454,28 @@ pub const Scanner = struct {
         return star.set;
     }
 
+    /// Recognize the compiled shape of `set*`: save0 -> star(set) ->
+    /// save1 -> accept. The star must be non-backtracking, which holds when
+    /// its continuation is the accepting save.
+    fn detectSimpleStar(program: Program) ?model.Set {
+        if (program.capture_count != 0 or program.extended) return null;
+        const ins = program.instructions;
+        if (ins.len != 6) return null;
+        if (std.meta.activeTag(ins[0]) != .accept or std.meta.activeTag(ins[1]) != .sub_accept or
+            std.meta.activeTag(ins[2]) != .ret) return null;
+        if (std.meta.activeTag(ins[3]) != .save or std.meta.activeTag(ins[4]) != .star or
+            std.meta.activeTag(ins[5]) != .save) return null;
+        if (program.start != 5 or program.body != 4) return null;
+        const save1 = ins[3].save;
+        if (save1.slot != 1 or save1.next != program.accept) return null;
+        const star = ins[4].star;
+        if (star.next != 3 or star.backtrack) return null;
+        const save0 = ins[5].save;
+        if (save0.slot != 0 or save0.next != 4) return null;
+        if (star.set.ranges.len == 0) return null;
+        return star.set;
+    }
+
     fn sameSet(a: model.Set, b: model.Set) bool {
         if (a.ranges.len != b.ranges.len) return false;
         for (a.ranges, b.ranges) |left, right| {
@@ -636,6 +679,54 @@ pub const Scanner = struct {
         self.offset = keep;
     }
 
+    /// Report the empty match a `set*` attempt produces at `at`, honoring the
+    /// `(*NOTEMPTY)` verbs.
+    fn emitStarEmpty(self: *Scanner, context: ?*anyopaque, emit: EmitFn, at: usize) void {
+        const suppressed = self.program.notempty or (self.program.notempty_atstart and at == 0);
+        if (!suppressed) self.emitSimple(context, emit, at, at);
+    }
+
+    fn processStar(self: *Scanner, context: ?*anyopaque, emit: EmitFn, at_eof: bool) model.Error!void {
+        const set = self.simple_star.?;
+        while (true) {
+            if (self.scan >= self.buffer.items.len) break;
+            const abs = self.buffer_base + self.scan;
+            const rune: ?Rune = switch (self.runeStatus(abs)) {
+                .valid => |value| value,
+                .invalid => null,
+                .incomplete => if (at_eof) null else break,
+            };
+            if (self.star_start) |start| {
+                if (rune) |value| {
+                    if (set.matches(value.value)) {
+                        self.scan += value.len;
+                        continue;
+                    }
+                }
+                // The run ended here. The rune that ended it also starts the
+                // next attempt, whose only match is the empty one.
+                self.emitSimple(context, emit, start, abs);
+                self.star_start = null;
+            }
+            if (rune) |value| {
+                if (set.matches(value.value)) {
+                    self.star_start = abs;
+                    self.scan += value.len;
+                    continue;
+                }
+                self.emitStarEmpty(context, emit, abs);
+                self.scan += value.len;
+                continue;
+            }
+            self.emitStarEmpty(context, emit, abs);
+            self.scan += 1;
+        }
+        const keep = self.buffer_base + self.scan;
+        self.discardBefore(keep);
+        self.scan = keep - self.buffer_base;
+        self.offset = keep;
+    }
+
     fn discardBefore(self: *Scanner, absolute: usize) void {
         const keep = if (absolute == 0) 0 else absolute - 1;
         if (keep <= self.buffer_base) return;
@@ -692,15 +783,27 @@ pub const Scanner = struct {
                 }
             }
             if (self.empty_skip) {
-                if (self.runeAtAbsolute(self.offset)) |rune| {
-                    self.search_start = self.offset + rune.len;
-                    self.offset += rune.len;
-                    self.scan = self.offset - self.buffer_base;
-                    self.empty_skip = false;
-                } else if (self.eof) {
-                    self.empty_skip = false;
-                    break;
-                } else break;
+                switch (self.runeStatus(self.offset)) {
+                    .valid => |rune| {
+                        self.search_start = self.offset + rune.len;
+                        self.offset += rune.len;
+                    },
+                    .invalid => {
+                        // An invalid byte can never become a valid rune, so
+                        // skip it now instead of stalling the scan.
+                        self.search_start = self.offset + 1;
+                        self.offset += 1;
+                    },
+                    .incomplete => {
+                        // A truncated sequence at EOF is skipped byte-wise;
+                        // before EOF more chunks may complete it.
+                        if (!self.eof) break;
+                        self.search_start = self.offset + 1;
+                        self.offset += 1;
+                    },
+                }
+                self.scan = self.offset - self.buffer_base;
+                self.empty_skip = false;
             }
             if (self.eof_processed) {
                 if (self.recorded == null) break;

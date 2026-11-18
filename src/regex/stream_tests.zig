@@ -24,6 +24,17 @@ fn emitMatch(context: ?*anyopaque, match: regex.StreamMatch) void {
     }
 }
 
+/// Byte length of the rune at `start`, or 1 for invalid/truncated sequences;
+/// mirrors how the scanner treats undecodable bytes when bumping past an
+/// empty match.
+fn bumpLength(input: []const u8, start: usize) usize {
+    if (start >= input.len) return 1;
+    const len = std.unicode.utf8ByteSequenceLength(input[start]) catch return 1;
+    if (start + len > input.len) return 1;
+    _ = std.unicode.utf8Decode(input[start..][0..len]) catch return 1;
+    return len;
+}
+
 fn wholeInputSpans(allocator: std.mem.Allocator, program: regex.Program, limits: regex.Limits, input: []const u8) ![]const [2]usize {
     var workspace = try regex.ReplaceWorkspace.init(allocator, program, limits);
     defer workspace.deinit();
@@ -37,8 +48,7 @@ fn wholeInputSpans(allocator: std.mem.Allocator, program: regex.Program, limits:
         count += 1;
         if (found.end <= found.start) {
             if (found.start == input.len) break;
-            const len = std.unicode.utf8ByteSequenceLength(input[found.start]) catch 1;
-            offset = found.start + len;
+            offset = found.start + bumpLength(input, found.start);
         } else offset = found.end;
     }
     return spans.toOwnedSlice(allocator);
@@ -214,4 +224,63 @@ test "streaming chain fast path handles chunk boundaries" {
     var scanner = try regex.StreamScanner.init(allocator, value.program, .{});
     defer scanner.deinit();
     try std.testing.expect(scanner.simple_chain != null);
+}
+
+test "streaming star fast path handles chunk boundaries" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // `set*` reports the empty matches between runs, so the boundary matrix
+    // covers runs, separators, multi-byte runes, and invalid bytes.
+    const cases = [_]struct { pattern: []const u8, input: []const u8 }{
+        .{ .pattern = "a*", .input = "baaac" },
+        .{ .pattern = "a*", .input = "aaaa" },
+        .{ .pattern = "a*", .input = "" },
+        .{ .pattern = "a*", .input = "bbbb" },
+        .{ .pattern = "[a-z]*", .input = "ab cd  ef" },
+        .{ .pattern = "\\s*", .input = "a \t b\n" },
+        .{ .pattern = "\\d*", .input = "12 345 6" },
+        .{ .pattern = "\\p{Han}*", .input = "a\u{4f60}\u{597d}\u{ff0c}\u{4e16}\u{754c}b" },
+        .{ .pattern = "(?i)[a-z]*", .input = "AbC dEf" },
+        .{ .pattern = "[a-z]*", .input = "\u{00e9}t\u{00e9}" },
+        .{ .pattern = "a*", .input = "baaac\xff" },
+        .{ .pattern = "a*", .input = "\xffa\x80" },
+    };
+    for (cases) |case| {
+        for ([_]usize{ 1, 2, 3, 4, 5, 8 }) |chunk| {
+            try expectScannerMatches(allocator, case.pattern, case.input, chunk, .{});
+        }
+    }
+
+    var value = try regex.Regex.init(allocator, "a*", .{});
+    defer value.deinit();
+    var scanner = try regex.StreamScanner.init(allocator, value.program, .{});
+    defer scanner.deinit();
+    try std.testing.expect(scanner.simple_star != null);
+
+    // A nullable loop with a continuation is a split shape, not a bare star.
+    var loop = try regex.Regex.init(allocator, "a*b", .{});
+    defer loop.deinit();
+    var loop_scanner = try regex.StreamScanner.init(allocator, loop.program, .{});
+    defer loop_scanner.deinit();
+    try std.testing.expect(loop_scanner.simple_star == null);
+}
+
+test "streaming scanner skips invalid bytes after empty matches" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const cases = [_]struct { pattern: []const u8, input: []const u8 }{
+        .{ .pattern = "a*", .input = "\xff" },
+        .{ .pattern = "a*", .input = "b\xffa" },
+        .{ .pattern = "(?:a|b)*", .input = "\x80x\xffy" },
+        .{ .pattern = "x*", .input = "\xe4\xffx" },
+    };
+    for (cases) |case| {
+        for ([_]usize{ 1, 2, 3, 4, 8 }) |chunk| {
+            try expectScannerMatches(allocator, case.pattern, case.input, chunk, .{});
+        }
+    }
 }

@@ -97,7 +97,7 @@ Implemented functionality:
   case transforms `\U`/`\L`/`\E`/`\u`/`\l` (simple Unicode by default;
   `Limits.full_case_mapping` enables full SpecialCasing), and callback
   replacement via `replaceAllWithFn`.
-- 172 tests, including recursion, branch reset, conditional assertions,
+- 198 tests, including recursion, branch reset, conditional assertions,
   grapheme clusters, binary properties, Unicode blocks, partial matching,
   control verbs, thread safety, allocation-failure, and differential coverage
   against V8 for the supported subset.
@@ -217,9 +217,13 @@ Qwen search is ~68–74 µs (~330–353 MiB/s), CJK tokenizer search is ~200–2
 Unicode full matches scan at ~800 MiB/s and ASCII full matches at ~2.7 GiB/s
 (direct-mapped transition cache), and extended full matches reuse a
 persistent backtracking workspace (~17 ns for a backreference pattern), and
-shared-prefix no-match scans are ~1.55 µs (15.5 GiB/s). The bench gate now covers 35 cases;
-`RegexSet` ~97 µs, `replaceAll` ~85 µs, compile ~1.5 µs with `smp_allocator`,
-and all 196 tests plus the V8/Rust/extended/replacement differential fuzzers pass. On the
+shared-prefix no-match scans are ~1.55 µs (15.5 GiB/s). Streaming runs stay
+deterministic: `[a-z]+` streams at ~650 MiB/s, `[a-z]+ [a-z]+` at ~585 MiB/s,
+and the `set*` scan (which must also report the empty matches between runs)
+at ~416 MiB/s, 6.9× faster than the generic thread list. The bench gate now
+covers 36 cases; `RegexSet` ~97 µs, `replaceAll` ~85 µs, compile ~1.5 µs with
+`smp_allocator`, and all 198 tests plus the V8/Rust/extended/replacement
+differential fuzzers pass. On the
 feature side, PCRE2 forward numeric/named references, `\e` and isolated `\E`,
 the full substitution reference syntax (`$<name>`, `$+`, `$_`, `` $` ``, `$'`),
 `escape`/`splitn`/`replacen`, and compile diagnostics (`diagnose`) are covered.
