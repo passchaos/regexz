@@ -317,7 +317,7 @@ busy Apple Silicon host (absolute numbers vary with load):
 | `find` xDS-like after a 4 KiB prefix | — | ~94 ns |
 | `find` multi-literal after a 4 KiB prefix | ~2.0 µs | ~0.22 µs |
 | `find` capture email tokens (18 KiB) | ~161 µs | ~68 µs |
-| `find` capture no-match scan (23 KiB) | ~617 µs | ~84 µs |
+| `find` capture no-match scan (23 KiB) | ~617 µs | ~66 µs |
 | `find` loop-exit no-match (23 KiB) | ~120 µs | ~4.7 µs |
 | `find` suffix no-match (23 KiB) | ~238 µs | ~14 µs |
 | `find` extended no-match (23 KiB) | ~275 µs | ~2.5 µs |
