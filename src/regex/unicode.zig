@@ -20,6 +20,9 @@ pub const grapheme = @import("unicode/grapheme.zig");
 const gcb_data = @embedFile("unicode/grapheme_gcb.bin");
 const extpict_data = @embedFile("unicode/grapheme_extpict.bin");
 const incb_data = @embedFile("unicode/grapheme_incb.bin");
+const word_break_data = @embedFile("unicode/word_break.bin");
+pub const Wb = @import("unicode/word_break.zig").Wb;
+const wb_count = @import("unicode/word_break.zig").wb_count;
 pub const fold_range_count = fold_data.len / 12;
 pub fn foldRange(index: usize) Range {
     const bytes = fold_data[index * 12 ..];
@@ -301,6 +304,20 @@ pub fn gcbOf(rune: u21) grapheme.Gcb {
     while (first < last) {
         const middle = first + (last - first) / 2;
         const bytes = gcb_data[middle * 12 ..];
+        const low = std.mem.readInt(u32, bytes[0..4], .little);
+        const high = std.mem.readInt(u32, bytes[4..8], .little);
+        if (rune < low) last = middle else if (rune > high) first = middle + 1 else return @enumFromInt(bytes[8]);
+    }
+    return .other;
+}
+
+/// Word_Break property.
+pub fn wbOf(rune: u21) Wb {
+    var first: usize = 0;
+    var last: usize = wb_count;
+    while (first < last) {
+        const middle = first + (last - first) / 2;
+        const bytes = word_break_data[middle * 12 ..];
         const low = std.mem.readInt(u32, bytes[0..4], .little);
         const high = std.mem.readInt(u32, bytes[4..8], .little);
         if (rune < low) last = middle else if (rune > high) first = middle + 1 else return @enumFromInt(bytes[8]);

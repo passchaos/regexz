@@ -256,6 +256,7 @@ test {
     _ = @import("regex/required_literals_tests.zig");
     _ = @import("regex/emoji_tests.zig");
     _ = @import("regex/grapheme_assertion_tests.zig");
+    _ = @import("regex/word_boundary_tests.zig");
     _ = @import("regex/replace.zig");
     _ = @import("regex/stream_tests.zig");
     _ = @import("regex/serialize_tests.zig");

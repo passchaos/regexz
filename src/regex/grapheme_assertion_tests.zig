@@ -25,6 +25,5 @@ test "grapheme cluster boundary assertions" {
 
 test "grapheme boundary rejects unsupported boundary kinds" {
     const allocator = std.testing.allocator;
-    try std.testing.expectError(error.UnsupportedRegexFeature, regex.Regex.init(allocator, "\\b{wb}", .{}));
     try std.testing.expectError(error.UnsupportedRegexFeature, regex.Regex.init(allocator, "\\b{sb}", .{}));
 }

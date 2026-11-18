@@ -63,7 +63,7 @@ Implemented functionality:
 - `\N{U+hhhh}` explicit code points, `\cX` control characters, `\o{...}`
   octal code points, and class-aware `\Q...\E` quoting.
 - UAX #29 grapheme cluster boundary assertions `\b{gcb}` / `\B{gcb}`
-  (alias `\b{g}`).
+  (alias `\b{g}`) and word boundaries `\b{wb}` / `\B{wb}`.
 - `Limits.capture_reset` (JavaScript capture reset) and
   `Limits.unset_backref_empty` (PCRE2 `PCRE2_MATCH_UNSET_BACKREF`).
 - Search API: `isMatch`, `find`, `findFrom`, `findAll`, `split`, `replaceAll`,
@@ -76,7 +76,7 @@ Implemented functionality:
 - Replacement syntax: `\0`..`\9`, `$0`..`$99`, `$&`, `$$`, `${name}`,
   case transforms `\U`/`\L`/`\E`/`\u`/`\l` (simple Unicode), and callback
   replacement via `replaceAllWithFn`.
-- 118 tests, including recursion, branch reset, conditional assertions,
+- 120 tests, including recursion, branch reset, conditional assertions,
   grapheme clusters, binary properties, Unicode blocks, partial matching,
   control verbs, thread safety, allocation-failure, and differential coverage
   against V8 for the supported subset.
@@ -111,7 +111,7 @@ Strengths:
 | Relative subroutines `(?+1)`/`(?-1)` | yes | yes | no | no |
 | `(?(R))` recursion condition | yes | yes | no | no |
 | `\X` grapheme cluster | yes (extended) | yes | no | no |
-| `\b{gcb}` grapheme boundary | yes (extended) | no | no | no |
+| `\b{gcb}` / `\b{wb}` boundaries | yes (extended) | no | no | no |
 | Backtracking verbs | yes (subset) | yes | no | no |
 | Callouts / `(*THEN)` | numeric + string + auto callouts, `(*THEN)`, MARK | yes | no | no |
 | `\p{Xan}`/`\p{Xwd}` specials | yes | yes | no | no |

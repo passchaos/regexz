@@ -9,6 +9,7 @@ const std = @import("std");
 const model = @import("model.zig");
 const Program = @import("compile.zig").Program;
 const grapheme = @import("grapheme.zig");
+const word_boundary = @import("word_boundary.zig");
 const unset = std.math.maxInt(usize);
 
 pub const Error = model.Error;
@@ -71,6 +72,8 @@ const Position = struct {
             .no_word_boundary_unicode => unicodeWord(ucp_word, self.previous_rune) == unicodeWord(ucp_word, self.next_rune),
             .grapheme_boundary => grapheme.isBoundary(self.input, self.offset),
             .no_grapheme_boundary => !grapheme.isBoundary(self.input, self.offset),
+            .word_boundary_uax29 => word_boundary.isBoundary(self.input, self.offset),
+            .no_word_boundary_uax29 => !word_boundary.isBoundary(self.input, self.offset),
         };
     }
 };
