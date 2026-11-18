@@ -364,6 +364,19 @@ def unicode_char_names(unicode_files):
         if not normalized or normalized in seen: continue
         seen.add(normalized)
         entries.append((normalized,int(parts[0],16)))
+    # Hangul syllables use algorithmic names that UnicodeData.txt does not list.
+    L=['G','GG','N','D','DD','R','M','B','BB','S','SS','','J','JJ','C','K','T','P','H']
+    V=['A','AE','YA','YAE','EO','E','YEO','YE','O','WA','WAE','OE','YO','U','WEO','WE','WI','YU','EU','YI','I']
+    T=['','G','GG','GS','N','NJ','NH','D','L','LG','LM','LB','LS','LT','LP','LH','M','B','BS','S','SS','NG','J','C','K','T','P','H']
+    for l in range(19):
+        for v in range(21):
+            for t in range(28):
+                cp=0xAC00+(l*21+v)*28+t
+                name='HANGUL SYLLABLE '+L[l]+V[v]+T[t]
+                normalized=''.join(ch for ch in name.upper() if ch not in ' -_')
+                if normalized in seen: continue
+                seen.add(normalized)
+                entries.append((normalized,cp))
     entries.sort()
     index=bytearray()
     names=bytearray()

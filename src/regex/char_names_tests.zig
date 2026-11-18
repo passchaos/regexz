@@ -15,6 +15,9 @@ test "Unicode character names" {
         .{ .pattern = "\\N{LATIN SMALL LETTER A}+", .yes = &.{ "aaa", "aa" }, .no = &.{"bbb"} },
         .{ .pattern = "\\N{CJK UNIFIED IDEOGRAPH-4E00}", .yes = &.{"\u{4e00}"}, .no = &.{"a"} },
         .{ .pattern = "\\N{CJK COMPATIBILITY IDEOGRAPH-F900}", .yes = &.{"\u{f900}"}, .no = &.{"a"} },
+        .{ .pattern = "\\N{HANGUL SYLLABLE GA}", .yes = &.{"\u{ac00}"}, .no = &.{"a"} },
+        .{ .pattern = "\\N{HANGUL SYLLABLE HIH}", .yes = &.{"\u{d7a3}"}, .no = &.{"a"} },
+        .{ .pattern = "\\N{hangul syllable ga}", .yes = &.{"\u{ac00}"}, .no = &.{"a"} },
     };
     for (cases) |case| {
         var value = try regex.Regex.init(allocator, case.pattern, .{});
@@ -24,4 +27,5 @@ test "Unicode character names" {
     }
     try std.testing.expectError(error.InvalidRegex, regex.Regex.init(allocator, "\\N{NOT A REAL NAME}", .{}));
     try std.testing.expectError(error.InvalidRegex, regex.Regex.init(allocator, "\\N{CJK UNIFIED IDEOGRAPH-0041}", .{}));
+    try std.testing.expectError(error.InvalidRegex, regex.Regex.init(allocator, "\\N{HANGUL SYLLABLE ZZZ}", .{}));
 }
