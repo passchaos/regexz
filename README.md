@@ -190,6 +190,8 @@ The engine picks the execution strategy automatically:
     `Program.deserialize` use a versioned, validated binary format for
     cross-process caches. Deserialize into an arena and keep it alive for the
     program's lifetime.
+  - Compile diagnostics: `diagnose` reports the byte offset and kind
+    (`syntax`, `unsupported`, `limit`) where a pattern failed to compile.
 - Caller-owned compilation: `compile` writes into the allocator you provide;
   `Regex` keeps an internal arena.
 - Reusable workspaces (`Workspace`, `ReplaceWorkspace`) for matching and

@@ -116,3 +116,30 @@ test "replacement validation rejects unknown groups" {
     try std.testing.expectError(error.InvalidRegex, regex.validateSubstitutionFor(value.program, "\\3"));
     try regex.validateSubstitutionFor(value.program, "$2 ${1} $& $$ $");
 }
+
+test "compile diagnostics report where parsing stopped" {
+    try std.testing.expect(regex.diagnose(gpa, "abc", .{}) == null);
+    try std.testing.expect(regex.diagnose(gpa, "(?<=a*)b", .{}) == null);
+
+    const cases = [_]struct { pattern: []const u8, offset: usize }{
+        .{ .pattern = "(", .offset = 1 },
+        .{ .pattern = "a[", .offset = 2 },
+        .{ .pattern = "\\", .offset = 1 },
+        .{ .pattern = "a**", .offset = 2 },
+        .{ .pattern = "(?P<n>a)(?P<n>b)", .offset = 14 },
+    };
+    for (cases) |case| {
+        const diagnostic = regex.diagnose(gpa, case.pattern, .{}).?;
+        try std.testing.expectEqual(regex.DiagnosticKind.syntax, diagnostic.kind);
+        try std.testing.expectEqual(case.offset, diagnostic.offset);
+    }
+
+    // Negated Unicode string properties are rejected as unsupported.
+    const unsupported = regex.diagnose(gpa, "\\P{RGI_Emoji}", .{}).?;
+    try std.testing.expectEqual(regex.DiagnosticKind.unsupported, unsupported.kind);
+
+    // The pattern-size limit reports the end of the pattern.
+    const limited = regex.diagnose(gpa, "abc", .{ .max_pattern_bytes = 2 }).?;
+    try std.testing.expectEqual(regex.DiagnosticKind.limit, limited.kind);
+    try std.testing.expectEqual(@as(usize, 3), limited.offset);
+}

@@ -3,6 +3,12 @@ const std = @import("std");
 pub const unicode = @import("unicode.zig");
 pub const StringProperty = unicode.StringProperty;
 pub const Error = std.mem.Allocator.Error || error{ InvalidRegex, UnsupportedRegexFeature, RegexLimitExceeded };
+/// Why a pattern failed to compile.
+pub const DiagnosticKind = enum { syntax, unsupported, limit };
+/// Where a pattern failed to compile. `offset` is a byte index into the
+/// pattern as parsed (identical to the input unless `\Q...\E` rewriting
+/// changed its length).
+pub const Diagnostic = struct { offset: usize = 0, kind: DiagnosticKind = .syntax };
 /// Result of a full-match partiality query.
 pub const PartialResult = enum { none, partial, full };
 

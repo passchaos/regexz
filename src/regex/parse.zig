@@ -1149,16 +1149,64 @@ fn unquote(gpa: std.mem.Allocator, pattern: []const u8) m.Error![]const u8 {
     return bytes.toOwnedSlice(gpa);
 }
 
+fn diagnosticKind(err: m.Error) ?m.DiagnosticKind {
+    return switch (err) {
+        error.InvalidRegex => .syntax,
+        error.UnsupportedRegexFeature => .unsupported,
+        error.RegexLimitExceeded => .limit,
+        error.OutOfMemory => null,
+    };
+}
+
+fn setDiagnostic(diagnostic: ?*m.Diagnostic, offset: usize, err: m.Error) void {
+    const kind = diagnosticKind(err) orelse return;
+    if (diagnostic) |value| value.* = .{ .offset = offset, .kind = kind };
+}
+
+/// First byte of an invalid UTF-8 sequence (or the length when truncated).
+fn invalidUtf8Offset(pattern: []const u8) usize {
+    var index: usize = 0;
+    while (index < pattern.len) {
+        const len = std.unicode.utf8ByteSequenceLength(pattern[index]) catch return index;
+        if (len > pattern.len - index) return index;
+        if (!std.unicode.utf8ValidateSlice(pattern[index..][0..len])) return index;
+        index += len;
+    }
+    return index;
+}
+
 pub fn parse(gpa: std.mem.Allocator, pattern: []const u8, limits: m.Limits) m.Error!m.ParseResult {
-    if (pattern.len > limits.max_pattern_bytes) return error.RegexLimitExceeded;
-    if (!std.unicode.utf8ValidateSlice(pattern)) return error.InvalidRegex;
+    return parseWithDiagnostic(gpa, pattern, limits, null);
+}
+
+/// Like `parse`, but records where parsing stopped on failure.
+pub fn parseWithDiagnostic(
+    gpa: std.mem.Allocator,
+    pattern: []const u8,
+    limits: m.Limits,
+    diagnostic: ?*m.Diagnostic,
+) m.Error!m.ParseResult {
+    if (pattern.len > limits.max_pattern_bytes) {
+        setDiagnostic(diagnostic, pattern.len, error.RegexLimitExceeded);
+        return error.RegexLimitExceeded;
+    }
+    if (!std.unicode.utf8ValidateSlice(pattern)) {
+        setDiagnostic(diagnostic, invalidUtf8Offset(pattern), error.InvalidRegex);
+        return error.InvalidRegex;
+    }
     var parser = Parser{ .allocator = gpa, .pattern = try unquote(gpa, pattern), .limits = limits };
     defer parser.group_names.deinit(gpa);
     defer parser.group_nodes.deinit(gpa);
     defer parser.marks.deinit(gpa);
     defer parser.callouts.deinit(gpa);
-    const root = try parser.expression(0);
-    if (parser.cursor != parser.pattern.len) return error.InvalidRegex;
+    const root = parser.expression(0) catch |err| {
+        setDiagnostic(diagnostic, parser.cursor, err);
+        return err;
+    };
+    if (parser.cursor != parser.pattern.len) {
+        setDiagnostic(diagnostic, parser.cursor, error.InvalidRegex);
+        return error.InvalidRegex;
+    }
     const nodes = try gpa.alloc(*const m.Node, @as(usize, parser.captures) + 1);
     nodes[0] = root;
     for (1..@as(usize, parser.captures) + 1) |index| {

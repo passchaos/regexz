@@ -11,6 +11,8 @@ const parse_mod = @import("regex/parse.zig");
 const compile_mod = @import("regex/compile.zig");
 const backtrack = @import("regex/backtrack.zig");
 pub const Error = model.Error;
+pub const Diagnostic = model.Diagnostic;
+pub const DiagnosticKind = model.DiagnosticKind;
 pub const Limits = model.Limits;
 pub const Callout = model.Callout;
 pub const CalloutAction = model.CalloutAction;
@@ -100,6 +102,30 @@ const stack_workspace_bytes = 8192;
 pub fn compile(gpa: std.mem.Allocator, pattern: []const u8, limits: Limits) Error!Program {
     const parsed = try parse_mod.parse(gpa, pattern, limits);
     return compile_mod.compile(gpa, parsed, limits);
+}
+
+/// Compile and, on failure, report where compilation stopped.
+///
+/// The offset is a byte index into the pattern (identical to the input unless
+/// `\Q...\E` rewriting changed its length). Compile-stage failures (node or
+/// instruction limits) report the end of the pattern. Returns `null` when the
+/// pattern compiles or the failure is out of memory.
+pub fn diagnose(gpa: std.mem.Allocator, pattern: []const u8, limits: Limits) ?Diagnostic {
+    var arena = std.heap.ArenaAllocator.init(gpa);
+    defer arena.deinit();
+    var diagnostic: Diagnostic = .{};
+    const parsed = parse_mod.parseWithDiagnostic(arena.allocator(), pattern, limits, &diagnostic) catch |err| {
+        return if (err == error.OutOfMemory) null else diagnostic;
+    };
+    _ = compile_mod.compile(arena.allocator(), parsed, limits) catch |err| {
+        return switch (err) {
+            error.OutOfMemory => null,
+            error.RegexLimitExceeded => .{ .offset = pattern.len, .kind = .limit },
+            error.UnsupportedRegexFeature => .{ .offset = 0, .kind = .unsupported },
+            error.InvalidRegex => .{ .offset = 0, .kind = .syntax },
+        };
+    };
+    return null;
 }
 pub const Regex = struct {
     arena: std.heap.ArenaAllocator,

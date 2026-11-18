@@ -292,6 +292,8 @@ on the tokenizer and xDS workloads.
    PCRE2/Rust/Perl semantics.
 10. **`Program` ownership**: add `Program.deinit` or encode the arena
     requirement in the type system.
+11. ~~**Compile diagnostics**~~: done. `diagnose` reports the byte offset and
+    kind (`syntax`, `unsupported`, `limit`) where a pattern failed to compile.
 
 ### P2 — performance and process
 
