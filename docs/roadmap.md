@@ -260,11 +260,13 @@ on the tokenizer and xDS workloads.
 
 For the workloads in `tools/bench/main.zig`, on an idle host:
 
-- Full match, short literal/class/xDS patterns: **≤ 40 ns** one-shot.
-- Full match, reused workspace: **≤ 20 ns** for ASCII class patterns.
+- Full match, short literal/class/xDS patterns: **≤ 40 ns** one-shot
+  (achieved: ~8–17 ns).
+- Full match, reused workspace: **≤ 20 ns** for ASCII class patterns
+  (achieved: ~8 ns).
 - Qwen tokenizer search: **≥ 200 MiB/s** (achieved: ~210 MiB/s).
-- `replaceAll` `a+`: **≥ 400 MiB/s**.
-- Compile xDS-like pattern: **≤ 2 µs**.
+- `replaceAll` `a+`: **≥ 400 MiB/s** (achieved: ~450–480 MiB/s).
+- Compile xDS-like pattern: **≤ 2 µs** (current: ~3.1 µs).
 - Workspace memory: **≤ 48 bytes/instruction** (achieved: 44).
 - Linear mode: **O(input × program)**; extended mode: bounded by the
   configured step/choice/trail/depth limits.
