@@ -245,7 +245,8 @@ pub const Node = union(enum) {
     /// Zero-width set assertion. `negative` is true for `(?!set)`.
     lookahead_set: struct { set: Set, negative: bool },
     /// General lookaround. `behind` selects lookbehind. `non_atomic` is
-    /// PCRE2 `(?*...)`: the engine may backtrack into the lookaround.
+    /// PCRE2 `(?*...)`/`(?<*...)`: the engine may backtrack into the
+    /// lookaround.
     lookaround: struct { child: *const Node, negative: bool, behind: bool, non_atomic: bool = false },
     /// Numeric or named backreference. Names are resolved to an index at
     /// parse time.
@@ -359,6 +360,18 @@ pub const Instruction = union(enum) {
     /// lookahead: the child consumes input, then the position is reset before
     /// the continuation, while the child's choices stay backtrackable.
     restore_pos: struct { slot: u16, next: usize },
+    /// Start of a non-atomic positive lookbehind `(?<*...)`. Saves the current
+    /// position as the target end and begins trying start positions. `next` is
+    /// the continuation used by first-set analysis; execution goes through the
+    /// child and `lookbehind_accept` instead. `resume` is the paired
+    /// `lookbehind_next` instruction used by the scan choice.
+    lookbehind_non_atomic: struct { child: usize, next: usize, scan_pc: usize, target_slot: u16, start_slot: u16 },
+    /// Try the next start position of a non-atomic lookbehind. Reached through
+    /// the choice pushed by `lookbehind_non_atomic`/`lookbehind_next`.
+    lookbehind_next: struct { child: usize, target_slot: u16, start_slot: u16 },
+    /// Child terminator for a non-atomic lookbehind: succeeds only when the
+    /// child ends exactly at the saved target position.
+    lookbehind_accept: struct { target_slot: u16, next: usize },
     /// Recursion/subroutine call. `child` is the subroutine body start and
     /// `next` is the return continuation.
     call: struct { group: u16, child: usize, next: usize },

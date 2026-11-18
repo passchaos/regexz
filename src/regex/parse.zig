@@ -377,7 +377,19 @@ pub const Parser = struct {
                 if (!self.take(')')) return error.InvalidRegex;
                 return self.subroutine(value);
             } else if (self.take('<')) {
-                if (self.peek() == '*') return error.UnsupportedRegexFeature;
+                if (self.take('*')) {
+                    // PCRE2 10.43 non-atomic positive lookbehind: the engine
+                    // may backtrack into the child if the continuation fails.
+                    self.extended = true;
+                    const child = try self.expression(depth + 1);
+                    if (!self.take(')')) return error.InvalidRegex;
+                    return self.node(.{ .lookaround = .{
+                        .child = child,
+                        .negative = false,
+                        .behind = true,
+                        .non_atomic = true,
+                    } });
+                }
                 if (self.peek() == '=' or self.peek() == '!') {
                     const negative = self.peek() == '!';
                     self.cursor += 1;

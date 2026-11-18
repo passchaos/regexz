@@ -48,9 +48,8 @@ The engine picks the execution strategy automatically:
 - Extended features:
   - General lookahead and lookbehind: `(?=...)`, `(?!...)`, `(?<=...)`,
     `(?<!...)` (variable-length lookbehind is supported and budgeted).
-  - Non-atomic positive lookahead `(?*...)`: the engine can backtrack into
-    the lookaround when the continuation fails. Non-atomic lookbehind
-    `(?<*...)` is reported as unsupported.
+  - Non-atomic positive lookaround `(?*...)` and `(?<*...)`: the engine can
+    backtrack into the assertion when the continuation fails.
   - Numeric and named backreferences: `\1`..`\99`, `\k<name>`, `\k'name'`,
     `\k{name}`, `\g{name}`, `\g{1}`, relative `\g{-1}`, `(?P=name)`.
   - Subroutine calls by number, name, and relative offset: `(?1)`, `(?+1)`,

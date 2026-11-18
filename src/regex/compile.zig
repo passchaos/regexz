@@ -277,8 +277,35 @@ const Builder = struct {
             },
             .lookaround => |look| blk: {
                 if (look.non_atomic) {
-                    if (look.negative or look.behind) return error.UnsupportedRegexFeature;
+                    if (look.negative) return error.UnsupportedRegexFeature;
                     const base = 2 * (@as(usize, self.capture_count) + 1);
+                    if (look.behind) {
+                        // Non-atomic lookbehind: try every start position at or
+                        // before the current one. Each start leaves a choice so
+                        // a failing continuation can resume the scan, while the
+                        // child's own choices are tried first (LIFO).
+                        const target_slot = base + self.extra_slots;
+                        const start_slot = target_slot + 1;
+                        if (start_slot > 65535) return error.RegexLimitExceeded;
+                        self.extra_slots += 2;
+                        const accept = try self.emit(.{ .lookbehind_accept = .{
+                            .target_slot = @intCast(target_slot),
+                            .next = continuation,
+                        } });
+                        const child = try self.node(look.child, accept);
+                        const scan_pc = try self.emit(.{ .lookbehind_next = .{
+                            .child = child,
+                            .target_slot = @intCast(target_slot),
+                            .start_slot = @intCast(start_slot),
+                        } });
+                        break :blk try self.emit(.{ .lookbehind_non_atomic = .{
+                            .child = child,
+                            .next = continuation,
+                            .scan_pc = scan_pc,
+                            .target_slot = @intCast(target_slot),
+                            .start_slot = @intCast(start_slot),
+                        } });
+                    }
                     const slot = base + self.extra_slots;
                     if (slot > 65535) return error.RegexLimitExceeded;
                     self.extra_slots += 1;
@@ -420,7 +447,7 @@ fn terminalFirst(instruction: model.Instruction) model.FirstSet {
         .byte, .grapheme, .string_property => .{ .ascii = .{ ~@as(u64, 0), ~@as(u64, 0) }, .nonascii = true },
         .accept, .sub_accept, .accept_verb => .{ .empty = true },
         .fail => .{},
-        .split, .save, .restore_pos, .assertion, .lookahead, .reset_start, .prune, .skip, .commit, .then, .mark, .callout, .auto_callout, .reset_captures, .dispatch, .lookaround, .conditional, .conditional_assert, .conditional_recursion => .{},
+        .split, .save, .restore_pos, .assertion, .lookahead, .reset_start, .prune, .skip, .commit, .then, .mark, .callout, .auto_callout, .reset_captures, .dispatch, .lookaround, .conditional, .conditional_assert, .conditional_recursion, .lookbehind_non_atomic, .lookbehind_next, .lookbehind_accept => .{},
         .backref, .atomic, .call, .ret => conservative_first,
     };
 }
@@ -447,6 +474,8 @@ fn computeFirstSets(allocator: std.mem.Allocator, instructions: []const model.In
             },
             .save => |save| try edges.append(allocator, .{ .from = from, .to = @intCast(save.next) }),
             .restore_pos => |restore| try edges.append(allocator, .{ .from = from, .to = @intCast(restore.next) }),
+            .lookbehind_non_atomic => |look| try edges.append(allocator, .{ .from = from, .to = @intCast(look.next) }),
+            .lookbehind_accept => |look| try edges.append(allocator, .{ .from = from, .to = @intCast(look.next) }),
             .assertion => |assertion| try edges.append(allocator, .{ .from = from, .to = @intCast(assertion.next) }),
             .lookahead => |look| try edges.append(allocator, .{ .from = from, .to = @intCast(look.next) }),
             .star => |star| try edges.append(allocator, .{ .from = from, .to = @intCast(star.next) }),

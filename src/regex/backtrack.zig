@@ -292,6 +292,31 @@ pub const Workspace = struct {
         return true;
     }
 
+    /// Prepare the next start position for a non-atomic lookbehind. Returns
+    /// the start to run the child from, or null when every start up to the
+    /// target has been tried. The resume choice is pushed before the child
+    /// runs, so the child's own choices are tried first on backtracking.
+    fn lookbehindStart(self: *Workspace, input: []const u8, target_slot: u16, start_slot: u16, resume_pc: usize) Error!?usize {
+        const target = self.slots[target_slot];
+        const start = self.slots[start_slot];
+        if (start > target) return null;
+        if (start == target) {
+            self.slots[start_slot] = target + 1;
+            return start;
+        }
+        if (self.choices.items.len >= self.limits.max_backtrack_choices) return error.RegexLimitExceeded;
+        self.slots[start_slot] = start + runeLenAt(input, start);
+        try self.choices.append(self.allocator, .{
+            .pc = resume_pc,
+            .pos = target,
+            .trail_len = self.trail.items.len,
+            .call_depth = self.calls.items.len,
+            .mark = self.mark,
+            .mark_pos = self.mark_pos,
+        });
+        return start;
+    }
+
     fn atomic(self: *Workspace, input: []const u8, child: usize, pos: usize) Error!?usize {
         const trail_base = self.trail.items.len;
         const choice_base = self.choices.items.len;
@@ -474,6 +499,30 @@ pub const Workspace = struct {
                 },
                 .lookaround => |look| {
                     if (try self.lookaround(input, look.child, look.negative, look.behind, pos)) {
+                        pc = look.next;
+                        continue;
+                    }
+                },
+                .lookbehind_non_atomic => |look| {
+                    // Hidden slots are scratch state: every entry through this
+                    // instruction reinitializes them, so they are not trailed.
+                    self.slots[look.target_slot] = pos;
+                    self.slots[look.start_slot] = 0;
+                    if (try self.lookbehindStart(input, look.target_slot, look.start_slot, look.scan_pc)) |start| {
+                        pos = start;
+                        pc = look.child;
+                        continue;
+                    }
+                },
+                .lookbehind_next => |look| {
+                    if (try self.lookbehindStart(input, look.target_slot, look.start_slot, pc)) |start| {
+                        pos = start;
+                        pc = look.child;
+                        continue;
+                    }
+                },
+                .lookbehind_accept => |look| {
+                    if (pos == self.slots[look.target_slot]) {
                         pc = look.next;
                         continue;
                     }

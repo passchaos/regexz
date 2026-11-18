@@ -52,6 +52,9 @@ const Tag = enum(u8) {
     save,
     string_property,
     restore_pos,
+    lookbehind_non_atomic,
+    lookbehind_next,
+    lookbehind_accept,
 };
 
 const Writer = struct {
@@ -337,12 +340,31 @@ fn writeInstruction(writer: *Writer, instruction: model.Instruction) !void {
             try writer.u16v(restore.slot);
             try writer.u32v(@intCast(restore.next));
         },
+        .lookbehind_non_atomic => |look| {
+            try writer.byte(@intFromEnum(Tag.lookbehind_non_atomic));
+            try writer.u32v(@intCast(look.child));
+            try writer.u32v(@intCast(look.next));
+            try writer.u32v(@intCast(look.scan_pc));
+            try writer.u16v(look.target_slot);
+            try writer.u16v(look.start_slot);
+        },
+        .lookbehind_next => |look| {
+            try writer.byte(@intFromEnum(Tag.lookbehind_next));
+            try writer.u32v(@intCast(look.child));
+            try writer.u16v(look.target_slot);
+            try writer.u16v(look.start_slot);
+        },
+        .lookbehind_accept => |look| {
+            try writer.byte(@intFromEnum(Tag.lookbehind_accept));
+            try writer.u16v(look.target_slot);
+            try writer.u32v(@intCast(look.next));
+        },
     }
 }
 
 fn readInstruction(reader: *Reader, allocator: std.mem.Allocator) !model.Instruction {
     const tag_value = try reader.byte();
-    if (tag_value > @intFromEnum(Tag.restore_pos)) return error.InvalidRegex;
+    if (tag_value > @intFromEnum(Tag.lookbehind_accept)) return error.InvalidRegex;
     const tag: Tag = @enumFromInt(tag_value);
     return switch (tag) {
         .accept => .accept,
@@ -415,6 +437,22 @@ fn readInstruction(reader: *Reader, allocator: std.mem.Allocator) !model.Instruc
         },
         .restore_pos => .{ .restore_pos = .{
             .slot = try reader.u16v(),
+            .next = @intCast(try reader.u32v()),
+        } },
+        .lookbehind_non_atomic => .{ .lookbehind_non_atomic = .{
+            .child = @intCast(try reader.u32v()),
+            .next = @intCast(try reader.u32v()),
+            .scan_pc = @intCast(try reader.u32v()),
+            .target_slot = try reader.u16v(),
+            .start_slot = try reader.u16v(),
+        } },
+        .lookbehind_next => .{ .lookbehind_next = .{
+            .child = @intCast(try reader.u32v()),
+            .target_slot = try reader.u16v(),
+            .start_slot = try reader.u16v(),
+        } },
+        .lookbehind_accept => .{ .lookbehind_accept = .{
+            .target_slot = try reader.u16v(),
             .next = @intCast(try reader.u32v()),
         } },
     };
@@ -601,6 +639,9 @@ fn validate(program: Program) model.Error!void {
         .save => |save| if (save.next >= count or save.slot >= slot_count) return error.InvalidRegex,
         .string_property => |property| if (property.next >= count) return error.InvalidRegex,
         .restore_pos => |restore| if (restore.next >= count or restore.slot >= slot_count) return error.InvalidRegex,
+        .lookbehind_non_atomic => |look| if (look.child >= count or look.next >= count or look.scan_pc >= count or look.target_slot >= slot_count or look.start_slot >= slot_count) return error.InvalidRegex,
+        .lookbehind_next => |look| if (look.child >= count or look.target_slot >= slot_count or look.start_slot >= slot_count) return error.InvalidRegex,
+        .lookbehind_accept => |look| if (look.next >= count or look.target_slot >= slot_count) return error.InvalidRegex,
     };
     for (program.dispatches) |dispatch| {
         for (dispatch.branches) |branch| {

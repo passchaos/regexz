@@ -24,7 +24,7 @@ regexz now has two execution engines:
 Implemented functionality:
 
 - General lookahead/lookbehind, including variable-length lookbehind, and
-  PCRE2 non-atomic positive lookahead `(?*...)`.
+  PCRE2 non-atomic positive lookaround `(?*...)`/`(?<*...)`.
 - Numeric/named backreferences.
 - Named captures and group-name lookup; duplicate names with `(?J)`.
 - Atomic groups and possessive quantifiers.
@@ -83,7 +83,7 @@ Implemented functionality:
   case transforms `\U`/`\L`/`\E`/`\u`/`\l` (simple Unicode by default;
   `Limits.full_case_mapping` enables full SpecialCasing), and callback
   replacement via `replaceAllWithFn`.
-- 134 tests, including recursion, branch reset, conditional assertions,
+- 136 tests, including recursion, branch reset, conditional assertions,
   grapheme clusters, binary properties, Unicode blocks, partial matching,
   control verbs, thread safety, allocation-failure, and differential coverage
   against V8 for the supported subset.

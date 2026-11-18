@@ -11,6 +11,7 @@ const patterns = [_][]const u8{
     "\\p{RGI_Emoji}",
     "\\b{gcb}a",
     "(?*(a|ab))(?1)c",
+    "(?<*(a+))\\1c",
     "a|ab",
     "(?:ab|cd)+",
     "(a)(b)?",
