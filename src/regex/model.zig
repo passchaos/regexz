@@ -80,6 +80,9 @@ pub const Flags = struct {
     duplicate_names: bool = false,
 };
 pub const GroupName = struct { name: []const u8, index: u16 };
+/// PCRE2 newline conventions selected by `(*CR)`, `(*LF)`, `(*CRLF)`,
+/// `(*ANYCRLF)`, `(*ANY)`, and `(*NUL)`.
+pub const Newline = enum(u8) { lf, cr, crlf, anycrlf, any, nul };
 pub const ParseResult = struct {
     root: *const Node,
     group_names: []const GroupName,
@@ -91,6 +94,7 @@ pub const ParseResult = struct {
     group_nodes: []const *const Node,
     capture_count: u16,
     extended: bool,
+    newline: Newline = .lf,
 };
 pub const Range = unicode.Range;
 /// Pre-materialization set: positive ranges plus the requested fold/negate.

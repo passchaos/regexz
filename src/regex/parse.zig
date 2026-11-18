@@ -6,6 +6,7 @@ const std = @import("std");
 const m = @import("model.zig");
 const classes = @import("classes.zig");
 const escape = @import("escape.zig");
+const newline = @import("newline.zig");
 
 pub const Parser = struct {
     allocator: std.mem.Allocator,
@@ -16,6 +17,8 @@ pub const Parser = struct {
     captures: u16 = 0,
     current_group: u16 = 0,
     flags: m.Flags = .{},
+    newline: m.Newline = .lf,
+    bsr_anycrlf: bool = false,
     group_names: std.ArrayList(m.GroupName) = .empty,
     group_nodes: std.ArrayList(?*const m.Node) = .empty,
     marks: std.ArrayList([]const u8) = .empty,
@@ -271,6 +274,38 @@ pub const Parser = struct {
             return self.node(.empty);
         }
         if (std.mem.eql(u8, name, "UTF") or std.mem.eql(u8, name, "NO_JIT")) return self.node(.empty);
+        if (std.mem.eql(u8, name, "CR")) {
+            self.newline = .cr;
+            return self.node(.empty);
+        }
+        if (std.mem.eql(u8, name, "LF")) {
+            self.newline = .lf;
+            return self.node(.empty);
+        }
+        if (std.mem.eql(u8, name, "CRLF")) {
+            self.newline = .crlf;
+            return self.node(.empty);
+        }
+        if (std.mem.eql(u8, name, "ANYCRLF")) {
+            self.newline = .anycrlf;
+            return self.node(.empty);
+        }
+        if (std.mem.eql(u8, name, "ANY")) {
+            self.newline = .any;
+            return self.node(.empty);
+        }
+        if (std.mem.eql(u8, name, "NUL")) {
+            self.newline = .nul;
+            return self.node(.empty);
+        }
+        if (std.mem.eql(u8, name, "BSR_ANYCRLF")) {
+            self.bsr_anycrlf = true;
+            return self.node(.empty);
+        }
+        if (std.mem.eql(u8, name, "BSR_UNICODE")) {
+            self.bsr_anycrlf = false;
+            return self.node(.empty);
+        }
         // Start-up optimization switches; they do not change match results.
         if (std.mem.eql(u8, name, "NO_AUTO_POSSESS") or
             std.mem.eql(u8, name, "NO_START_OPT") or
@@ -665,8 +700,26 @@ pub const Parser = struct {
         }
         return escape.literal(self, try self.rune(), fold);
     }
+    /// `.` and bare `\N`: any rune except the configured line terminators.
+    /// CRLF needs a composite node because an isolated CR or LF still matches.
+    fn dotNode(self: *Parser) m.Error!*const m.Node {
+        if (self.flags.dot_newline) {
+            return self.node(.{ .set = try classes.normalize(self.allocator, &.{.{ .first = 0, .last = 0x10ffff }}, false, false, self.limits.max_ranges) });
+        }
+        if (self.newline == .crlf) {
+            const not_cr = try self.node(.{ .set = try classes.normalize(self.allocator, &.{.{ .first = '\r', .last = '\r' }}, true, false, self.limits.max_ranges) });
+            const cr = try self.literalNode('\r');
+            const not_lf = try self.node(.{ .lookahead_set = .{
+                .set = try classes.normalize(self.allocator, &.{.{ .first = '\n', .last = '\n' }}, false, false, self.limits.max_ranges),
+                .negative = true,
+            } });
+            const cr_only = try self.node(.{ .pair = .{ .left = cr, .right = not_lf } });
+            return self.node(.{ .alternate = .{ .left = not_cr, .right = cr_only } });
+        }
+        return self.node(.{ .set = try classes.normalize(self.allocator, newline.excluded(self.newline), true, false, self.limits.max_ranges) });
+    }
     fn dotSet(self: *Parser) m.Error!m.Set {
-        return classes.normalize(self.allocator, if (self.flags.dot_newline) &.{.{ .first = 0, .last = 0x10ffff }} else &.{.{ .first = '\n', .last = '\n' }}, !self.flags.dot_newline, false, self.limits.max_ranges);
+        return classes.normalize(self.allocator, if (self.flags.dot_newline) &.{.{ .first = 0, .last = 0x10ffff }} else newline.excluded(self.newline), !self.flags.dot_newline, false, self.limits.max_ranges);
     }
     fn lookaheadSet(self: *Parser) m.Error!m.Set {
         const byte = self.peek() orelse return error.InvalidRegex;
@@ -757,7 +810,10 @@ pub const Parser = struct {
     }
     fn newlineSequence(self: *Parser) m.Error!*const m.Node {
         const crlf = try self.node(.{ .pair = .{ .left = try self.literalNode('\r'), .right = try self.literalNode('\n') } });
-        const single = try self.node(.{ .set = try self.materialize(.{ .ranges = &.{
+        const single = try self.node(.{ .set = try self.materialize(.{ .ranges = if (self.bsr_anycrlf) &.{
+            .{ .first = '\n', .last = '\n' },
+            .{ .first = '\r', .last = '\r' },
+        } else &.{
             .{ .first = '\n', .last = '\n' },
             .{ .first = 0x0b, .last = 0x0c },
             .{ .first = '\r', .last = '\r' },
@@ -774,7 +830,7 @@ pub const Parser = struct {
         return switch (byte) {
             '(' => if (self.peek() == '*') self.verb(depth) else self.group(depth),
             '[' => self.characterClass(),
-            '.' => self.node(.{ .set = try self.dotSet() }),
+            '.' => self.dotNode(),
             '^' => self.node(.{ .assertion = if (self.flags.multiline) .start_line else .start_text }),
             '$' => self.node(.{ .assertion = if (self.flags.multiline) .end_line else .end_text }),
             '\\' => blk: {
@@ -789,6 +845,7 @@ pub const Parser = struct {
                 }
                 break :blk switch (try escape.parse(self, false, self.flags.fold)) {
                     .set => |parsed| self.node(.{ .set = try self.materialize(parsed) }),
+                    .dot => self.dotNode(),
                     .byte => self.node(.byte),
                     .assertion => |assertion| self.node(.{ .assertion = assertion }),
                     .backref => |index| self.node(.{ .backref = .{ .index = index } }),
@@ -919,5 +976,6 @@ pub fn parse(gpa: std.mem.Allocator, pattern: []const u8, limits: m.Limits) m.Er
         .group_nodes = nodes,
         .capture_count = parser.captures,
         .extended = parser.extended,
+        .newline = parser.newline,
     };
 }

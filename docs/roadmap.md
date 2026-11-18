@@ -27,6 +27,12 @@ Implemented functionality:
   alphabetic assertion names (`(*pla:)`, `(*nla:)`, `(*plb:)`, `(*nlb:)`),
   and non-atomic positive lookaround `(?*...)`/`(?<*...)`
   (`(*napla:)`/`(*naplb:)`).
+- PCRE2 script-run assertions `(*sr:...)`/`(*asr:...)` with UTS #39 script
+  sets, Han virtual scripts, and the decimal-digit-set rule.
+- PCRE2 scan-substring assertions `(*scs:...)`/`(*scan_substring:...)`.
+- Newline conventions `(*CR)`, `(*LF)`, `(*CRLF)`, `(*ANYCRLF)`, `(*ANY)`,
+  and `(*NUL)` for `^`, `$`, `\Z`, dot, and `\N`; `(*BSR_ANYCRLF)` /
+  `(*BSR_UNICODE)` control `\R`.
 - Numeric/named backreferences.
 - Named captures and group-name lookup; duplicate names with `(?J)`.
 - Atomic groups and possessive quantifiers.
@@ -86,7 +92,7 @@ Implemented functionality:
   case transforms `\U`/`\L`/`\E`/`\u`/`\l` (simple Unicode by default;
   `Limits.full_case_mapping` enables full SpecialCasing), and callback
   replacement via `replaceAllWithFn`.
-- 146 tests, including recursion, branch reset, conditional assertions,
+- 150 tests, including recursion, branch reset, conditional assertions,
   grapheme clusters, binary properties, Unicode blocks, partial matching,
   control verbs, thread safety, allocation-failure, and differential coverage
   against V8 for the supported subset.
@@ -140,7 +146,7 @@ Strengths:
 | True streaming scanner | yes (linear, rune-based) | partial | partial | yes |
 | Multi-pattern `RegexSet` | yes | no (separate calls) | yes | no |
 | `\C` in DFA/Pike | fallback only | yes | no | no |
-| Newline conventions `(*CR)`/`(*CRLF)`/`(*ANY)`/`(*NUL)` | no (LF only) | yes | no | no |
+| Newline conventions `(*CR)`/`(*CRLF)`/`(*ANY)`/`(*NUL)` | yes | yes | no | no |
 | `(?r)` caseless-restrict / `(?aD)`/`(?aS)`/`(?aW)`/`(?aP)`/`(?aT)` | no | yes | no | no |
 | `(?xx)` extended-more | no | yes | no | no |
 | `(*NOTEMPTY)`/`(*NOTEMPTY_ATSTART)` | no | yes | no | no |

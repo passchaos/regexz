@@ -3,7 +3,7 @@
 const std = @import("std");
 const m = @import("model.zig");
 const classes = @import("classes.zig");
-pub const Atom = union(enum) { set: m.ParsedSet, assertion: m.Assertion, byte, backref: u16, subroutine: u16, reset_start, string_property: m.StringProperty };
+pub const Atom = union(enum) { set: m.ParsedSet, assertion: m.Assertion, byte, dot, backref: u16, subroutine: u16, reset_start, string_property: m.StringProperty };
 const any_range = [_]m.Range{.{ .first = 0, .last = 0x10ffff }};
 const ascii_range = [_]m.Range{.{ .first = 0, .last = 0x7f }};
 /// PCRE2 `\p{Xuc}`: characters representable by a Universal Character Name.
@@ -378,7 +378,9 @@ pub fn parse(p: anytype, in_class: bool, fold: bool) m.Error!Atom {
                 }
             }
         }
-        return .{ .set = .{ .ranges = &.{.{ .first = '\n', .last = '\n' }}, .negate = true, .fold = false } };
+        // Bare `\N` behaves like dot without DOTALL; the parser expands it
+        // using the active newline convention.
+        return .dot;
     }
     if (byte == 'h') return .{ .set = .{ .ranges = &classes.horizontal_space_ranges, .negate = false, .fold = false } };
     if (byte == 'H') return .{ .set = .{ .ranges = &classes.horizontal_space_ranges, .negate = true, .fold = false } };

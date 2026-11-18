@@ -13,6 +13,7 @@ const pike = @import("pike.zig");
 const backtrack = @import("backtrack.zig");
 const search_dfa = @import("search_dfa.zig");
 const prefilter = @import("prefilter.zig");
+const newline = @import("newline.zig");
 const required_literals = @import("required_literals.zig");
 const unicode = @import("unicode.zig");
 const unset = std.math.maxInt(usize);
@@ -500,7 +501,7 @@ pub const Workspace = struct {
                     pc = split.left;
                     continue;
                 },
-                .assertion => |*assertion| if (position(input, pos).allows(assertion.kind)) {
+                .assertion => |*assertion| if (position(input, pos, self.program.newline).allows(assertion.kind)) {
                     pc = assertion.next;
                     continue;
                 },
@@ -695,7 +696,7 @@ pub const Workspace = struct {
                     continue;
                 },
                 .assertion => |*assertion| {
-                    if (position(input, pos).allows(assertion.kind)) {
+                    if (position(input, pos, self.program.newline).allows(assertion.kind)) {
                         pc = assertion.next;
                         continue;
                     }
@@ -1009,6 +1010,8 @@ const Position = struct {
     start: bool,
     end: bool,
     final_newline: bool,
+    line_before: bool,
+    line_after: bool,
     previous: ?u21,
     next: ?u21,
     fn word(rune: ?u21) bool {
@@ -1035,14 +1038,13 @@ const Position = struct {
     }
 };
 
-fn position(input: []const u8, offset: usize) Position {
-    const final_newline = offset == input.len or
-        (offset + 1 == input.len and input[offset] == '\n') or
-        (offset + 2 == input.len and input[offset] == '\r' and input[offset + 1] == '\n');
+fn position(input: []const u8, offset: usize, newline_mode: model.Newline) Position {
     return .{
         .start = offset == 0,
         .end = offset == input.len,
-        .final_newline = final_newline,
+        .final_newline = newline.final(input, offset, input.len, newline_mode),
+        .line_before = newline.before(input, offset, newline_mode),
+        .line_after = newline.after(input, offset, newline_mode),
         .previous = if (offset == 0) null else input[offset - 1],
         .next = if (offset == input.len) null else input[offset],
     };

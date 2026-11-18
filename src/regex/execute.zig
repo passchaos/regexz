@@ -5,12 +5,15 @@ const std = @import("std");
 const model = @import("model.zig");
 const Program = @import("compile.zig").Program;
 const budget_mod = @import("budget.zig");
+const newline = @import("newline.zig");
 pub const Stats = struct { input_bytes: usize = 0, states_visited: usize = 0 };
 pub const PartialResult = model.PartialResult;
 const Position = struct {
     start: bool,
     end: bool,
     final_newline: bool,
+    line_before: bool,
+    line_after: bool,
     previous: ?u21,
     next: ?u21,
     fn word(rune: ?u21) bool {
@@ -23,8 +26,8 @@ const Position = struct {
             .start_text, .start_match => self.start,
             .end_text => self.end,
             .end_text_or_newline => self.end or self.final_newline,
-            .start_line => self.start or self.previous == '\n',
-            .end_line => self.end or self.next == '\n',
+            .start_line => self.start or self.line_before,
+            .end_line => self.end or self.line_after,
             .word_boundary, .word_boundary_unicode => boundary,
             .no_word_boundary, .no_word_boundary_unicode => !boundary,
             // Grapheme boundary assertions are extended-only and evaluated by
@@ -146,14 +149,13 @@ pub const Workspace = struct {
             }
         }
     }
-    fn position(input: []const u8, offset: usize) Position {
-        const final_newline = offset == input.len or
-            (offset + 1 == input.len and input[offset] == '\n') or
-            (offset + 2 == input.len and input[offset] == '\r' and input[offset + 1] == '\n');
+    fn position(input: []const u8, offset: usize, newline_mode: model.Newline) Position {
         return .{
             .start = offset == 0,
             .end = offset == input.len,
-            .final_newline = final_newline,
+            .final_newline = newline.final(input, offset, input.len, newline_mode),
+            .line_before = newline.before(input, offset, newline_mode),
+            .line_after = newline.after(input, offset, newline_mode),
             .previous = if (offset == 0) null else input[offset - 1],
             .next = if (offset == input.len) null else input[offset],
         };
@@ -360,7 +362,7 @@ pub const Workspace = struct {
         var counts = [_]usize{0} ** 5;
         const stack = self.storage[n * 5 ..][0..n];
         self.epoch = 1;
-        try self.add(program, program.start, input, 0, position(input, 0), self.storage[0..n], &counts[0], stack, self.seen[0..n]);
+        try self.add(program, program.start, input, 0, position(input, 0, program.newline), self.storage[0..n], &counts[0], stack, self.seen[0..n]);
         // Rune transitions advance 1..4 bytes; \C advances exactly one.
         // Five rotating buckets retain only future positions without letting
         // a 4-byte transition overwrite the list being consumed.
@@ -403,7 +405,7 @@ pub const Workspace = struct {
                 } else {
                     self.epoch = @intCast(destination + 1);
                 }
-                try self.add(program, continuation, input, destination, position(input, destination), self.storage[bucket * n ..][0..n], &counts[bucket], stack, self.seen[bucket * n ..][0..n]);
+                try self.add(program, continuation, input, destination, position(input, destination, program.newline), self.storage[bucket * n ..][0..n], &counts[bucket], stack, self.seen[bucket * n ..][0..n]);
             }
         }
         return false;

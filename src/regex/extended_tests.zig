@@ -117,7 +117,10 @@ test "UCP classes and property aliases" {
 test "end of text and start of match assertions" {
     try expectFull("abc\\Z", "abc", .{}, true);
     try expectFind("abc\\Z", "abc\n", .{}, .{ .start = 0, .end = 3 });
-    try expectFind("abc\\Z", "abc\r\n", .{}, .{ .start = 0, .end = 3 });
+    // Under the default LF convention, CR is an ordinary character, so \Z
+    // does not match before a CRLF pair.
+    try expectFind("abc\\Z", "abc\r\n", .{}, null);
+    try expectFind("(*CRLF)abc\\Z", "abc\r\n", .{}, .{ .start = 0, .end = 3 });
     try expectFull("\\Gabc", "abc", .{}, true);
     try expectFind("\\Gabc", "xabc", .{}, null);
     var value = try regex.Regex.init(gpa, "\\Gabc", .{});

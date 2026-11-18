@@ -8,6 +8,7 @@
 const std = @import("std");
 const model = @import("model.zig");
 const Program = @import("compile.zig").Program;
+const newline = @import("newline.zig");
 const unset = std.math.maxInt(usize);
 
 pub const Match = struct {
@@ -37,14 +38,13 @@ pub fn eligible(program: Program) bool {
     return true;
 }
 
-fn position(input: []const u8, offset: usize) struct { start: bool, end: bool, final_newline: bool, previous: ?u21, next: ?u21 } {
-    const final_newline = offset == input.len or
-        (offset + 1 == input.len and input[offset] == '\n') or
-        (offset + 2 == input.len and input[offset] == '\r' and input[offset + 1] == '\n');
+fn position(input: []const u8, offset: usize, newline_mode: model.Newline) struct { start: bool, end: bool, final_newline: bool, line_before: bool, line_after: bool, previous: ?u21, next: ?u21 } {
     return .{
         .start = offset == 0,
         .end = offset == input.len,
-        .final_newline = final_newline,
+        .final_newline = newline.final(input, offset, input.len, newline_mode),
+        .line_before = newline.before(input, offset, newline_mode),
+        .line_after = newline.after(input, offset, newline_mode),
         .previous = if (offset == 0) null else input[offset - 1],
         .next = if (offset == input.len) null else input[offset],
     };
@@ -61,8 +61,8 @@ fn allows(context: anytype, assertion: model.Assertion) bool {
         .start_text, .start_match => context.start,
         .end_text => context.end,
         .end_text_or_newline => context.end or context.final_newline,
-        .start_line => context.start or context.previous == '\n',
-        .end_line => context.end or context.next == '\n',
+        .start_line => context.start or context.line_before,
+        .end_line => context.end or context.line_after,
         .word_boundary, .word_boundary_unicode => boundary,
         .no_word_boundary, .no_word_boundary_unicode => !boundary,
         // Grapheme boundary assertions are extended-only and evaluated by the
@@ -219,7 +219,7 @@ pub const Workspace = struct {
                 }
             },
             .assertion => |*assertion| {
-                if (allows(position(input, offset), assertion.kind)) {
+                if (allows(position(input, offset, program.newline), assertion.kind)) {
                     try self.add(program, list, count, region, used, assertion.next, start, input, offset, slots);
                 }
             },

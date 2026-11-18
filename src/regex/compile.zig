@@ -29,6 +29,8 @@ pub const Program = struct {
     dfa_eligible: bool = false,
     /// True when the program needs the extended backtracking VM.
     extended: bool = false,
+    /// Newline convention for `^`, `$`, `\Z`, dot, and `\N`.
+    newline: model.Newline = .lf,
     group_names: []const model.GroupName = &.{},
     /// UCP word set, present when the pattern uses Unicode `\b`/`\B`.
     ucp_word: ?model.Set = null,
@@ -728,6 +730,7 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         .literal_prefix = literal_prefix,
         .dfa_eligible = dfa_eligible,
         .extended = extended,
+        .newline = parsed.newline,
         .group_names = parsed.group_names,
         .ucp_word = ucp_word,
         .marks = parsed.marks,

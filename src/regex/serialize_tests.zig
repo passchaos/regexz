@@ -16,6 +16,8 @@ const patterns = [_][]const u8{
     "(*asr:(?:\\S+|\\S))\\S*",
     "(a)(*scs:(1)a)",
     "(?<w>ab)(*scs:('w')a.c)",
+    "(*CRLF)a.b",
+    "(*ANY)\\R",
     "a|ab",
     "(?:ab|cd)+",
     "(a)(b)?",

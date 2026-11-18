@@ -15,6 +15,7 @@ const std = @import("std");
 const model = @import("model.zig");
 const Program = @import("compile.zig").Program;
 const prefilter = @import("prefilter.zig");
+const newline = @import("newline.zig");
 const unset = std.math.maxInt(usize);
 
 pub const StreamMatch = struct {
@@ -35,6 +36,8 @@ const Position = struct {
     start: bool,
     end: bool,
     final_newline: bool,
+    line_before: bool,
+    line_after: bool,
     previous: ?u21,
     next: ?u21,
 };
@@ -50,8 +53,8 @@ fn allows(context: Position, assertion: model.Assertion) bool {
         .start_text, .start_match => context.start,
         .end_text => context.end,
         .end_text_or_newline => context.end or context.final_newline,
-        .start_line => context.start or context.previous == '\n',
-        .end_line => context.end or context.next == '\n',
+        .start_line => context.start or context.line_before,
+        .end_line => context.end or context.line_after,
         .word_boundary, .word_boundary_unicode => boundary,
         .no_word_boundary, .no_word_boundary_unicode => !boundary,
         // Grapheme boundary assertions are extended-only and evaluated by the
@@ -291,17 +294,13 @@ pub const Scanner = struct {
         const rel = offset - self.buffer_base;
         const total = self.total_len;
         const at_end = self.eof and offset == total;
-        var final_newline = false;
-        if (self.eof) {
-            final_newline = offset == total or
-                (offset + 1 == total and rel < self.buffer.items.len and self.buffer.items[rel] == '\n') or
-                (offset + 2 == total and rel + 1 < self.buffer.items.len and
-                    self.buffer.items[rel] == '\r' and self.buffer.items[rel + 1] == '\n');
-        }
+        const mode = self.program.newline;
         return .{
             .start = offset == 0,
             .end = at_end,
-            .final_newline = final_newline,
+            .final_newline = if (self.eof) newline.final(self.buffer.items, rel, self.buffer.items.len, mode) else false,
+            .line_before = if (rel > 0) newline.before(self.buffer.items, rel, mode) else false,
+            .line_after = if (rel < self.buffer.items.len) newline.after(self.buffer.items, rel, mode) else false,
             .previous = if (offset == 0) null else if (rel > 0) self.buffer.items[rel - 1] else null,
             .next = if (rel < self.buffer.items.len) self.buffer.items[rel] else null,
         };

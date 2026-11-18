@@ -552,6 +552,8 @@ pub fn deserialize(allocator: std.mem.Allocator, bytes: []const u8) model.Error!
     reader.pos = magic.len;
     if (try reader.u16v() != version) return error.InvalidRegex;
     const flags = try reader.u16v();
+    const newline_value = (flags >> 3) & 7;
+    if (newline_value > @intFromEnum(model.Newline.nul)) return error.InvalidRegex;
     const count = try reader.u32v();
     if (count > max_instructions) return error.RegexLimitExceeded;
     const start = try reader.u32v();
@@ -626,6 +628,7 @@ pub fn deserialize(allocator: std.mem.Allocator, bytes: []const u8) model.Error!
         .dispatches = dispatches,
         .first = first,
         .skip_start = flags & 4 != 0,
+        .newline = @enumFromInt(newline_value),
     };
     try validate(program);
     return program;

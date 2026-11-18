@@ -108,6 +108,9 @@ The engine picks the execution strategy automatically:
     `(?U:...)`, `(?-U:...)`, `(?n:...)`, and `(?-n:...)` forms.
   - PCRE2 `(?^)` option reset, plus the `(*NO_START_OPT)`,
     `(*NO_AUTO_POSSESS)`, and `(*NO_DOTSTAR_ANCHOR)` start-up directives.
+  - Newline conventions `(*CR)`, `(*LF)`, `(*CRLF)`, `(*ANYCRLF)`, `(*ANY)`,
+    and `(*NUL)`, which drive `^`, `$`, `\Z`, dot, and bare `\N`; `\R` is
+    controlled separately by `(*BSR_ANYCRLF)`/`(*BSR_UNICODE)`.
   - Character-class set operations `&&`, `--`, and `~~`, including nested
     classes such as `[a-z&&[^aeiou]]`.
   - UCP `\d`/`\w`/`\s` and Unicode `\b`/`\B` via
@@ -325,9 +328,6 @@ recursion-depth limits and fail closed with `error.RegexLimitExceeded`.
 - UCP applies to `\s` only when `unicode_perl_space` is set, or to
   `\d`/`\w`/`\s` and word boundaries when `unicode_perl_classes` is set.
 - Invalid UTF-8 bytes are not decoded as U+FFFD; only `\C` can consume them.
-- Newline handling uses LF (with a final CRLF recognized by `\Z`/`$`);
-  PCRE2 newline-convention and BSR directives (`(*CRLF)`, `(*ANYCRLF)`,
-  `(*ANY)`, `(*BSR_...)`) are not implemented.
 - PCRE2 `(*NOTEMPTY)`/`(*NOTEMPTY_ATSTART)` and the `(?r)`/`(?aD)`/`(?aS)`/
   `(?aW)`/`(?aP)`/`(?aT)`/`(?xx)` option letters are not implemented.
 - `\x{D800}`–`\x{DFFF}` parse but can never match, because inputs are decoded

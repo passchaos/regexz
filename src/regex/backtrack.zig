@@ -10,6 +10,7 @@ const model = @import("model.zig");
 const Program = @import("compile.zig").Program;
 const grapheme = @import("grapheme.zig");
 const script_run = @import("script_run.zig");
+const newline_mod = @import("newline.zig");
 const word_boundary = @import("word_boundary.zig");
 const sentence_boundary = @import("sentence_boundary.zig");
 const unset = std.math.maxInt(usize);
@@ -52,6 +53,8 @@ const Position = struct {
     input: []const u8,
     offset: usize,
     subject_end: usize,
+    line_before: bool,
+    line_after: bool,
     fn asciiWord(rune: ?u21) bool {
         const value = rune orelse return false;
         return value == '_' or (value >= 'a' and value <= 'z') or (value >= 'A' and value <= 'Z') or (value >= '0' and value <= '9');
@@ -67,8 +70,8 @@ const Position = struct {
             .end_text => self.end,
             .end_text_or_newline => self.end or self.final_newline,
             .start_match => self.start_match,
-            .start_line => self.start or self.previous == '\n',
-            .end_line => self.end or self.next == '\n',
+            .start_line => self.start or self.line_before,
+            .end_line => self.end or self.line_after,
             .word_boundary => asciiWord(self.previous_rune) != asciiWord(self.next_rune),
             .no_word_boundary => asciiWord(self.previous_rune) == asciiWord(self.next_rune),
             .word_boundary_unicode => unicodeWord(ucp_word, self.previous_rune) != unicodeWord(ucp_word, self.next_rune),
@@ -110,14 +113,11 @@ fn runeBefore(input: []const u8, offset: usize) ?u21 {
     return if (runeAt(input, start)) |rune| rune.value else null;
 }
 
-fn position(input: []const u8, offset: usize, attempt_start: usize, subject_end: usize) Position {
-    const final_newline = offset == subject_end or
-        (offset + 1 == subject_end and input[offset] == '\n') or
-        (offset + 2 == subject_end and input[offset] == '\r' and input[offset + 1] == '\n');
+fn position(input: []const u8, offset: usize, attempt_start: usize, subject_end: usize, newline_mode: model.Newline) Position {
     return .{
         .start = offset == 0,
         .end = offset == subject_end,
-        .final_newline = final_newline,
+        .final_newline = newline_mod.final(input, offset, subject_end, newline_mode),
         .start_match = offset == attempt_start,
         .previous = if (offset == 0) null else input[offset - 1],
         .next = if (offset == subject_end) null else input[offset],
@@ -125,6 +125,8 @@ fn position(input: []const u8, offset: usize, attempt_start: usize, subject_end:
         .input = input,
         .offset = offset,
         .subject_end = subject_end,
+        .line_before = newline_mod.before(input, offset, newline_mode),
+        .line_after = newline_mod.after(input, offset, newline_mode),
         .next_rune = if (offset < subject_end) (if (runeAt(input, offset)) |rune| rune.value else null) else null,
     };
 }
@@ -534,7 +536,7 @@ pub const Workspace = struct {
                     continue;
                 },
                 .assertion => |*assertion| {
-                    if (position(input, pos, self.attempt_start, self.subject_end).allows(assertion.kind, self.program.ucp_word)) {
+                    if (position(input, pos, self.attempt_start, self.subject_end, self.program.newline).allows(assertion.kind, self.program.ucp_word)) {
                         pc = assertion.next;
                         continue;
                     }
