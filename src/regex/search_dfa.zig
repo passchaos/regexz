@@ -984,13 +984,23 @@ pub const Workspace = struct {
     pub fn find(self: *Workspace, input: []const u8, search_start: usize) Error!?Match {
         if (search_start > input.len) return null;
         var start = search_start;
+        // Hoist the prefilter choice and the first-set summary out of the
+        // per-start loop.
+        const prefix = self.program.literal_prefix;
+        const use_prefix = if (prefix) |value| value.len != 0 else false;
+        const filter: ?*prefilter.MultiFilter = if (!use_prefix)
+            (if (self.start_filter) |*value| value else null)
+        else
+            null;
+        const skip_start = !use_prefix and filter == null and self.program.skip_start;
+        const first = self.program.first;
         while (start <= input.len) {
-            if (self.program.literal_prefix) |prefix| {
-                if (prefix.len != 0) start = indexOfLiteral(input, start, prefix) orelse return null;
-            } else if (self.start_filter) |*filter| {
-                start = filter.indexOf(input, start) orelse return null;
-            } else if (self.program.skip_start) {
-                if (start < input.len and !self.program.first.allowsByte(input[start])) {
+            if (use_prefix) {
+                start = indexOfLiteral(input, start, prefix.?) orelse return null;
+            } else if (filter) |value| {
+                start = value.indexOf(input, start) orelse return null;
+            } else if (skip_start) {
+                if (start < input.len and !first.allowsByte(input[start])) {
                     start = self.first_filter.indexOf(input, start) orelse return null;
                 }
                 if (start == input.len) return null;
