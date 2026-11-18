@@ -6,6 +6,7 @@ const model = @import("model.zig");
 const Program = @import("compile.zig").Program;
 const budget_mod = @import("budget.zig");
 const newline = @import("newline.zig");
+const shapes = @import("shapes.zig");
 pub const Stats = struct { input_bytes: usize = 0, states_visited: usize = 0 };
 pub const PartialResult = model.PartialResult;
 const Position = struct {
@@ -116,12 +117,23 @@ pub const Workspace = struct {
     dfa: ?Dfa = null,
     dfa_calls: usize = 0,
     dfa_failed: bool = false,
+    /// A `set+` program over an ASCII-only set full-matches with a byte
+    /// table, which beats the lazy DFA on both short and long inputs.
+    simple_set: bool = false,
+    simple_table: [256]bool = .{false} ** 256,
     pub fn init(allocator: std.mem.Allocator, program: Program) std.mem.Allocator.Error!Workspace {
         const storage = try allocator.alloc(u32, program.instructions.len * 6);
         errdefer allocator.free(storage);
         const seen = try allocator.alloc(u32, program.instructions.len * 5);
         @memset(seen, 0);
-        return .{ .allocator = allocator, .storage = storage, .seen = seen };
+        var workspace = Workspace{ .allocator = allocator, .storage = storage, .seen = seen };
+        if (shapes.setRun(program)) |set| {
+            if (set.ascii_only) {
+                workspace.simple_set = true;
+                for (0..128) |byte| workspace.simple_table[byte] = set.matches(@intCast(byte));
+            }
+        }
+        return workspace;
     }
     pub fn deinit(self: *Workspace) void {
         if (self.dfa) |*dfa| dfa.deinit();
@@ -362,6 +374,14 @@ pub const Workspace = struct {
     fn matchesUnchecked(self: *Workspace, program: Program, input: []const u8) bool {
         self.stats = .{ .input_bytes = input.len };
         if (program.literal) |literal| return std.mem.eql(u8, literal, input);
+        if (self.simple_set) {
+            if (input.len == 0) return false;
+            const table = &self.simple_table;
+            for (input) |byte| {
+                if (!table[byte]) return false;
+            }
+            return true;
+        }
         if (program.dfa_eligible and !self.dfa_failed) {
             const use_dfa = input.len >= dfa_min_input or self.dfa_calls >= dfa_warmup_calls;
             if (use_dfa) {
@@ -385,6 +405,11 @@ pub const Workspace = struct {
     /// Full-match partiality: `full` when the input matches, `partial` when
     /// it is a proper prefix of some match, `none` otherwise.
     pub fn partialMatch(self: *Workspace, program: Program, input: []const u8) PartialResult {
+        if (self.simple_set) {
+            const table = &self.simple_table;
+            for (input) |byte| if (!table[byte]) return .none;
+            return if (input.len == 0) .partial else .full;
+        }
         const full = self.execute(program, input, null) catch unreachable;
         if (full) return .full;
         return if (self.partial) .partial else .none;

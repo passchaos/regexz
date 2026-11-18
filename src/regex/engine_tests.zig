@@ -9,6 +9,27 @@ fn expectMatches(allocator: std.mem.Allocator, pattern: []const u8, yes: []const
     for (no) |input| try std.testing.expect(!try value.matches(allocator, input));
 }
 
+test "set-run fullmatch uses the byte table" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    try expectMatches(allocator, "[a-z]+", &.{ "abc", "a" }, &.{ "", "ab1", "caf\u{00e9}", "abc\n", "ABC" }, .{});
+    try expectMatches(allocator, "\\w+", &.{ "abc_123", "_" }, &.{ "", "ab-c" }, .{});
+    try expectMatches(allocator, "[A-Za-z0-9._-]+", &.{"User.Name_42"}, &.{ "", "User Name" }, .{});
+    try expectMatches(allocator, "\\d{1,}", &.{ "0", "123456" }, &.{ "", "12a" }, .{});
+
+    var value = try regex.Regex.init(allocator, "[a-z]+", .{});
+    defer value.deinit();
+    try std.testing.expectEqual(regex.PartialResult.full, try value.partialMatch(allocator, "abc"));
+    try std.testing.expectEqual(regex.PartialResult.partial, try value.partialMatch(allocator, ""));
+    try std.testing.expectEqual(regex.PartialResult.none, try value.partialMatch(allocator, "ab1"));
+
+    // A case-folded ASCII class gains non-ASCII members, so it stays on the
+    // DFA path and must still match them.
+    try expectMatches(allocator, "(?i)[a-z]+", &.{ "AbC", "\u{212a}" }, &.{ "", "ab1" }, .{});
+}
+
 test "case folding is materialized before class negation" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
