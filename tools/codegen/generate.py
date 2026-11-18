@@ -541,7 +541,7 @@ def main():
   value={'EvenOdd':1,'OddEven':-1}.get(delta)
   if value is None:value=int(delta)
   fold.extend(struct.pack('<IIi',int(a),int(b),value))
- unicode_names=['auxiliary/GraphemeBreakProperty.txt','emoji/emoji-data.txt','DerivedCoreProperties.txt','PropList.txt','Blocks.txt','ScriptExtensions.txt','PropertyValueAliases.txt','UnicodeData.txt','emoji/emoji-test.txt','emoji/emoji-sequences.txt','emoji/emoji-zwj-sequences.txt','auxiliary/WordBreakProperty.txt','auxiliary/WordBreakTest.txt','auxiliary/SentenceBreakProperty.txt','auxiliary/SentenceBreakTest.txt','SpecialCasing.txt','Scripts.txt']
+ unicode_names=['auxiliary/GraphemeBreakProperty.txt','emoji/emoji-data.txt','DerivedCoreProperties.txt','PropList.txt','Blocks.txt','ScriptExtensions.txt','PropertyValueAliases.txt','UnicodeData.txt','emoji/emoji-test.txt','emoji/emoji-sequences.txt','emoji/emoji-zwj-sequences.txt','auxiliary/WordBreakProperty.txt','auxiliary/WordBreakTest.txt','auxiliary/SentenceBreakProperty.txt','auxiliary/SentenceBreakTest.txt','SpecialCasing.txt','Scripts.txt','extracted/DerivedGeneralCategory.txt']
  unicode_urls={name:f'https://www.unicode.org/Public/{UNICODE_VERSION}/ucd/{name}' for name in unicode_names}
  unicode_urls['emoji/emoji-test.txt']=f'https://www.unicode.org/Public/emoji/{EMOJI_VERSION}/emoji-test.txt'
  unicode_urls['emoji/emoji-sequences.txt']=f'https://www.unicode.org/Public/emoji/{EMOJI_VERSION}/emoji-sequences.txt'
@@ -569,6 +569,24 @@ def main():
   ucd_scripts.setdefault(parts[1],[]).append((int(first,16),int(last,16)))
  for name,values in ucd_scripts.items():
   group_ranges[name]=merge_ranges(values)
+ # General Category Cn (unassigned) is omitted by RE2's tables but is part
+ # of the Unicode general categories and backs \p{Assigned}.
+ cn_ranges=[]
+ for line in unicode_files['extracted/DerivedGeneralCategory.txt'].decode().splitlines():
+  line=line.split('#',1)[0].strip()
+  if not line: continue
+  parts=[p.strip() for p in line.split(';')]
+  if len(parts)<2 or parts[1]!='Cn': continue
+  rng=parts[0]
+  if '..' in rng:
+   first,last=rng.split('..')
+  else:
+   first=last=rng
+  cn_ranges.append((int(first,16),int(last,16)))
+ group_ranges['Cn']=merge_ranges(cn_ranges)
+ # The Other (C) category includes unassigned code points.
+ if 'C' in group_ranges:
+  group_ranges['C']=merge_ranges(group_ranges['C']+cn_ranges)
  blob=bytearray();entries=[]
  for name in sorted(group_ranges):
   values=group_ranges[name]

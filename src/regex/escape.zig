@@ -88,6 +88,11 @@ fn property(p: anytype, negative: bool, fold: bool) m.Error!m.ParsedSet {
     }
     if (std.mem.eql(u8, name, "Any")) return .{ .ranges = &any_range, .negate = negate, .fold = fold };
     if (nameEqual(name, "ASCII")) return .{ .ranges = &ascii_range, .negate = negate, .fold = fold };
+    if (nameEqual(name, "Assigned")) {
+        const cn = try classes.unicodePropertyRanges(p.allocator, "Cn");
+        if (cn.len > p.limits.max_ranges) return error.RegexLimitExceeded;
+        return .{ .ranges = cn, .negate = !negate, .fold = fold };
+    }
     if (std.mem.eql(u8, name, "Xan")) return .{ .ranges = try classes.unicodePropertyUnion(p.allocator, &.{ "L", "N" }, p.limits.max_ranges), .negate = negate, .fold = fold };
     if (std.mem.eql(u8, name, "Xwd")) return .{ .ranges = try classes.unicodeWordRanges(p.allocator, p.limits.max_ranges), .negate = negate, .fold = fold };
     if (std.mem.eql(u8, name, "Xps") or std.mem.eql(u8, name, "Xsp")) return .{ .ranges = &classes.unicode_space_ranges, .negate = negate, .fold = fold };

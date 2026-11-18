@@ -221,3 +221,20 @@ test "ASCII property" {
         for (case.no) |input| try std.testing.expect(!try value.matches(gpa, input));
     }
 }
+
+test "Assigned and unassigned properties" {
+    const Case = struct { pattern: []const u8, input: []const u8, matches: bool };
+    for ([_]Case{
+        .{ .pattern = "\\p{Cn}", .input = "\u{0378}", .matches = true },
+        .{ .pattern = "\\p{Cn}", .input = "a", .matches = false },
+        .{ .pattern = "\\p{C}", .input = "\u{0378}", .matches = true },
+        .{ .pattern = "\\p{Assigned}", .input = "a", .matches = true },
+        .{ .pattern = "\\p{Assigned}", .input = "\u{0378}", .matches = false },
+        .{ .pattern = "\\P{Assigned}", .input = "\u{0378}", .matches = true },
+        .{ .pattern = "\\P{Assigned}", .input = "a", .matches = false },
+    }) |case| {
+        var value = try regex.Regex.init(gpa, case.pattern, .{});
+        defer value.deinit();
+        try std.testing.expectEqual(case.matches, try value.matches(gpa, case.input));
+    }
+}

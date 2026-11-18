@@ -108,7 +108,7 @@ The engine picks the execution strategy automatically:
     `\p{White_Space}`, `\p{Emoji}`, `\p{Extended_Pictographic}`,
     `\p{Lowercase}`, `\p{Hex_Digit}`, `\p{ID_Start}`, plus PCRE2 special
     properties `\p{Xan}`, `\p{Xwd}`, `\p{Xps}`, `\p{Xsp}`, `\p{Xuc}`,
-    plus `\p{ASCII}`.
+    plus `\p{ASCII}`, `\p{Cn}` (unassigned), and `\p{Assigned}`.
   - Unicode blocks: `\p{InBasic_Latin}`, `\p{InGreek}`, `\p{InEmoticons}`,
     `\p{Block=Basic_Latin}` (underscores are optional and case-insensitive).
   - Unicode string properties: `\p{RGI_Emoji}` (all RGI sequences) plus
