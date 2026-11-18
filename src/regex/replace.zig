@@ -156,7 +156,21 @@ pub const Workspace = struct {
         var out: std.ArrayList(u8) = .empty;
         errdefer out.deinit(self.allocator);
         var writer = ListWriter{ .list = &out, .allocator = self.allocator };
-        try self.replaceAllWith(&writer, input, substitution);
+        try self.replaceAllWith(&writer, input, substitution, std.math.maxInt(usize));
+        return out.toOwnedSlice(self.allocator);
+    }
+
+    /// Replace at most `limit` non-overlapping leftmost-first matches.
+    pub fn replacen(
+        self: *Workspace,
+        input: []const u8,
+        limit: usize,
+        substitution: []const u8,
+    ) Error![]u8 {
+        var out: std.ArrayList(u8) = .empty;
+        errdefer out.deinit(self.allocator);
+        var writer = ListWriter{ .list = &out, .allocator = self.allocator };
+        try self.replaceAllWith(&writer, input, substitution, limit);
         return out.toOwnedSlice(self.allocator);
     }
 
@@ -168,7 +182,7 @@ pub const Workspace = struct {
     ) Error!usize {
         var length: usize = 0;
         var writer = LengthWriter{ .length = &length };
-        try self.replaceAllWith(&writer, input, substitution);
+        try self.replaceAllWith(&writer, input, substitution, std.math.maxInt(usize));
         return length;
     }
 
@@ -181,7 +195,7 @@ pub const Workspace = struct {
         output: []u8,
     ) Error![]const u8 {
         var writer = BufferWriter{ .output = output };
-        try self.replaceAllWith(&writer, input, substitution);
+        try self.replaceAllWith(&writer, input, substitution, std.math.maxInt(usize));
         return output[0..writer.len];
     }
 
@@ -227,12 +241,15 @@ pub const Workspace = struct {
         writer: anytype,
         input: []const u8,
         substitution: []const u8,
+        limit: usize,
     ) Error!void {
         try validateSubstitutionFor(self.program, substitution);
         self.steps = 0;
         var search_start: usize = 0;
-        while (search_start <= input.len) {
+        var replaced: usize = 0;
+        while (search_start <= input.len and replaced < limit) {
             const match = try self.findInternal(input, search_start) orelse break;
+            replaced += 1;
             try writer.appendSlice(input[search_start..match.start]);
             try appendSubstitution(writer, input, substitution, match.slots, self.program, self.limits.full_case_mapping);
             if (match.end > match.start) {

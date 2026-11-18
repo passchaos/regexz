@@ -143,3 +143,57 @@ test "compile diagnostics report where parsing stopped" {
     try std.testing.expectEqual(regex.DiagnosticKind.limit, limited.kind);
     try std.testing.expectEqual(@as(usize, 3), limited.offset);
 }
+
+test "escape produces a literal pattern" {
+    const escaped = try regex.escape(gpa, "a.b*c (d) [e] {f} | ^$ \\ # & - ~");
+    defer gpa.free(escaped);
+    try std.testing.expectEqualStrings("a\\.b\\*c \\(d\\) \\[e\\] \\{f\\} \\| \\^\\$ \\\\ \\# \\& \\- \\~", escaped);
+
+    var value = try regex.Regex.init(gpa, escaped, .{});
+    defer value.deinit();
+    try std.testing.expect(try value.matches(gpa, "a.b*c (d) [e] {f} | ^$ \\ # & - ~"));
+    try std.testing.expect(!try value.matches(gpa, "axb*c (d) [e] {f} | ^$ \\ # & - ~"));
+
+    // Non-ASCII bytes pass through unchanged.
+    const unicode = try regex.escape(gpa, "你好.世界");
+    defer gpa.free(unicode);
+    var han = try regex.Regex.init(gpa, unicode, .{});
+    defer han.deinit();
+    try std.testing.expect(try han.matches(gpa, "你好.世界"));
+}
+
+test "splitn and replacen honor their limits" {
+    var value = try regex.Regex.init(gpa, ",", .{});
+    defer value.deinit();
+
+    const all = try value.split(gpa, "a,b,c");
+    defer gpa.free(all);
+    try std.testing.expectEqual(@as(usize, 3), all.len);
+
+    const two = try value.splitn(gpa, "a,b,c", 2);
+    defer gpa.free(two);
+    try std.testing.expectEqual(@as(usize, 2), two.len);
+    try std.testing.expectEqualStrings("a", two[0]);
+    try std.testing.expectEqualStrings("b,c", two[1]);
+
+    const one = try value.splitn(gpa, "a,b,c", 1);
+    defer gpa.free(one);
+    try std.testing.expectEqual(@as(usize, 1), one.len);
+    try std.testing.expectEqualStrings("a,b,c", one[0]);
+
+    const none = try value.splitn(gpa, "a,b,c", 0);
+    defer gpa.free(none);
+    try std.testing.expectEqual(@as(usize, 0), none.len);
+
+    const replaced = try value.replacen(gpa, "a,b,c", 1, "-");
+    defer gpa.free(replaced);
+    try std.testing.expectEqualStrings("a-b,c", replaced);
+
+    const replaced_none = try value.replacen(gpa, "a,b,c", 0, "-");
+    defer gpa.free(replaced_none);
+    try std.testing.expectEqualStrings("a,b,c", replaced_none);
+
+    const replaced_all = try value.replacen(gpa, "a,b,c", 5, "-");
+    defer gpa.free(replaced_all);
+    try std.testing.expectEqualStrings("a-b-c", replaced_all);
+}

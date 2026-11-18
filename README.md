@@ -173,12 +173,14 @@ The engine picks the execution strategy automatically:
     are approximated conservatively).
   - Capture-aware search: `Regex.find`/`findFrom` with a reusable `Captures`
     buffer.
-  - Iteration and splitting: `Regex.findAll`, `Regex.split`.
+  - Iteration and splitting: `Regex.findAll`, `Regex.split`, `Regex.splitn`
+    (limited parts).
   - Multi-pattern matching: `RegexSet` compiles independent patterns and
     reports which match anywhere in the input via `matches`, `isMatch`, or
     `matchIndices`. Eligible patterns share one unanchored DFA scan; patterns
     with assertions or extended features stay on their per-pattern engines.
-  - Replacement: `Regex.replaceAll` and `ReplaceWorkspace`. Dynamic
+  - Replacement: `Regex.replaceAll`, `Regex.replacen` (limited matches), and
+    `ReplaceWorkspace`. Dynamic
     replacement via `Regex.replaceAllWithFn` /
     `ReplaceWorkspace.replaceAllWithFn` passes each match and its capture
     slots to a callback that returns allocator-owned replacement bytes.
@@ -192,6 +194,8 @@ The engine picks the execution strategy automatically:
     program's lifetime.
   - Compile diagnostics: `diagnose` reports the byte offset and kind
     (`syntax`, `unsupported`, `limit`) where a pattern failed to compile.
+  - Pattern escaping: `escape` turns a literal string into a pattern that
+    matches it.
 - Caller-owned compilation: `compile` writes into the allocator you provide;
   `Regex` keeps an internal arena.
 - Reusable workspaces (`Workspace`, `ReplaceWorkspace`) for matching and

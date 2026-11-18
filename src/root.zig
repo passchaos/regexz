@@ -104,6 +104,22 @@ pub fn compile(gpa: std.mem.Allocator, pattern: []const u8, limits: Limits) Erro
     return compile_mod.compile(gpa, parsed, limits);
 }
 
+/// Escape `literal` so that compiling the result matches the literal bytes.
+/// The escaped set matches Rust `regex::escape`: `\ . + * ? ( ) | [ ] { } ^
+/// $ # & - ~`.
+pub fn escape(gpa: std.mem.Allocator, literal: []const u8) std.mem.Allocator.Error![]u8 {
+    var out: std.ArrayList(u8) = .empty;
+    errdefer out.deinit(gpa);
+    for (literal) |byte| {
+        switch (byte) {
+            '\\', '.', '+', '*', '?', '(', ')', '|', '[', ']', '{', '}', '^', '$', '#', '&', '-', '~' => try out.append(gpa, '\\'),
+            else => {},
+        }
+        try out.append(gpa, byte);
+    }
+    return out.toOwnedSlice(gpa);
+}
+
 /// Compile and, on failure, report where compilation stopped.
 ///
 /// The offset is a byte index into the pattern (identical to the input unless
@@ -292,10 +308,33 @@ pub const Regex = struct {
         try parts.append(gpa, input[last..]);
         return parts.toOwnedSlice(gpa);
     }
+    /// Split `input` around at most `limit` matches; the last part receives
+    /// the unmatched remainder. `limit == 0` returns no parts.
+    pub fn splitn(self: *const Regex, gpa: std.mem.Allocator, input: []const u8, limit: usize) Error![][]const u8 {
+        var parts: std.ArrayList([]const u8) = .empty;
+        errdefer parts.deinit(gpa);
+        if (limit == 0) return parts.toOwnedSlice(gpa);
+        var iterator = try self.findAll(gpa, input);
+        defer iterator.deinit();
+        var last: usize = 0;
+        while (parts.items.len + 1 < limit) {
+            const match = (try iterator.next()) orelse break;
+            try parts.append(gpa, input[last..match.start]);
+            last = match.end;
+        }
+        try parts.append(gpa, input[last..]);
+        return parts.toOwnedSlice(gpa);
+    }
     pub fn replaceAll(self: *const Regex, gpa: std.mem.Allocator, input: []const u8, substitution: []const u8) Error![]u8 {
         var workspace = try ReplaceWorkspace.init(gpa, self.program, self.limits);
         defer workspace.deinit();
         return workspace.replaceAll(input, substitution);
+    }
+    /// Replace at most `limit` matches.
+    pub fn replacen(self: *const Regex, gpa: std.mem.Allocator, input: []const u8, limit: usize, substitution: []const u8) Error![]u8 {
+        var workspace = try ReplaceWorkspace.init(gpa, self.program, self.limits);
+        defer workspace.deinit();
+        return workspace.replacen(input, limit, substitution);
     }
 
     pub fn replaceAllWithFn(
