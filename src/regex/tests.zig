@@ -457,3 +457,17 @@ test "Bidi_Class properties" {
     }
     try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, "\\p{BC:XX}", .{}));
 }
+
+test "unbounded assertion repetition is capped" {
+    const Case = struct { pattern: []const u8, input: []const u8, matches: bool };
+    for ([_]Case{
+        .{ .pattern = "(?=a)+a", .input = "a", .matches = true },
+        .{ .pattern = "(?=a)*a", .input = "a", .matches = true },
+        .{ .pattern = "(?=a){2,}a", .input = "a", .matches = true },
+        .{ .pattern = "(?=b)+a", .input = "a", .matches = false },
+    }) |case| {
+        var value = try regex.Regex.init(gpa, case.pattern, .{});
+        defer value.deinit();
+        try std.testing.expectEqual(case.matches, try value.matches(gpa, case.input));
+    }
+}

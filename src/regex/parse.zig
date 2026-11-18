@@ -987,6 +987,17 @@ pub const Parser = struct {
         if (minimum > self.limits.max_repeat or (maximum != null and maximum.? > self.limits.max_repeat)) return error.RegexLimitExceeded;
         return .{ .minimum = minimum, .maximum = maximum };
     }
+    fn zeroWidthNode(value: *const m.Node) bool {
+        return switch (value.*) {
+            .empty, .flag_change, .assertion, .lookahead_set, .lookaround => true,
+            .group => |child| zeroWidthNode(child),
+            .capture => |capture| zeroWidthNode(capture.child),
+            .atomic => |child| zeroWidthNode(child),
+            .pair => |pair| zeroWidthNode(pair.left) and zeroWidthNode(pair.right),
+            .alternate => |pair| zeroWidthNode(pair.left) and zeroWidthNode(pair.right),
+            else => false,
+        };
+    }
     fn repetition(self: *Parser, child: *const m.Node) m.Error!*const m.Node {
         self.skipExtended();
         var minimum: usize = 0;
@@ -1000,7 +1011,7 @@ pub const Parser = struct {
             minimum = count.minimum;
             maximum = count.maximum;
         } else return child;
-        if (child.* == .flag_change or child.* == .lookahead_set or child.* == .fail or child.* == .accept_verb or child.* == .prune or child.* == .skip or child.* == .commit) return error.InvalidRegex;
+        if (child.* == .flag_change or child.* == .fail or child.* == .accept_verb or child.* == .prune or child.* == .skip or child.* == .commit) return error.InvalidRegex;
         var lazy = false;
         var possessive = false;
         if (self.take('?')) {
@@ -1013,6 +1024,11 @@ pub const Parser = struct {
         // makes them greedy again. Possessive quantifiers are unaffected.
         if (self.flags.ungreedy and !possessive) lazy = !lazy;
         if (self.peek()) |byte| if (byte == '*' or byte == '+' or byte == '?') return error.InvalidRegex;
+        // PCRE2 caps unbounded repetition of zero-width assertions at one
+        // more than the minimum, preventing non-progressing loops.
+        if (maximum == null and zeroWidthNode(child)) {
+            maximum = if (minimum >= self.limits.max_repeat) minimum else minimum + 1;
+        }
         return self.node(.{ .repeat = .{
             .child = child,
             .minimum = minimum,
