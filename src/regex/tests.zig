@@ -507,3 +507,29 @@ test "backspace escape inside character classes" {
     try std.testing.expect(try mixed.matches(gpa, "\x08"));
     try std.testing.expect(try mixed.matches(gpa, "a"));
 }
+
+test "Turkish casing" {
+    const Case = struct { pattern: []const u8, input: []const u8, matches: bool };
+    for ([_]Case{
+        .{ .pattern = "(*TURKISH_CASING)(?i)i", .input = "\u{0130}", .matches = true },
+        .{ .pattern = "(*TURKISH_CASING)(?i)i", .input = "I", .matches = false },
+        .{ .pattern = "(*TURKISH_CASING)(?i)I", .input = "\u{0131}", .matches = true },
+        .{ .pattern = "(*TURKISH_CASING)(?i)I", .input = "i", .matches = false },
+        .{ .pattern = "(*TURKISH_CASING)(?i)\u{0130}", .input = "i", .matches = true },
+        .{ .pattern = "(*TURKISH_CASING)(?i)\u{0131}", .input = "I", .matches = true },
+        .{ .pattern = "(*TURKISH_CASING)(?i)[a-z]", .input = "\u{0130}", .matches = true },
+        .{ .pattern = "(*TURKISH_CASING)(?i)[a-z]", .input = "I", .matches = false },
+        .{ .pattern = "(*TURKISH_CASING)(?i)[A-Z]", .input = "\u{0131}", .matches = true },
+        .{ .pattern = "(*TURKISH_CASING)(?i)[A-Z]", .input = "i", .matches = false },
+        .{ .pattern = "(*TURKISH_CASING)(?i)\u{00e9}", .input = "\u{00c9}", .matches = true },
+        .{ .pattern = "(?i)i", .input = "I", .matches = true },
+        .{ .pattern = "(?i)i", .input = "\u{0130}", .matches = false },
+        .{ .pattern = "(*TURKISH_CASING)(?i)(i)\\1", .input = "i\u{0130}", .matches = true },
+        .{ .pattern = "(*TURKISH_CASING)(?i)(i)\\1", .input = "iI", .matches = false },
+        .{ .pattern = "(*TURKISH_CASING)(?i)(I)\\1", .input = "I\u{0131}", .matches = true },
+    }) |case| {
+        var value = try regex.Regex.init(gpa, case.pattern, .{});
+        defer value.deinit();
+        try std.testing.expectEqual(case.matches, try value.matches(gpa, case.input));
+    }
+}

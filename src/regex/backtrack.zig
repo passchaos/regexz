@@ -438,6 +438,14 @@ pub const Workspace = struct {
         return false;
     }
 
+    fn foldEqualTurkish(a: u21, b: u21) bool {
+        if (a == b) return true;
+        if ((a == 'i' and b == 0x130) or (a == 0x130 and b == 'i')) return true;
+        if ((a == 'I' and b == 0x131) or (a == 0x131 and b == 'I')) return true;
+        if ((a == 'i' and b == 'I') or (a == 'I' and b == 'i')) return false;
+        return foldEqual(a, b);
+    }
+
     /// Caseless backreference comparison (`(?i)` active at the reference).
     fn caselessBackref(self: *Workspace, input: []const u8, captured: []const u8, fold: model.Fold, pos: usize) ?usize {
         if (fold == .ascii) {
@@ -463,7 +471,8 @@ pub const Workspace = struct {
                 self.partial = true;
                 return null;
             };
-            if (!foldEqual(a.value, b.value)) return null;
+            const equal = if (fold == .turkish) foldEqualTurkish(a.value, b.value) else foldEqual(a.value, b.value);
+            if (!equal) return null;
             source += a.len;
             target += b.len;
         }

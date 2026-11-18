@@ -41,6 +41,26 @@ fn appendFolded(gpa: std.mem.Allocator, ranges: *std.ArrayList(m.Range)) m.Error
     }
 }
 
+/// Add Turkish/Azeri peers: `i` pairs with U+0130 and `I` with U+0131,
+/// while the ASCII `I`/`i` pair is removed.
+fn appendTurkishFolded(gpa: std.mem.Allocator, ranges: *std.ArrayList(m.Range)) m.Error!void {
+    const original_len = ranges.items.len;
+    try appendFolded(gpa, ranges);
+    var write: usize = 0;
+    for (ranges.items, 0..) |range, index| {
+        if (index >= original_len and range.first == range.last and (range.first == 'I' or range.first == 'i')) continue;
+        ranges.items[write] = range;
+        write += 1;
+    }
+    ranges.shrinkRetainingCapacity(write);
+    for (ranges.items[0..original_len]) |range| {
+        if (range.first <= 'i' and range.last >= 'i') try ranges.append(gpa, .{ .first = 0x130, .last = 0x130 });
+        if (range.first <= 'I' and range.last >= 'I') try ranges.append(gpa, .{ .first = 0x131, .last = 0x131 });
+        if (range.first <= 0x130 and range.last >= 0x130) try ranges.append(gpa, .{ .first = 'i', .last = 'i' });
+        if (range.first <= 0x131 and range.last >= 0x131) try ranges.append(gpa, .{ .first = 'I', .last = 'I' });
+    }
+}
+
 /// Add ASCII case peers for `(?r)`; Unicode pairs stay unfolded.
 fn appendAsciiFolded(gpa: std.mem.Allocator, ranges: *std.ArrayList(m.Range)) m.Error!void {
     const original_len = ranges.items.len;
@@ -100,7 +120,11 @@ pub fn normalize(gpa: std.mem.Allocator, raw: []const m.Range, negate: bool, fol
     defer ranges.deinit(gpa);
     try ranges.appendSlice(gpa, raw);
     if (fold != .none) {
-        if (fold == .ascii) try appendAsciiFolded(gpa, &ranges) else try appendFolded(gpa, &ranges);
+        switch (fold) {
+            .ascii => try appendAsciiFolded(gpa, &ranges),
+            .turkish => try appendTurkishFolded(gpa, &ranges),
+            else => try appendFolded(gpa, &ranges),
+        }
     }
     std.mem.sort(m.Range, ranges.items, {}, lessThan);
     var count: usize = 0;

@@ -97,7 +97,7 @@ Implemented functionality:
   case transforms `\U`/`\L`/`\E`/`\u`/`\l` (simple Unicode by default;
   `Limits.full_case_mapping` enables full SpecialCasing), and callback
   replacement via `replaceAllWithFn`.
-- 169 tests, including recursion, branch reset, conditional assertions,
+- 170 tests, including recursion, branch reset, conditional assertions,
   grapheme clusters, binary properties, Unicode blocks, partial matching,
   control verbs, thread safety, allocation-failure, and differential coverage
   against V8 for the supported subset.
@@ -159,7 +159,7 @@ Strengths:
 | `(?xx)` extended-more | yes | yes | no | no |
 | `(*NOTEMPTY)`/`(*NOTEMPTY_ATSTART)` | yes | yes | no | no |
 | `(*LIMIT_MATCH/DEPTH/HEAP=...)` | yes (heap is a choice/trail proxy) | yes | no | no |
-| Turkish/Azeri casing `(*TURKISH_CASING)` | no (rejected) | yes (10.45+) | no | no |
+| Turkish/Azeri casing `(*TURKISH_CASING)` | yes | yes (10.45+) | no | no |
 
 ## 3. Performance gaps
 
@@ -194,7 +194,7 @@ cache for identical sources.
 
 Latest verification on a busy macOS host (2026-11): full-pattern Qwen search
 is ~89–92 µs (~260 MiB/s), `RegexSet` ~96 µs, `replaceAll` ~76 µs, compile
-~1.5 µs with `smp_allocator`, and all 169 tests plus the V8/Rust/extended
+~1.5 µs with `smp_allocator`, and all 170 tests plus the V8/Rust/extended
 differential fuzzers pass. Treat absolute numbers as host-noise-sensitive;
 the bench gate compares ratios against `tools/bench/baseline.json`.
 

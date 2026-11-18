@@ -140,6 +140,8 @@ The engine picks the execution strategy automatically:
     plus `\p{ASCII}`, `\p{Cn}` (unassigned), and `\p{Assigned}`.
   - Case-insensitive matching uses simple Unicode case folding; Unicode 17
     `CaseFolding.txt` pairs missing from RE2's pinned tables are supplemented.
+    `(?r)` restricts folding to ASCII, and `(*TURKISH_CASING)` enables
+    Turkish/Azeri `i`/`İ` and `I`/`ı` pairing.
   - Unicode blocks: `\p{InBasic_Latin}`, `\p{InGreek}`, `\p{InEmoticons}`,
     `\p{Block=Basic_Latin}` (underscores are optional and case-insensitive).
   - Unicode string properties: `\p{RGI_Emoji}` (all RGI sequences) plus
@@ -345,8 +347,6 @@ recursion-depth limits and fail closed with `error.RegexLimitExceeded`.
 - Invalid UTF-8 bytes are not decoded as U+FFFD; only `\C` can consume them.
 - PCRE2 `(*NOTEMPTY)`/`(*NOTEMPTY_ATSTART)` are supported in full-match,
   search, replace, and streaming paths; `\C` still uses the interpreter.
-- Turkish/Azeri casing (`(*TURKISH_CASING)`) is not implemented and is
-  rejected rather than silently ignored.
 - `(*LIMIT_HEAP=...)` is enforced as a cap on backtracking choices and
   capture-trail entries (64-byte units), not exact byte accounting.
 - `\x{D800}`–`\x{DFFF}` parse but can never match, because inputs are decoded

@@ -24,6 +24,7 @@ pub const Parser = struct {
     limit_match: usize = std.math.maxInt(usize),
     limit_depth: usize = std.math.maxInt(usize),
     limit_heap_kib: usize = std.math.maxInt(usize),
+    turkish_casing: bool = false,
     group_names: std.ArrayList(m.GroupName) = .empty,
     group_nodes: std.ArrayList(?*const m.Node) = .empty,
     marks: std.ArrayList([]const u8) = .empty,
@@ -326,6 +327,10 @@ pub const Parser = struct {
         }
         if (std.mem.eql(u8, name, "NUL")) {
             self.newline = .nul;
+            return self.node(.empty);
+        }
+        if (std.mem.eql(u8, name, "TURKISH_CASING")) {
+            self.turkish_casing = true;
             return self.node(.empty);
         }
         if (std.mem.eql(u8, name, "BSR_ANYCRLF")) {
@@ -864,7 +869,8 @@ pub const Parser = struct {
     }
     fn foldMode(self: *Parser) m.Fold {
         if (!self.flags.fold) return .none;
-        return if (self.flags.caseless_restrict) .ascii else .unicode;
+        if (self.flags.caseless_restrict) return .ascii;
+        return if (self.turkish_casing) .turkish else .unicode;
     }
     /// `.` and bare `\N`: any rune except the configured line terminators.
     /// CRLF needs a composite node because an isolated CR or LF still matches.

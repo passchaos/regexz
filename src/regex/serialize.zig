@@ -430,7 +430,7 @@ fn readInstruction(reader: *Reader, allocator: std.mem.Allocator) !model.Instruc
         .backref_fold => blk: {
             const group = try reader.u16v();
             const fold_value = try reader.byte();
-            if (fold_value > @intFromEnum(model.Fold.ascii)) return error.InvalidRegex;
+            if (fold_value > @intFromEnum(model.Fold.turkish)) return error.InvalidRegex;
             break :blk .{ .backref = .{
                 .group = group,
                 .fold = @enumFromInt(fold_value),
@@ -444,7 +444,7 @@ fn readInstruction(reader: *Reader, allocator: std.mem.Allocator) !model.Instruc
             const groups = try allocator.alloc(u16, count);
             for (groups) |*item| item.* = try reader.u16v();
             const fold_value = try reader.byte();
-            if (fold_value > @intFromEnum(model.Fold.ascii)) return error.InvalidRegex;
+            if (fold_value > @intFromEnum(model.Fold.turkish)) return error.InvalidRegex;
             break :blk .{ .backref = .{
                 .group = group,
                 .groups = groups,

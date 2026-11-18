@@ -121,7 +121,7 @@ pub const Range = unicode.Range;
 /// before complementing.
 /// Case-folding mode for a parsed set. `ascii` is PCRE2 `(?r)`:
 /// only A-Z/a-z pairs fold, Unicode peers are ignored.
-pub const Fold = enum(u8) { none, unicode, ascii };
+pub const Fold = enum(u8) { none, unicode, ascii, turkish };
 pub const ParsedSet = struct {
     ranges: []const Range,
     negate: bool = false,

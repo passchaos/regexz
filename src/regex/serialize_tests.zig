@@ -24,6 +24,7 @@ const patterns = [_][]const u8{
     "(?J)(?:(?<n>foo)|(?<n>bar))\\k<n>",
     "(?|(?<AA>aa)|(?<AA>bb))\\k<AA>",
     "(*LIMIT_MATCH=1000000)a+",
+    "(*TURKISH_CASING)(?i)i",
     "a|ab",
     "(?:ab|cd)+",
     "(a)(b)?",
