@@ -339,6 +339,8 @@ fn parseGroupSpec(text: []const u8) m.Error!GroupSpec {
 pub fn parse(p: anytype, in_class: bool, fold: m.Fold) m.Error!Atom {
     const byte = p.peek() orelse return error.InvalidRegex;
     p.cursor += 1;
+    // Inside a character class, `\b` is the backspace character.
+    if (in_class and byte == 'b') return .{ .set = try literal(p, 0x08, fold) };
     if (std.mem.indexOfScalar(u8, "dDsSwW", byte) != null) {
         const negate = std.ascii.isUpper(byte);
         const ascii_override = switch (std.ascii.toLower(byte)) {

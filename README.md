@@ -105,7 +105,8 @@ The engine picks the execution strategy automatically:
     (explicit code point), `\N{NAME}` (Unicode character name; explicit names
     plus algorithmic CJK, Hangul, Tangut, Khitan, Nushu, Egyptian, and
     Anatolian names), `\h`/`\H` (horizontal whitespace), `\cX`
-    (control characters), and `\o{...}` (octal code points).
+    (control characters), `\o{...}` (octal code points), and `[\b]`
+    (backspace inside classes).
   - Extended mode `(?x)` with whitespace and `#` comments outside classes.
   - Ungreedy mode `(?U)` and no-auto-capture mode `(?n)`, including scoped
     `(?U:...)`, `(?-U:...)`, `(?n:...)`, and `(?-n:...)` forms.

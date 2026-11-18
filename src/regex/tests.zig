@@ -141,7 +141,7 @@ test "UCP Qwen pre-tokenizer matches PCRE2 on Unicode whitespace" {
     }
 }
 test "gRPC xDS safe regex rejects invalid syntax and bounds nested repetitions" {
-    for ([_][]const u8{ "(", "[a-z", "[z-a]", "a**", "(?=", "(?=[a-z)", "(?i-)a", "(?i)*", "{1}", "a{1}{2}", "\\p{Unknown}", "\\x{110000}", "a{2,1}", "a{1001}", "[a-\\d]", "[\\b]", "\\" }) |pattern| try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, pattern, .{}));
+    for ([_][]const u8{ "(", "[a-z", "[z-a]", "a**", "(?=", "(?=[a-z)", "(?i-)a", "(?i)*", "{1}", "a{1}{2}", "\\p{Unknown}", "\\x{110000}", "a{2,1}", "a{1001}", "[a-\\d]", "\\" }) |pattern| try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, pattern, .{}));
     try std.testing.expectError(error.RegexLimitExceeded, regex.Regex.init(gpa, "abcdef", .{ .max_pattern_bytes = 5 }));
     try std.testing.expectError(error.RegexLimitExceeded, regex.Regex.init(gpa, "a{5}", .{ .max_repeat = 4 }));
     try std.testing.expectError(error.RegexLimitExceeded, regex.Regex.init(gpa, "(a{100}){100}", .{ .max_instructions = 64 }));
@@ -495,4 +495,15 @@ test "pattern resource limit directives" {
     var heap = try regex.Regex.init(gpa, "(*LIMIT_HEAP=1)(a+)+b\\1", .{ .max_backtrack_choices = 1_000_000 });
     defer heap.deinit();
     try std.testing.expectError(error.RegexLimitExceeded, heap.matches(gpa, runaway));
+}
+
+test "backspace escape inside character classes" {
+    var value = try regex.Regex.init(gpa, "[\\b]", .{});
+    defer value.deinit();
+    try std.testing.expect(try value.matches(gpa, "\x08"));
+    try std.testing.expect(!try value.matches(gpa, "b"));
+    var mixed = try regex.Regex.init(gpa, "[a\\b]", .{});
+    defer mixed.deinit();
+    try std.testing.expect(try mixed.matches(gpa, "\x08"));
+    try std.testing.expect(try mixed.matches(gpa, "a"));
 }
