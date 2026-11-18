@@ -367,6 +367,10 @@ pub const Scanner = struct {
             return;
         }
         const drop = keep - self.buffer_base;
+        // Defer the move until at least half the buffer is dead; callers
+        // track the scan position by absolute offset, so a live prefix only
+        // costs memory, not correctness.
+        if (drop * 2 < self.buffer.items.len) return;
         std.mem.copyForwards(u8, self.buffer.items[0..], self.buffer.items[drop..]);
         self.buffer.shrinkRetainingCapacity(self.buffer.items.len - drop);
         self.buffer_base = keep;

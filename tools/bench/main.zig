@@ -75,6 +75,35 @@ fn benchFindFirst(io: std.Io, out: *std.Io.Writer, name: []const u8, pattern: []
     try report(out, name, iterations, input.len, elapsed(io, .{ .nanoseconds = start }));
 }
 
+var stream_pieces: usize = 0;
+fn streamEmit(context: ?*anyopaque, match: regexz.StreamMatch) void {
+    _ = context;
+    _ = match;
+    stream_pieces += 1;
+}
+
+fn streamPass(text: []const u8, program: regexz.Program, chunk: usize) !void {
+    var scanner = try regexz.StreamScanner.init(gpa, program, .{});
+    defer scanner.deinit();
+    var offset: usize = 0;
+    while (offset < text.len) {
+        const end = @min(offset + chunk, text.len);
+        try scanner.feed(text[offset..end], null, streamEmit);
+        offset = end;
+    }
+    try scanner.finish(null, streamEmit);
+}
+
+fn benchStream(io: std.Io, out: *std.Io.Writer, name: []const u8, pattern: []const u8, input: []const u8, chunk: usize, iterations: usize, limits: regexz.Limits) !void {
+    var value = try regexz.Regex.init(gpa, pattern, limits);
+    defer value.deinit();
+    for (0..3) |_| try streamPass(input, value.program, chunk);
+    const start = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds;
+    for (0..iterations) |_| try streamPass(input, value.program, chunk);
+    std.mem.doNotOptimizeAway(stream_pieces);
+    try report(out, name, iterations, input.len, elapsed(io, .{ .nanoseconds = start }));
+}
+
 fn benchReplace(io: std.Io, out: *std.Io.Writer, name: []const u8, pattern: []const u8, input: []const u8, substitution: []const u8, iterations: usize) !void {
     var value = try regexz.Regex.init(gpa, pattern, .{});
     defer value.deinit();
@@ -179,6 +208,7 @@ pub fn main() !void {
     for (0..4000) |_| try ascii_text.appendSlice(gpa, "the quick brown fox jumps over the lazy dog 1234567890\n");
     try benchMatches(io, out, "fullmatch ASCII class (216 KiB)", "[a-z0-9 \n]+", ascii_text.items, 50, true);
     try benchMatches(io, out, "fullmatch ASCII loop (216 KiB)", "(?:[a-z0-9]+[ \n])+", ascii_text.items, 50, true);
+    try benchStream(io, out, "stream [a-z]+ (216 KiB, 4 KiB chunks)", "[a-z]+", ascii_text.items, 4096, 20, .{});
 
     {
         const set_patterns = [_][]const u8{
