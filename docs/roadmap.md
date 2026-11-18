@@ -194,9 +194,10 @@ Rust 1.13.1 reference for that branch-less equivalent is ~56 µs.
 cache for identical sources.
 
 Latest verification on a busy macOS host (2026-11): after flattening the
-search-DFA transition tables, full-pattern Qwen search is ~72–74 µs
-(~330 MiB/s), `RegexSet` ~97 µs, `replaceAll` ~85 µs, compile ~1.5 µs with
-`smp_allocator`, and all 170 tests plus the V8/Rust/extended differential
+search-DFA transition tables and adding a capture-free `find` fast path,
+full-pattern Qwen search is ~69–73 µs (~330–350 MiB/s) and per-call `find`
+overhead is ~4.3 ns. `RegexSet` ~97 µs, `replaceAll` ~85 µs, compile ~1.5 µs
+with `smp_allocator`, and all 170 tests plus the V8/Rust/extended differential
 fuzzers pass. Treat absolute numbers as host-noise-sensitive;
 the bench gate compares ratios against `tools/bench/baseline.json`.
 
