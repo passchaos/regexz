@@ -22,8 +22,6 @@ const max_patterns: usize = 64;
 const State = struct {
     bits: []const u64,
     accept_mask: u64,
-    /// 0 = unprepared, `dead_state` = no continuation, otherwise next id + 1.
-    ascii: [128]u32 = [_]u32{0} ** 128,
 };
 
 pub const Workspace = struct {
@@ -43,6 +41,12 @@ pub const Workspace = struct {
     seen: []u32,
     epoch: u32 = 0,
     states: std.ArrayList(State) = .empty,
+    /// Flat [state][byte] transitions: 0 = unprepared, otherwise next id + 1.
+    /// A separate power-of-two-stride table keeps the scan loop's address
+    /// cheap; the per-state struct also holds a large bitset slice.
+    ascii_table: std.ArrayList(u32) = .empty,
+    /// Accept mask per state, flat for the same reason.
+    state_accept: std.ArrayList(u64) = .empty,
     index: std.StringHashMapUnmanaged(u32) = .empty,
     unicode: std.AutoHashMapUnmanaged(u64, u32) = .empty,
     arena: std.heap.ArenaAllocator,
@@ -125,6 +129,8 @@ pub const Workspace = struct {
         self.work.deinit(self.allocator);
         self.allocator.free(self.seen);
         self.states.deinit(self.allocator);
+        self.ascii_table.deinit(self.allocator);
+        self.state_accept.deinit(self.allocator);
         self.index.deinit(self.allocator);
         self.unicode.deinit(self.allocator);
         self.arena.deinit();
@@ -146,14 +152,26 @@ pub const Workspace = struct {
     /// Scan for matches at or after `start` (a byte offset).
     pub fn scanFrom(self: *Workspace, input: []const u8, start: usize, matched: []bool) Error!void {
         var state = self.start_state;
-        var mask = self.states.items[state].accept_mask;
+        var mask = self.state_accept.items[state];
+        const full = allMask(self.included.len);
         var offset = start;
         while (offset < input.len) {
+            const byte = input[offset];
+            if (byte < 0x80) {
+                const cached = self.ascii_table.items[@as(usize, state) * 128 + byte];
+                if (cached != 0) {
+                    state = cached - 1;
+                    mask |= self.state_accept.items[state];
+                    offset += 1;
+                    if (mask == full) break;
+                    continue;
+                }
+            }
             const rune = runeAt(input, offset) orelse return error.InvalidUtf8;
             state = try self.transition(state, rune.value);
-            mask |= self.states.items[state].accept_mask;
+            mask |= self.state_accept.items[state];
             offset += rune.len;
-            if (mask == allMask(self.included.len)) break;
+            if (mask == full) break;
         }
         var slot: usize = 0;
         while (slot < self.included.len) : (slot += 1) {
@@ -252,13 +270,15 @@ pub const Workspace = struct {
         const owned = try self.arena.allocator().dupe(u64, self.live);
         const id: u32 = @intCast(self.states.items.len);
         try self.states.append(self.allocator, .{ .bits = owned, .accept_mask = mask });
+        try self.ascii_table.appendNTimes(self.allocator, 0, 128);
+        try self.state_accept.append(self.allocator, mask);
         try self.index.put(self.allocator, std.mem.sliceAsBytes(owned), id);
         return id;
     }
 
     fn transition(self: *Workspace, state_id: u32, rune: u21) Error!u32 {
         if (rune < 128) {
-            const cached = self.states.items[state_id].ascii[rune];
+            const cached = self.ascii_table.items[@as(usize, state_id) * 128 + rune];
             if (cached != 0) return cached - 1;
         } else {
             const key = (@as(u64, state_id) << 21) | rune;
@@ -302,7 +322,7 @@ pub const Workspace = struct {
         try self.closure();
         const next = try self.buildState();
         if (rune < 128) {
-            self.states.items[state_id].ascii[rune] = next + 1;
+            self.ascii_table.items[@as(usize, state_id) * 128 + rune] = next + 1;
         } else {
             try self.unicode.put(self.allocator, (@as(u64, state_id) << 21) | rune, next);
         }

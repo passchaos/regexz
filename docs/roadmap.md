@@ -196,7 +196,7 @@ Measured on an Apple Silicon macOS host. "Before" is the initial commit state;
 | `find` loop-exit no-match, 23 KiB | ~120 µs | ~4.7 µs | ~31.8 µs | — |
 | `find` suffix no-match, 23 KiB | ~238 µs | ~14 µs | ~155 µs | — |
 | `find` extended no-match, 23 KiB | ~275 µs | ~2.5 µs | — | — |
-| `RegexSet`, 9 no-match patterns, 23 KiB | ~1.7 ms | ~63 µs | ~104 µs | — |
+| `RegexSet`, 9 no-match patterns, 23 KiB | ~1.7 ms | ~44 µs | ~104 µs | — |
 | `replaceAll` `a+`, 32 KiB | ~265 µs | ~64 µs (480 MiB/s) | ~91 µs | ~47 µs |
 | Compile xDS-like pattern | ~2.9 µs | ~3.1–3.9 µs | ~10.8 µs | ~61 ns† |
 | Compile xDS-like (smp allocator) | — | ~1.5 µs | — | — |
@@ -228,8 +228,10 @@ same-host Rust reference at ~3.9 GiB/s) and short validation inputs pay ~7 ns
 instead of a DFA call. Streaming runs stay deterministic: `[a-z]+` streams
 at ~650 MiB/s, `[a-z]+ [a-z]+` at ~585 MiB/s, and the `set*` scan (which must
 also report the empty matches between runs) at ~416 MiB/s, 6.9× faster than
-the generic thread list. The bench gate now covers 37 cases; `RegexSet`
-~97 µs, `replaceAll` ~85 µs, compile ~1.5 µs with `smp_allocator`, and all
+the generic thread list. The `RegexSet` DFA flattens its per-state ASCII
+rows and accept masks into power-of-two-stride tables, taking the 9-pattern
+no-match scan from ~63 µs to ~44 µs. The bench gate now covers 37 cases;
+`replaceAll` ~85 µs, compile ~1.5 µs with `smp_allocator`, and all
 204 tests plus the V8/Rust/extended/replacement differential fuzzers pass. On the
 feature side, PCRE2 forward numeric/named references, `\e` and isolated `\E`,
 the full substitution reference syntax (`$<name>`, `$+`, `$_`, `` $` ``, `$'`),
