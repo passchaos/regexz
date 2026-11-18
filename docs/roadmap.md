@@ -175,7 +175,7 @@ Measured on an Apple Silicon macOS host. "Before" is the initial commit state;
 | Full match, Unicode (reused) | ~64 ns | ~12 ns | ~8 ns | ~13 ns |
 | Qwen tokenizer search, 22 KiB | ~842 µs | ~68 µs (353 MiB/s) | ~56 µs* (427 MiB/s) | ~195 µs |
 | CJK tokenizer search, 191 KiB | — | ~284 µs (659 MiB/s) | ~216 µs* (864 MiB/s) | — |
-| Han class scan, 191 KiB | — | ~635 µs (294 MiB/s) | ~169 µs (1104 MiB/s) | — |
+| Han class scan, 191 KiB | — | ~196–270 µs (690–810 MiB/s) | ~169 µs (1104 MiB/s) | — |
 | Byte escape scan `\C+`, 23 KiB | — | ~95 µs (252 MiB/s) | not supported | — |
 | Shared-prefix alternation no-match, 23 KiB | — | ~1.55 µs (15.5 GiB/s) | ~2.1 µs (11.4 GiB/s) | — |
 | `find` selective pattern (`\p{N}`) | — | ~36 ns/piece | — | — |
@@ -200,11 +200,13 @@ cache for identical sources.
 Latest verification on a busy macOS host (2026-11): after flattening the
 search-DFA transition tables, adding a capture-free `find` fast path,
 replacing the Unicode hash map with a direct-mapped cache plus a fast UTF-8
-decoder, and adding a shared-prefix multi-literal prefilter, full-pattern
-Qwen search is ~68–74 µs (~330–353 MiB/s), CJK tokenizer search is ~284 µs
-(~659 MiB/s), and shared-prefix no-match scans are ~1.55 µs (15.5 GiB/s). The bench gate now covers 26 cases;
+decoder, adding a shared-prefix multi-literal prefilter, and determinizing
+lookahead-free programs over UTF-8 bytes, full-pattern
+Qwen search is ~68–74 µs (~330–353 MiB/s), CJK tokenizer search is ~284–310 µs
+(~630–660 MiB/s), Han class scans are ~196–270 µs (~690–810 MiB/s, down from
+~635 µs), and shared-prefix no-match scans are ~1.55 µs (15.5 GiB/s). The bench gate now covers 26 cases;
 `RegexSet` ~97 µs, `replaceAll` ~85 µs, compile ~1.5 µs with `smp_allocator`,
-and all 172 tests plus the V8/Rust/extended differential fuzzers pass. Treat absolute numbers as host-noise-sensitive;
+and all 176 tests plus the V8/Rust/extended differential fuzzers pass. Treat absolute numbers as host-noise-sensitive;
 the bench gate compares ratios against `tools/bench/baseline.json`.
 
 Where the remaining time goes:
@@ -213,7 +215,13 @@ Where the remaining time goes:
   lazy DFA still starts cold for each new `Regex`. Precomputing a DFA for
   small programs would remove the first-call construction cost.
 - **Search** uses the priority search DFA for linear programs (Qwen now
-  exceeds 200 MiB/s). Capture programs take DFA bounds and replay only the
+  exceeds 200 MiB/s). Lookahead-free programs are determinized over bytes:
+  each rune set compiles to a UTF-8 automaton (`utf8_set.zig`) and a scan is
+  one flat table lookup per byte, which removed the per-rune decode + binary
+  search that dominated `\p{Han}+`. Programs with single-rune lookaheads
+  (for example Qwen's `(?!\S)`) still use the rune-level construction; a
+  byte-level gate for lookahead continuations is the next large step.
+  Capture programs take DFA bounds and replay only the
   matched slice, which removes the failed-start scans that dominated patterns
   like `(\w+)@(\w+)`. Interpreter fallbacks with a multi-byte required
   literal run one literal prefilter, so no-match scans of patterns like
@@ -250,8 +258,11 @@ Where the remaining time goes:
    programs including capture programs (bounds from the DFA, slots replayed
    on the matched slice). Flattening the state transition tables lifted Qwen
    tokenizer search to ~330 MiB/s, against a same-host Rust reference of
-   ~427 MiB/s. Remaining: iteration-aware priorities for loops whose exits
-   compete with later choices, and closing the remaining Rust gap. An
+   ~427 MiB/s. Lookahead-free programs with non-ASCII sets are determinized
+   over UTF-8 bytes (`utf8_set.zig`), taking `\p{Han}+` from ~635 µs to
+   ~196–270 µs. Remaining: byte-level lookahead gating (Qwen's `(?!\S)`),
+   iteration-aware priorities for loops whose exits compete with later
+   choices, and closing the remaining Rust gap. An
    ordered-subset DFA prototype was evaluated and reverted: list position
    captures loop-iteration order but cannot compare an accept with an earlier
    accept from a different branch. A sound solution needs tagged priorities
@@ -265,8 +276,9 @@ summaries for alternation skipping and search prefilters, literal prefix and
 `memchr` prefilters, persistent workspace/DFA, ASCII bitmaps, a SIMD
 first-byte prefilter for small selective sets, pointer payload dispatch in the
 VMs, the capture-aware Pike fallback, no-backtrack marks on stars whose
-continuation always accepts, and the priority-annotated search DFA for
-capture-free alternation/optional/simple-loop/set-lookahead programs. A multi-way
+continuation always accepts, the priority-annotated search DFA for
+capture-free alternation/optional/simple-loop/set-lookahead programs, and the
+UTF-8 byte determinization for lookahead-free non-ASCII programs. A multi-way
 alternation dispatch table was implemented and benchmarked but is disabled
 (`alternation_dispatch = false`): the split + first-byte-skip chain is faster
 on the tokenizer and xDS workloads.

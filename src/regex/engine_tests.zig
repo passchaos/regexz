@@ -355,6 +355,28 @@ test "split first-set skipping preserves leftmost-first search" {
     try expectFindSpans(allocator, "(?i:k|s|σ|ß)+", "KSσςx", &.{.{ 0, 6 }}, .{});
 }
 
+test "byte-level DFA searches non-ASCII sets" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // Greedy single-set scans stop at the first rune outside the set.
+    try expectFindSpans(allocator, "\\p{Han}+", "a你好世界，x", &.{.{ 1, 13 }}, .{});
+    try expectFindSpans(allocator, "\\p{Han}+", "你好，世界", &.{ .{ 0, 6 }, .{ 9, 15 } }, .{});
+    try expectFindSpans(allocator, "[\\p{Greek}\\p{Cyrillic}]+", "xαβγддеz", &.{.{ 1, 13 }}, .{});
+    // Alternation, anchors, and repetition over non-ASCII classes.
+    try expectFindSpans(allocator, "(?:\\p{Han}|\\p{Greek})+", "a猫αb", &.{.{ 1, 6 }}, .{});
+    try expectFindSpans(allocator, "^\\p{Han}+$", "你好", &.{.{ 0, 6 }}, .{});
+    try expectFindSpans(allocator, "\\p{Han}{2,3}", "你好世界啊", &.{ .{ 0, 9 }, .{ 9, 15 } }, .{});
+    // Capture bounds come from the byte DFA and are replayed for slots.
+    try expectFindSpans(allocator, "(\\p{Han}+)-(\\p{Han}+)", "a你好-世界b", &.{.{ 1, 14 }}, .{});
+    // Lazy quantifiers and non-matching starts.
+    try expectFindSpans(allocator, "\\p{Han}+?", "你好", &.{ .{ 0, 3 }, .{ 3, 6 } }, .{});
+    try expectFindSpans(allocator, "\\p{Han}+", "abc", &.{}, .{});
+    // Invalid UTF-8 cannot extend a rune-based match.
+    try expectFindSpans(allocator, "\\p{Han}+", "a\xE4\xB8", &.{}, .{});
+}
+
 test "ungreedy flag swaps quantifier defaults" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

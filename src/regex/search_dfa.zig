@@ -7,6 +7,12 @@
 //! thread order. `lookahead_set` instructions stay pending in a DFA state and
 //! are evaluated against the rune being consumed (or EOF).
 //!
+//! Lookahead-free programs are determinized over input *bytes*: each rune set
+//! is compiled to a UTF-8 byte automaton, so a scan is one flat table lookup
+//! per byte with no per-rune decoding or binary search. Programs with
+//! single-rune lookaheads keep the rune-level construction, where a pending
+//! lookahead gates the rune consumed by its continuation.
+//!
 //! Capture programs use the same DFA for bounds: `save`/`reset_captures` are
 //! zero-width and do not affect match priority, so the caller replays the
 //! winning path on the matched slice to fill slots.
@@ -18,17 +24,40 @@ const std = @import("std");
 const model = @import("model.zig");
 const Program = @import("compile.zig").Program;
 const prefilter = @import("prefilter.zig");
+const utf8_set = @import("utf8_set.zig");
 
 pub const Match = struct { start: usize, end: usize };
 const Error = std.mem.Allocator.Error || error{RegexLimitExceeded};
 
 const no_priority = std.math.maxInt(u64);
 const dead_state = std.math.maxInt(u32);
-const max_states: usize = 64;
+/// Byte-mode table entries: 0 = not prepared, `dead_state_byte` = dead,
+/// otherwise `next id + 1` with `accept_bit` set when the target state
+/// accepts. The bit lets the scan loop skip the priority load for the common
+/// mid-rune case.
+const dead_state_byte: u16 = 0x7FFF;
+const accept_bit: u16 = 0x8000;
+const state_mask: u16 = 0x7FFF;
+const rune_max_states: usize = 64;
+/// Byte determinization expands every rune into its UTF-8 length, so more
+/// states are needed for the same program.
+const byte_max_states: usize = 250;
+
+const Mode = enum { rune, byte };
 
 /// Deterministic 16-byte entry: `priority` first so the cache key has no
-/// padding, then the instruction index.
-const Entry = extern struct { priority: u64, pc: u64 };
+/// padding, then a packed `(pc, automaton state)` key.
+const Entry = extern struct { priority: u64, key: u64 };
+
+inline fn entryKey(pc: usize, state: u16) u64 {
+    return (@as(u64, @intCast(pc)) << 16) | state;
+}
+inline fn entryPc(entry: Entry) usize {
+    return @intCast(entry.key >> 16);
+}
+inline fn entryState(entry: Entry) u16 {
+    return @intCast(entry.key & 0xFFFF);
+}
 
 const Prepared = struct { next: u32, accept: u64 };
 
@@ -57,12 +86,16 @@ const State = struct {
 pub const Workspace = struct {
     allocator: std.mem.Allocator,
     program: Program,
+    mode: Mode,
     bits: []u8,
     body_mask: []u64,
     body_left: []bool,
     loop_split: []bool,
     best_priority: []u64,
     best_epoch: []u32,
+    /// First `best_priority` slot for each instruction; consuming instructions
+    /// own one slot per UTF-8 automaton state.
+    node_base: []u32,
     epoch: u32 = 0,
     work: std.ArrayList(Entry) = .empty,
     terminals: std.ArrayList(Entry) = .empty,
@@ -72,16 +105,23 @@ pub const Workspace = struct {
     /// otherwise next id + 1.
     ascii_table: std.ArrayList(u32) = .empty,
     accept_table: std.ArrayList(u64) = .empty,
+    /// Byte-mode flat [state][256] transitions: 0 = not prepared,
+    /// `dead_state_byte` = dead, otherwise `next id + 1` with `accept_bit`
+    /// set when the target state accepts.
+    byte_table: std.ArrayList(u16) = .empty,
+    state_accept: std.ArrayList(u64) = .empty,
     index: std.StringHashMapUnmanaged(u32) = .empty,
     unicode_cache: []UnicodeEntry,
+    automata: []?utf8_set.Automaton,
     arena: std.heap.ArenaAllocator,
     start_state: ?u32 = null,
+    max_states: usize,
     first_filter: prefilter.FirstFilter,
     start_filter: ?prefilter.MultiFilter = null,
 
     /// Returns null when the program is not eligible for the search DFA.
     pub fn init(allocator: std.mem.Allocator, program: Program) std.mem.Allocator.Error!?Workspace {
-        if (!eligible(program)) return null;
+        const mode = eligibility(program) orelse return null;
         const bits = (try assignBits(allocator, program)) orelse return null;
         errdefer allocator.free(bits);
         const count = program.instructions.len;
@@ -142,13 +182,57 @@ pub const Workspace = struct {
                 return null;
             }
         }
-        const best_priority = try allocator.alloc(u64, count);
+        const automata = try allocator.alloc(?utf8_set.Automaton, count);
+        errdefer allocator.free(automata);
+        @memset(automata, null);
+        var built: usize = 0;
+        errdefer for (automata[0..built]) |*automaton| {
+            if (automaton.*) |*value| value.deinit(allocator);
+        };
+        const node_base = try allocator.alloc(u32, count + 1);
+        errdefer allocator.free(node_base);
+        if (mode == .byte) {
+            for (program.instructions, 0..) |instruction, index| {
+                automata[index] = switch (instruction) {
+                    .consume => |consume| try utf8_set.build(allocator, consume.set.ranges),
+                    .star => |star| try utf8_set.build(allocator, star.set.ranges),
+                    .literal_rune => |literal| blk: {
+                        const range = [_]model.Range{.{ .first = literal.value, .last = literal.value }};
+                        break :blk try utf8_set.build(allocator, &range);
+                    },
+                    else => null,
+                };
+                if (automata[index] != null) built = index + 1;
+            }
+        }
+        var total: u64 = 0;
+        for (program.instructions, 0..) |instruction, index| {
+            node_base[index] = @intCast(total);
+            total += switch (instruction) {
+                .consume, .star, .literal_rune => if (automata[index]) |automaton| automaton.stateCount() else 1,
+                else => 1,
+            };
+        }
+        node_base[count] = @intCast(total);
+        if (total > 1 << 20) {
+            allocator.free(bits);
+            allocator.free(body_mask);
+            allocator.free(body_left);
+            allocator.free(loop_split);
+            for (automata) |*automaton| {
+                if (automaton.*) |*value| value.deinit(allocator);
+            }
+            allocator.free(automata);
+            allocator.free(node_base);
+            return null;
+        }
+        const best_priority = try allocator.alloc(u64, @intCast(total));
         errdefer allocator.free(best_priority);
         @memset(best_priority, no_priority);
-        const unicode_cache = try allocator.alloc(UnicodeEntry, unicode_cache_size);
+        const unicode_cache = try allocator.alloc(UnicodeEntry, if (mode == .rune) unicode_cache_size else 0);
         errdefer allocator.free(unicode_cache);
         @memset(unicode_cache, .{});
-        const best_epoch = try allocator.alloc(u32, count);
+        const best_epoch = try allocator.alloc(u32, @intCast(total));
         errdefer allocator.free(best_epoch);
         @memset(best_epoch, 0);
         var arena = std.heap.ArenaAllocator.init(allocator);
@@ -166,17 +250,21 @@ pub const Workspace = struct {
         return .{
             .allocator = allocator,
             .program = program,
+            .mode = mode,
             .bits = bits,
             .body_mask = body_mask,
             .body_left = body_left,
             .loop_split = loop_split,
             .best_priority = best_priority,
             .best_epoch = best_epoch,
+            .node_base = node_base,
             .work = work,
             .terminals = terminals,
             .next_entries = next_entries,
             .unicode_cache = unicode_cache,
+            .automata = automata,
             .arena = arena,
+            .max_states = if (mode == .byte) byte_max_states else rune_max_states,
             .first_filter = prefilter.FirstFilter.init(program.first),
             .start_filter = start_filter,
         };
@@ -189,28 +277,46 @@ pub const Workspace = struct {
         self.allocator.free(self.loop_split);
         self.allocator.free(self.best_priority);
         self.allocator.free(self.best_epoch);
+        self.allocator.free(self.node_base);
         self.work.deinit(self.allocator);
         self.terminals.deinit(self.allocator);
         self.next_entries.deinit(self.allocator);
         self.states.deinit(self.allocator);
         self.ascii_table.deinit(self.allocator);
         self.accept_table.deinit(self.allocator);
+        self.byte_table.deinit(self.allocator);
+        self.state_accept.deinit(self.allocator);
         self.index.deinit(self.allocator);
         self.allocator.free(self.unicode_cache);
+        for (self.automata) |*automaton| {
+            if (automaton.*) |*value| value.deinit(self.allocator);
+        }
+        self.allocator.free(self.automata);
         self.arena.deinit();
         self.* = undefined;
     }
 
-    fn eligible(program: Program) bool {
-        if (program.extended) return false;
-        if (program.instructions.len == 0 or program.instructions.len > 2048) return false;
+    fn hasNonAsciiConsumer(program: Program) bool {
+        for (program.instructions) |instruction| switch (instruction) {
+            .consume => |consume| if (!consume.set.ascii_only) return true,
+            .star => |star| if (!star.set.ascii_only) return true,
+            .literal_rune => return true,
+            else => {},
+        };
+        return false;
+    }
+
+    fn eligibility(program: Program) ?Mode {
+        if (program.extended) return null;
+        if (program.instructions.len == 0 or program.instructions.len > 2048) return null;
         var choices: usize = 0;
         var complex: usize = 0;
         var stars: usize = 0;
         var literals: usize = 0;
+        var has_lookahead = false;
         for (program.instructions) |instruction| switch (instruction) {
             .accept, .consume, .literal_byte, .literal_rune, .split, .star, .save, .reset_captures, .lookahead, .sub_accept, .ret => {},
-            else => return false,
+            else => return null,
         };
         for (program.instructions) |instruction| switch (instruction) {
             .split => {
@@ -222,19 +328,27 @@ pub const Workspace = struct {
                 stars += 1;
             },
             .literal_byte, .literal_rune => literals += 1,
-            .lookahead => complex += 1,
+            .lookahead => {
+                complex += 1;
+                has_lookahead = true;
+            },
             else => {},
         };
         // A lone star/literal capture-free pattern is faster on the
-        // interpreter's tight scan; capture programs still benefit because
-        // the DFA locates bounds before the VM fills slots, but only when a
-        // failed start can scan a long prefix (multiple loops, or a loop
-        // followed by a mandatory literal).
+        // interpreter's tight scan unless it needs per-rune Unicode set
+        // membership, where the byte DFA avoids decode + binary search.
         if (complex == 0) {
-            if (program.capture_count == 0) return false;
-            if (stars < 2 and !(stars >= 1 and literals >= 1)) return false;
+            if (program.capture_count == 0) {
+                if (has_lookahead or !hasNonAsciiConsumer(program)) return null;
+            } else if (stars < 2 and !(stars >= 1 and literals >= 1)) {
+                return null;
+            }
         }
-        return choices <= 64;
+        if (choices > 64) return null;
+        // Byte-level determinization only pays off when rune sets need UTF-8
+        // decoding; ASCII-only programs keep the tighter rune transition
+        // tables, and single-rune lookaheads keep the rune construction.
+        return if (has_lookahead or !hasNonAsciiConsumer(program)) .rune else .byte;
     }
 
     /// Assign a priority bit to every choice instruction. Pre-order, left
@@ -442,14 +556,33 @@ pub const Workspace = struct {
         }
     }
 
-    fn push(self: *Workspace, pc: usize, priority: u64) std.mem.Allocator.Error!void {
-        if (self.best_epoch[pc] != self.epoch) {
-            self.best_epoch[pc] = self.epoch;
-            self.best_priority[pc] = priority;
-            try self.work.append(self.allocator, .{ .priority = priority, .pc = @intCast(pc) });
-        } else if (priority < self.best_priority[pc]) {
-            self.best_priority[pc] = priority;
-            try self.work.append(self.allocator, .{ .priority = priority, .pc = @intCast(pc) });
+    fn pushNode(self: *Workspace, pc: usize, state: u16, priority: u64) std.mem.Allocator.Error!void {
+        const node = @as(usize, self.node_base[pc]) + state;
+        if (self.best_epoch[node] != self.epoch) {
+            self.best_epoch[node] = self.epoch;
+            self.best_priority[node] = priority;
+            try self.work.append(self.allocator, .{ .priority = priority, .key = entryKey(pc, state) });
+        } else if (priority < self.best_priority[node]) {
+            self.best_priority[node] = priority;
+            try self.work.append(self.allocator, .{ .priority = priority, .key = entryKey(pc, state) });
+        }
+    }
+
+    inline fn push(self: *Workspace, pc: usize, priority: u64) std.mem.Allocator.Error!void {
+        return self.pushNode(pc, 0, priority);
+    }
+
+    /// Append a consuming node straight to the next state (mid-rune byte
+    /// automaton states are not epsilon-expanded).
+    fn pushTerminal(self: *Workspace, pc: usize, state: u16, priority: u64, list: *std.ArrayList(Entry)) std.mem.Allocator.Error!void {
+        const node = @as(usize, self.node_base[pc]) + state;
+        if (self.best_epoch[node] != self.epoch) {
+            self.best_epoch[node] = self.epoch;
+            self.best_priority[node] = priority;
+            try list.append(self.allocator, .{ .priority = priority, .key = entryKey(pc, state) });
+        } else if (priority < self.best_priority[node]) {
+            self.best_priority[node] = priority;
+            try list.append(self.allocator, .{ .priority = priority, .key = entryKey(pc, state) });
         }
     }
 
@@ -464,7 +597,7 @@ pub const Workspace = struct {
         accept: *u64,
     ) std.mem.Allocator.Error!void {
         while (self.work.pop()) |entry| {
-            const pc: usize = @intCast(entry.pc);
+            const pc = entryPc(entry);
             switch (self.program.instructions[pc]) {
                 .accept => {
                     accept.* = @min(accept.*, entry.priority);
@@ -519,7 +652,7 @@ pub const Workspace = struct {
     }
 
     fn entryLess(_: void, a: Entry, b: Entry) bool {
-        return a.pc < b.pc or (a.pc == b.pc and a.priority < b.priority);
+        return a.key < b.key or (a.key == b.key and a.priority < b.priority);
     }
 
     fn buildState(self: *Workspace, entries: []Entry) Error!u32 {
@@ -528,10 +661,10 @@ pub const Workspace = struct {
         var accept: u64 = no_priority;
         var has_lookahead = false;
         for (entries) |entry| {
-            if (count != 0 and entries[count - 1].pc == entry.pc) continue;
+            if (count != 0 and entries[count - 1].key == entry.key) continue;
             entries[count] = entry;
             count += 1;
-            switch (self.program.instructions[@intCast(entry.pc)]) {
+            switch (self.program.instructions[entryPc(entry)]) {
                 .accept => accept = @min(accept, entry.priority),
                 .lookahead => has_lookahead = true,
                 else => {},
@@ -540,7 +673,7 @@ pub const Workspace = struct {
         const sorted = entries[0..count];
         const key = std.mem.sliceAsBytes(sorted);
         if (self.index.get(key)) |id| return id;
-        if (self.states.items.len >= max_states) return error.RegexLimitExceeded;
+        if (self.states.items.len >= self.max_states) return error.RegexLimitExceeded;
         const owned = try self.arena.allocator().dupe(Entry, sorted);
         const id: u32 = @intCast(self.states.items.len);
         try self.states.append(self.allocator, .{
@@ -548,8 +681,16 @@ pub const Workspace = struct {
             .accept = accept,
             .has_lookahead = has_lookahead,
         });
-        try self.ascii_table.appendNTimes(self.allocator, 0, 128);
-        try self.accept_table.appendNTimes(self.allocator, no_priority, 128);
+        switch (self.mode) {
+            .rune => {
+                try self.ascii_table.appendNTimes(self.allocator, 0, 128);
+                try self.accept_table.appendNTimes(self.allocator, no_priority, 128);
+            },
+            .byte => {
+                try self.byte_table.appendNTimes(self.allocator, 0, 256);
+                try self.state_accept.append(self.allocator, accept);
+            },
+        }
         try self.index.put(self.allocator, std.mem.sliceAsBytes(owned), id);
         return id;
     }
@@ -588,7 +729,7 @@ pub const Workspace = struct {
     fn prepareSlow(self: *Workspace, state_id: u32, rune: u21) Error!Prepared {
         self.nextEpoch();
         self.work.clearRetainingCapacity();
-        for (self.states.items[state_id].entries) |entry| try self.push(@intCast(entry.pc), entry.priority);
+        for (self.states.items[state_id].entries) |entry| try self.pushNode(entryPc(entry), entryState(entry), entry.priority);
         self.terminals.clearRetainingCapacity();
         var accept: u64 = no_priority;
         try self.runClosure(true, rune, &self.terminals, &accept);
@@ -596,8 +737,8 @@ pub const Workspace = struct {
         // epoch overwrites `best_priority`.
         var terminal_count: usize = 0;
         for (self.terminals.items) |entry| {
-            const pc: usize = @intCast(entry.pc);
-            if (self.best_priority[pc] != entry.priority) continue;
+            const pc = entryPc(entry);
+            if (self.best_priority[@as(usize, self.node_base[pc]) + entryState(entry)] != entry.priority) continue;
             self.terminals.items[terminal_count] = entry;
             terminal_count += 1;
         }
@@ -606,7 +747,7 @@ pub const Workspace = struct {
         self.nextEpoch();
         self.work.clearRetainingCapacity();
         for (self.terminals.items) |entry| {
-            const pc: usize = @intCast(entry.pc);
+            const pc = entryPc(entry);
             switch (self.program.instructions[pc]) {
                 .consume => |consume| if (consume.set.matches(rune)) try self.push(@intCast(consume.next), entry.priority),
                 .literal_byte => |literal| if (rune == literal.value) try self.push(@intCast(literal.next), entry.priority),
@@ -637,11 +778,70 @@ pub const Workspace = struct {
         return result;
     }
 
+    /// Byte-mode transition: advance every consuming thread through its UTF-8
+    /// automaton. Completed runes re-enter the epsilon closure; partial runes
+    /// carry their automaton state into the next DFA state.
+    fn prepareByte(self: *Workspace, state_id: u32, byte: u8) Error!u16 {
+        self.nextEpoch();
+        self.work.clearRetainingCapacity();
+        self.next_entries.clearRetainingCapacity();
+        for (self.states.items[state_id].entries) |entry| {
+            const pc = entryPc(entry);
+            switch (self.program.instructions[pc]) {
+                .consume => |consume| {
+                    const advanced = self.automata[pc].?.advance(entryState(entry), byte);
+                    if (advanced == utf8_set.dead) continue;
+                    if (advanced == utf8_set.accept) {
+                        try self.push(@intCast(consume.next), entry.priority);
+                    } else {
+                        try self.pushTerminal(pc, advanced, entry.priority, &self.next_entries);
+                    }
+                },
+                .literal_rune => |literal| {
+                    const advanced = self.automata[pc].?.advance(entryState(entry), byte);
+                    if (advanced == utf8_set.dead) continue;
+                    if (advanced == utf8_set.accept) {
+                        try self.push(@intCast(literal.next), entry.priority);
+                    } else {
+                        try self.pushTerminal(pc, advanced, entry.priority, &self.next_entries);
+                    }
+                },
+                .star => {
+                    const advanced = self.automata[pc].?.advance(entryState(entry), byte);
+                    if (advanced == utf8_set.dead) continue;
+                    if (advanced == utf8_set.accept) {
+                        try self.push(pc, entry.priority);
+                    } else {
+                        try self.pushTerminal(pc, advanced, entry.priority, &self.next_entries);
+                    }
+                },
+                .literal_byte => |literal| {
+                    if (byte == literal.value) try self.push(@intCast(literal.next), entry.priority);
+                },
+                .accept => {},
+                else => unreachable,
+            }
+        }
+        var ignored: u64 = no_priority;
+        try self.runClosure(false, null, &self.next_entries, &ignored);
+        const next = if (self.next_entries.items.len == 0) dead_state else try self.buildState(self.next_entries.items);
+        const encoded = encodeByteEntry(self, next);
+        self.byte_table.items[@as(usize, state_id) * 256 + byte] = encoded;
+        return encoded;
+    }
+
+    fn encodeByteEntry(self: *Workspace, next: u32) u16 {
+        if (next == dead_state) return dead_state_byte;
+        const base: u16 = @intCast(next + 1);
+        return if (self.state_accept.items[next] != no_priority) base | accept_bit else base;
+    }
+
     fn prepareEof(self: *Workspace, state_id: u32) std.mem.Allocator.Error!u64 {
+        if (self.mode == .byte) return self.state_accept.items[state_id];
         if (self.states.items[state_id].eof_prepared) return self.states.items[state_id].eof_accept;
         self.nextEpoch();
         self.work.clearRetainingCapacity();
-        for (self.states.items[state_id].entries) |entry| try self.push(@intCast(entry.pc), entry.priority);
+        for (self.states.items[state_id].entries) |entry| try self.pushNode(entryPc(entry), entryState(entry), entry.priority);
         self.terminals.clearRetainingCapacity();
         var accept: u64 = no_priority;
         try self.runClosure(true, null, &self.terminals, &accept);
@@ -661,7 +861,39 @@ pub const Workspace = struct {
         }
     }
 
+    fn anchoredByte(self: *Workspace, input: []const u8, start: usize) Error!?usize {
+        var state = try self.startState();
+        var offset = start;
+        var best_end: usize = std.math.maxInt(usize);
+        var best_priority: u64 = no_priority;
+        const initial = self.state_accept.items[state];
+        if (initial != no_priority) {
+            best_end = offset;
+            best_priority = initial;
+        }
+        while (offset < input.len) {
+            const index = @as(usize, state) * 256 + input[offset];
+            var cached = self.byte_table.items[index];
+            if (cached == 0) cached = try self.prepareByte(state, input[offset]);
+            if (cached == dead_state_byte) break;
+            offset += 1;
+            const next = (cached & state_mask) - 1;
+            if (cached & accept_bit != 0) {
+                const accept = self.state_accept.items[next];
+                if (accept < best_priority) {
+                    best_end = offset;
+                    best_priority = accept;
+                } else if (accept == best_priority) {
+                    best_end = offset;
+                }
+            }
+            state = next;
+        }
+        return if (best_end == std.math.maxInt(usize)) null else best_end;
+    }
+
     inline fn anchored(self: *Workspace, input: []const u8, start: usize) Error!?usize {
+        if (self.mode == .byte) return self.anchoredByte(input, start);
         var state = try self.startState();
         var offset = start;
         var best_end: ?usize = null;

@@ -208,9 +208,12 @@ pub fn main() !void {
         var value = try regexz.Regex.init(gpa, qwen, ucp);
         defer value.deinit();
         const iterations = 200000;
+        // The page allocator would benchmark mmap/munmap under host memory
+        // pressure; a general-purpose allocator measures workspace setup.
+        const smp = std.heap.smp_allocator;
         const start = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds;
         for (0..iterations) |_| {
-            var workspace = try regexz.Workspace.init(gpa, value.program);
+            var workspace = try regexz.Workspace.init(smp, value.program);
             workspace.deinit();
         }
         try report(out, "Workspace.init Qwen program", iterations, 0, elapsed(io, .{ .nanoseconds = start }));
