@@ -124,6 +124,7 @@ Strengths:
 | Script runs `(*sr:...)`/`(*asr:...)` | yes (extended) | yes (10.43+) | no | no |
 | Scan substring `(*scs:...)` | yes (extended) | yes (10.43+) | no | no |
 | Backreferences | yes (extended) | yes | no | yes |
+| Forward back/subroutine/condition references | yes | yes | no | no |
 | Atomic/possessive | yes (extended) | yes | no | no |
 | Conditionals | group + assertion + `(?(R1))`/`(?(R&name))` + DEFINE | full | no | no |
 | Branch reset `(?|...)` | yes | yes | no | no |
