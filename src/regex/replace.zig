@@ -1279,6 +1279,8 @@ fn runeAt(input: []const u8, offset: usize) ?struct { value: u21, len: usize } {
 }
 
 fn runeLenAt(input: []const u8, offset: usize) usize {
+    if (offset >= input.len) return 1;
+    if (input[offset] < 0x80) return 1;
     return if (runeAt(input, offset)) |rune| rune.len else 1;
 }
 
