@@ -536,17 +536,47 @@ def main():
  ranges={name:[tuple(map(int,pair)) for pair in re.findall(r'\{\s*(\d+),\s*(\d+)\s*\}',data)] for name,data in re.findall(r'static const URange(?:16|32) (\w+)\[\] = \{(.*?)\};',groups_source,re.S)}
  groups=re.findall(r'\{ "([^"]+)", \+1, (\w+), (\d+), (\w+), (\d+) \}',groups_source)
  fold_data=re.search(r'const CaseFold unicode_casefold\[\] = \{(.*?)\};',fold_source,re.S)[1]
- fold=bytearray()
+ fold_ranges=[]
  for a,b,delta in re.findall(r'\{\s*(\d+),\s*(\d+),\s*([^ }]+)\s*\}',fold_data):
   value={'EvenOdd':1,'OddEven':-1}.get(delta)
   if value is None:value=int(delta)
-  fold.extend(struct.pack('<IIi',int(a),int(b),value))
- unicode_names=['auxiliary/GraphemeBreakProperty.txt','emoji/emoji-data.txt','DerivedCoreProperties.txt','PropList.txt','Blocks.txt','ScriptExtensions.txt','PropertyValueAliases.txt','UnicodeData.txt','emoji/emoji-test.txt','emoji/emoji-sequences.txt','emoji/emoji-zwj-sequences.txt','auxiliary/WordBreakProperty.txt','auxiliary/WordBreakTest.txt','auxiliary/SentenceBreakProperty.txt','auxiliary/SentenceBreakTest.txt','SpecialCasing.txt','Scripts.txt','extracted/DerivedGeneralCategory.txt']
+  fold_ranges.append((int(a),int(b),value))
+ fold=bytearray()
+ for a,b,value in fold_ranges: fold.extend(struct.pack('<IIi',a,b,value))
+ unicode_names=['auxiliary/GraphemeBreakProperty.txt','emoji/emoji-data.txt','DerivedCoreProperties.txt','PropList.txt','Blocks.txt','ScriptExtensions.txt','PropertyValueAliases.txt','UnicodeData.txt','emoji/emoji-test.txt','emoji/emoji-sequences.txt','emoji/emoji-zwj-sequences.txt','auxiliary/WordBreakProperty.txt','auxiliary/WordBreakTest.txt','auxiliary/SentenceBreakProperty.txt','auxiliary/SentenceBreakTest.txt','SpecialCasing.txt','Scripts.txt','extracted/DerivedGeneralCategory.txt','CaseFolding.txt']
  unicode_urls={name:f'https://www.unicode.org/Public/{UNICODE_VERSION}/ucd/{name}' for name in unicode_names}
  unicode_urls['emoji/emoji-test.txt']=f'https://www.unicode.org/Public/emoji/{EMOJI_VERSION}/emoji-test.txt'
  unicode_urls['emoji/emoji-sequences.txt']=f'https://www.unicode.org/Public/emoji/{EMOJI_VERSION}/emoji-sequences.txt'
  unicode_urls['emoji/emoji-zwj-sequences.txt']=f'https://www.unicode.org/Public/emoji/{EMOJI_VERSION}/emoji-zwj-sequences.txt'
  unicode_files={name:fetch(url) for name,url in unicode_urls.items()}
+ # RE2's pinned fold table predates Unicode 16. Add simple CaseFolding pairs
+ # for code points that the RE2 ranges do not already cover.
+ def fold_covered(cp):
+  return any(a<=cp<=b for a,b,_ in fold_ranges)
+ supplements=[]
+ seen_src=set()
+ for line in unicode_files['CaseFolding.txt'].decode().splitlines():
+  line=line.split('#',1)[0].strip()
+  if not line: continue
+  parts=[p.strip() for p in line.split(';')]
+  if len(parts)<3 or parts[1] not in ('C','S'): continue
+  mapping=parts[2].split()
+  if len(mapping)!=1: continue
+  cp=int(parts[0],16); mapped=int(mapping[0],16)
+  if cp==mapped or fold_covered(cp) or fold_covered(mapped): continue
+  if cp in seen_src or mapped in seen_src: continue
+  seen_src.add(cp); seen_src.add(mapped)
+  for src,dst in ((cp,mapped),(mapped,cp)):
+   delta=dst-src
+   if delta==1:
+    delta=1 if src%2==0 else -1
+   elif delta==-1:
+    delta=-1 if src%2==0 else 1
+   supplements.append((src,src,delta))
+ fold_ranges.extend(supplements)
+ fold_ranges.sort(key=lambda item:(item[0],item[1]))
+ fold=bytearray()
+ for a,b,value in fold_ranges: fold.extend(struct.pack('<IIi',a,b,value))
  grapheme_files,grapheme_counts=unicode_grapheme_data(unicode_files)
  property_files,property_counts=unicode_binary_properties(unicode_files)
  block_files,block_counts=unicode_blocks(unicode_files)

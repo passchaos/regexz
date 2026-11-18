@@ -238,3 +238,17 @@ test "Assigned and unassigned properties" {
         try std.testing.expectEqual(case.matches, try value.matches(gpa, case.input));
     }
 }
+
+test "Unicode 16 case folding" {
+    const Case = struct { pattern: []const u8, input: []const u8, matches: bool };
+    for ([_]Case{
+        .{ .pattern = "(?i)\u{10d50}", .input = "\u{10d70}", .matches = true },
+        .{ .pattern = "(?i)\u{10d70}", .input = "\u{10d50}", .matches = true },
+        .{ .pattern = "(?i)\u{10d50}", .input = "\u{10d51}", .matches = false },
+        .{ .pattern = "(?i)\u{10d50}", .input = "A", .matches = false },
+    }) |case| {
+        var value = try regex.Regex.init(gpa, case.pattern, .{});
+        defer value.deinit();
+        try std.testing.expectEqual(case.matches, try value.matches(gpa, case.input));
+    }
+}

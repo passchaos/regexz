@@ -109,6 +109,8 @@ The engine picks the execution strategy automatically:
     `\p{Lowercase}`, `\p{Hex_Digit}`, `\p{ID_Start}`, plus PCRE2 special
     properties `\p{Xan}`, `\p{Xwd}`, `\p{Xps}`, `\p{Xsp}`, `\p{Xuc}`,
     plus `\p{ASCII}`, `\p{Cn}` (unassigned), and `\p{Assigned}`.
+  - Case-insensitive matching uses simple Unicode case folding; Unicode 16
+    `CaseFolding.txt` pairs missing from RE2's pinned tables are supplemented.
   - Unicode blocks: `\p{InBasic_Latin}`, `\p{InGreek}`, `\p{InEmoticons}`,
     `\p{Block=Basic_Latin}` (underscores are optional and case-insensitive).
   - Unicode string properties: `\p{RGI_Emoji}` (all RGI sequences) plus
