@@ -306,6 +306,8 @@ busy Apple Silicon host (absolute numbers vary with load):
 | Reused workspace, class pattern | ~171 ns | ~8 ns |
 | Reused workspace, xDS-like pattern | ~233 ns | ~16 ns |
 | Reused workspace, `(?i)` literal | ~72 ns | ~5 ns |
+| Full match, backref `(a)\1` (reuse) | ~5.5 µs | ~17 ns |
+| Full match, atomic `(?>a+)a` (reuse) | ~5.2 µs | ~23 ns |
 | Qwen tokenizer `find` (22 KiB) | ~842 µs | ~68 µs (350 MiB/s) |
 | CJK tokenizer `find` (191 KiB) | — | ~200–230 µs (~850–980 MiB/s) |
 | `\p{Han}+` class scan (191 KiB) | ~635 µs | ~173–200 µs (~940–1080 MiB/s) |

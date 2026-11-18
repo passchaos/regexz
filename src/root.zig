@@ -223,13 +223,13 @@ pub const Regex = struct {
             if (!std.mem.eql(u8, literal, input)) return false;
             return !(input.len == 0 and (self.program.notempty or self.program.notempty_atstart));
         }
-        if (self.program.extended) {
-            var workspace = try backtrack.Workspace.init(gpa, self.program, self.limits);
-            defer workspace.deinit();
-            return workspace.fullMatch(input);
-        }
+        _ = gpa;
         self.lock();
         defer self.unlock();
+        if (self.program.extended) {
+            const workspace = try self.ensureReplaceWorkspace();
+            return workspace.fullMatch(input);
+        }
         const workspace = try self.ensureWorkspace();
         return workspace.matches(self.program, input);
     }

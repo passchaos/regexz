@@ -137,6 +137,8 @@ pub fn main() !void {
     try benchMatches(io, out, "fullmatch xDS-like (reuse)", "/(?:demo|test)\\.[A-Z][A-Za-z]+/(Get|List)", path_input, 200000, true);
     try benchMatches(io, out, "fullmatch unicode (reuse)", "\\p{Greek}+\\p{Nd}", unicode_input, 200000, true);
     try benchMatches(io, out, "fullmatch (?i) literal (reuse)", "(?i)hello", ci_input, 200000, true);
+    try benchMatches(io, out, "fullmatch backref (Regex)", "(a)\\1", "aa", 200000, false);
+    try benchMatches(io, out, "fullmatch atomic (Regex)", "(?>a+)a", "aa", 200000, false);
 
     var text: std.ArrayList(u8) = .empty;
     defer text.deinit(gpa);

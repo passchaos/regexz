@@ -120,6 +120,14 @@ pub const Workspace = struct {
         self.* = undefined;
     }
 
+    /// Full match for extended programs, delegated to the backtracking VM.
+    pub fn fullMatch(self: *Workspace, input: []const u8) Error!bool {
+        if (self.backtrack_workspace == null) {
+            self.backtrack_workspace = try backtrack.Workspace.init(self.allocator, self.program, self.limits);
+        }
+        return self.backtrack_workspace.?.fullMatch(input);
+    }
+
     /// Full-match partiality for extended programs, delegated to the
     /// backtracking VM.
     pub fn partialMatch(self: *Workspace, input: []const u8) Error!model.PartialResult {
