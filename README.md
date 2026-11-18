@@ -127,7 +127,9 @@ The engine picks the execution strategy automatically:
     fail-closed in all configurations.
   - Substitution syntax supports both RE2 `\0`..`\9`/`\\` and `$0`..`$99`,
     `$&`, `$$`, and `${name}`, plus PCRE2 case transforms `\U`, `\L`, `\E`,
-    `\u`, and `\l` (simple Unicode case mapping).
+    `\u`, and `\l` (simple Unicode case mapping by default). Set
+    `Limits.full_case_mapping = true` to use full SpecialCasing mappings such
+    as `ß` -> `SS` and `İ` -> `i̇`.
 - API:
   - Full match: `Regex.matches`.
   - Partial match: `Regex.isMatch` and `Regex.partialMatch` (full/partial/

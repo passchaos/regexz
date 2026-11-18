@@ -168,3 +168,32 @@ test "regex replacement applies case transforms" {
     try expectReplace("(.)", "\\l$1", "\u{00c9}", "\u{00e9}");
     try expectReplace("(.)", "\\U$1", "\u{00df}", "\u{00df}");
 }
+
+fn expectReplaceLimits(
+    pattern: []const u8,
+    substitution: []const u8,
+    input: []const u8,
+    expected: []const u8,
+    limits: regex.Limits,
+) !void {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const program = try regex.compile(allocator, pattern, limits);
+    var workspace = try regex.ReplaceWorkspace.init(allocator, program, limits);
+    defer workspace.deinit();
+    const actual = try workspace.replaceAll(input, substitution);
+    try std.testing.expectEqualStrings(expected, actual);
+}
+
+test "full Unicode case mapping is opt-in" {
+    // Default PCRE2-compatible simple mapping leaves sharp s unchanged.
+    try expectReplace("(.)", "\\U$1", "\u{00df}", "\u{00df}");
+    const full = regex.Limits{ .full_case_mapping = true };
+    try expectReplaceLimits("(.)", "\\U$1", "\u{00df}", "SS", full);
+    try expectReplaceLimits("(.)", "\\L$1", "\u{0130}", "i\u{0307}", full);
+    try expectReplaceLimits("(.)", "\\U$1", "\u{fb01}", "FI", full);
+    try expectReplaceLimits("(.)", "\\U$1", "abc", "ABC", full);
+    try expectReplaceLimits("(.)", "\\L$1", "ABC", "abc", full);
+    try expectReplaceLimits("(.)", "\\u$1", "\u{00df}", "SS", full);
+}

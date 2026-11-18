@@ -62,6 +62,10 @@ pub const Limits = struct {
     /// backreference to a group that did not participate matches the empty
     /// string. The default is to fail the path (PCRE2/Perl/Rust).
     unset_backref_empty: bool = false,
+    /// Use full Unicode SpecialCasing in replacement case transforms. The
+    /// default is the PCRE2-compatible simple one-to-one mapping; enabling
+    /// this allows multi-character mappings such as `ß` -> `SS`.
+    full_case_mapping: bool = false,
 };
 pub const Flags = struct {
     fold: bool = false,

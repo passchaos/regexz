@@ -25,6 +25,7 @@ pub const Wb = @import("unicode/word_break.zig").Wb;
 const wb_count = @import("unicode/word_break.zig").wb_count;
 const sentence_break_data = @embedFile("unicode/sentence_break.bin");
 const char_names_data = @embedFile("unicode/char_names.bin");
+const special_case_data = @embedFile("unicode/special_case.bin");
 pub const Sb = @import("unicode/sentence_break.zig").Sb;
 const sb_count = @import("unicode/sentence_break.zig").sb_count;
 pub const fold_range_count = fold_data.len / 12;
@@ -361,6 +362,72 @@ pub fn charNameAt(index: usize) ?struct { name: []const u8, cp: u21 } {
         .name = char_names_data[names_start + offset ..][0..name_length],
         .cp = @intCast(cp),
     };
+}
+
+const SpecialCase = struct {
+    upper_offset: u16,
+    upper_len: u8,
+    lower_offset: u16,
+    lower_len: u8,
+};
+
+fn lookupSpecialCase(rune: u21) ?SpecialCase {
+    const count = std.mem.readInt(u32, special_case_data[0..4], .little);
+    var low: usize = 0;
+    var high: usize = count;
+    while (low < high) {
+        const middle = low + (high - low) / 2;
+        const entry = special_case_data[4 + middle * 10 ..];
+        const cp = std.mem.readInt(u32, entry[0..4], .little);
+        if (rune < cp) {
+            high = middle;
+        } else if (rune > cp) {
+            low = middle + 1;
+        } else {
+            return .{
+                .upper_offset = std.mem.readInt(u16, entry[4..6], .little),
+                .upper_len = entry[6],
+                .lower_offset = std.mem.readInt(u16, entry[7..9], .little),
+                .lower_len = entry[9],
+            };
+        }
+    }
+    return null;
+}
+
+fn readSpecialCase(offset: u16, length: u8, out: *[4]u21) []const u21 {
+    var index: usize = 0;
+    while (index < length) : (index += 1) {
+        out[index] = @intCast(std.mem.readInt(u32, special_case_data[@as(usize, offset) + index * 4 ..][0..4], .little));
+    }
+    return out[0..length];
+}
+
+/// Full Unicode uppercase mapping from SpecialCasing.txt, falling back to the
+/// simple mapping. Writes the mapped code points to `out`.
+pub fn fullToUpper(rune: u21, out: *[4]u21) []const u21 {
+    if (lookupSpecialCase(rune)) |entry| {
+        if (entry.upper_len == 0) {
+            out[0] = rune;
+            return out[0..1];
+        }
+        return readSpecialCase(entry.upper_offset, entry.upper_len, out);
+    }
+    out[0] = toUpper(rune);
+    return out[0..1];
+}
+
+/// Full Unicode lowercase mapping from SpecialCasing.txt.
+pub fn fullToLower(rune: u21, out: *[4]u21) []const u21 {
+    if (lookupSpecialCase(rune)) |entry| {
+        if (entry.lower_len == 0) {
+            out[0] = rune;
+            return out[0..1];
+        }
+        return readSpecialCase(entry.lower_offset, entry.lower_len, out);
+    }
+    out[0] = toLower(rune);
+    return out[0..1];
 }
 
 /// Look up an explicit Unicode character name (`\N{LATIN SMALL LETTER A}`).

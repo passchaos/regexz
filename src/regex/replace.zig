@@ -220,7 +220,7 @@ pub const Workspace = struct {
         while (search_start <= input.len) {
             const match = try self.findInternal(input, search_start) orelse break;
             try writer.appendSlice(input[search_start..match.start]);
-            try appendSubstitution(writer, input, substitution, match.slots, self.program);
+            try appendSubstitution(writer, input, substitution, match.slots, self.program, self.limits.full_case_mapping);
             if (match.end > match.start) {
                 search_start = match.end;
             } else {
@@ -842,7 +842,7 @@ const CaseState = struct {
 
 /// Apply PCRE2 replacement case transforms using simple Unicode case
 /// mappings. Invalid UTF-8 bytes are copied unchanged.
-fn appendTransformed(writer: anytype, bytes: []const u8, state: *CaseState) Error!void {
+fn appendTransformed(writer: anytype, bytes: []const u8, state: *CaseState, full_case: bool) Error!void {
     if (state.base == .none and state.one_shot == .none) {
         try writer.appendSlice(bytes);
         return;
@@ -867,18 +867,23 @@ fn appendTransformed(writer: anytype, bytes: []const u8, state: *CaseState) Erro
         };
         const mode = state.effective();
         state.one_shot = .none;
-        const mapped = switch (mode) {
-            .none => rune,
-            .upper => unicode.toUpper(rune),
-            .lower => unicode.toLower(rune),
-        };
-        var buffer: [4]u8 = undefined;
-        const encoded = std.unicode.utf8Encode(mapped, &buffer) catch {
+        if (mode == .none) {
             try writer.appendSlice(bytes[index..][0..length]);
             index += length;
             continue;
+        }
+        var mapped: [4]u21 = undefined;
+        const sequence = if (full_case)
+            (if (mode == .upper) unicode.fullToUpper(rune, &mapped) else unicode.fullToLower(rune, &mapped))
+        else blk: {
+            mapped[0] = if (mode == .upper) unicode.toUpper(rune) else unicode.toLower(rune);
+            break :blk mapped[0..1];
         };
-        try writer.appendSlice(buffer[0..encoded]);
+        for (sequence) |cp| {
+            var buffer: [4]u8 = undefined;
+            const encoded = std.unicode.utf8Encode(cp, &buffer) catch continue;
+            try writer.appendSlice(buffer[0..encoded]);
+        }
         index += length;
     }
 }
@@ -889,6 +894,7 @@ fn appendSubstitution(
     substitution: []const u8,
     slots: []const usize,
     program: Program,
+    full_case: bool,
 ) Error!void {
     var state = CaseState{};
     var index: usize = 0;
@@ -924,7 +930,7 @@ fn appendSubstitution(
                 },
                 '0'...'9' => {
                     if (groupText(input, slots, escaped - '0')) |text| {
-                        try appendTransformed(writer, text, &state);
+                        try appendTransformed(writer, text, &state, full_case);
                     }
                     continue;
                 },
@@ -936,7 +942,7 @@ fn appendSubstitution(
                     try writer.append('\\');
                     const length = std.unicode.utf8ByteSequenceLength(escaped) catch 1;
                     const end = @min(index + length, substitution.len);
-                    try appendTransformed(writer, substitution[index..end], &state);
+                    try appendTransformed(writer, substitution[index..end], &state, full_case);
                     index = end - 1;
                     continue;
                 },
@@ -945,7 +951,7 @@ fn appendSubstitution(
         if (byte == '$') {
             if (try parseSubstitutionGroup(substitution, &index, program, program.capture_count)) |group| {
                 if (groupText(input, slots, group)) |text| {
-                    try appendTransformed(writer, text, &state);
+                    try appendTransformed(writer, text, &state, full_case);
                 }
             } else {
                 try writer.append('$');
@@ -956,7 +962,7 @@ fn appendSubstitution(
         // decoded and case-mapped as one character.
         var end = index;
         while (end < substitution.len and substitution[end] != '\\' and substitution[end] != '$') end += 1;
-        try appendTransformed(writer, substitution[index..end], &state);
+        try appendTransformed(writer, substitution[index..end], &state, full_case);
         index = end - 1;
     }
 }

@@ -77,9 +77,10 @@ Implemented functionality:
 - Versioned `Program.serialize`/`deserialize` with index/slot validation for
   cross-process compiled-pattern caches.
 - Replacement syntax: `\0`..`\9`, `$0`..`$99`, `$&`, `$$`, `${name}`,
-  case transforms `\U`/`\L`/`\E`/`\u`/`\l` (simple Unicode), and callback
+  case transforms `\U`/`\L`/`\E`/`\u`/`\l` (simple Unicode by default;
+  `Limits.full_case_mapping` enables full SpecialCasing), and callback
   replacement via `replaceAllWithFn`.
-- 126 tests, including recursion, branch reset, conditional assertions,
+- 127 tests, including recursion, branch reset, conditional assertions,
   grapheme clusters, binary properties, Unicode blocks, partial matching,
   control verbs, thread safety, allocation-failure, and differential coverage
   against V8 for the supported subset.
@@ -119,6 +120,7 @@ Strengths:
 | Backtracking verbs | yes (subset) | yes | no | no |
 | Callouts / `(*THEN)` | numeric + string + auto callouts, `(*THEN)`, MARK | yes | no | no |
 | `\N{NAME}` named characters | yes (explicit + algorithmic) | no | no | no |
+| Full SpecialCasing | optional (`full_case_mapping`) | no | no | no |
 | `\p{Xan}`/`\p{Xwd}` specials | yes | yes | no | no |
 | `\p{Xuc}` | yes | yes | no | no |
 | Binary Unicode properties | yes (63) | yes | partial | yes |
