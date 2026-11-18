@@ -13,6 +13,7 @@ const pike = @import("pike.zig");
 const backtrack = @import("backtrack.zig");
 const search_dfa = @import("search_dfa.zig");
 const prefilter = @import("prefilter.zig");
+const shapes = @import("shapes.zig");
 const newline = @import("newline.zig");
 const required_literals = @import("required_literals.zig");
 const unicode = @import("unicode.zig");
@@ -79,6 +80,9 @@ pub const Workspace = struct {
     search_dfa_ineligible: bool = false,
     /// Cached capture-free DFA for the common find fast path.
     fast_dfa: ?*search_dfa.Workspace = null,
+    /// A `set+` program over an ASCII-only set scans runs directly instead of
+    /// entering the DFA.
+    simple_set: ?model.Set = null,
     first_filter: prefilter.FirstFilter,
 
     pub fn init(
@@ -105,6 +109,11 @@ pub const Workspace = struct {
             .slots = slots,
             .best_slots = best_slots,
             .pike_eligible = pike.eligible(program),
+            .simple_set = if (limits.longest) null else blk: {
+                const set = shapes.setRun(program) orelse break :blk null;
+                if (!set.ascii_only) break :blk null;
+                break :blk set;
+            },
             .first_filter = prefilter.FirstFilter.init(program.first),
         };
     }
@@ -144,6 +153,7 @@ pub const Workspace = struct {
         search_start: usize,
     ) Error!?Match {
         self.steps = 0;
+        if (self.simple_set) |set| return self.findSetRun(set, input, search_start);
         if (self.fast_dfa) |dfa| {
             const found = (try dfa.find(input, search_start)) orelse return null;
             self.slots[0] = found.start;
@@ -252,6 +262,9 @@ pub const Workspace = struct {
         limit: usize,
     ) Error!void {
         try validateSubstitutionFor(self.program, substitution);
+        // A substitution with no `$` or `\` expands to itself; skip the
+        // per-match parse in that common case.
+        const literal_substitution = std.mem.indexOfAny(u8, substitution, "\\$") == null;
         self.steps = 0;
         var search_start: usize = 0;
         var replaced: usize = 0;
@@ -259,7 +272,11 @@ pub const Workspace = struct {
             const match = try self.findInternal(input, search_start) orelse break;
             replaced += 1;
             try writer.appendSlice(input[search_start..match.start]);
-            try appendSubstitution(writer, input, substitution, match.slots, self.program, self.limits.full_case_mapping);
+            if (literal_substitution) {
+                try writer.appendSlice(substitution);
+            } else {
+                try appendSubstitution(writer, input, substitution, match.slots, self.program, self.limits.full_case_mapping);
+            }
             if (match.end > match.start) {
                 search_start = match.end;
             } else {
@@ -345,6 +362,7 @@ pub const Workspace = struct {
         search_start: usize,
     ) Error!?Match {
         if (search_start > input.len) return null;
+        if (self.simple_set) |set| return self.findSetRun(set, input, search_start);
         if (self.program.literal) |literal| {
             if (self.program.capture_count == 0) {
                 const found = indexOfLiteral(input, search_start, literal) orelse return null;
@@ -448,6 +466,27 @@ pub const Workspace = struct {
             start += runeLenAt(input, start);
         }
         return null;
+    }
+
+    /// `set+` over an ASCII-only set: skip to the next member with the SIMD
+    /// first-byte filter, then extend the run. The shape is deterministic, so
+    /// no DFA state or backtracking stack is involved.
+    fn findSetRun(self: *Workspace, set: model.Set, input: []const u8, search_start: usize) ?Match {
+        var offset = search_start;
+        // Match-dense input spends its time in short gaps, where a scalar scan
+        // beats the vector filter's setup; long gaps switch to the SIMD scan.
+        const scalar_limit = @min(input.len, offset + 32);
+        while (offset < scalar_limit and !set.matches(input[offset])) offset += 1;
+        if (offset >= scalar_limit) {
+            if (offset >= input.len) return null;
+            offset = self.first_filter.indexOf(input, offset) orelse return null;
+        }
+        const start = offset;
+        offset += 1;
+        while (offset < input.len and set.matches(input[offset])) offset += 1;
+        self.slots[0] = start;
+        self.slots[1] = offset;
+        return .{ .start = start, .end = offset, .slots = self.slots };
     }
 
     /// Capture-free fast path: no slot trail, no per-instruction capture

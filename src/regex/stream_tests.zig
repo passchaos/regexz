@@ -185,6 +185,10 @@ test "streaming simple-run fast path handles chunk boundaries" {
         .{ .pattern = "\\w+", .input = "ab_12 cd" },
         .{ .pattern = "\\s+", .input = "a \t b\n" },
         .{ .pattern = "[\\p{L}\\p{N}]+", .input = "caf\u{00e9} 12 \u{4f60}\u{597d}" },
+        // Single-rune sets compile to a literal body, not a set instruction.
+        .{ .pattern = "a+", .input = "baaac a" },
+        .{ .pattern = "x+", .input = "xxabcx" },
+        .{ .pattern = "\u{732b}+", .input = "a\u{732b}\u{732b}\u{ff0c}\u{732b}" },
     };
     for (cases) |case| {
         for ([_]usize{ 1, 2, 3, 4, 5, 8 }) |chunk| {

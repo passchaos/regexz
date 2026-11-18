@@ -384,6 +384,53 @@ test "split first-set skipping preserves leftmost-first search" {
     try expectFindSpans(allocator, "(?i:k|s|σ|ß)+", "KSσςx", &.{.{ 0, 6 }}, .{});
 }
 
+test "set-run fast path scans ASCII runs directly" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    try expectFindSpans(allocator, "a+", "baaac a", &.{ .{ 1, 4 }, .{ 6, 7 } }, .{});
+    try expectFindSpans(allocator, "[a-z]+", "  abc  def", &.{ .{ 2, 5 }, .{ 7, 10 } }, .{});
+    try expectFindSpans(allocator, "\\d+", "12 345 6", &.{ .{ 0, 2 }, .{ 3, 6 }, .{ 7, 8 } }, .{});
+    try expectFindSpans(allocator, "\\w+", "ab_12 cd", &.{ .{ 0, 5 }, .{ 6, 8 } }, .{});
+    try expectFindSpans(allocator, "(?i)[a-z]+", "AbC dEf", &.{ .{ 0, 3 }, .{ 4, 7 } }, .{});
+    // Multi-byte runes are non-members of an ASCII-only set and split runs.
+    try expectFindSpans(allocator, "[a-z]+", "caf\u{00e9}s", &.{ .{ 0, 3 }, .{ 5, 6 } }, .{});
+    try expectFindSpans(allocator, "a+", "\u{1f600}aa\u{1f600}a", &.{ .{ 4, 6 }, .{ 10, 11 } }, .{});
+    try expectFindSpans(allocator, "[a-z]+", "", &.{}, .{});
+
+    var value = try regex.Regex.init(allocator, "[a-z]+", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(allocator, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.simple_set != null);
+
+    // A mid-run search start still returns the maximal remaining run.
+    const found = (try workspace.find("abcdef", 3)).?;
+    try std.testing.expectEqual(@as(usize, 3), found.start);
+    try std.testing.expectEqual(@as(usize, 6), found.end);
+    try std.testing.expectEqualSlices(usize, &.{ 3, 6 }, found.slots);
+    try std.testing.expect((try workspace.find("abcdef", 6)) == null);
+    try std.testing.expect((try workspace.find("abcdef", 7)) == null);
+
+    // Shapes that are not a bare ASCII `set+` keep the general engine.
+    var han = try regex.Regex.init(allocator, "\\p{Han}+", .{});
+    defer han.deinit();
+    var han_workspace = try regex.ReplaceWorkspace.init(allocator, han.program, .{});
+    defer han_workspace.deinit();
+    try std.testing.expect(han_workspace.simple_set == null);
+    var captured = try regex.Regex.init(allocator, "(a)+", .{});
+    defer captured.deinit();
+    var captured_workspace = try regex.ReplaceWorkspace.init(allocator, captured.program, .{});
+    defer captured_workspace.deinit();
+    try std.testing.expect(captured_workspace.simple_set == null);
+    var bounded = try regex.Regex.init(allocator, "a{2,}", .{});
+    defer bounded.deinit();
+    var bounded_workspace = try regex.ReplaceWorkspace.init(allocator, bounded.program, .{});
+    defer bounded_workspace.deinit();
+    try std.testing.expect(bounded_workspace.simple_set == null);
+}
+
 test "byte-level DFA searches non-ASCII sets" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

@@ -15,6 +15,7 @@ const std = @import("std");
 const model = @import("model.zig");
 const Program = @import("compile.zig").Program;
 const prefilter = @import("prefilter.zig");
+const shapes = @import("shapes.zig");
 const newline = @import("newline.zig");
 const unset = std.math.maxInt(usize);
 
@@ -157,8 +158,8 @@ pub const Scanner = struct {
             .scratch = scratch,
             .best_slots = best_slots,
             .capture_free = program.capture_count == 0,
-            .simple_set = if (limits.longest) null else detectSimpleRun(program),
-            .simple_star = if (limits.longest) null else detectSimpleStar(program),
+            .simple_set = if (limits.longest) null else shapes.setRun(program),
+            .simple_star = if (limits.longest) null else shapes.setStar(program),
             .simple_chain = if (limits.longest) null else detectSimpleChain(program),
             .seen = seen,
         };
@@ -427,53 +428,6 @@ pub const Scanner = struct {
                 else => unreachable,
             }
         }
-    }
-
-    /// Recognize the compiled shape of `set+`: save0 -> consume(set) ->
-    /// star(set) -> save1 -> accept.
-    fn detectSimpleRun(program: Program) ?model.Set {
-        if (program.capture_count != 0 or program.extended) return null;
-        const ins = program.instructions;
-        if (ins.len != 7) return null;
-        if (std.meta.activeTag(ins[0]) != .accept or std.meta.activeTag(ins[1]) != .sub_accept or std.meta.activeTag(ins[2]) != .ret) return null;
-        if (std.meta.activeTag(ins[3]) != .save or std.meta.activeTag(ins[4]) != .star or
-            std.meta.activeTag(ins[5]) != .consume or std.meta.activeTag(ins[6]) != .save) return null;
-        if (program.start != 6 or program.body != 5) return null;
-        const save1 = ins[3].save;
-        if (save1.slot != 1 or save1.next != program.accept) return null;
-        const star = ins[4].star;
-        if (star.next != 3 or star.backtrack) return null;
-        const consume = ins[5].consume;
-        if (consume.next != 4) return null;
-        const save0 = ins[6].save;
-        if (save0.slot != 0 or save0.next != 5) return null;
-        if (star.set.ranges.len == 0 or star.set.ranges.len != consume.set.ranges.len) return null;
-        for (star.set.ranges, consume.set.ranges) |a, b| {
-            if (a.first != b.first or a.last != b.last) return null;
-        }
-        return star.set;
-    }
-
-    /// Recognize the compiled shape of `set*`: save0 -> star(set) ->
-    /// save1 -> accept. The star must be non-backtracking, which holds when
-    /// its continuation is the accepting save.
-    fn detectSimpleStar(program: Program) ?model.Set {
-        if (program.capture_count != 0 or program.extended) return null;
-        const ins = program.instructions;
-        if (ins.len != 6) return null;
-        if (std.meta.activeTag(ins[0]) != .accept or std.meta.activeTag(ins[1]) != .sub_accept or
-            std.meta.activeTag(ins[2]) != .ret) return null;
-        if (std.meta.activeTag(ins[3]) != .save or std.meta.activeTag(ins[4]) != .star or
-            std.meta.activeTag(ins[5]) != .save) return null;
-        if (program.start != 5 or program.body != 4) return null;
-        const save1 = ins[3].save;
-        if (save1.slot != 1 or save1.next != program.accept) return null;
-        const star = ins[4].star;
-        if (star.next != 3 or star.backtrack) return null;
-        const save0 = ins[5].save;
-        if (save0.slot != 0 or save0.next != 4) return null;
-        if (star.set.ranges.len == 0) return null;
-        return star.set;
     }
 
     fn sameSet(a: model.Set, b: model.Set) bool {

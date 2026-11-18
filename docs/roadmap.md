@@ -217,13 +217,16 @@ Qwen search is ~68–74 µs (~330–353 MiB/s), CJK tokenizer search is ~200–2
 Unicode full matches scan at ~800 MiB/s and ASCII full matches at ~2.7 GiB/s
 (direct-mapped transition cache), and extended full matches reuse a
 persistent backtracking workspace (~17 ns for a backreference pattern), and
-shared-prefix no-match scans are ~1.55 µs (15.5 GiB/s). Streaming runs stay
-deterministic: `[a-z]+` streams at ~650 MiB/s, `[a-z]+ [a-z]+` at ~585 MiB/s,
-and the `set*` scan (which must also report the empty matches between runs)
-at ~416 MiB/s, 6.9× faster than the generic thread list. The bench gate now
-covers 36 cases; `RegexSet` ~97 µs, `replaceAll` ~85 µs, compile ~1.5 µs with
-`smp_allocator`, and all 198 tests plus the V8/Rust/extended/replacement
-differential fuzzers pass. On the
+shared-prefix no-match scans are ~1.55 µs (15.5 GiB/s). A plain ASCII `set+`
+search (`[a-z]+`, `\w+`, `\d+`, including single-rune sets like `a+`) now
+scans runs directly instead of entering the DFA: ~21 µs on the 216 KiB Qwen
+sample (1.1 GiB/s, 1.3× the DFA path and faster than the same-host Rust
+reference at ~36 µs). Streaming runs stay deterministic: `[a-z]+` streams at
+~650 MiB/s, `[a-z]+ [a-z]+` at ~585 MiB/s, and the `set*` scan (which must
+also report the empty matches between runs) at ~416 MiB/s, 6.9× faster than
+the generic thread list. The bench gate now covers 37 cases; `RegexSet`
+~97 µs, `replaceAll` ~85 µs, compile ~1.5 µs with `smp_allocator`, and all
+199 tests plus the V8/Rust/extended/replacement differential fuzzers pass. On the
 feature side, PCRE2 forward numeric/named references, `\e` and isolated `\E`,
 the full substitution reference syntax (`$<name>`, `$+`, `$_`, `` $` ``, `$'`),
 `escape`/`splitn`/`replacen`, and compile diagnostics (`diagnose`) are covered.
@@ -287,9 +290,15 @@ Where the remaining time goes:
    ~173–200 µs. The CJK tokenizer is now ~1.05x the same-host Rust reference
    after the byte-keyed transition cache and inlined start-state lookup, so
    the remaining gap is per-transition cost rather than per-start restart
-   overhead. Remaining: byte-level lookahead gating (Qwen's `(?!\S)`),
-   iteration-aware priorities for loops whose exits compete with later
-   choices, and closing the last few percent. An
+   overhead. Match-dense inputs with weak first sets are the exception: the
+   search restarts an anchored DFA at every start candidate, so a dotted
+   local part (`user.name@example.com`) re-scans each suffix and runs ~2x the
+   same-host Rust reference, which finds the end in one unanchored pass and
+   recovers the start with a reverse DFA. A forward unanchored DFA plus a
+   reverse DFA for the match start is the next large search step. Remaining:
+   byte-level lookahead gating (Qwen's `(?!\S)`), iteration-aware priorities
+   for loops whose exits compete with later choices, and closing the last few
+   percent. An
    ordered-subset DFA prototype was evaluated and reverted: list position
    captures loop-iteration order but cannot compare an accept with an earlier
    accept from a different branch. A sound solution needs tagged priorities
