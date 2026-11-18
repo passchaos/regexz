@@ -290,12 +290,16 @@ Where the remaining time goes:
    ~173–200 µs. The CJK tokenizer is now ~1.05x the same-host Rust reference
    after the byte-keyed transition cache and inlined start-state lookup, so
    the remaining gap is per-transition cost rather than per-start restart
-   overhead. Match-dense inputs with weak first sets are the exception: the
-   search restarts an anchored DFA at every start candidate, so a dotted
-   local part (`user.name@example.com`) re-scans each suffix and runs ~2x the
-   same-host Rust reference, which finds the end in one unanchored pass and
-   recovers the start with a reverse DFA. A forward unanchored DFA plus a
-   reverse DFA for the match start is the next large search step. Remaining:
+   overhead. Match-dense capture searches are the exception:
+   `(\w+)@(\w+)\.com` over repeated `user.name@example.com` runs at
+   ~3.5 ns/byte against ~1.6 ns/byte for the same-host Rust reference.
+   Failed-start restarts are cheap (a dotted versus plain local part differs
+   by ~15 ns per match), so the gap is the sum of per-match overheads: the
+   find call chain, rune-DFA transitions (two table loads each), capture
+   replay over the matched slice, and slot copies. Rust pays less because its
+   forward DFA finds the end in one unanchored pass and a reverse DFA
+   recovers the start; adding that pair is the next large search step.
+   Remaining:
    byte-level lookahead gating (Qwen's `(?!\S)`), iteration-aware priorities
    for loops whose exits compete with later choices, and closing the last few
    percent. An
