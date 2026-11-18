@@ -157,7 +157,9 @@ Strengths:
 | `(?r)` caseless-restrict | yes | yes | no | no |
 | `(?aD)`/`(?aS)`/`(?aW)`/`(?aP)`/`(?aT)` | yes | yes | no | no |
 | `(?xx)` extended-more | yes | yes | no | no |
-| `(*NOTEMPTY)`/`(*NOTEMPTY_ATSTART)` | no | yes | no | no |
+| `(*NOTEMPTY)`/`(*NOTEMPTY_ATSTART)` | yes | yes | no | no |
+| `(*LIMIT_MATCH/DEPTH/HEAP=...)` | yes (heap is a choice/trail proxy) | yes | no | no |
+| Turkish/Azeri casing `(*TURKISH_CASING)` | no (rejected) | yes (10.45+) | no | no |
 
 ## 3. Performance gaps
 
