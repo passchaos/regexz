@@ -210,3 +210,18 @@ test "expand a replacement template for one match" {
     try std.testing.expectEqualStrings("[user|example|user@example.com|mail me at |!]", expanded);
     try std.testing.expectError(error.InvalidRegex, value.expandMatch(gpa, input, match, "$9"));
 }
+
+test "Regex.find and findAll expose MARK names" {
+    var value = try regex.Regex.init(gpa, "a(*MARK:one)b|a(*MARK:two)c", .{});
+    defer value.deinit();
+    var captures = try regex.Captures.init(gpa, value.program);
+    defer captures.deinit(gpa);
+    try std.testing.expectEqualStrings("one", (try value.find(gpa, "ab", &captures)).?.mark.?);
+    try std.testing.expectEqualStrings("two", (try value.find(gpa, "ac", &captures)).?.mark.?);
+
+    var iterator = try value.findAll(gpa, "ab ac");
+    defer iterator.deinit();
+    try std.testing.expectEqualStrings("one", (try iterator.next()).?.mark.?);
+    try std.testing.expectEqualStrings("two", (try iterator.next()).?.mark.?);
+    try std.testing.expect((try iterator.next()) == null);
+}

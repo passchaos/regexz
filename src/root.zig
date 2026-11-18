@@ -275,7 +275,12 @@ pub const Regex = struct {
         const found = try workspace.find(input, start) orelse return null;
         std.debug.assert(found.slots.len == captures.slots.len);
         @memcpy(captures.slots, found.slots);
-        return .{ .start = found.start, .end = found.end, .slots = captures.slots };
+        return .{
+            .start = found.start,
+            .end = found.end,
+            .slots = captures.slots,
+            .mark = found.mark,
+        };
     }
     pub fn find(self: *Regex, gpa: std.mem.Allocator, input: []const u8, captures: *Captures) Error!?Match {
         return self.findFrom(gpa, input, 0, captures);
