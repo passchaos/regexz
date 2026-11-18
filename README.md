@@ -89,8 +89,8 @@ The engine picks the execution strategy automatically:
     boundaries `\b{sb}` / `\B{sb}`, evaluated by the extended engine.
   - `\R` (atomic newline sequence), `\N` (not newline), `\N{U+hhhh}`
     (explicit code point), `\N{NAME}` (Unicode character name; explicit names
-    plus algorithmic CJK unified/compatibility ideograph and Hangul syllable
-    names), `\h`/`\H` (horizontal whitespace), `\cX`
+    plus algorithmic CJK, Hangul, Tangut, Khitan, Nushu, Egyptian, and
+    Anatolian names), `\h`/`\H` (horizontal whitespace), `\cX`
     (control characters), and `\o{...}` (octal code points).
   - Extended mode `(?x)` with whitespace and `#` comments outside classes.
   - Ungreedy mode `(?U)` and no-auto-capture mode `(?n)`, including scoped

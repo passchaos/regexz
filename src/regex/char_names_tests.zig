@@ -18,6 +18,9 @@ test "Unicode character names" {
         .{ .pattern = "\\N{HANGUL SYLLABLE GA}", .yes = &.{"\u{ac00}"}, .no = &.{"a"} },
         .{ .pattern = "\\N{HANGUL SYLLABLE HIH}", .yes = &.{"\u{d7a3}"}, .no = &.{"a"} },
         .{ .pattern = "\\N{hangul syllable ga}", .yes = &.{"\u{ac00}"}, .no = &.{"a"} },
+        .{ .pattern = "\\N{TANGUT IDEOGRAPH-17000}", .yes = &.{"\u{17000}"}, .no = &.{"a"} },
+        .{ .pattern = "\\N{NUSHU CHARACTER-1B170}", .yes = &.{"\u{1b170}"}, .no = &.{"a"} },
+        .{ .pattern = "\\N{EGYPTIAN HIEROGLYPH-13000}", .yes = &.{"\u{13000}"}, .no = &.{"a"} },
     };
     for (cases) |case| {
         var value = try regex.Regex.init(allocator, case.pattern, .{});

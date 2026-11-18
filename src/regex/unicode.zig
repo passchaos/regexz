@@ -411,6 +411,21 @@ fn algorithmicName(key: []const u8) ?u21 {
     if (hexNameSuffix(key, "CJKCOMPATIBILITYIDEOGRAPH")) |cp| {
         if (isCjkCompatibility(cp)) return cp;
     }
+    if (hexNameSuffix(key, "TANGUTIDEOGRAPH")) |cp| {
+        if ((cp >= 0x17000 and cp <= 0x187ff) or (cp >= 0x18d00 and cp <= 0x18d8f)) return cp;
+    }
+    if (hexNameSuffix(key, "KHITANSMALLSCRIPTCHARACTER")) |cp| {
+        if (cp >= 0x18b00 and cp <= 0x18cff) return cp;
+    }
+    if (hexNameSuffix(key, "NUSHUCHARACTER")) |cp| {
+        if (cp >= 0x1b170 and cp <= 0x1b2ff) return cp;
+    }
+    if (hexNameSuffix(key, "EGYPTIANHIEROGLYPH")) |cp| {
+        if (cp >= 0x13000 and cp <= 0x1345f) return cp;
+    }
+    if (hexNameSuffix(key, "ANATOLIANHIEROGLYPH")) |cp| {
+        if (cp >= 0x14400 and cp <= 0x14646) return cp;
+    }
     return null;
 }
 
