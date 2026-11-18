@@ -304,7 +304,12 @@ Where the remaining time goes:
    programs of saves, literals, and forced greedy runs, which took the email
    benchmark from ~68 µs to ~42 µs before the chain path; shapes that need
    backtracking (`(a+)ab`, adjacent runs, loops with competing exits) still
-   use the VM. Remaining:
+   use the VM. The full-match ASCII loop gap (~1.35x, `(?:[a-z0-9]+[ \n])+`)
+   is an engine-selection difference rather than a table problem: a
+   hand-written three-state table loop measures the same ~1.7 ns/byte as the
+   lazy full-match DFA, while the same-host Rust reference reaches
+   ~1.25 ns/byte, most likely through its one-pass DFA. Closing it needs a
+   one-pass-style engine. Remaining:
    byte-level lookahead gating (Qwen's `(?!\S)`), iteration-aware priorities
    for loops whose exits compete with later choices, and closing the last few
    percent. An
