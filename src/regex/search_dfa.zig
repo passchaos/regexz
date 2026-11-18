@@ -37,9 +37,6 @@ const State = struct {
     /// Minimum accept priority reachable without pending lookaheads.
     accept: u64 = no_priority,
     has_lookahead: bool = false,
-    /// 0 = not prepared, `dead_state` = dead, otherwise next id + 1.
-    ascii: [128]u32 = [_]u32{0} ** 128,
-    accept_ascii: [128]u64 = [_]u64{no_priority} ** 128,
     eof_accept: u64 = no_priority,
     eof_prepared: bool = false,
 };
@@ -58,6 +55,10 @@ pub const Workspace = struct {
     terminals: std.ArrayList(Entry) = .empty,
     next_entries: std.ArrayList(Entry) = .empty,
     states: std.ArrayList(State) = .empty,
+    /// Flat [state][byte] tables: 0 = not prepared, `dead_state` = dead,
+    /// otherwise next id + 1.
+    ascii_table: std.ArrayList(u32) = .empty,
+    accept_table: std.ArrayList(u64) = .empty,
     index: std.StringHashMapUnmanaged(u32) = .empty,
     unicode: std.AutoHashMapUnmanaged(u64, Prepared) = .empty,
     arena: std.heap.ArenaAllocator,
@@ -172,6 +173,8 @@ pub const Workspace = struct {
         self.terminals.deinit(self.allocator);
         self.next_entries.deinit(self.allocator);
         self.states.deinit(self.allocator);
+        self.ascii_table.deinit(self.allocator);
+        self.accept_table.deinit(self.allocator);
         self.index.deinit(self.allocator);
         self.unicode.deinit(self.allocator);
         self.arena.deinit();
@@ -525,6 +528,8 @@ pub const Workspace = struct {
             .accept = accept,
             .has_lookahead = has_lookahead,
         });
+        try self.ascii_table.appendNTimes(self.allocator, 0, 128);
+        try self.accept_table.appendNTimes(self.allocator, no_priority, 128);
         try self.index.put(self.allocator, std.mem.sliceAsBytes(owned), id);
         return id;
     }
@@ -543,13 +548,13 @@ pub const Workspace = struct {
     }
 
     inline fn prepare(self: *Workspace, state_id: u32, rune: u21) Error!Prepared {
-        const state = &self.states.items[state_id];
         if (rune < 128) {
-            const cached = state.ascii[rune];
+            const index = @as(usize, state_id) * 128 + rune;
+            const cached = self.ascii_table.items[index];
             if (cached != 0) {
                 return .{
                     .next = if (cached == dead_state) dead_state else cached - 1,
-                    .accept = state.accept_ascii[rune],
+                    .accept = self.accept_table.items[index],
                 };
             }
         } else {
@@ -595,11 +600,10 @@ pub const Workspace = struct {
         try self.runClosure(false, null, &self.next_entries, &ignored);
         const next = if (self.next_entries.items.len == 0) dead_state else try self.buildState(self.next_entries.items);
         const result = Prepared{ .next = next, .accept = accept };
-        // `buildState` may reallocate the state list, so re-index.
-        const state = &self.states.items[state_id];
         if (rune < 128) {
-            state.ascii[rune] = if (next == dead_state) dead_state else next + 1;
-            state.accept_ascii[rune] = accept;
+            const index = @as(usize, state_id) * 128 + rune;
+            self.ascii_table.items[index] = if (next == dead_state) dead_state else next + 1;
+            self.accept_table.items[index] = accept;
         } else {
             try self.unicode.put(self.allocator, (@as(u64, state_id) << 21) | rune, result);
         }
@@ -643,10 +647,10 @@ pub const Workspace = struct {
             }
             const byte = input[offset];
             if (byte < 0x80) {
-                const current = &self.states.items[state];
-                const cached = current.ascii[byte];
+                const index = @as(usize, state) * 128 + byte;
+                const cached = self.ascii_table.items[index];
                 if (cached != 0) {
-                    const accept = current.accept_ascii[byte];
+                    const accept = self.accept_table.items[index];
                     if (accept != no_priority) {
                         if (best_end == null or accept < best_priority) {
                             best_end = offset;
