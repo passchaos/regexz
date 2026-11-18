@@ -32,6 +32,19 @@ const Entry = extern struct { priority: u64, pc: u64 };
 
 const Prepared = struct { next: u32, accept: u64 };
 
+/// Direct-mapped cache for non-ASCII (state, rune) transitions.
+const unicode_cache_size: usize = 4096;
+const UnicodeEntry = extern struct {
+    key: u64 = std.math.maxInt(u64),
+    accept: u64 = no_priority,
+    next: u32 = 0,
+    pad: u32 = 0,
+};
+
+inline fn unicodeSlot(key: u64) usize {
+    return @intCast((key *% 0x9E3779B97F4A7C15) >> 52);
+}
+
 const State = struct {
     entries: []const Entry,
     /// Minimum accept priority reachable without pending lookaheads.
@@ -60,7 +73,7 @@ pub const Workspace = struct {
     ascii_table: std.ArrayList(u32) = .empty,
     accept_table: std.ArrayList(u64) = .empty,
     index: std.StringHashMapUnmanaged(u32) = .empty,
-    unicode: std.AutoHashMapUnmanaged(u64, Prepared) = .empty,
+    unicode_cache: []UnicodeEntry,
     arena: std.heap.ArenaAllocator,
     start_state: ?u32 = null,
     first_filter: prefilter.FirstFilter,
@@ -131,6 +144,9 @@ pub const Workspace = struct {
         const best_priority = try allocator.alloc(u64, count);
         errdefer allocator.free(best_priority);
         @memset(best_priority, no_priority);
+        const unicode_cache = try allocator.alloc(UnicodeEntry, unicode_cache_size);
+        errdefer allocator.free(unicode_cache);
+        @memset(unicode_cache, .{});
         const best_epoch = try allocator.alloc(u32, count);
         errdefer allocator.free(best_epoch);
         @memset(best_epoch, 0);
@@ -157,6 +173,7 @@ pub const Workspace = struct {
             .work = work,
             .terminals = terminals,
             .next_entries = next_entries,
+            .unicode_cache = unicode_cache,
             .arena = arena,
             .first_filter = prefilter.FirstFilter.init(program.first),
         };
@@ -176,7 +193,7 @@ pub const Workspace = struct {
         self.ascii_table.deinit(self.allocator);
         self.accept_table.deinit(self.allocator);
         self.index.deinit(self.allocator);
-        self.unicode.deinit(self.allocator);
+        self.allocator.free(self.unicode_cache);
         self.arena.deinit();
         self.* = undefined;
     }
@@ -559,7 +576,8 @@ pub const Workspace = struct {
             }
         } else {
             const key = (@as(u64, state_id) << 21) | rune;
-            if (self.unicode.get(key)) |cached| return cached;
+            const entry = &self.unicode_cache[unicodeSlot(key)];
+            if (entry.key == key) return .{ .next = entry.next, .accept = entry.accept };
         }
         return self.prepareSlow(state_id, rune);
     }
@@ -605,7 +623,13 @@ pub const Workspace = struct {
             self.ascii_table.items[index] = if (next == dead_state) dead_state else next + 1;
             self.accept_table.items[index] = accept;
         } else {
-            try self.unicode.put(self.allocator, (@as(u64, state_id) << 21) | rune, result);
+            const key = (@as(u64, state_id) << 21) | rune;
+            self.unicode_cache[unicodeSlot(key)] = .{
+                .key = key,
+                .accept = result.accept,
+                .next = result.next,
+                .pad = 0,
+            };
         }
         return result;
     }
@@ -704,10 +728,39 @@ fn runeAt(input: []const u8, offset: usize) ?struct { value: u21, len: usize } {
     if (offset >= input.len) return null;
     const byte = input[offset];
     if (byte < 0x80) return .{ .value = byte, .len = 1 };
-    const len = std.unicode.utf8ByteSequenceLength(byte) catch return null;
-    if (len > input.len - offset) return null;
-    const value = std.unicode.utf8Decode(input[offset..][0..len]) catch return null;
-    return .{ .value = value, .len = len };
+    if (byte < 0xE0) {
+        if (offset + 1 >= input.len) return null;
+        const b1 = input[offset + 1];
+        if (b1 & 0xC0 != 0x80 or byte < 0xC2) return null;
+        return .{ .value = (@as(u21, byte & 0x1F) << 6) | (b1 & 0x3F), .len = 2 };
+    }
+    if (byte < 0xF0) {
+        if (offset + 2 >= input.len) return null;
+        const b1 = input[offset + 1];
+        const b2 = input[offset + 2];
+        if (b1 & 0xC0 != 0x80 or b2 & 0xC0 != 0x80) return null;
+        if (byte == 0xE0 and b1 < 0xA0) return null;
+        if (byte == 0xED and b1 >= 0xA0) return null;
+        return .{
+            .value = (@as(u21, byte & 0x0F) << 12) | (@as(u21, b1 & 0x3F) << 6) | (b2 & 0x3F),
+            .len = 3,
+        };
+    }
+    if (byte < 0xF5) {
+        if (offset + 3 >= input.len) return null;
+        const b1 = input[offset + 1];
+        const b2 = input[offset + 2];
+        const b3 = input[offset + 3];
+        if (b1 & 0xC0 != 0x80 or b2 & 0xC0 != 0x80 or b3 & 0xC0 != 0x80) return null;
+        if (byte == 0xF0 and b1 < 0x90) return null;
+        if (byte == 0xF4 and b1 >= 0x90) return null;
+        return .{
+            .value = (@as(u21, byte & 0x07) << 18) | (@as(u21, b1 & 0x3F) << 12) |
+                (@as(u21, b2 & 0x3F) << 6) | (b3 & 0x3F),
+            .len = 4,
+        };
+    }
+    return null;
 }
 
 fn runeLenAt(input: []const u8, offset: usize) usize {
