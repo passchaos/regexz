@@ -77,6 +77,7 @@ pub const Workspace = struct {
     arena: std.heap.ArenaAllocator,
     start_state: ?u32 = null,
     first_filter: prefilter.FirstFilter,
+    start_filter: ?prefilter.MultiFilter = null,
 
     /// Returns null when the program is not eligible for the search DFA.
     pub fn init(allocator: std.mem.Allocator, program: Program) std.mem.Allocator.Error!?Workspace {
@@ -161,6 +162,7 @@ pub const Workspace = struct {
         var next_entries: std.ArrayList(Entry) = .empty;
         errdefer next_entries.deinit(allocator);
         try next_entries.ensureTotalCapacity(allocator, count * 2);
+        const start_filter = if (program.start_literals) |literals| prefilter.MultiFilter.init(literals) else null;
         return .{
             .allocator = allocator,
             .program = program,
@@ -176,6 +178,7 @@ pub const Workspace = struct {
             .unicode_cache = unicode_cache,
             .arena = arena,
             .first_filter = prefilter.FirstFilter.init(program.first),
+            .start_filter = start_filter,
         };
     }
 
@@ -709,8 +712,9 @@ pub const Workspace = struct {
         while (start <= input.len) {
             if (self.program.literal_prefix) |prefix| {
                 if (prefix.len != 0) start = indexOfLiteral(input, start, prefix) orelse return null;
-            }
-            if (self.program.skip_start) {
+            } else if (self.start_filter) |*filter| {
+                start = filter.indexOf(input, start) orelse return null;
+            } else if (self.program.skip_start) {
                 if (start < input.len and !self.program.first.allowsByte(input[start])) {
                     start = self.first_filter.indexOf(input, start) orelse return null;
                 }

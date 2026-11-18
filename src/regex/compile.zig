@@ -7,6 +7,7 @@ const model = @import("model.zig");
 const classes = @import("classes.zig");
 const serialize_mod = @import("serialize.zig");
 const required_literals = @import("required_literals.zig");
+const start_literals_mod = @import("start_literals.zig");
 
 pub const Program = struct {
     instructions: []const model.Instruction,
@@ -48,6 +49,9 @@ pub const Program = struct {
     callouts: []const model.CalloutSpec = &.{},
     /// Multi-way alternation dispatch tables.
     dispatches: []const model.Dispatch = &.{},
+    /// Literal-alternation start set for the multi-byte prefilter. Not
+    /// serialized; deserialized programs simply skip the optimization.
+    start_literals: ?[]const []const u8 = null,
     /// Conservative first-rune summary of the whole program. Search uses it
     /// to skip start positions that cannot begin a match. The default is
     /// conservative (empty matches possible, any byte allowed).
@@ -744,6 +748,7 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         break :blk try classes.normalize(allocator, raw, false, .none, limits.max_ranges);
     } else null;
     const required = try required_literals.analyze(allocator, parsed.root);
+    const start_literals = try start_literals_mod.analyze(allocator, parsed.root);
     return .{
         .instructions = instructions,
         .start = start,
@@ -772,5 +777,6 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         .first = program_first,
         .skip_start = !program_first.empty and program_first.selective(),
         .required_literals = required,
+        .start_literals = start_literals,
     };
 }

@@ -533,3 +533,31 @@ test "Turkish casing" {
         try std.testing.expectEqual(case.matches, try value.matches(gpa, case.input));
     }
 }
+
+test "literal alternation start prefilter" {
+    var value = try regex.Regex.init(gpa, "(?:sunday|saturday|september)", .{});
+    defer value.deinit();
+    try std.testing.expect(value.program.start_literals != null);
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect((try workspace.find("xx symbols yy", 0)) == null);
+    const first = (try workspace.find("xx sunday yy", 0)).?;
+    try std.testing.expectEqual(@as(usize, 3), first.start);
+    try std.testing.expectEqual(@as(usize, 9), first.end);
+    const second = (try workspace.find("september and saturday", 0)).?;
+    try std.testing.expectEqual(@as(usize, 0), second.start);
+    try std.testing.expectEqual(@as(usize, 9), second.end);
+    const third = (try workspace.find("september and saturday", 9)).?;
+    try std.testing.expectEqual(@as(usize, 14), third.start);
+    try std.testing.expectEqual(@as(usize, 22), third.end);
+
+    // Concatenated prefixes are extracted for a literal prefix plus alternation.
+    var prefixed = try regex.Regex.init(gpa, "foo(?:bar|baz)", .{});
+    defer prefixed.deinit();
+    try std.testing.expect(prefixed.program.start_literals != null);
+
+    // Patterns that can start with a class do not qualify.
+    var classy = try regex.Regex.init(gpa, "[a-z]+(?:foo|bar)", .{});
+    defer classy.deinit();
+    try std.testing.expect(classy.program.start_literals == null);
+}

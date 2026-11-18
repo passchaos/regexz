@@ -71,6 +71,86 @@ pub const FirstFilter = struct {
     }
 };
 
+/// Multi-literal start filter: scans 16 bytes at a time for the two-byte
+/// prefixes of a small literal set, then verifies the full literal.
+pub const MultiFilter = struct {
+    literals: []const []const u8,
+    pairs: [max_pairs]u16 = undefined,
+    pair_count: u8 = 0,
+
+    const max_pairs = 16;
+
+    pub fn init(literals: []const []const u8) ?MultiFilter {
+        if (literals.len == 0 or literals.len > max_pairs) return null;
+        var filter = MultiFilter{ .literals = literals };
+        const shared_first = literals[0][0];
+        for (literals) |literal| {
+            // The pair filter pays off when the first byte is shared (and thus
+            // useless as a prefilter); otherwise the cheaper first-byte SIMD
+            // filter is already selective.
+            if (literal.len < 2 or literal[0] != shared_first) return null;
+            const pair = (@as(u16, literal[0]) << 8) | literal[1];
+            var exists = false;
+            for (filter.pairs[0..filter.pair_count]) |existing| {
+                if (existing == pair) {
+                    exists = true;
+                    break;
+                }
+            }
+            if (!exists) {
+                if (filter.pair_count == max_pairs) return null;
+                filter.pairs[filter.pair_count] = pair;
+                filter.pair_count += 1;
+            }
+        }
+        if (filter.pair_count == 0) return null;
+        return filter;
+    }
+
+    fn matchesAt(self: *const MultiFilter, input: []const u8, offset: usize) bool {
+        for (self.literals) |literal| {
+            if (offset + literal.len > input.len) continue;
+            if (std.mem.eql(u8, input[offset..][0..literal.len], literal)) return true;
+        }
+        return false;
+    }
+
+    pub fn indexOf(self: *const MultiFilter, input: []const u8, start: usize) ?usize {
+        if (start >= input.len) return null;
+        var first_splats: [max_pairs]Vec = undefined;
+        var second_splats: [max_pairs]Vec = undefined;
+        var pair_index: usize = 0;
+        while (pair_index < self.pair_count) : (pair_index += 1) {
+            const pair = self.pairs[pair_index];
+            first_splats[pair_index] = @splat(@intCast(pair >> 8));
+            second_splats[pair_index] = @splat(@intCast(pair & 0xFF));
+        }
+        const count: usize = self.pair_count;
+        var offset = start;
+        while (offset + 17 <= input.len) : (offset += 16) {
+            const raw: [16]u8 = input[offset..][0..16].*;
+            const next_raw: [16]u8 = input[offset + 1 ..][0..16].*;
+            const chunk: Vec = @bitCast(raw);
+            const next: Vec = @bitCast(next_raw);
+            var mask = @as(@Vector(16, bool), @splat(false));
+            pair_index = 0;
+            while (pair_index < count) : (pair_index += 1) {
+                mask = mask | ((chunk == first_splats[pair_index]) & (next == second_splats[pair_index]));
+            }
+            if (@reduce(.Or, mask)) {
+                var index: usize = 0;
+                while (index < 16) : (index += 1) {
+                    if (self.matchesAt(input, offset + index)) return offset + index;
+                }
+            }
+        }
+        while (offset < input.len) : (offset += 1) {
+            if (self.matchesAt(input, offset)) return offset;
+        }
+        return null;
+    }
+};
+
 /// One-shot variant for callers that do not keep a workspace. Hot paths
 /// should cache `FirstFilter` instead.
 pub fn indexOfFirstSet(input: []const u8, start: usize, first: model.FirstSet) ?usize {
@@ -134,4 +214,31 @@ test "FirstFilter flags sets too large for the vector path" {
     const empty = FirstFilter.init(.{});
     try std.testing.expectEqual(@as(u8, 0), empty.count);
     try std.testing.expect(empty.indexOf("abc", 0) == null);
+}
+
+test "MultiFilter finds literal prefixes and agrees with a naive scan" {
+    const literals = [_][]const u8{ "sunday", "saturday", "september" };
+    const filter = MultiFilter.init(&literals).?;
+    const input = "xx symbol sunday saturday september";
+    const naive = struct {
+        fn index(haystack: []const u8, start: usize, needles: []const []const u8) ?usize {
+            var offset = start;
+            while (offset < haystack.len) : (offset += 1) {
+                for (needles) |needle| {
+                    if (offset + needle.len <= haystack.len and std.mem.eql(u8, haystack[offset..][0..needle.len], needle)) return offset;
+                }
+            }
+            return null;
+        }
+    };
+    var start: usize = 0;
+    while (start <= input.len) : (start += 1) {
+        try std.testing.expectEqual(naive.index(input, start, &literals), filter.indexOf(input, start));
+    }
+    try std.testing.expectEqual(@as(?usize, 10), filter.indexOf(input, 0));
+    try std.testing.expectEqual(@as(?usize, 17), filter.indexOf(input, 11));
+    try std.testing.expectEqual(@as(?usize, 26), filter.indexOf(input, 18));
+    try std.testing.expectEqual(@as(?usize, null), filter.indexOf(input, 27));
+    const short = [_][]const u8{"a"};
+    try std.testing.expect(MultiFilter.init(&short) == null);
 }
