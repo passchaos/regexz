@@ -369,3 +369,43 @@ test "VERSION condition compares the feature level" {
     }
     try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, "(?(VERSION<10.45)yes|no)", .{}));
 }
+
+test "POSIX classes follow PCRE2 UCP replacements" {
+    const Case = struct { pattern: []const u8, input: []const u8, matches: bool };
+    for ([_]Case{
+        .{ .pattern = "[[:alpha:]]", .input = "\u{00e9}", .matches = true },
+        .{ .pattern = "[[:alpha:]]", .input = "\u{732b}", .matches = true },
+        .{ .pattern = "[[:alpha:]]", .input = "1", .matches = false },
+        .{ .pattern = "[[:alnum:]]", .input = "\u{0663}", .matches = true },
+        .{ .pattern = "[[:digit:]]", .input = "\u{0663}", .matches = true },
+        .{ .pattern = "(?aT)[[:digit:]]", .input = "\u{0663}", .matches = false },
+        .{ .pattern = "(?aP)[[:digit:]]", .input = "\u{0663}", .matches = false },
+        .{ .pattern = "(?aP)[[:alpha:]]", .input = "\u{00e9}", .matches = false },
+        .{ .pattern = "[[:lower:]]", .input = "\u{00e9}", .matches = true },
+        .{ .pattern = "[[:upper:]]", .input = "\u{00c9}", .matches = true },
+        .{ .pattern = "[[:word:]]", .input = "\u{732b}", .matches = true },
+        .{ .pattern = "[[:space:]]", .input = "\u{3000}", .matches = true },
+        .{ .pattern = "[[:blank:]]", .input = "\u{00a0}", .matches = true },
+        .{ .pattern = "[[:graph:]]", .input = "\u{732b}", .matches = true },
+        .{ .pattern = "[[:graph:]]", .input = "\u{061c}", .matches = false },
+        .{ .pattern = "[[:print:]]", .input = " ", .matches = true },
+        .{ .pattern = "[[:print:]]", .input = "\u{732b}", .matches = true },
+        .{ .pattern = "[[:punct:]]", .input = "!", .matches = true },
+        .{ .pattern = "[[:punct:]]", .input = "$", .matches = true },
+        .{ .pattern = "[[:punct:]]", .input = "\u{00a1}", .matches = true },
+        .{ .pattern = "[[:xdigit:]]", .input = "A", .matches = true },
+        .{ .pattern = "[[:xdigit:]]", .input = "\u{ff21}", .matches = true },
+        .{ .pattern = "[[:xdigit:]]", .input = "G", .matches = false },
+        .{ .pattern = "(?aT)[[:xdigit:]]", .input = "\u{ff21}", .matches = false },
+        .{ .pattern = "[[:^alpha:]]", .input = "1", .matches = true },
+        .{ .pattern = "[[:ascii:]]", .input = "\u{00e9}", .matches = false },
+    }) |case| {
+        var value = try regex.Regex.init(gpa, case.pattern, .{ .unicode_perl_classes = true });
+        defer value.deinit();
+        try std.testing.expectEqual(case.matches, try value.matches(gpa, case.input));
+    }
+    // Without UCP the POSIX classes stay ASCII.
+    var ascii_only = try regex.Regex.init(gpa, "[[:alpha:]]", .{});
+    defer ascii_only.deinit();
+    try std.testing.expect(!try ascii_only.matches(gpa, "\u{00e9}"));
+}

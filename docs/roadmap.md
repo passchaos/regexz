@@ -56,7 +56,8 @@ Implemented functionality:
   no-auto-capture `(?n)`, ASCII option letters, `(?r)` caseless-restrict,
   `(?^)` option reset, `(*NO_START_OPT)`/`(*NO_AUTO_POSSESS)`/
   `(*NO_DOTSTAR_ANCHOR)` start-up directives, and `(?#...)` comments.
-- UCP `\d`/`\w`/`\s` and Unicode `\b`/`\B`; property aliases
+- UCP `\d`/`\w`/`\s` and Unicode `\b`/`\B`; POSIX classes follow PCRE2
+  UCP replacements (`(?aP)`/`(?aT)` restore ASCII); property aliases
   (`Script=`, `sc=`, `gc=`, `General_Category=`, `Is...`), long
   General_Category names (`Letter`, `Uppercase_Letter`, `Decimal_Number`,
   `Cased_Letter`), ISO 15924 script codes (`Grek`), case/separator-insensitive
@@ -95,7 +96,7 @@ Implemented functionality:
   case transforms `\U`/`\L`/`\E`/`\u`/`\l` (simple Unicode by default;
   `Limits.full_case_mapping` enables full SpecialCasing), and callback
   replacement via `replaceAllWithFn`.
-- 157 tests, including recursion, branch reset, conditional assertions,
+- 158 tests, including recursion, branch reset, conditional assertions,
   grapheme clusters, binary properties, Unicode blocks, partial matching,
   control verbs, thread safety, allocation-failure, and differential coverage
   against V8 for the supported subset.
@@ -143,6 +144,7 @@ Strengths:
 | `\p{Xan}`/`\p{Xwd}` specials | yes | yes | no | no |
 | `\p{Xuc}` | yes | yes | no | no |
 | Binary Unicode properties | yes (63) | yes | partial | yes |
+| POSIX classes under UCP | yes (PCRE2 replacements) | yes | no | no |
 | Unicode string properties | 7 properties | yes (10.43+) | no | no |
 | Leftmost-longest mode | yes | partial | yes | no |
 | Partial match (prefix) | yes (linear + extended, conservative) | yes | yes | yes |
@@ -188,7 +190,7 @@ cache for identical sources.
 
 Latest verification on a busy macOS host (2026-11): full-pattern Qwen search
 is ~89–92 µs (~260 MiB/s), `RegexSet` ~96 µs, `replaceAll` ~76 µs, compile
-~1.5 µs with `smp_allocator`, and all 157 tests plus the V8/Rust/extended
+~1.5 µs with `smp_allocator`, and all 158 tests plus the V8/Rust/extended
 differential fuzzers pass. Treat absolute numbers as host-noise-sensitive;
 the bench gate compares ratios against `tools/bench/baseline.json`.
 

@@ -166,7 +166,7 @@ pub fn unicodePropertyRanges(gpa: std.mem.Allocator, name: []const u8) m.Error![
 
 /// UCP word characters: letters, marks, numbers, and connector punctuation.
 pub fn unicodeWordRanges(gpa: std.mem.Allocator, limit: usize) m.Error![]const m.Range {
-    return unicodePropertyUnion(gpa, &.{ "L", "M", "N", "Pc" }, limit);
+    return unicodePropertyUnion(gpa, &.{ "L", "N", "Mn", "Pc" }, limit);
 }
 
 /// Union of several Unicode property groups.
@@ -211,6 +211,68 @@ pub fn ascii(name: []const u8) ?[]const m.Range {
 /// Character-class set operations. Inputs and outputs are normalized
 /// (sorted, disjoint) range lists.
 pub const SetOp = enum { intersection, difference, symmetric_difference };
+
+/// PCRE2 10.43+ `[:xdigit:]` under UCP: ASCII hex digits plus their fullwidth
+/// forms.
+const fullwidth_xdigit_ranges = [_]m.Range{
+    .{ .first = '0', .last = '9' },
+    .{ .first = 'A', .last = 'F' },
+    .{ .first = 'a', .last = 'f' },
+    .{ .first = 0xff10, .last = 0xff19 },
+    .{ .first = 0xff21, .last = 0xff26 },
+    .{ .first = 0xff41, .last = 0xff46 },
+};
+
+/// POSIX class ranges under UCP, following PCRE2's replacement rules.
+/// `ascii_posix` (`(?aP)`) forces the ASCII tables; `ascii_digit` (`(?aT)`)
+/// only affects digit/xdigit.
+pub fn posixRanges(
+    gpa: std.mem.Allocator,
+    name: []const u8,
+    ucp: bool,
+    ascii_posix: bool,
+    ascii_digit: bool,
+    limit: usize,
+) m.Error![]const m.Range {
+    const ascii_ranges = ascii(name) orelse return error.InvalidRegex;
+    if (!ucp or ascii_posix) return ascii_ranges;
+    if (std.mem.eql(u8, name, "ascii")) return ascii_ranges;
+    if (std.mem.eql(u8, name, "alnum")) return unicodePropertyUnion(gpa, &.{ "L", "N" }, limit);
+    if (std.mem.eql(u8, name, "alpha")) return unicodePropertyRanges(gpa, "L");
+    if (std.mem.eql(u8, name, "blank")) return &horizontal_space_ranges;
+    if (std.mem.eql(u8, name, "cntrl")) return unicodePropertyRanges(gpa, "Cc");
+    if (std.mem.eql(u8, name, "digit")) return if (ascii_digit) ascii_ranges else unicodePropertyRanges(gpa, "Nd");
+    if (std.mem.eql(u8, name, "lower")) return unicodePropertyRanges(gpa, "Ll");
+    if (std.mem.eql(u8, name, "space")) return &unicode_space_ranges;
+    if (std.mem.eql(u8, name, "upper")) return unicodePropertyRanges(gpa, "Lu");
+    if (std.mem.eql(u8, name, "word")) return unicodeWordRanges(gpa, limit);
+    if (std.mem.eql(u8, name, "xdigit")) return if (ascii_digit) ascii_ranges else &fullwidth_xdigit_ranges;
+    if (std.mem.eql(u8, name, "graph")) {
+        const base = try unicodePropertyUnion(gpa, &.{ "L", "M", "N", "P", "S", "Cf" }, limit);
+        const exceptions = [_]m.Range{
+            .{ .first = 0x061c, .last = 0x061c },
+            .{ .first = 0x180e, .last = 0x180e },
+            .{ .first = 0x2066, .last = 0x2069 },
+        };
+        const base_set = try normalize(gpa, base, false, .none, limit);
+        const excluded = try normalize(gpa, &exceptions, false, .none, limit);
+        return (try combine(gpa, base_set, .difference, excluded, limit)).ranges;
+    }
+    if (std.mem.eql(u8, name, "print")) {
+        const graph = try posixRanges(gpa, "graph", true, false, ascii_digit, limit);
+        const graph_set = try normalize(gpa, graph, false, .none, limit);
+        const zs = try normalize(gpa, try unicodePropertyRanges(gpa, "Zs"), false, .none, limit);
+        return (try combine(gpa, graph_set, .symmetric_difference, zs, limit)).ranges;
+    }
+    if (std.mem.eql(u8, name, "punct")) {
+        const p = try normalize(gpa, try unicodePropertyRanges(gpa, "P"), false, .none, limit);
+        const s = try normalize(gpa, try unicodePropertyRanges(gpa, "S"), false, .none, limit);
+        const below_256 = try normalize(gpa, &.{.{ .first = 0, .last = 255 }}, false, .none, limit);
+        const s_ascii = try combine(gpa, s, .intersection, below_256, limit);
+        return (try combine(gpa, p, .symmetric_difference, s_ascii, limit)).ranges;
+    }
+    return error.InvalidRegex;
+}
 
 fn pushRange(list: *std.ArrayList(m.Range), gpa: std.mem.Allocator, first: u32, last: u32, limit: usize) m.Error!void {
     if (first > last) return;

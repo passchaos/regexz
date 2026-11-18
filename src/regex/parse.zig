@@ -757,7 +757,18 @@ pub const Parser = struct {
             }
             const name_value = self.pattern[start..self.cursor];
             if (!self.take(':') or !self.take(']')) return error.InvalidRegex;
-            return .{ .ranges = classes.ascii(name_value) orelse return error.InvalidRegex, .negate = negate, .fold = fold };
+            return .{
+                .ranges = try classes.posixRanges(
+                    self.allocator,
+                    name_value,
+                    self.limits.unicode_perl_classes,
+                    self.flags.ascii_posix,
+                    self.flags.ascii_digit,
+                    self.limits.max_ranges,
+                ),
+                .negate = negate,
+                .fold = fold,
+            };
         }
         if (self.peek() == '[') {
             // Nested class used as an operand (`[a-z&&[^aeiou]]`). The nested

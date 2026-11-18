@@ -118,6 +118,9 @@ The engine picks the execution strategy automatically:
   - Empty-match locks `(*NOTEMPTY)` and `(*NOTEMPTY_ATSTART)`.
   - Character-class set operations `&&`, `--`, and `~~`, including nested
     classes such as `[a-z&&[^aeiou]]`.
+  - POSIX classes `[[:alpha:]]`, `[[:digit:]]`, `[[:word:]]`, ...; under UCP
+    they follow PCRE2's Unicode replacements (including fullwidth `xdigit`),
+    and `(?aP)`/`(?aT)` restore ASCII behavior.
   - UCP `\d`/`\w`/`\s` and Unicode `\b`/`\B` via
     `Limits.unicode_perl_classes`; property aliases such as
     `\p{Script=Greek}`, `\p{sc=Greek}`, `\p{gc=Nd}`, `\p{IsGreek}`,
