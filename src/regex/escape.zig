@@ -333,7 +333,7 @@ pub fn parse(p: anytype, in_class: bool, fold: m.Fold) m.Error!Atom {
     if (std.mem.indexOfScalar(u8, "dDsSwW", byte) != null) {
         const negate = std.ascii.isUpper(byte);
         const ascii_override = switch (std.ascii.toLower(byte)) {
-            'd' => p.flags.ascii_digit,
+            'd' => p.flags.ascii_bsd,
             's' => p.flags.ascii_space,
             else => p.flags.ascii_word,
         };
@@ -429,7 +429,7 @@ pub fn parse(p: anytype, in_class: bool, fold: m.Fold) m.Error!Atom {
                 p.extended = true;
                 return .{ .assertion = kind };
             }
-            if (p.limits.unicode_perl_classes) {
+            if (p.limits.unicode_perl_classes and !p.flags.ascii_word) {
                 p.extended = true;
                 return .{ .assertion = .word_boundary_unicode };
             }
@@ -452,7 +452,7 @@ pub fn parse(p: anytype, in_class: bool, fold: m.Fold) m.Error!Atom {
                 };
                 return .{ .assertion = negated };
             }
-            if (p.limits.unicode_perl_classes) {
+            if (p.limits.unicode_perl_classes and !p.flags.ascii_word) {
                 p.extended = true;
                 return .{ .assertion = .no_word_boundary_unicode };
             }

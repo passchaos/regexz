@@ -675,7 +675,7 @@ pub const Parser = struct {
                             if (next == 'D' or next == 'S' or next == 'W' or next == 'P' or next == 'T') {
                                 consumed = 2;
                                 switch (next) {
-                                    'D' => self.flags.ascii_digit = !negative,
+                                    'D' => self.flags.ascii_bsd = !negative,
                                     'S' => self.flags.ascii_space = !negative,
                                     'W' => self.flags.ascii_word = !negative,
                                     'P' => {
@@ -686,10 +686,11 @@ pub const Parser = struct {
                                     else => unreachable,
                                 }
                             } else {
-                                self.flags.ascii_digit = !negative;
+                                self.flags.ascii_bsd = !negative;
                                 self.flags.ascii_space = !negative;
                                 self.flags.ascii_word = !negative;
                                 self.flags.ascii_posix = !negative;
+                                self.flags.ascii_digit = !negative;
                             }
                         },
                         'r' => self.flags.caseless_restrict = !negative,

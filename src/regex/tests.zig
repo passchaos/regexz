@@ -409,3 +409,30 @@ test "POSIX classes follow PCRE2 UCP replacements" {
     defer ascii_only.deinit();
     try std.testing.expect(!try ascii_only.matches(gpa, "\u{00e9}"));
 }
+
+test "ASCII word option affects UCP word boundaries" {
+    var ucp = try regex.Regex.init(gpa, "\\b\u{00e9}", .{ .unicode_perl_classes = true });
+    defer ucp.deinit();
+    try std.testing.expect(try ucp.matches(gpa, "\u{00e9}"));
+    var ascii = try regex.Regex.init(gpa, "(?aW)\\b\u{00e9}", .{ .unicode_perl_classes = true });
+    defer ascii.deinit();
+    try std.testing.expect(!try ascii.matches(gpa, "\u{00e9}"));
+    var non_boundary = try regex.Regex.init(gpa, "(?aW)\\B\u{00e9}", .{ .unicode_perl_classes = true });
+    defer non_boundary.deinit();
+    try std.testing.expect(try non_boundary.matches(gpa, "\u{00e9}"));
+}
+
+test "ASCII digit options are scoped to Perl or POSIX digit" {
+    var perl_digit = try regex.Regex.init(gpa, "(?aD)\\d", .{ .unicode_perl_classes = true });
+    defer perl_digit.deinit();
+    try std.testing.expect(!try perl_digit.matches(gpa, "\u{0663}"));
+    var perl_posix = try regex.Regex.init(gpa, "(?aD)[[:digit:]]", .{ .unicode_perl_classes = true });
+    defer perl_posix.deinit();
+    try std.testing.expect(try perl_posix.matches(gpa, "\u{0663}"));
+    var posix_digit = try regex.Regex.init(gpa, "(?aT)[[:digit:]]", .{ .unicode_perl_classes = true });
+    defer posix_digit.deinit();
+    try std.testing.expect(!try posix_digit.matches(gpa, "\u{0663}"));
+    var posix_perl = try regex.Regex.init(gpa, "(?aT)\\d", .{ .unicode_perl_classes = true });
+    defer posix_perl.deinit();
+    try std.testing.expect(try posix_perl.matches(gpa, "\u{0663}"));
+}

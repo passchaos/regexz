@@ -96,7 +96,7 @@ Implemented functionality:
   case transforms `\U`/`\L`/`\E`/`\u`/`\l` (simple Unicode by default;
   `Limits.full_case_mapping` enables full SpecialCasing), and callback
   replacement via `replaceAllWithFn`.
-- 158 tests, including recursion, branch reset, conditional assertions,
+- 160 tests, including recursion, branch reset, conditional assertions,
   grapheme clusters, binary properties, Unicode blocks, partial matching,
   control verbs, thread safety, allocation-failure, and differential coverage
   against V8 for the supported subset.
@@ -190,7 +190,7 @@ cache for identical sources.
 
 Latest verification on a busy macOS host (2026-11): full-pattern Qwen search
 is ~89–92 µs (~260 MiB/s), `RegexSet` ~96 µs, `replaceAll` ~76 µs, compile
-~1.5 µs with `smp_allocator`, and all 158 tests plus the V8/Rust/extended
+~1.5 µs with `smp_allocator`, and all 160 tests plus the V8/Rust/extended
 differential fuzzers pass. Treat absolute numbers as host-noise-sensitive;
 the bench gate compares ratios against `tools/bench/baseline.json`.
 
