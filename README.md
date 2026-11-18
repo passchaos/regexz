@@ -180,7 +180,8 @@ The engine picks the execution strategy automatically:
     (limited parts).
   - Multi-pattern matching: `RegexSet` compiles independent patterns and
     reports which match anywhere in the input via `matches`/`matchesAt`,
-    `isMatch`, or `matchIndices`. Eligible patterns share one unanchored DFA
+    `isMatch`, or `matchIndices`, and exposes the original patterns via
+    `patterns`. Eligible patterns share one unanchored DFA
     scan; patterns with assertions or extended features stay on their
     per-pattern engines.
   - Replacement: `Regex.replaceAll`, `Regex.replacen` (limited matches), and

@@ -187,3 +187,14 @@ test "regex set searches from an offset" {
     try set.matchesAt("foo", 4, &matched);
     try std.testing.expectEqualSlices(bool, &.{ false, false, false }, &matched);
 }
+
+test "regex set exposes its patterns" {
+    const allocator = std.testing.allocator;
+    const patterns = [_][]const u8{ "\\d+", "abc" };
+    var set = try regex.RegexSet.init(allocator, &patterns, .{});
+    defer set.deinit();
+    const sources = set.patterns();
+    try std.testing.expectEqual(@as(usize, 2), sources.len);
+    try std.testing.expectEqualStrings("\\d+", sources[0]);
+    try std.testing.expectEqualStrings("abc", sources[1]);
+}

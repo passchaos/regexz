@@ -18,6 +18,8 @@ pub const RegexSet = struct {
     allocator: std.mem.Allocator,
     arena: std.heap.ArenaAllocator,
     programs: []compile_mod.Program,
+    /// The original pattern strings, copied into the arena.
+    sources: []const []const u8,
     workspaces: []replace.Workspace,
     limits: model.Limits,
     /// Single-pass DFA over the subset of patterns it can model.
@@ -28,18 +30,20 @@ pub const RegexSet = struct {
     /// per-pattern workspaces are allocated from `allocator`.
     pub fn init(
         allocator: std.mem.Allocator,
-        patterns: []const []const u8,
+        pattern_list: []const []const u8,
         limits: model.Limits,
     ) Error!RegexSet {
         var arena = std.heap.ArenaAllocator.init(allocator);
         errdefer arena.deinit();
-        const programs = try allocator.alloc(compile_mod.Program, patterns.len);
+        const programs = try allocator.alloc(compile_mod.Program, pattern_list.len);
         errdefer allocator.free(programs);
-        for (patterns, 0..) |pattern, index| {
+        const sources = try arena.allocator().alloc([]const u8, pattern_list.len);
+        for (pattern_list, 0..) |pattern, index| {
+            sources[index] = try arena.allocator().dupe(u8, pattern);
             const parsed = try parse_mod.parse(arena.allocator(), pattern, limits);
             programs[index] = try compile_mod.compile(arena.allocator(), parsed, limits);
         }
-        const workspaces = try allocator.alloc(replace.Workspace, patterns.len);
+        const workspaces = try allocator.alloc(replace.Workspace, pattern_list.len);
         errdefer allocator.free(workspaces);
         var initialized: usize = 0;
         errdefer for (workspaces[0..initialized]) |*workspace| workspace.deinit();
@@ -51,6 +55,7 @@ pub const RegexSet = struct {
             .allocator = allocator,
             .arena = arena,
             .programs = programs,
+            .sources = sources,
             .workspaces = workspaces,
             .limits = limits,
             .dfa = try set_dfa.Workspace.init(allocator, programs),
@@ -68,6 +73,11 @@ pub const RegexSet = struct {
 
     pub fn count(self: RegexSet) usize {
         return self.programs.len;
+    }
+
+    /// The original pattern strings, in set order.
+    pub fn patterns(self: RegexSet) []const []const u8 {
+        return self.sources;
     }
 
     /// Set `matched[i]` for every pattern that matches anywhere in `input`.
