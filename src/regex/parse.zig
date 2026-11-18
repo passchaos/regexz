@@ -1132,8 +1132,15 @@ fn unquote(gpa: std.mem.Allocator, pattern: []const u8) m.Error![]const u8 {
     while (index < pattern.len) : (index += 1) {
         const byte = pattern[index];
         if (byte == '\\' and index + 1 < pattern.len) {
-            if ((!quoted and pattern[index + 1] == 'Q') or (quoted and pattern[index + 1] == 'E')) {
-                quoted = !quoted;
+            const next = pattern[index + 1];
+            if (!quoted and next == 'Q') {
+                quoted = true;
+                index += 1;
+                continue;
+            }
+            // `\E` ends quoting; without a preceding `\Q` PCRE2 ignores it.
+            if (next == 'E') {
+                quoted = false;
                 index += 1;
                 continue;
             }

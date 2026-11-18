@@ -50,6 +50,23 @@ test "pure literals use the exact-match fast path" {
     try std.testing.expect(try letters.matches(std.testing.allocator, "ABC"));
 }
 
+test "escape sequences cover PCRE2 control forms" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try expectMatches(allocator, "\\e", &.{"\x1b"}, &.{ "e", "E" }, .{});
+    try expectMatches(allocator, "\\cA", &.{"\x01"}, &.{ "A", "c" }, .{});
+    try expectMatches(allocator, "\\c?", &.{"\x7f"}, &.{"?"}, .{});
+    try expectMatches(allocator, "\\o{101}", &.{"A"}, &.{"o"}, .{});
+    try expectMatches(allocator, "\\x{1F600}", &.{"\u{1F600}"}, &.{"x"}, .{});
+    try expectMatches(allocator, "\\x41", &.{"A"}, &.{"x41"}, .{});
+    // `\E` without `\Q` is ignored; `\Q...\E` quotes metacharacters.
+    try expectMatches(allocator, "a\\Eb", &.{"ab"}, &.{"aEb"}, .{});
+    try expectMatches(allocator, "\\Qa.b\\E", &.{"a.b"}, &.{ "axb", "a.bc" }, .{});
+    try expectMatches(allocator, "\\Qa.b", &.{"a.b"}, &.{"axb"}, .{});
+    try expectMatches(allocator, "\\Qa\\Eb", &.{"ab"}, &.{"a\\Eb"}, .{});
+}
+
 test "ASCII and non-ASCII literal instructions match mixed input" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

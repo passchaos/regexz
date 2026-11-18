@@ -197,3 +197,18 @@ test "full Unicode case mapping is opt-in" {
     try expectReplaceLimits("(.)", "\\L$1", "ABC", "abc", full);
     try expectReplaceLimits("(.)", "\\u$1", "\u{00df}", "SS", full);
 }
+
+test "substitution supports PCRE2 whole-input and angle-bracket forms" {
+    try expectReplace("(a)(b)", "<$<2>|$<1>>", "ab", "<b|a>");
+    try expectReplace("b", "[$`][$'][$&][$_]", "abc", "a[a][c][b][abc]c");
+    try expectReplace("(?<first>a)(?<second>b)?", "<$+>", "ab", "<b>");
+    try expectReplace("(?<first>a)(?<second>b)?", "<$+>", "ac", "<a>c");
+
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const program = try regex.compile(allocator, "(?<n>a)", .{});
+    try regex.validateSubstitutionFor(program, "$<n>");
+    try std.testing.expectError(error.InvalidRegex, regex.validateSubstitutionFor(program, "$<missing>"));
+    try std.testing.expectError(error.InvalidRegex, regex.validateSubstitutionFor(program, "$<2>"));
+}

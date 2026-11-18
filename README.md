@@ -162,7 +162,9 @@ The engine picks the execution strategy automatically:
     fail-closed. Extended programs (lookaround, backreferences, ...) remain
     fail-closed in all configurations.
   - Substitution syntax supports both RE2 `\0`..`\9`/`\\` and `$0`..`$99`,
-    `$&`, `$$`, and `${name}`, plus PCRE2 case transforms `\U`, `\L`, `\E`,
+    `$&`, `$$`, `${name}`, `$<name>`, and PCRE2/Perl `$`` (before), `$'`
+    (after), `$+` (highest captured group), `$_` (whole input), plus PCRE2
+    case transforms `\U`, `\L`, `\E`,
     `\u`, and `\l` (simple Unicode case mapping by default). Set
     `Limits.full_case_mapping = true` to use full SpecialCasing mappings such
     as `ß` -> `SS` and `İ` -> `i̇`.

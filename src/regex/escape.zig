@@ -557,6 +557,7 @@ pub fn parse(p: anytype, in_class: bool, fold: m.Fold) m.Error!Atom {
     }
     const value: u21 = switch (byte) {
         'a' => 7,
+        'e' => 0x1b,
         'f' => '\x0c',
         'n' => '\n',
         'r' => '\r',

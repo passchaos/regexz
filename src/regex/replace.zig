@@ -899,6 +899,22 @@ fn parseSubstitutionGroup(
         index.* = start;
         return 0;
     }
+    // PCRE2 also accepts Perl's angle-bracket group syntax `$<name>`.
+    if (next == '<') {
+        const name_start = start + 1;
+        const close = std.mem.indexOfScalarPos(u8, substitution, name_start, '>') orelse return error.InvalidRegex;
+        const name = substitution[name_start..close];
+        if (name.len == 0) return error.InvalidRegex;
+        if (std.fmt.parseInt(u16, name, 10)) |number| {
+            if (number > capture_count) return error.InvalidRegex;
+            index.* = close;
+            return number;
+        } else |_| {}
+        const group = if (program) |value| value.groupIndex(name) else null;
+        const resolved = group orelse return error.InvalidRegex;
+        index.* = close;
+        return resolved;
+    }
     if (next == '{') {
         const name_start = start + 1;
         const close = std.mem.indexOfScalarPos(u8, substitution, name_start, '}') orelse return error.InvalidRegex;
@@ -945,7 +961,18 @@ fn validateSubstitutionInternal(program: ?Program, substitution: []const u8, cap
             }
             continue;
         }
-        if (byte == '$') _ = try parseSubstitutionGroup(substitution, &index, program, capture_count);
+        if (byte == '$') {
+            if (index + 1 < substitution.len) {
+                switch (substitution[index + 1]) {
+                    '`', '\'', '+', '_' => {
+                        index += 1;
+                        continue;
+                    },
+                    else => {},
+                }
+            }
+            _ = try parseSubstitutionGroup(substitution, &index, program, capture_count);
+        }
     }
 }
 
@@ -1026,6 +1053,14 @@ fn appendTransformed(writer: anytype, bytes: []const u8, state: *CaseState, full
     }
 }
 
+fn highestGroup(input: []const u8, slots: []const usize, capture_count: u16) ?[]const u8 {
+    var group: u16 = capture_count;
+    while (group > 0) : (group -= 1) {
+        if (groupText(input, slots, group)) |text| return text;
+    }
+    return null;
+}
+
 fn appendSubstitution(
     writer: anytype,
     input: []const u8,
@@ -1087,6 +1122,34 @@ fn appendSubstitution(
             }
         }
         if (byte == '$') {
+            // PCRE2/Perl whole-input substitutions.
+            if (index + 1 < substitution.len) {
+                switch (substitution[index + 1]) {
+                    '`' => {
+                        try appendTransformed(writer, input[0..slots[0]], &state, full_case);
+                        index += 1;
+                        continue;
+                    },
+                    '\'' => {
+                        try appendTransformed(writer, input[slots[1]..], &state, full_case);
+                        index += 1;
+                        continue;
+                    },
+                    '+' => {
+                        if (highestGroup(input, slots, program.capture_count)) |text| {
+                            try appendTransformed(writer, text, &state, full_case);
+                        }
+                        index += 1;
+                        continue;
+                    },
+                    '_' => {
+                        try appendTransformed(writer, input, &state, full_case);
+                        index += 1;
+                        continue;
+                    },
+                    else => {},
+                }
+            }
             if (try parseSubstitutionGroup(substitution, &index, program, program.capture_count)) |group| {
                 if (groupText(input, slots, group)) |text| {
                     try appendTransformed(writer, text, &state, full_case);
