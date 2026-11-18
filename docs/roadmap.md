@@ -129,7 +129,7 @@ Strengths:
 | Conditionals | group + assertion + `(?(R1))`/`(?(R&name))` + DEFINE | full | no | no |
 | Branch reset `(?|...)` | yes | yes | no | no |
 | Recursion/subroutines | yes (extended) | yes | no | no |
-| Named captures | yes | yes | yes | yes |
+| Named captures (incl. Unicode names and `(?'name'...)`) | yes | yes | yes | yes |
 | Duplicate group names | yes (`(?J)`) | yes | no | no |
 | Ungreedy `(?U)` | yes | yes | no | no |
 | No-auto-capture `(?n)` | yes | yes | no | no |
@@ -208,7 +208,7 @@ Qwen search is ~68–74 µs (~330–353 MiB/s), CJK tokenizer search is ~284–3
 ~635 µs), greedy `\C+` scans collapse to a single full-span match (~8 ns), and
 shared-prefix no-match scans are ~1.55 µs (15.5 GiB/s). The bench gate now covers 27 cases;
 `RegexSet` ~97 µs, `replaceAll` ~85 µs, compile ~1.5 µs with `smp_allocator`,
-and all 189 tests plus the V8/Rust/extended/replacement differential fuzzers pass. On the
+and all 190 tests plus the V8/Rust/extended/replacement differential fuzzers pass. On the
 feature side, PCRE2 forward numeric/named references, `\e` and isolated `\E`,
 the full substitution reference syntax (`$<name>`, `$+`, `$_`, `` $` ``, `$'`),
 `escape`/`splitn`/`replacen`, and compile diagnostics (`diagnose`) are covered.

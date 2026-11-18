@@ -792,3 +792,15 @@ test "caseless-restrict limits folding to ASCII" {
     try expectFull("(?i)s", "\u{017F}", .{}, true);
     try expectFull("(*CASELESS_RESTRICT)(?i)s", "\u{017F}", .{}, false);
 }
+
+test "group names accept Unicode letters and single-quote delimiters" {
+    try expectFull("(?<\u{03B1}>a)\\k<\u{03B1}>", "aa", .{}, true);
+    try expectFull("(?'\u{03B1}'a)\\k'\u{03B1}'", "aa", .{}, true);
+    try expectFull("(?P<\u{03B1}>a)(?P=\u{03B1})", "aa", .{}, true);
+    try expectFull("(?<\u{03B1}1>a)", "a", .{}, true);
+    try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, "(?<1a>a)", .{}));
+    try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, "(?<>a)", .{}));
+    var value = try regex.Regex.init(gpa, "(?<\u{03B1}>a)", .{});
+    defer value.deinit();
+    try std.testing.expectEqual(@as(?u16, 1), value.groupIndex("\u{03B1}"));
+}

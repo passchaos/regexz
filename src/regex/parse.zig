@@ -160,15 +160,43 @@ pub const Parser = struct {
         }
         return self.join(alternatives.items, true);
     }
-    fn nameAngle(self: *Parser) m.Error![]const u8 {
+    /// PCRE2 group-name rules in UTF mode: `[_\p{L}][_\p{L}\p{Nd}]*`.
+    fn nameDelimited(self: *Parser, close: u8) m.Error![]const u8 {
         const start = self.cursor;
+        var first = true;
         while (self.peek()) |byte| {
-            if (byte == '>') break;
-            if (!std.ascii.isAlphanumeric(byte) and byte != '_') return error.InvalidRegex;
-            self.cursor += 1;
+            if (byte == close) break;
+            const value = try self.rune();
+            const valid = if (first) nameStartRune(value) else nameContinueRune(value);
+            if (!valid) return error.InvalidRegex;
+            first = false;
         }
-        if (self.cursor == start or !self.take('>')) return error.InvalidRegex;
+        if (self.cursor == start or !self.take(close)) return error.InvalidRegex;
         return self.pattern[start .. self.cursor - 1];
+    }
+    fn nameAngle(self: *Parser) m.Error![]const u8 {
+        return self.nameDelimited('>');
+    }
+    fn inUnicodeGroup(name: []const u8, value: u21) bool {
+        const table = m.unicode.lookup(name) orelse return false;
+        var first: usize = 0;
+        var last = table.count;
+        while (first < last) {
+            const middle = first + (last - first) / 2;
+            const range = table.range(middle);
+            if (value < range.first) {
+                last = middle;
+            } else if (value > range.last) {
+                first = middle + 1;
+            } else return true;
+        }
+        return false;
+    }
+    fn nameStartRune(value: u21) bool {
+        return value == '_' or inUnicodeGroup("L", value);
+    }
+    fn nameContinueRune(value: u21) bool {
+        return value == '_' or inUnicodeGroup("L", value) or inUnicodeGroup("Nd", value);
     }
     fn addGroupName(self: *Parser, name: []const u8, index: u16) m.Error!void {
         // PCRE2 permits duplicate names on the same number (branch reset);
@@ -697,6 +725,10 @@ pub const Parser = struct {
                     return self.lookaround(negative, true, depth);
                 }
                 capture_name = try self.nameAngle();
+                capturing = true;
+            } else if (self.take('\'')) {
+                // Perl single-quote group name: (?'name'...)
+                capture_name = try self.nameDelimited('\'');
                 capturing = true;
             } else if (self.take('*')) {
                 // PCRE2 non-atomic positive lookahead: the engine may

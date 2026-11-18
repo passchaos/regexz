@@ -67,7 +67,8 @@ The engine picks the execution strategy automatically:
   - Subroutine calls by number, name, and relative offset: `(?1)`, `(?+1)`,
     `(?-1)`, `\g<1>`, `\g<-1>`, `\g<+1>`, `\g<name>`, `(?&name)`,
     `(?P>name)`. Named calls may refer to groups defined later.
-  - Named captures: `(?P<name>...)`, `(?<name>...)`; query them with
+  - Named captures: `(?P<name>...)`, `(?<name>...)`, `(?'name'...)`;
+    UTF-mode names may use Unicode letters and digits. Query them with
     `Program.groupIndex`/`groupName` and `Regex.groupIndex`/`groupName`.
   - Atomic groups `(?>...)` and possessive quantifiers `*+`, `++`, `?+`,
     `{n,m}+`.
