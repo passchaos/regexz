@@ -97,7 +97,7 @@ Implemented functionality:
   case transforms `\U`/`\L`/`\E`/`\u`/`\l` (simple Unicode by default;
   `Limits.full_case_mapping` enables full SpecialCasing), and callback
   replacement via `replaceAllWithFn`.
-- 170 tests, including recursion, branch reset, conditional assertions,
+- 172 tests, including recursion, branch reset, conditional assertions,
   grapheme clusters, binary properties, Unicode blocks, partial matching,
   control verbs, thread safety, allocation-failure, and differential coverage
   against V8 for the supported subset.
@@ -177,7 +177,7 @@ Measured on an Apple Silicon macOS host. "Before" is the initial commit state;
 | CJK tokenizer search, 191 KiB | — | ~284 µs (659 MiB/s) | ~216 µs* (864 MiB/s) | — |
 | Han class scan, 191 KiB | — | ~635 µs (294 MiB/s) | ~169 µs (1104 MiB/s) | — |
 | Byte escape scan `\C+`, 23 KiB | — | ~95 µs (252 MiB/s) | not supported | — |
-| Shared-prefix alternation no-match, 23 KiB | — | ~9.4 µs (2.56 GiB/s) | ~2.1 µs (11.4 GiB/s) | — |
+| Shared-prefix alternation no-match, 23 KiB | — | ~1.55 µs (15.5 GiB/s) | ~2.1 µs (11.4 GiB/s) | — |
 | `find` selective pattern (`\p{N}`) | — | ~36 ns/piece | — | — |
 | `find` multi-literal after a 4 KiB prefix | ~2.0 µs | ~0.22 µs | — | — |
 | `find` capture email tokens, 18 KiB | ~161 µs | ~68 µs | — | — |
@@ -198,12 +198,13 @@ Rust 1.13.1 reference for that branch-less equivalent is ~56 µs.
 cache for identical sources.
 
 Latest verification on a busy macOS host (2026-11): after flattening the
-search-DFA transition tables, adding a capture-free `find` fast path, and
+search-DFA transition tables, adding a capture-free `find` fast path,
 replacing the Unicode hash map with a direct-mapped cache plus a fast UTF-8
-decoder, full-pattern Qwen search is ~68 µs (~353 MiB/s) and CJK tokenizer
-search is ~284 µs (~659 MiB/s). The bench gate now covers 26 cases;
+decoder, and adding a shared-prefix multi-literal prefilter, full-pattern
+Qwen search is ~68–74 µs (~330–353 MiB/s), CJK tokenizer search is ~284 µs
+(~659 MiB/s), and shared-prefix no-match scans are ~1.55 µs (15.5 GiB/s). The bench gate now covers 26 cases;
 `RegexSet` ~97 µs, `replaceAll` ~85 µs, compile ~1.5 µs with `smp_allocator`,
-and all 170 tests plus the V8/Rust/extended differential fuzzers pass. Treat absolute numbers as host-noise-sensitive;
+and all 172 tests plus the V8/Rust/extended differential fuzzers pass. Treat absolute numbers as host-noise-sensitive;
 the bench gate compares ratios against `tools/bench/baseline.json`.
 
 Where the remaining time goes:
