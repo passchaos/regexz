@@ -101,7 +101,8 @@ Strengths:
   recursion-depth limits produce `error.RegexLimitExceeded`.
 - Compile-time materialization of `(?i)` folding and negation keeps set
   matching to one binary search.
-- Unicode data and property tables are generated from a pinned RE2 revision.
+- Unicode data and property tables are generated from Unicode 17.0.0 UCD data
+  (emoji sequences from 16.0).
 
 ## 2. Remaining feature gaps
 
@@ -139,6 +140,10 @@ Strengths:
 | True streaming scanner | yes (linear, rune-based) | partial | partial | yes |
 | Multi-pattern `RegexSet` | yes | no (separate calls) | yes | no |
 | `\C` in DFA/Pike | fallback only | yes | no | no |
+| Newline conventions `(*CR)`/`(*CRLF)`/`(*ANY)`/`(*NUL)` | no (LF only) | yes | no | no |
+| `(?r)` caseless-restrict / `(?aD)`/`(?aS)`/`(?aW)`/`(?aP)`/`(?aT)` | no | yes | no | no |
+| `(?xx)` extended-more | no | yes | no | no |
+| `(*NOTEMPTY)`/`(*NOTEMPTY_ATSTART)` | no | yes | no | no |
 
 ## 3. Performance gaps
 
@@ -170,6 +175,12 @@ lookaround; the Node baseline uses the full pattern.
 
 † Node's repeated `new RegExp` benchmark likely benefits from V8's compile
 cache for identical sources.
+
+Latest verification on a busy macOS host (2026-11): full-pattern Qwen search
+is ~89–92 µs (~260 MiB/s), `RegexSet` ~96 µs, `replaceAll` ~76 µs, compile
+~1.5 µs with `smp_allocator`, and all 146 tests plus the V8/Rust/extended
+differential fuzzers pass. Treat absolute numbers as host-noise-sensitive;
+the bench gate compares ratios against `tools/bench/baseline.json`.
 
 Where the remaining time goes:
 
