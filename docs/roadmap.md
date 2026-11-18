@@ -188,7 +188,7 @@ cache for identical sources.
 
 Latest verification on a busy macOS host (2026-11): full-pattern Qwen search
 is ~89–92 µs (~260 MiB/s), `RegexSet` ~96 µs, `replaceAll` ~76 µs, compile
-~1.5 µs with `smp_allocator`, and all 146 tests plus the V8/Rust/extended
+~1.5 µs with `smp_allocator`, and all 156 tests plus the V8/Rust/extended
 differential fuzzers pass. Treat absolute numbers as host-noise-sensitive;
 the bench gate compares ratios against `tools/bench/baseline.json`.
 
