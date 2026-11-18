@@ -108,6 +108,9 @@ The engine picks the execution strategy automatically:
     `(?U:...)`, `(?-U:...)`, `(?n:...)`, and `(?-n:...)` forms.
   - PCRE2 `(?^)` option reset, plus the `(*NO_START_OPT)`,
     `(*NO_AUTO_POSSESS)`, and `(*NO_DOTSTAR_ANCHOR)` start-up directives.
+  - `(?xx)` extended-more classes (space and tab ignored inside classes) and
+    ASCII option letters `(?aD)`, `(?aS)`, `(?aW)`, `(?aP)`, `(?aT)`, and
+    `(?a)` under UCP.
   - Newline conventions `(*CR)`, `(*LF)`, `(*CRLF)`, `(*ANYCRLF)`, `(*ANY)`,
     and `(*NUL)`, which drive `^`, `$`, `\Z`, dot, and bare `\N`; `\R` is
     controlled separately by `(*BSR_ANYCRLF)`/`(*BSR_UNICODE)`.
@@ -328,8 +331,8 @@ recursion-depth limits and fail closed with `error.RegexLimitExceeded`.
 - UCP applies to `\s` only when `unicode_perl_space` is set, or to
   `\d`/`\w`/`\s` and word boundaries when `unicode_perl_classes` is set.
 - Invalid UTF-8 bytes are not decoded as U+FFFD; only `\C` can consume them.
-- PCRE2 `(*NOTEMPTY)`/`(*NOTEMPTY_ATSTART)` and the `(?r)`/`(?aD)`/`(?aS)`/
-  `(?aW)`/`(?aP)`/`(?aT)`/`(?xx)` option letters are not implemented.
+- PCRE2 `(*NOTEMPTY)`/`(*NOTEMPTY_ATSTART)` and the `(?r)` caseless-restrict
+  option are not implemented.
 - `\x{D800}`–`\x{DFFF}` parse but can never match, because inputs are decoded
   as Unicode scalar values.
 - Lookbehind is evaluated by scanning start positions, so it is O(n) per

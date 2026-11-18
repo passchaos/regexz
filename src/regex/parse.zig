@@ -598,6 +598,7 @@ pub const Parser = struct {
             } else {
                 var negative = false;
                 var caret = false;
+                var consumed: usize = 1;
                 var flag_count: usize = 0;
                 var negative_count: usize = 0;
                 if (self.take('^')) {
@@ -607,6 +608,7 @@ pub const Parser = struct {
                     self.flags.multiline = false;
                     self.flags.dot_newline = false;
                     self.flags.extended = false;
+                    self.flags.extended_more = false;
                     self.flags.no_auto_capture = false;
                     flag_count += 1;
                 }
@@ -621,13 +623,44 @@ pub const Parser = struct {
                         'i' => self.flags.fold = !negative,
                         'm' => self.flags.multiline = !negative,
                         's' => self.flags.dot_newline = !negative,
-                        'x' => self.flags.extended = !negative,
+                        'x' => {
+                            if (self.cursor + 1 < self.pattern.len and self.pattern[self.cursor + 1] == 'x') {
+                                consumed = 2;
+                                self.flags.extended_more = !negative;
+                                self.flags.extended = !negative;
+                            } else {
+                                self.flags.extended = !negative;
+                                if (negative) self.flags.extended_more = false;
+                            }
+                        },
+                        'a' => {
+                            const next = if (self.cursor + 1 < self.pattern.len) self.pattern[self.cursor + 1] else 0;
+                            if (next == 'D' or next == 'S' or next == 'W' or next == 'P' or next == 'T') {
+                                consumed = 2;
+                                switch (next) {
+                                    'D' => self.flags.ascii_digit = !negative,
+                                    'S' => self.flags.ascii_space = !negative,
+                                    'W' => self.flags.ascii_word = !negative,
+                                    'P' => {
+                                        self.flags.ascii_posix = !negative;
+                                        self.flags.ascii_digit = !negative;
+                                    },
+                                    'T' => self.flags.ascii_digit = !negative,
+                                    else => unreachable,
+                                }
+                            } else {
+                                self.flags.ascii_digit = !negative;
+                                self.flags.ascii_space = !negative;
+                                self.flags.ascii_word = !negative;
+                                self.flags.ascii_posix = !negative;
+                            }
+                        },
                         'J' => self.flags.duplicate_names = !negative,
                         'U' => self.flags.ungreedy = !negative,
                         'n' => self.flags.no_auto_capture = !negative,
                         else => break,
                     }
-                    self.cursor += 1;
+                    self.cursor += consumed;
                     flag_count += 1;
                     if (negative) negative_count += 1;
                 }
@@ -757,6 +790,12 @@ pub const Parser = struct {
         }
         return null;
     }
+    fn skipClassSpace(self: *Parser) void {
+        while (self.peek()) |byte| {
+            if (byte != ' ' and byte != '\t') break;
+            self.cursor += 1;
+        }
+    }
     fn characterClass(self: *Parser) m.Error!*const m.Node {
         const negate = self.take('^');
         var accumulator: ?m.Set = null;
@@ -765,6 +804,7 @@ pub const Parser = struct {
         defer operand.deinit(self.allocator);
         var first = true;
         while (self.peek()) |_| {
+            if (self.flags.extended_more) self.skipClassSpace();
             if (!first and self.take(']')) {
                 const right = try classes.normalize(self.allocator, operand.items, false, self.flags.fold, self.limits.max_ranges);
                 const combined = if (accumulator) |left|
@@ -790,10 +830,12 @@ pub const Parser = struct {
             // single runes even when `(?i)` is active. The operand
             // normalization folds the union.
             const start = try self.element(false);
+            if (self.flags.extended_more) self.skipClassSpace();
             if (self.peek() == '-' and self.cursor + 1 < self.pattern.len and
                 self.pattern[self.cursor + 1] != ']' and self.pattern[self.cursor + 1] != '-')
             {
                 self.cursor += 1;
+                if (self.flags.extended_more) self.skipClassSpace();
                 const end = try self.element(false);
                 if (start.negate or end.negate or start.ranges.len != 1 or end.ranges.len != 1 or start.ranges[0].first != start.ranges[0].last or end.ranges[0].first != end.ranges[0].last) return error.InvalidRegex;
                 if (operand.items.len >= self.limits.max_ranges) return error.RegexLimitExceeded;

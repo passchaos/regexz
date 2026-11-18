@@ -304,3 +304,29 @@ test "option reset and start-up directives" {
     }
     try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, "(?^-i)a", .{}));
 }
+
+test "extended-more classes and ASCII option letters" {
+    const Case = struct { pattern: []const u8, input: []const u8, matches: bool };
+    for ([_]Case{
+        .{ .pattern = "(?xx)[ a ]", .input = "a", .matches = true },
+        .{ .pattern = "(?xx)[ a ]", .input = " ", .matches = false },
+        .{ .pattern = "(?xx)[ a - z ]+", .input = "abc", .matches = true },
+        .{ .pattern = "(?xx)[ a - z ]+", .input = "A", .matches = false },
+        .{ .pattern = "(?xx)[\\ ]", .input = " ", .matches = true },
+        .{ .pattern = "(?xx:[ a ])", .input = "a", .matches = true },
+        .{ .pattern = "[ a ]", .input = " ", .matches = true },
+        .{ .pattern = "(?aD)\\d", .input = "\u{0663}", .matches = false },
+        .{ .pattern = "(?aD)\\d", .input = "3", .matches = true },
+        .{ .pattern = "(?aD:\\d)", .input = "3", .matches = true },
+        .{ .pattern = "(?aD)(?-aD)\\d", .input = "\u{0663}", .matches = true },
+        .{ .pattern = "(?aS)\\s", .input = "\u{3000}", .matches = false },
+        .{ .pattern = "(?aS)\\s", .input = " ", .matches = true },
+        .{ .pattern = "(?aW)\\w", .input = "\u{00e9}", .matches = false },
+        .{ .pattern = "(?aW)\\w", .input = "a", .matches = true },
+        .{ .pattern = "(?a)\\w", .input = "\u{00e9}", .matches = false },
+    }) |case| {
+        var value = try regex.Regex.init(gpa, case.pattern, .{ .unicode_perl_classes = true });
+        defer value.deinit();
+        try std.testing.expectEqual(case.matches, try value.matches(gpa, case.input));
+    }
+}

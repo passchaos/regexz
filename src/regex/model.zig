@@ -78,6 +78,14 @@ pub const Flags = struct {
     no_auto_capture: bool = false,
     /// `(?J)`: allow duplicate capture-group names.
     duplicate_names: bool = false,
+    /// `(?xx)`: also ignore space and horizontal tab inside character classes.
+    extended_more: bool = false,
+    /// PCRE2 `(?aD)`/`(?aS)`/`(?aW)`: keep `\d`, `\s`, `\w` ASCII even with UCP.
+    ascii_digit: bool = false,
+    ascii_space: bool = false,
+    ascii_word: bool = false,
+    /// `(?aP)`/`(?aT)`: ASCII POSIX classes and ASCII digit handling.
+    ascii_posix: bool = false,
 };
 pub const GroupName = struct { name: []const u8, index: u16 };
 /// PCRE2 newline conventions selected by `(*CR)`, `(*LF)`, `(*CRLF)`,

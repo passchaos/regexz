@@ -332,7 +332,12 @@ pub fn parse(p: anytype, in_class: bool, fold: bool) m.Error!Atom {
     p.cursor += 1;
     if (std.mem.indexOfScalar(u8, "dDsSwW", byte) != null) {
         const negate = std.ascii.isUpper(byte);
-        if (p.limits.unicode_perl_classes) {
+        const ascii_override = switch (std.ascii.toLower(byte)) {
+            'd' => p.flags.ascii_digit,
+            's' => p.flags.ascii_space,
+            else => p.flags.ascii_word,
+        };
+        if (p.limits.unicode_perl_classes and !ascii_override) {
             switch (std.ascii.toLower(byte)) {
                 'd' => return .{ .set = .{ .ranges = try classes.unicodePropertyRanges(p.allocator, "Nd"), .negate = negate, .fold = fold } },
                 'w' => return .{ .set = .{ .ranges = try classes.unicodeWordRanges(p.allocator, p.limits.max_ranges), .negate = negate, .fold = fold } },
@@ -340,7 +345,7 @@ pub fn parse(p: anytype, in_class: bool, fold: bool) m.Error!Atom {
                 else => unreachable,
             }
         }
-        if ((byte == 's' or byte == 'S') and p.limits.unicode_perl_space) {
+        if ((byte == 's' or byte == 'S') and p.limits.unicode_perl_space and !p.flags.ascii_space) {
             return .{ .set = .{ .ranges = &classes.unicode_space_ranges, .negate = negate, .fold = fold } };
         }
         const name: []const u8 = switch (std.ascii.toLower(byte)) {
