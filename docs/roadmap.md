@@ -274,11 +274,12 @@ Where the remaining time goes:
    tokenizer search to ~330 MiB/s, against a same-host Rust reference of
    ~427 MiB/s. Lookahead-free programs with non-ASCII sets are determinized
    over UTF-8 bytes (`utf8_set.zig`), taking `\p{Han}+` from ~635 µs to
-   ~173–200 µs. Remaining: an unanchored DFA (or a 2-byte start filter) to
-   remove the per-start anchored-restart cost that dominates scans with many
-   short matches, byte-level lookahead gating (Qwen's `(?!\S)`),
+   ~173–200 µs. The CJK tokenizer is now ~1.05x the same-host Rust reference
+   after the byte-keyed transition cache and inlined start-state lookup, so
+   the remaining gap is per-transition cost rather than per-start restart
+   overhead. Remaining: byte-level lookahead gating (Qwen's `(?!\S)`),
    iteration-aware priorities for loops whose exits compete with later
-   choices, and closing the remaining Rust gap. An
+   choices, and closing the last few percent. An
    ordered-subset DFA prototype was evaluated and reverted: list position
    captures loop-iteration order but cannot compare an accept with an earlier
    accept from a different branch. A sound solution needs tagged priorities
