@@ -70,7 +70,7 @@ The engine picks the execution strategy automatically:
     `(?-1)`, `(?&name)`, `(?P>name)`, `\g<name>`, with a recursion-depth
     limit.
   - Leftmost-longest (POSIX) search/replace via `Limits.longest`.
-  - `\X` extended grapheme clusters (UAX #29, Unicode 16.0.0 data).
+  - `\X` extended grapheme clusters (UAX #29, Unicode 17.0.0 data).
   - `\K` (reset match start), `\G` (start of the current match attempt),
     `\Z` (end or before a final newline).
   - Backtracking control verbs: `(*FAIL)`, `(*ACCEPT)`, `(*PRUNE)`,
@@ -109,7 +109,7 @@ The engine picks the execution strategy automatically:
     `\p{Lowercase}`, `\p{Hex_Digit}`, `\p{ID_Start}`, plus PCRE2 special
     properties `\p{Xan}`, `\p{Xwd}`, `\p{Xps}`, `\p{Xsp}`, `\p{Xuc}`,
     plus `\p{ASCII}`, `\p{Cn}` (unassigned), and `\p{Assigned}`.
-  - Case-insensitive matching uses simple Unicode case folding; Unicode 16
+  - Case-insensitive matching uses simple Unicode case folding; Unicode 17
     `CaseFolding.txt` pairs missing from RE2's pinned tables are supplemented.
   - Unicode blocks: `\p{InBasic_Latin}`, `\p{InGreek}`, `\p{InEmoticons}`,
     `\p{Block=Basic_Latin}` (underscores are optional and case-insensitive).
@@ -164,7 +164,7 @@ The engine picks the execution strategy automatically:
 - Reusable workspaces (`Workspace`, `ReplaceWorkspace`) for matching and
   substitution without per-call program compilation.
 - Bounded Unicode class data generated from a pinned RE2 revision and
-  Unicode 16.0.0 UCD files (`tools/codegen/generate.py`), including simple
+  Unicode 17.0.0 UCD files (`tools/codegen/generate.py`), including simple
   upper/lower case mappings.
 - No dependency on `netz`; only the Zig standard library.
 
@@ -336,14 +336,9 @@ The engine and Unicode scripts/categories were moved from `netz`
 (`src/grpc/xds/routing/regex` and `src/grpc/xds/routing/regex.zig`). The
 generated RE2 tables remain covered by the RE2 BSD license in
 `src/regex/unicode/LICENSE.re2`. Grapheme-cluster and binary-property tables
-are generated from Unicode 16.0.0 data by `tools/codegen/generate.py`; the
-pinned source hashes are recorded in `src/regex/unicode/source.json`.
-
-## License
-
-MIT. See `LICENSE`.
-g`). The generated Unicode tables remain
-covered by the RE2 BSD license in `src/regex/unicode/LICENSE.re2`.
+are generated from Unicode 17.0.0 UCD data (emoji sequence data from 16.0) by
+`tools/codegen/generate.py`; the pinned source hashes are recorded in
+`src/regex/unicode/source.json`.
 
 ## License
 

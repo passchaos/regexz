@@ -1,4 +1,5 @@
-//! RE2 Unicode categories/scripts and simple folding, decoded on any endian.
+//! Unicode 17.0 categories/scripts, binary properties, and simple folding,
+//! decoded on any endian.
 const std = @import("std");
 pub const Range = struct { first: u21, last: u21 };
 pub const Entry = struct { name: []const u8, offset: usize, count: usize };

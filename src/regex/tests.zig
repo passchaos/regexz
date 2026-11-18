@@ -239,6 +239,40 @@ test "Assigned and unassigned properties" {
     }
 }
 
+test "Unicode 17 scripts missing from RE2 tables" {
+    const Case = struct { pattern: []const u8, input: []const u8, matches: bool };
+    for ([_]Case{
+        .{ .pattern = "\\p{Script=Sidetic}", .input = "\u{10940}", .matches = true },
+        .{ .pattern = "\\p{sc=Sidetic}", .input = "\u{10959}", .matches = true },
+        .{ .pattern = "\\p{Sidetic}", .input = "\u{10940}", .matches = true },
+        .{ .pattern = "\\p{Script=Sidetic}", .input = "\u{10960}", .matches = false },
+        .{ .pattern = "\\p{Script=Tolong_Siki}", .input = "\u{11db0}", .matches = true },
+        .{ .pattern = "\\p{scx=Tolong_Siki}", .input = "\u{11de9}", .matches = true },
+        .{ .pattern = "\\p{Script=Tolong_Siki}", .input = "\u{11ddc}", .matches = false },
+        .{ .pattern = "\\p{Script=Beria_Erfe}", .input = "\u{16ea0}", .matches = true },
+        .{ .pattern = "\\p{sc=Beria_Erfe}", .input = "\u{16ed3}", .matches = true },
+        .{ .pattern = "\\p{Script=Beria_Erfe}", .input = "\u{16eba}", .matches = false },
+    }) |case| {
+        var value = try regex.Regex.init(gpa, case.pattern, .{});
+        defer value.deinit();
+        try std.testing.expectEqual(case.matches, try value.matches(gpa, case.input));
+    }
+}
+
+test "Unicode 17 case folding" {
+    const Case = struct { pattern: []const u8, input: []const u8, matches: bool };
+    for ([_]Case{
+        .{ .pattern = "(?i)\u{16ea0}", .input = "\u{16ebb}", .matches = true },
+        .{ .pattern = "(?i)\u{16ebb}", .input = "\u{16ea0}", .matches = true },
+        .{ .pattern = "(?i)\u{16ea0}", .input = "\u{16ea1}", .matches = false },
+        .{ .pattern = "(?i)\u{16ea0}", .input = "A", .matches = false },
+    }) |case| {
+        var value = try regex.Regex.init(gpa, case.pattern, .{});
+        defer value.deinit();
+        try std.testing.expectEqual(case.matches, try value.matches(gpa, case.input));
+    }
+}
+
 test "Unicode 16 case folding" {
     const Case = struct { pattern: []const u8, input: []const u8, matches: bool };
     for ([_]Case{

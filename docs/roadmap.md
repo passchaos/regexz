@@ -34,7 +34,7 @@ Implemented functionality:
 - Recursion `(?R)`, `(?0)`, `(?1)`, `(?+1)`, `(?-1)`, `(?&name)`,
   `(?P>name)`, `\g<name>` with a depth limit.
 - Leftmost-longest (POSIX) search/replace via `Limits.longest`.
-- `\X` extended grapheme clusters using UAX #29 and Unicode 16.0.0 data.
+- `\X` extended grapheme clusters using UAX #29 and Unicode 17.0.0 data.
 - `\K`, `\G`, `\Z`, `\R`, `\N`, `\h`, `\H`.
 - Backtracking control verbs `(*FAIL)`, `(*ACCEPT)`, `(*PRUNE)`,
   `(*SKIP)`/`(*SKIP:name)`, `(*COMMIT)`, `(*THEN)`; `(*MARK:name)` is
@@ -50,7 +50,7 @@ Implemented functionality:
   `Cased_Letter`), ISO 15924 script codes (`Grek`), case/separator-insensitive
   names, `Script_Extensions`
   (`scx=`/`Script_Extensions=`, long names or ISO 15924 codes, including the
-  Unicode 16 scripts missing from RE2's pinned tables), 63 binary Unicode
+  Unicode 16/17 scripts missing from RE2's pinned tables), 63 binary Unicode
   properties (`Alphabetic`, `White_Space`, `Emoji`, `Extended_Pictographic`,
   `Lowercase`, `Hex_Digit`, `ID_Start`, ...), `\p{ASCII}`, `\p{Cn}`,
   `\p{Assigned}`, Unicode 16 case-fold supplements, Unicode blocks (`In...`/
@@ -83,7 +83,7 @@ Implemented functionality:
   case transforms `\U`/`\L`/`\E`/`\u`/`\l` (simple Unicode by default;
   `Limits.full_case_mapping` enables full SpecialCasing), and callback
   replacement via `replaceAllWithFn`.
-- 132 tests, including recursion, branch reset, conditional assertions,
+- 134 tests, including recursion, branch reset, conditional assertions,
   grapheme clusters, binary properties, Unicode blocks, partial matching,
   control verbs, thread safety, allocation-failure, and differential coverage
   against V8 for the supported subset.
