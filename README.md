@@ -72,7 +72,8 @@ The engine picks the execution strategy automatically:
   - Conditionals on group participation or assertions:
     `(?(1)yes|no)`, `(?(<name>)yes|no)`, `(?(?=...)yes|no)`,
     `(?(?<=...)yes|no)`, recursion conditions `(?(R))`, `(?(R1))`,
-    `(?(R&name))`, and `(?(DEFINE)...)` definition blocks.
+    `(?(R&name))`, `(?(VERSION>=10.45)yes|no)`, and `(?(DEFINE)...)`
+    definition blocks.
   - Branch reset `(?|...)` with shared capture numbers across alternatives.
   - Duplicate group names with `(?J)`.
   - Recursion and subroutine calls: `(?R)`, `(?0)`, `(?1)`, `(?+1)`,

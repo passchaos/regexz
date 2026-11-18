@@ -352,3 +352,20 @@ test "caseless restrict folds only ASCII" {
         try std.testing.expectEqual(case.matches, try value.matches(gpa, case.input));
     }
 }
+
+test "VERSION condition compares the feature level" {
+    const Case = struct { pattern: []const u8, input: []const u8, matches: bool };
+    for ([_]Case{
+        .{ .pattern = "(?(VERSION>=10.4)yes|no)", .input = "yes", .matches = true },
+        .{ .pattern = "(?(VERSION>=10.4)yes|no)", .input = "no", .matches = false },
+        .{ .pattern = "(?(VERSION>=10.45)yes|no)", .input = "yes", .matches = true },
+        .{ .pattern = "(?(VERSION>=10.46)yes|no)", .input = "no", .matches = true },
+        .{ .pattern = "(?(VERSION=10.45)yes|no)", .input = "yes", .matches = true },
+        .{ .pattern = "(?(VERSION=10.4)yes|no)", .input = "no", .matches = true },
+    }) |case| {
+        var value = try regex.Regex.init(gpa, case.pattern, .{});
+        defer value.deinit();
+        try std.testing.expectEqual(case.matches, try value.matches(gpa, case.input));
+    }
+    try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, "(?(VERSION<10.45)yes|no)", .{}));
+}

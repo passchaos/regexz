@@ -630,7 +630,7 @@ pub const Workspace = struct {
         }
     }
 
-    fn anchored(self: *Workspace, input: []const u8, start: usize) Error!?usize {
+    inline fn anchored(self: *Workspace, input: []const u8, start: usize) Error!?usize {
         var state = try self.startState();
         var offset = start;
         var best_end: ?usize = null;

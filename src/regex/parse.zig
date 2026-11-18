@@ -329,6 +329,32 @@ pub const Parser = struct {
         return self.node(.{ .lookaround = .{ .child = child, .negative = negative, .behind = behind } });
     }
     fn condition(self: *Parser, depth: usize) m.Error!m.Condition {
+        if (std.mem.startsWith(u8, self.pattern[self.cursor..], "VERSION")) {
+            self.cursor += "VERSION".len;
+            const ge = if (self.take('>')) blk: {
+                if (!self.take('=')) return error.InvalidRegex;
+                break :blk true;
+            } else if (self.take('=')) false else return error.InvalidRegex;
+            const start = self.cursor;
+            while (self.peek()) |byte| {
+                if (!std.ascii.isDigit(byte) and byte != '.') break;
+                self.cursor += 1;
+            }
+            if (self.cursor == start) return error.InvalidRegex;
+            const text = self.pattern[start..self.cursor];
+            const dot = std.mem.indexOfScalar(u8, text, '.');
+            const major = std.fmt.parseInt(u16, text[0 .. dot orelse text.len], 10) catch return error.InvalidRegex;
+            const minor = if (dot) |index| std.fmt.parseInt(u16, text[index + 1 ..], 10) catch return error.InvalidRegex else 0;
+            if (!self.take(')')) return error.InvalidRegex;
+            // The engine targets the PCRE2 10.45 feature level.
+            const supported_major: u16 = 10;
+            const supported_minor: u16 = 45;
+            const satisfied = if (ge)
+                supported_major > major or (supported_major == major and supported_minor >= minor)
+            else
+                major == supported_major and minor == supported_minor;
+            return .{ .version = satisfied };
+        }
         if (self.peek() == 'R') {
             self.cursor += 1;
             var group_index: ?u16 = null;

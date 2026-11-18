@@ -244,6 +244,8 @@ pub const Condition = union(enum) {
     /// `(?(R))`: true while executing inside a recursion/subroutine call.
     /// A non-null payload restricts the check to a specific group.
     recursion: ?u16,
+    /// `(?(VERSION>=x.y))`: evaluated at compile time.
+    version: bool,
 };
 pub const Node = union(enum) {
     empty,

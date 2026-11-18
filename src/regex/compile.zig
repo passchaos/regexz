@@ -364,6 +364,7 @@ const Builder = struct {
                 switch (cond.condition) {
                     .group => |group| break :blk self.emit(.{ .conditional = .{ .group = group, .yes = yes, .no = no } }),
                     .recursion => |group| break :blk self.emit(.{ .conditional_recursion = .{ .group = group, .yes = yes, .no = no } }),
+                    .version => |satisfied| break :blk if (satisfied) yes else no,
                     .assertion => |assertion_node| {
                         const look = switch (assertion_node.*) {
                             .lookaround => |look_value| look_value,
