@@ -304,12 +304,13 @@ Where the remaining time goes:
    programs of saves, literals, and forced greedy runs, which took the email
    benchmark from ~68 µs to ~42 µs before the chain path; shapes that need
    backtracking (`(a+)ab`, adjacent runs, loops with competing exits) still
-   use the VM. The full-match ASCII loop gap (~1.35x, `(?:[a-z0-9]+[ \n])+`)
-   is an engine-selection difference rather than a table problem: a
-   hand-written three-state table loop measures the same ~1.7 ns/byte as the
-   lazy full-match DFA, while the same-host Rust reference reaches
-   ~1.25 ns/byte, most likely through its one-pass DFA. Closing it needs a
-   one-pass-style engine. Remaining:
+   use the VM. The full-match ASCII table now stores pre-multiplied row
+   offsets (`state * 128`) instead of state ids, which removes the shift from
+   the dependent-load address chain: `(?:[a-z0-9]+[ \n])+` went from ~373 µs
+   to ~311 µs (1.40 ns/byte) against ~273 µs (1.25 ns/byte) for the
+   same-host Rust reference, so the gap is ~1.12x. A flat probe confirms the
+   row-offset form beats the state-id form (1.17 vs 1.41 ns/byte); the rest
+   is engine selection, most likely Rust's one-pass DFA. Remaining:
    byte-level lookahead gating (Qwen's `(?!\S)`), iteration-aware priorities
    for loops whose exits compete with later choices, and closing the last few
    percent. An

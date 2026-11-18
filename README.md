@@ -319,7 +319,7 @@ busy Apple Silicon host (absolute numbers vary with load):
 | `\p{Han}+` class scan (191 KiB) | ~635 µs | ~173–200 µs (~940–1080 MiB/s) |
 | Full match, Han class (191 KiB) | — | ~204 µs (~800 MiB/s) |
 | Full match, ASCII class (216 KiB) | — | ~52 µs (~4.0 GiB/s) |
-| Full match, ASCII loop (216 KiB) | — | ~376 µs (~555 MiB/s) |
+| Full match, ASCII loop (216 KiB) | — | ~311 µs (~675 MiB/s) |
 | `replaceAll` `a+` (32 KiB) | ~265 µs | ~64 µs |
 | `find` literal after a 4 KiB prefix | — | ~55 ns |
 | `find` xDS-like after a 4 KiB prefix | — | ~94 ns |

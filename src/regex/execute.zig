@@ -67,7 +67,8 @@ const Dfa = struct {
     states: std.ArrayList(DfaState) = .empty,
     index: std.StringHashMapUnmanaged(u32) = .empty,
     /// Flat [state][byte] table: `ascii_unprepared` = unknown,
-    /// `ascii_dead` = dead, otherwise the state id.
+    /// `ascii_dead` = dead, otherwise the target's row offset
+    /// (`state id * 128`), which keeps the scan loop's address on one add.
     ascii_table: std.ArrayList(u32) = .empty,
     unicode_cache: []UnicodeEntry,
     scratch: []u32,
@@ -299,7 +300,7 @@ pub const Workspace = struct {
         const dfa = &self.dfa.?;
         if (rune < 128) {
             const cached = dfa.ascii_table.items[@as(usize, state_id) * 128 + rune];
-            if (cached != ascii_unprepared) return if (cached == ascii_dead) dfa_dead else cached;
+            if (cached != ascii_unprepared) return if (cached == ascii_dead) dfa_dead else cached >> 7;
         } else {
             const key = (@as(u64, state_id) << 21) | rune;
             const entry = &dfa.unicode_cache[unicodeSlot(key)];
@@ -322,7 +323,9 @@ pub const Workspace = struct {
         const next: u32 = if (count == 0) dfa_dead else try self.dfaGetState(program, list[0..count]);
         const cached: u32 = if (next == dfa_dead) dfa_dead else next + 1;
         if (rune < 128) {
-            dfa.ascii_table.items[@as(usize, state_id) * 128 + rune] = if (next == dfa_dead) ascii_dead else next;
+            // Store the target's row offset so the scan loop can index with
+            // one add instead of a shift plus add on the critical path.
+            dfa.ascii_table.items[@as(usize, state_id) * 128 + rune] = if (next == dfa_dead) ascii_dead else next * 128;
         } else {
             dfa.unicode_cache[unicodeSlot((@as(u64, state_id) << 21) | rune)] = .{
                 .key = (@as(u64, state_id) << 21) | rune,
@@ -334,26 +337,29 @@ pub const Workspace = struct {
     }
     fn executeDfa(self: *Workspace, program: Program, input: []const u8) std.mem.Allocator.Error!bool {
         const dfa = &self.dfa.?;
-        var state = try self.dfaStartState(program);
+        // Table entries are row offsets (state * 128), so the hot loop's next
+        // address is one add away from the loaded value.
+        var row: u32 = (try self.dfaStartState(program)) * 128;
         var offset: usize = 0;
         while (offset < input.len) {
             const byte = input[offset];
             if (byte < 0x80) {
-                const cached = dfa.ascii_table.items[@as(usize, state) * 128 + byte];
+                const cached = dfa.ascii_table.items[@as(usize, row) + byte];
                 if (cached >= ascii_dead) {
                     if (cached == ascii_dead) return false;
                 } else {
-                    state = cached;
+                    row = cached;
                     offset += 1;
                     continue;
                 }
             }
             const rune = runeAt(input, offset) orelse return false;
-            state = try self.dfaTransition(program, state, rune.value);
-            if (state == dfa_dead) return false;
+            const next = try self.dfaTransition(program, row >> 7, rune.value);
+            if (next == dfa_dead) return false;
+            row = next * 128;
             offset += rune.len;
         }
-        return dfa.states.items[state].accept;
+        return dfa.states.items[row >> 7].accept;
     }
     fn tryDfa(self: *Workspace, program: Program, input: []const u8) ?bool {
         if (self.dfa == null) {
