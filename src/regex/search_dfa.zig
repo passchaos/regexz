@@ -72,11 +72,22 @@ const UnicodeEntry = extern struct {
 };
 
 inline fn unicodeSlot(key: u64) usize {
-    // The key packs (state << 21) | rune; folding the high bits down keeps
-    // the state and the rune's high bits in the slot without a multiply,
-    // which is on the per-rune dependency chain.
-    return @intCast((key ^ (key >> 12)) & (unicode_cache_size - 1));
+    // Folding the high bits down keeps the state and the rune bytes in the
+    // slot without a multiply, which is on the per-rune dependency chain.
+    return @intCast((key ^ (key >> 12) ^ (key >> 24)) & (unicode_cache_size - 1));
 }
+
+/// UTF-8 length by lead byte (0 = invalid lead). Continuation-byte validity
+/// is checked on cache misses by `runeAt`.
+const utf8_length = blk: {
+    var table = [_]u8{0} ** 256;
+    for (0..0x80) |index| table[index] = 1;
+    for (0xC2..0xE0) |index| table[index] = 2;
+    for (0xE0..0xF0) |index| table[index] = 3;
+    for (0xF0..0xF5) |index| table[index] = 4;
+    break :blk table;
+};
+const utf8_mask = [5]u32{ 0, 0xFF, 0xFFFF, 0xFFFFFF, 0xFFFFFFFF };
 
 const State = struct {
     entries: []const Entry,
@@ -726,25 +737,8 @@ pub const Workspace = struct {
         return id;
     }
 
-    inline fn prepare(self: *Workspace, state_id: u32, rune: u21) Error!Prepared {
-        if (rune < 128) {
-            const index = @as(usize, state_id) * 128 + rune;
-            const cached = self.ascii_table.items[index];
-            if (cached != 0) {
-                return .{
-                    .next = if (cached == dead_state) dead_state else cached - 1,
-                    .accept = self.accept_table.items[index],
-                };
-            }
-        } else {
-            const key = (@as(u64, state_id) << 21) | rune;
-            const entry = &self.unicode_cache[unicodeSlot(key)];
-            if (entry.key == key) return .{ .next = entry.next, .accept = entry.accept };
-        }
-        return self.prepareSlow(state_id, rune);
-    }
-
-    fn prepareSlow(self: *Workspace, state_id: u32, rune: u21) Error!Prepared {
+    /// Compute a rune transition without consulting or filling any cache.
+    fn compute(self: *Workspace, state_id: u32, rune: u21) Error!Prepared {
         self.nextEpoch();
         self.work.clearRetainingCapacity();
         for (self.states.items[state_id].entries) |entry| try self.pushNode(entryPc(entry), entryState(entry), entry.priority);
@@ -779,21 +773,7 @@ pub const Workspace = struct {
         var ignored: u64 = no_priority;
         try self.runClosure(false, null, &self.next_entries, &ignored);
         const next = if (self.next_entries.items.len == 0) dead_state else try self.buildState(self.next_entries.items);
-        const result = Prepared{ .next = next, .accept = accept };
-        if (rune < 128) {
-            const index = @as(usize, state_id) * 128 + rune;
-            self.ascii_table.items[index] = if (next == dead_state) dead_state else next + 1;
-            self.accept_table.items[index] = accept;
-        } else {
-            const key = (@as(u64, state_id) << 21) | rune;
-            self.unicode_cache[unicodeSlot(key)] = .{
-                .key = key,
-                .accept = result.accept,
-                .next = result.next,
-                .pad = 0,
-            };
-        }
-        return result;
+        return .{ .next = next, .accept = accept };
     }
 
     /// Byte-mode transition: advance every consuming thread through its UTF-8
@@ -951,19 +931,52 @@ pub const Workspace = struct {
                     offset += 1;
                     continue;
                 }
+                const prepared = try self.compute(state, byte);
+                self.ascii_table.items[index] = if (prepared.next == dead_state) dead_state else prepared.next + 1;
+                self.accept_table.items[index] = prepared.accept;
+                recordMatch(&best_end, &best_priority, offset, prepared.accept);
+                if (prepared.next == dead_state) break;
+                state = prepared.next;
+                offset += 1;
+                continue;
             }
-            const rune = runeAt(input, offset) orelse {
-                // Invalid UTF-8 cannot continue a rune-based path; the
-                // position may still accept an empty match.
+            const length = utf8_length[byte];
+            if (length == 0 or length > input.len - offset) {
+                // Invalid or truncated UTF-8 cannot continue a rune-based
+                // path; the position may still accept an empty match.
                 const accept = try self.prepareEof(state);
                 recordMatch(&best_end, &best_priority, offset, accept);
                 break;
-            };
-            const prepared = try self.prepare(state, rune.value);
+            }
+            var bytes: u32 = 0;
+            if (offset + 4 <= input.len) {
+                bytes = std.mem.readInt(u32, input[offset..][0..4], .little) & utf8_mask[length];
+            } else {
+                for (0..length) |index| bytes |= @as(u32, input[offset + index]) << @intCast(8 * index);
+            }
+            const key = (@as(u64, bytes) << 8) | state;
+            const entry = &self.unicode_cache[unicodeSlot(key)];
+            var prepared: Prepared = undefined;
+            if (entry.key == key) {
+                prepared = .{ .next = entry.next, .accept = entry.accept };
+            } else {
+                const rune = runeAt(input, offset) orelse {
+                    const accept = try self.prepareEof(state);
+                    recordMatch(&best_end, &best_priority, offset, accept);
+                    break;
+                };
+                prepared = try self.compute(state, rune.value);
+                entry.* = .{
+                    .key = key,
+                    .accept = prepared.accept,
+                    .next = prepared.next,
+                    .pad = 0,
+                };
+            }
             recordMatch(&best_end, &best_priority, offset, prepared.accept);
             if (prepared.next == dead_state) break;
             state = prepared.next;
-            offset += rune.len;
+            offset += length;
         }
         return best_end;
     }

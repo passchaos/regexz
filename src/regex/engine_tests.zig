@@ -745,3 +745,13 @@ test "Unicode property aliases" {
     try expectMatches(allocator, "\\p{letter}+", &.{"abc"}, &.{ "1", "" }, .{});
     try expectMatches(allocator, "\\p{alphabetic}+", &.{ "abc", "\u{732b}" }, &.{ "1", "" }, .{});
 }
+
+test "rune-mode DFA stops at invalid UTF-8" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    try expectFindSpans(allocator, "a+", "a\xE4\xB8", &.{.{ 0, 1 }}, .{});
+    try expectFindSpans(allocator, "[a-z]+", "abc\xFF", &.{.{ 0, 3 }}, .{});
+    try expectFindSpans(allocator, "(?=a)a+", "a\xE4", &.{.{ 0, 1 }}, .{});
+    try expectFindSpans(allocator, "a+", "\xE4a", &.{.{ 1, 2 }}, .{});
+}
