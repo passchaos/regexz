@@ -77,6 +77,14 @@ const Position = struct {
             .no_word_boundary_uax29 => !word_boundary.isBoundary(self.input, self.offset),
             .sentence_boundary => sentence_boundary.isBoundary(self.input, self.offset),
             .no_sentence_boundary => !sentence_boundary.isBoundary(self.input, self.offset),
+            .word_start => !asciiWord(self.previous_rune) and asciiWord(self.next_rune),
+            .no_word_start => !(!asciiWord(self.previous_rune) and asciiWord(self.next_rune)),
+            .word_end => asciiWord(self.previous_rune) and !asciiWord(self.next_rune),
+            .no_word_end => !(asciiWord(self.previous_rune) and !asciiWord(self.next_rune)),
+            .word_start_unicode => !unicodeWord(ucp_word, self.previous_rune) and unicodeWord(ucp_word, self.next_rune),
+            .no_word_start_unicode => !(!unicodeWord(ucp_word, self.previous_rune) and unicodeWord(ucp_word, self.next_rune)),
+            .word_end_unicode => unicodeWord(ucp_word, self.previous_rune) and !unicodeWord(ucp_word, self.next_rune),
+            .no_word_end_unicode => !(unicodeWord(ucp_word, self.previous_rune) and !unicodeWord(ucp_word, self.next_rune)),
         };
     }
 };

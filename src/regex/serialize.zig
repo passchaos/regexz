@@ -361,7 +361,7 @@ fn readInstruction(reader: *Reader, allocator: std.mem.Allocator) !model.Instruc
         } },
         .assertion => blk: {
             const kind_value = try reader.byte();
-            if (kind_value > @intFromEnum(model.Assertion.no_sentence_boundary)) return error.InvalidRegex;
+            if (kind_value > @intFromEnum(model.Assertion.no_word_end_unicode)) return error.InvalidRegex;
             break :blk .{ .assertion = .{
                 .kind = @enumFromInt(kind_value),
                 .next = @intCast(try reader.u32v()),

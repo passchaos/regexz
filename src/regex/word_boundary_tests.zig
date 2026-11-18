@@ -38,3 +38,25 @@ test "word boundary regex assertions" {
         try std.testing.expectEqual(case.matches, try value.matches(allocator, case.input));
     }
 }
+
+test "word start and end boundary variants" {
+    const allocator = std.testing.allocator;
+    const cases = [_]struct { pattern: []const u8, input: []const u8, matches: bool }{
+        .{ .pattern = "\\b{start}word", .input = "word", .matches = true },
+        .{ .pattern = "word\\b{start}", .input = "word", .matches = false },
+        .{ .pattern = "\\b{end}word", .input = "word", .matches = false },
+        .{ .pattern = "word\\b{end}", .input = "word", .matches = true },
+        .{ .pattern = "\\b{startend}word\\b{startend}", .input = "word", .matches = true },
+        .{ .pattern = "w\\B{start}ord", .input = "word", .matches = true },
+        .{ .pattern = "w\\B{end}ord", .input = "word", .matches = true },
+        .{ .pattern = "\\b{start}\u{732b}", .input = "\u{732b}", .matches = false },
+    };
+    for (cases) |case| {
+        var value = try regex.Regex.init(allocator, case.pattern, .{});
+        defer value.deinit();
+        try std.testing.expectEqual(case.matches, try value.matches(allocator, case.input));
+    }
+    var ucp = try regex.Regex.init(allocator, "\\b{start}\u{732b}\\b{end}", .{ .unicode_perl_classes = true });
+    defer ucp.deinit();
+    try std.testing.expect(try ucp.matches(allocator, "\u{732b}"));
+}

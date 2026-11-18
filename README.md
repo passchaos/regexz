@@ -87,6 +87,8 @@ The engine picks the execution strategy automatically:
   - UAX #29 boundary assertions: grapheme cluster `\b{gcb}` / `\B{gcb}`
     (alias `\b{g}`), word boundaries `\b{wb}` / `\B{wb}`, and sentence
     boundaries `\b{sb}` / `\B{sb}`, evaluated by the extended engine.
+    Oniguruma/Java-style word-start/end variants `\b{start}`, `\b{end}`, and
+    `\b{startend}` are also supported (ASCII or UCP word sets).
   - `\R` (atomic newline sequence), `\N` (not newline), `\N{U+hhhh}`
     (explicit code point), `\N{NAME}` (Unicode character name; explicit names
     plus algorithmic CJK, Hangul, Tangut, Khitan, Nushu, Egyptian, and

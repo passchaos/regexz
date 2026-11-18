@@ -187,6 +187,18 @@ fn graphemeBoundarySuffix(p: anytype) m.Error!?m.Assertion {
         p.cursor = end + 1;
         return .sentence_boundary;
     }
+    if (nameEqual(name, "start")) {
+        p.cursor = end + 1;
+        return if (p.limits.unicode_perl_classes) .word_start_unicode else .word_start;
+    }
+    if (nameEqual(name, "end")) {
+        p.cursor = end + 1;
+        return if (p.limits.unicode_perl_classes) .word_end_unicode else .word_end;
+    }
+    if (nameEqual(name, "startend")) {
+        p.cursor = end + 1;
+        return if (p.limits.unicode_perl_classes) .word_boundary_unicode else .word_boundary;
+    }
     return null;
 }
 
@@ -406,6 +418,12 @@ pub fn parse(p: anytype, in_class: bool, fold: bool) m.Error!Atom {
                     .grapheme_boundary => .no_grapheme_boundary,
                     .word_boundary_uax29 => .no_word_boundary_uax29,
                     .sentence_boundary => .no_sentence_boundary,
+                    .word_start => .no_word_start,
+                    .word_end => .no_word_end,
+                    .word_start_unicode => .no_word_start_unicode,
+                    .word_end_unicode => .no_word_end_unicode,
+                    .word_boundary => .no_word_boundary,
+                    .word_boundary_unicode => .no_word_boundary_unicode,
                     else => unreachable,
                 };
                 return .{ .assertion = negated };

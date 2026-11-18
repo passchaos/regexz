@@ -205,6 +205,15 @@ pub const Assertion = enum {
     /// UAX #29 sentence boundary (`\b{sb}`).
     sentence_boundary,
     no_sentence_boundary,
+    /// Oniguruma/Java word-start/word-end boundary variants.
+    word_start,
+    no_word_start,
+    word_end,
+    no_word_end,
+    word_start_unicode,
+    no_word_start_unicode,
+    word_end_unicode,
+    no_word_end_unicode,
 };
 /// Condition for `(?(cond)yes|no)`.
 pub const Condition = union(enum) {

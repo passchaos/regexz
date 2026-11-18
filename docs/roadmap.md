@@ -65,8 +65,9 @@ Implemented functionality:
   `\cX` control characters, `\o{...}` octal code points, and class-aware
   `\Q...\E` quoting.
 - UAX #29 boundary assertions: grapheme clusters `\b{gcb}` / `\B{gcb}`
-  (alias `\b{g}`), word boundaries `\b{wb}` / `\B{wb}`, and sentence
-  boundaries `\b{sb}` / `\B{sb}`.
+  (alias `\b{g}`), word boundaries `\b{wb}` / `\B{wb}`, sentence
+  boundaries `\b{sb}` / `\B{sb}`, and Oniguruma/Java word-start/end
+  variants `\b{start}` / `\b{end}` / `\b{startend}`.
 - `Limits.capture_reset` (JavaScript capture reset) and
   `Limits.unset_backref_empty` (PCRE2 `PCRE2_MATCH_UNSET_BACKREF`).
 - Search API: `isMatch`, `find`, `findFrom`, `findAll`, `split`, `replaceAll`,
@@ -80,7 +81,7 @@ Implemented functionality:
   case transforms `\U`/`\L`/`\E`/`\u`/`\l` (simple Unicode by default;
   `Limits.full_case_mapping` enables full SpecialCasing), and callback
   replacement via `replaceAllWithFn`.
-- 127 tests, including recursion, branch reset, conditional assertions,
+- 128 tests, including recursion, branch reset, conditional assertions,
   grapheme clusters, binary properties, Unicode blocks, partial matching,
   control verbs, thread safety, allocation-failure, and differential coverage
   against V8 for the supported subset.
@@ -117,6 +118,7 @@ Strengths:
 | `(?(R))` recursion condition | yes | yes | no | no |
 | `\X` grapheme cluster | yes (extended) | yes | no | no |
 | `\b{gcb}` / `\b{wb}` / `\b{sb}` | yes (extended) | no | no | no |
+| `\b{start}` / `\b{end}` variants | yes (extended) | no | no | no |
 | Backtracking verbs | yes (subset) | yes | no | no |
 | Callouts / `(*THEN)` | numeric + string + auto callouts, `(*THEN)`, MARK | yes | no | no |
 | `\N{NAME}` named characters | yes (explicit + algorithmic) | no | no | no |

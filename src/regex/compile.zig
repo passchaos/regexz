@@ -648,7 +648,7 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         .assertion => |assertion| {
             dfa_eligible = false;
             switch (assertion.kind) {
-                .word_boundary_unicode, .no_word_boundary_unicode => needs_ucp_word = true,
+                .word_boundary_unicode, .no_word_boundary_unicode, .word_start_unicode, .no_word_start_unicode, .word_end_unicode, .no_word_end_unicode => needs_ucp_word = true,
                 else => {},
             }
         },
