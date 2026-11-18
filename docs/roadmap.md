@@ -208,8 +208,12 @@ Qwen search is ~68–74 µs (~330–353 MiB/s), CJK tokenizer search is ~284–3
 ~635 µs), greedy `\C+` scans collapse to a single full-span match (~8 ns), and
 shared-prefix no-match scans are ~1.55 µs (15.5 GiB/s). The bench gate now covers 27 cases;
 `RegexSet` ~97 µs, `replaceAll` ~85 µs, compile ~1.5 µs with `smp_allocator`,
-and all 185 tests plus the V8/Rust/extended differential fuzzers pass. Treat absolute numbers as host-noise-sensitive;
-the bench gate compares ratios against `tools/bench/baseline.json`.
+and all 185 tests plus the V8/Rust/extended differential fuzzers pass. On the
+feature side, PCRE2 forward numeric/named references, `\e` and isolated `\E`,
+the full substitution reference syntax (`$<name>`, `$+`, `$_`, `` $` ``, `$'`),
+`escape`/`splitn`/`replacen`, and compile diagnostics (`diagnose`) are covered.
+Treat absolute numbers as host-noise-sensitive; the bench gate compares ratios
+against `tools/bench/baseline.json`.
 
 Where the remaining time goes:
 
@@ -262,7 +266,9 @@ Where the remaining time goes:
    tokenizer search to ~330 MiB/s, against a same-host Rust reference of
    ~427 MiB/s. Lookahead-free programs with non-ASCII sets are determinized
    over UTF-8 bytes (`utf8_set.zig`), taking `\p{Han}+` from ~635 µs to
-   ~196–270 µs. Remaining: byte-level lookahead gating (Qwen's `(?!\S)`),
+   ~196–270 µs. Remaining: an unanchored DFA (or a 2-byte start filter) to
+   remove the per-start anchored-restart cost that dominates scans with many
+   short matches, byte-level lookahead gating (Qwen's `(?!\S)`),
    iteration-aware priorities for loops whose exits compete with later
    choices, and closing the remaining Rust gap. An
    ordered-subset DFA prototype was evaluated and reverted: list position
