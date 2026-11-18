@@ -724,7 +724,7 @@ pub const Workspace = struct {
         return id;
     }
 
-    fn startState(self: *Workspace) Error!u32 {
+    inline fn startState(self: *Workspace) Error!u32 {
         if (self.start_state) |id| return id;
         self.nextEpoch();
         self.work.clearRetainingCapacity();

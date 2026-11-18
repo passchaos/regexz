@@ -175,7 +175,7 @@ Measured on an Apple Silicon macOS host. "Before" is the initial commit state;
 | Full match, xDS-like (reused) | ~233 ns | ~15–17 ns | ~11 ns | ~11 ns |
 | Full match, Unicode (reused) | ~64 ns | ~12 ns | ~8 ns | ~13 ns |
 | Qwen tokenizer search, 22 KiB | ~842 µs | ~68 µs (353 MiB/s) | ~56 µs* (427 MiB/s) | ~195 µs |
-| CJK tokenizer search, 191 KiB | — | ~229–250 µs (~790–850 MiB/s) | ~216 µs* (864 MiB/s) | — |
+| CJK tokenizer search, 191 KiB | — | ~200–230 µs (~850–980 MiB/s) | ~216 µs* (864 MiB/s) | — |
 | Han class scan, 191 KiB | — | ~173–200 µs (940–1080 MiB/s) | ~169 µs (1104 MiB/s) | — |
 | Full match, Han class, 191 KiB | — | ~204 µs (~800 MiB/s) | — | — |
 | Full match, ASCII class, 216 KiB | — | ~78 µs (~2.7 GiB/s) | — | — |
@@ -206,8 +206,8 @@ search-DFA transition tables, adding a capture-free `find` fast path,
 replacing the Unicode hash map with a direct-mapped cache plus a fast UTF-8
 decoder, adding a shared-prefix multi-literal prefilter, and determinizing
 lookahead-free programs over UTF-8 bytes, full-pattern
-Qwen search is ~68–74 µs (~330–353 MiB/s), CJK tokenizer search is ~229–250 µs
-(~790–850 MiB/s), Han class scans are ~173–200 µs (~940–1080 MiB/s, down from
+Qwen search is ~68–74 µs (~330–353 MiB/s), CJK tokenizer search is ~200–230 µs
+(~850–980 MiB/s), Han class scans are ~173–200 µs (~940–1080 MiB/s, down from
 ~635 µs), greedy `\C+` scans collapse to a single full-span match (~8 ns), large
 Unicode full matches scan at ~800 MiB/s and ASCII full matches at ~2.7 GiB/s
 (direct-mapped transition cache), and
