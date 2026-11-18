@@ -207,7 +207,7 @@ Qwen search is ~68–74 µs (~330–353 MiB/s), CJK tokenizer search is ~284–3
 ~635 µs), greedy `\C+` scans collapse to a single full-span match (~8 ns), and
 shared-prefix no-match scans are ~1.55 µs (15.5 GiB/s). The bench gate now covers 27 cases;
 `RegexSet` ~97 µs, `replaceAll` ~85 µs, compile ~1.5 µs with `smp_allocator`,
-and all 183 tests plus the V8/Rust/extended differential fuzzers pass. Treat absolute numbers as host-noise-sensitive;
+and all 185 tests plus the V8/Rust/extended differential fuzzers pass. Treat absolute numbers as host-noise-sensitive;
 the bench gate compares ratios against `tools/bench/baseline.json`.
 
 Where the remaining time goes:

@@ -63,9 +63,10 @@ The engine picks the execution strategy automatically:
   - Numeric and named backreferences: `\1`..`\99`, `\k<name>`, `\k'name'`,
     `\k{name}`, `\g{name}`, `\g{1}`, relative `\g{-1}`, `(?P=name)`;
     backreferences follow the caseless flag active at the reference site.
+    Forward references resolve against the final group count, as in PCRE2.
   - Subroutine calls by number, name, and relative offset: `(?1)`, `(?+1)`,
     `(?-1)`, `\g<1>`, `\g<-1>`, `\g<+1>`, `\g<name>`, `(?&name)`,
-    `(?P>name)`.
+    `(?P>name)`. Named calls may refer to groups defined later.
   - Named captures: `(?P<name>...)`, `(?<name>...)`; query them with
     `Program.groupIndex`/`groupName` and `Regex.groupIndex`/`groupName`.
   - Atomic groups `(?>...)` and possessive quantifiers `*+`, `++`, `?+`,
