@@ -172,14 +172,21 @@ def main() -> int:
         zig_path.write_text(zig_source(cases), encoding="utf-8")
 
         node = subprocess.run(["node", str(reference_path), str(cases_path)], capture_output=True, text=True, check=True)
-        zig = subprocess.run(
+        executable_path = temp_path / "fuzz_replace"
+        compiled = subprocess.run(
             [
-                "zig", "run", "-OReleaseFast", "--dep", "regexz",
+                "zig", "build-exe", "-OReleaseFast", "--dep", "regexz",
                 f"-Mroot={zig_path}", f"-Mregexz={ROOT / 'src/root.zig'}",
+                f"-femit-bin={executable_path}",
             ],
             capture_output=True,
             text=True,
         )
+        if compiled.returncode != 0:
+            sys.stderr.write(compiled.stderr)
+            return 1
+        # Keep compiler/wrapper diagnostics separate from the result protocol.
+        zig = subprocess.run([str(executable_path)], capture_output=True, text=True)
         if zig.returncode != 0:
             sys.stderr.write(zig.stderr)
             return 1

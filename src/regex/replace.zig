@@ -425,8 +425,15 @@ pub const Workspace = struct {
         errdefer out.deinit(self.allocator);
         self.steps = 0;
         var search_start: usize = 0;
+        var first_match = true;
         while (search_start <= input.len) {
             const match = try self.findInternal(input, search_start) orelse break;
+            if (first_match) {
+                // Start near the output size without overallocating when the
+                // first match replaces the entire input.
+                try out.ensureTotalCapacity(self.allocator, input.len - (match.end - match.start));
+                first_match = false;
+            }
             try out.appendSlice(self.allocator, input[search_start..match.start]);
             const replacement = try function(context, self.allocator, input, match);
             defer self.allocator.free(replacement);
@@ -466,6 +473,14 @@ pub const Workspace = struct {
         while (search_start <= input.len and replaced < limit) {
             const match = try self.findInternal(input, search_start) orelse break;
             replaced += 1;
+            if (@TypeOf(writer) == *subst.ListWriter) {
+                if (replaced == 1) {
+                    // Length and caller-buffer writers need no allocation.
+                    // Subtract the first match so whole-input replacements
+                    // keep their small output allocation.
+                    try writer.list.ensureTotalCapacity(writer.allocator, input.len - (match.end - match.start));
+                }
+            }
             try writer.appendSlice(input[search_start..match.start]);
             if (literal_substitution) {
                 try writer.appendSlice(substitution);

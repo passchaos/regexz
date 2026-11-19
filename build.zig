@@ -57,4 +57,18 @@ pub fn build(b: *std.Build) void {
     const run_bench = b.addRunArtifact(bench_exe);
     const bench_step = b.step("bench", "Run regexz microbenchmarks (use -Doptimize=ReleaseFast)");
     bench_step.dependOn(&run_bench.step);
+
+    const replace_bench_mod = b.createModule(.{
+        .root_source_file = b.path("tools/bench/replace.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    replace_bench_mod.addImport("regexz", regexz_mod);
+    const replace_bench_exe = b.addExecutable(.{
+        .name = "regexz-replace-bench",
+        .root_module = replace_bench_mod,
+    });
+    const run_replace_bench = b.addRunArtifact(replace_bench_exe);
+    const replace_bench_step = b.step("bench-replace", "Run scoped replacement benchmarks and count output allocations");
+    replace_bench_step.dependOn(&run_replace_bench.step);
 }

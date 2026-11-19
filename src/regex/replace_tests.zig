@@ -157,6 +157,54 @@ test "regex callback replacement handles zero-width matches" {
     try std.testing.expectEqualStrings("|ab| |cd|", output);
 }
 
+test "replacement output allocation failures roll back" {
+    const Harness = struct {
+        fn run(allocator: std.mem.Allocator) !void {
+            var value = try regex.Regex.init(allocator, "a+", .{});
+            defer value.deinit();
+            var workspace = try regex.ReplaceWorkspace.init(allocator, value.program, .{});
+            defer workspace.deinit();
+            const input = "aaa bbb " ** 512;
+            const cases = [_]struct { replacement: []const u8, expected: []const u8 }{
+                .{ .replacement = "x", .expected = "x bbb " ** 512 },
+                .{ .replacement = "abcdefghij", .expected = "abcdefghij bbb " ** 512 },
+            };
+            for (cases) |case| {
+                const output = try workspace.replaceAll(input, case.replacement);
+                defer allocator.free(output);
+                try std.testing.expectEqualStrings(case.expected, output);
+            }
+            const limited = try workspace.replacen(input, 1, "x");
+            defer allocator.free(limited);
+            try std.testing.expectEqualStrings("x bbb " ++ "aaa bbb " ** 511, limited);
+            const dynamic = try workspace.replaceAllWithFn(input, null, boundaryMarker);
+            defer allocator.free(dynamic);
+            try std.testing.expectEqualStrings("| bbb " ** 512, dynamic);
+            const deleted = try workspace.replaceAll("a" ** 4096, "");
+            defer allocator.free(deleted);
+            try std.testing.expectEqualStrings("", deleted);
+        }
+    };
+    try std.testing.checkAllAllocationFailures(std.testing.allocator, Harness.run, .{});
+}
+
+test "replacement length and caller buffers avoid output allocation" {
+    const allocator = std.testing.allocator;
+    var value = try regex.Regex.init(allocator, "a+", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(allocator, value.program, .{});
+    defer workspace.deinit();
+    var failing = std.testing.FailingAllocator.init(allocator, .{ .fail_index = 0 });
+    workspace.allocator = failing.allocator();
+    defer workspace.allocator = allocator;
+    const input = "aaa bbb " ** 512;
+    const expected = "x bbb " ** 512;
+    try std.testing.expectEqual(expected.len, try workspace.replaceAllLen(input, "x"));
+    var output: [expected.len]u8 = undefined;
+    try std.testing.expectEqualStrings(expected, try workspace.replaceAllInto(input, "x", &output));
+    try std.testing.expectError(error.RegexLimitExceeded, workspace.replaceAllInto(input, "x", output[0..2]));
+}
+
 test "regex replacement applies case transforms" {
     try expectReplace("([A-Za-z]+)", "\\U$1", "abc", "ABC");
     try expectReplace("([A-Za-z]+)", "\\L$1", "ABC", "abc");
