@@ -867,7 +867,7 @@ test "word run fast path matches whole words" {
         .{ .input = "hello world", .spans = &.{ .{ 0, 5 }, .{ 6, 11 } } },
         .{ .input = "a-b", .spans = &.{ .{ 0, 1 }, .{ 2, 3 } } },
         .{ .input = "_x_ 123", .spans = &.{ .{ 0, 3 }, .{ 4, 7 } } },
-        .{ .input = "  spaced  ", .spans = &.{ .{ 2, 8 } } },
+        .{ .input = "  spaced  ", .spans = &.{.{ 2, 8 }} },
         .{ .input = "caf\u{00e9}", .spans = &.{.{ 0, 3 }} },
         .{ .input = "x", .spans = &.{.{ 0, 1 }} },
     };
