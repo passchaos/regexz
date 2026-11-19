@@ -670,3 +670,23 @@ test "byte escape runs on the DFA and Pike paths" {
     const ascii = (try rune_workspace.find("axb", 0)).?;
     try std.testing.expectEqual(@as(usize, 3), ascii.end);
 }
+
+test "multi-rune loops do not skip candidate starts" {
+    const cases = [_]struct { pattern: []const u8, input: []const u8, span: [2]usize }{
+        .{ .pattern = "(?:ab)*b+", .input = "ab", .span = .{ 1, 2 } },
+        .{ .pattern = "(?:ab)*b+", .input = "aab", .span = .{ 2, 3 } },
+        .{ .pattern = "(?:ab)*b+", .input = "xxab", .span = .{ 3, 4 } },
+        .{ .pattern = "(?:ab)*c", .input = "ababc", .span = .{ 0, 5 } },
+        .{ .pattern = "a*b", .input = "c aab", .span = .{ 2, 5 } },
+        .{ .pattern = ".*foo", .input = "x\nfoo", .span = .{ 2, 5 } },
+    };
+    for (cases) |case| {
+        var value = try regex.Regex.init(gpa, case.pattern, .{});
+        defer value.deinit();
+        var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+        defer workspace.deinit();
+        const found = (try workspace.find(case.input, 0)).?;
+        try std.testing.expectEqual(case.span[0], found.start);
+        try std.testing.expectEqual(case.span[1], found.end);
+    }
+}

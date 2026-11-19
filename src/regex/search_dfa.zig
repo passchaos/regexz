@@ -1089,19 +1089,47 @@ pub const Workspace = struct {
     }
 };
 
-/// Whether the program body begins with an unbounded loop (`.*`, `.*?`,
-/// `\w*`, ...). Such a loop can consume the span of a failed anchored scan,
-/// so a later start inside that span cannot match when the earlier start did
-/// not: the loop would just consume the skipped bytes and follow the same
-/// continuation.
+/// Whether the program body begins with an unbounded single-rune loop
+/// (`.*`, `\w*`, `a*`). Such a loop keeps the exit branch alive at every
+/// position of a failed anchored scan, so the scan already tried every start
+/// inside its span and a later start there cannot match.
+///
+/// A multi-rune loop such as `(?:ab)*` does not qualify: the scan state after
+/// one `a` differs from the state a fresh start at the next byte would have,
+/// so a match can begin inside the span (for example `(?:ab)*b+` on `ab`).
 fn isPrefixLoop(program: Program) bool {
     const ins = program.instructions;
     if (program.body >= ins.len) return false;
     switch (ins[program.body]) {
         .star => return true,
-        .split => |split| return loopsBack(ins, split.left, program.body) or loopsBack(ins, split.right, program.body),
+        .split => |split| return singleRuneLoop(ins, split.left, program.body) or singleRuneLoop(ins, split.right, program.body),
         else => return false,
     }
+}
+
+/// Whether the path from `start` back to `target` consumes exactly one rune.
+fn singleRuneLoop(ins: []const model.Instruction, start: usize, target: usize) bool {
+    var pc = start;
+    var steps: usize = 0;
+    var consumes: usize = 0;
+    while (steps < 8) : (steps += 1) {
+        if (pc == target) return consumes == 1;
+        if (pc >= ins.len) return false;
+        const next = switch (ins[pc]) {
+            .consume => |value| value.next,
+            .literal_byte => |value| value.next,
+            .literal_rune => |value| value.next,
+            .save => |value| value.next,
+            .reset_captures => |value| value.next,
+            else => return false,
+        };
+        switch (ins[pc]) {
+            .consume, .literal_byte, .literal_rune => consumes += 1,
+            else => {},
+        }
+        pc = next;
+    }
+    return false;
 }
 
 fn loopsBack(ins: []const model.Instruction, start: usize, target: usize) bool {
