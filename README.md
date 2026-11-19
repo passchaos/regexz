@@ -372,6 +372,7 @@ busy Apple Silicon host (absolute numbers vary with load):
 | `find` capture no-match scan (23 KiB) | ~617 µs | ~2.2 µs |
 | `find` loop-exit no-match (23 KiB) | ~120 µs | ~4.7 µs |
 | `find` suffix no-match (23 KiB) | ~238 µs | ~4 µs |
+| `find` `(?m)^.*$` line scan (216 KiB) | — | ~39 µs (5.3 GiB/s) |
 | `find` extended no-match (23 KiB) | ~275 µs | ~2.5 µs |
 | `RegexSet`, 9 no-match patterns (23 KiB) | ~1.7 ms | ~40 µs |
 | Compile xDS-like pattern | ~2.9 µs | ~3.1–3.9 µs |

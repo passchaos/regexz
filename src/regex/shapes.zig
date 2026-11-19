@@ -456,3 +456,42 @@ pub fn utf8Loop(program: Program) ?Utf8Loop {
     if (a.set.matches(separator.value)) return null;
     return .{ .run = a.set, .separator = separator.value };
 }
+
+/// `(?m)^.*$`: a multiline line match. The star must be the dot set (every
+/// rune except `\n`), so the match is exactly one line without its newline.
+pub fn lineRun(program: Program) bool {
+    if (program.capture_count != 0 or program.extended) return false;
+    const ins = program.instructions;
+    if (ins.len != 8) return false;
+    if (std.meta.activeTag(ins[0]) != .accept or std.meta.activeTag(ins[1]) != .sub_accept or
+        std.meta.activeTag(ins[2]) != .ret) return false;
+    if (std.meta.activeTag(ins[3]) != .save or std.meta.activeTag(ins[4]) != .assertion or
+        std.meta.activeTag(ins[5]) != .star or std.meta.activeTag(ins[6]) != .assertion or
+        std.meta.activeTag(ins[7]) != .save) return false;
+    if (program.start != 7 or program.body != 6) return false;
+    const save1 = ins[3].save;
+    if (save1.slot != 1 or save1.next != program.accept) return false;
+    const end_line = ins[4].assertion;
+    if (end_line.kind != .end_line or end_line.next != 3) return false;
+    const star = ins[5].star;
+    if (star.next != 4) return false;
+    const start_line = ins[6].assertion;
+    if (start_line.kind != .start_line or start_line.next != 5) return false;
+    const save0 = ins[7].save;
+    if (save0.slot != 0 or save0.next != 6) return false;
+    return isDotExceptNewline(star.set);
+}
+
+/// Whether `set` is the dot set: every rune except `\n`.
+fn isDotExceptNewline(set: model.Set) bool {
+    var byte: u32 = 0;
+    while (byte < 128) : (byte += 1) {
+        const expected = byte != '\n';
+        if (set.matches(@intCast(byte)) != expected) return false;
+    }
+    // All non-ASCII runes must be members.
+    for (set.ranges) |range| {
+        if (range.first <= 0x80 and range.last >= 0x10FFFF) return true;
+    }
+    return false;
+}

@@ -220,11 +220,22 @@ pub fn main() !void {
     for (0..4000) |_| try han_text.appendSlice(gpa, "\u{4f60}\u{597d}\u{4e16}\u{754c}\u{8fd9}\u{662f}\u{4e00}\u{4e2a}\u{4e2d}\u{6587}\u{5206}\u{8bcd}\u{6d4b}\u{8bd5}\n");
     try benchMatches(io, out, "fullmatch Han class (191 KiB)", "(?:\\p{Han}+\n)+", han_text.items, 50, true);
 
+    var json_text: std.ArrayList(u8) = .empty;
+    defer json_text.deinit(gpa);
+    for (0..400) |_| try json_text.appendSlice(gpa, "{\"name\": \"value\", \"id\": 12345} ");
+    try benchFind(io, out, "find JSON string literal", "\"[^\"]*\"", json_text.items, 200, .{});
+
+    var number_text: std.ArrayList(u8) = .empty;
+    defer number_text.deinit(gpa);
+    for (0..2000) |_| try number_text.appendSlice(gpa, "id=12345 n=6789 x=42 ");
+    try benchFind(io, out, "find digits", "\\d+", number_text.items, 200, .{});
+
     var ascii_text: std.ArrayList(u8) = .empty;
     defer ascii_text.deinit(gpa);
     for (0..4000) |_| try ascii_text.appendSlice(gpa, "the quick brown fox jumps over the lazy dog 1234567890\n");
     try benchMatches(io, out, "fullmatch ASCII class (216 KiB)", "[a-z0-9 \n]+", ascii_text.items, 50, true);
     try benchMatches(io, out, "fullmatch ASCII loop (216 KiB)", "(?:[a-z0-9]+[ \n])+", ascii_text.items, 50, true);
+    try benchFind(io, out, "find line (?m)^.*$", "(?m)^.*$", ascii_text.items, 100, .{});
     try benchStream(io, out, "stream [a-z]+ (216 KiB, 4 KiB chunks)", "[a-z]+", ascii_text.items, 4096, 20, .{});
     try benchStream(io, out, "stream [a-z]* (216 KiB, 4 KiB chunks)", "[a-z]*", ascii_text.items, 4096, 20, .{});
     try benchStream(io, out, "stream [a-z]+ [a-z]+ (216 KiB, 4 KiB chunks)", "[a-z]+ [a-z]+", ascii_text.items, 4096, 20, .{});

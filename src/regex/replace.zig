@@ -109,6 +109,8 @@ pub const Workspace = struct {
     utf8_run: ?utf8_run_mod.Utf8Run = null,
     /// Dedicated scan for a dominant alternation branch (tokenizer shape).
     fast_branch: ?FastBranch = null,
+    /// `(?m)^.*$`: match one line at a time with a newline scan.
+    line_run: bool = false,
     /// The first set covers most of the alphabet, so the start prefilter
     /// barely skips. Programs with a nullable prefix (like `.*foo`) then
     /// restart the DFA at almost every position, and one required-literal
@@ -183,6 +185,7 @@ pub const Workspace = struct {
             .simple_chain = simple_chain,
             .simple_anchored = if (limits.longest) null else detectAnchoredRun(program),
             .chain_tables = if (simple_chain) |chain| ChainTables.init(chain) else null,
+            .line_run = shapes.lineRun(program),
             .utf8_run = utf8_run,
             .fast_branch = fast_branch,
             .weak_first = @as(usize, @popCount(program.first.ascii[0])) + @popCount(program.first.ascii[1]) >= 48,
@@ -241,6 +244,7 @@ pub const Workspace = struct {
         }
         if (self.simple_chain) |*chain| return self.findChain(chain, input, search_start);
         if (self.simple_anchored) |anchored_run| return self.findAnchoredRun(anchored_run, input, search_start);
+        if (self.line_run) return self.findLineRun(input, search_start);
         // Every match must start at a start-literal occurrence, so the first
         // occurrence bounds the leftmost match start and the DFA can skip
         // the prefix before it.
@@ -580,6 +584,7 @@ pub const Workspace = struct {
         }
         if (self.simple_chain) |*chain| return self.findChain(chain, input, search_start);
         if (self.simple_anchored) |anchored_run| return self.findAnchoredRun(anchored_run, input, search_start);
+        if (self.line_run) return self.findLineRun(input, search_start);
         var from = search_start;
         if (self.pair_filter) |filter| {
             from = filter.indexOfAny(input, search_start) orelse return null;
@@ -742,6 +747,20 @@ pub const Workspace = struct {
     /// Try the dominant alternation branch at `search_start`. Returns null
     /// when an earlier branch could start here or this branch does not match;
     /// the general engine then decides.
+    /// `(?m)^.*$`: the match is the whole line at the next line start.
+    fn findLineRun(self: *Workspace, input: []const u8, search_start: usize) ?Match {
+        if (search_start > input.len) return null;
+        var start = search_start;
+        if (start > 0 and input[start - 1] != '\n') {
+            start = nextLineStart(input, start) orelse return null;
+        }
+        if (start > input.len) return null;
+        const end = std.mem.indexOfScalarPos(u8, input, start, '\n') orelse input.len;
+        self.slots[0] = start;
+        self.slots[1] = end;
+        return .{ .start = start, .end = end, .slots = self.slots };
+    }
+
     fn findFastBranch(self: *Workspace, branch: *const FastBranch, input: []const u8, search_start: usize) ?Match {
         if (search_start >= input.len) return null;
         if (branch.prior.first.allowsByte(input[search_start])) return null;

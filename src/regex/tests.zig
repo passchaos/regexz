@@ -781,3 +781,43 @@ test "prefix loop requires a full-coverage loop set" {
     try std.testing.expectEqual(@as(usize, 2), dot_found.start);
     try std.testing.expectEqual(@as(usize, 5), dot_found.end);
 }
+
+test "line run fast path matches line by line" {
+    var value = try regex.Regex.init(gpa, "(?m)^.*$", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.line_run);
+
+    const cases = [_]struct { input: []const u8, spans: []const [2]usize }{
+        .{ .input = "", .spans = &.{.{ 0, 0 }} },
+        .{ .input = "abc", .spans = &.{.{ 0, 3 }} },
+        .{ .input = "abc\ndef", .spans = &.{ .{ 0, 3 }, .{ 4, 7 } } },
+        .{ .input = "abc\n", .spans = &.{ .{ 0, 3 }, .{ 4, 4 } } },
+        .{ .input = "a\r\nb", .spans = &.{ .{ 0, 2 }, .{ 3, 4 } } },
+        .{ .input = "\u{4f60}\u{597d}\n\u{4e16}\u{754c}", .spans = &.{ .{ 0, 6 }, .{ 7, 13 } } },
+        .{ .input = "\n\n", .spans = &.{ .{ 0, 0 }, .{ 1, 1 }, .{ 2, 2 } } },
+    };
+    for (cases) |case| {
+        var offset: usize = 0;
+        var index: usize = 0;
+        while (offset <= case.input.len and index < case.spans.len) : (index += 1) {
+            const m = (try workspace.find(case.input, offset)) orelse break;
+            try std.testing.expectEqual(case.spans[index][0], m.start);
+            try std.testing.expectEqual(case.spans[index][1], m.end);
+            if (m.end <= m.start) {
+                if (m.start == case.input.len) {
+                    offset = case.input.len + 1;
+                    continue;
+                }
+                offset = m.start + 1;
+            } else offset = m.end;
+        }
+        try std.testing.expectEqual(case.spans.len, index);
+    }
+
+    // Mid-line search starts jump to the next line start.
+    const mid = (try workspace.find("abc\ndef", 1)).?;
+    try std.testing.expectEqual(@as(usize, 4), mid.start);
+    try std.testing.expectEqual(@as(usize, 7), mid.end);
+}
