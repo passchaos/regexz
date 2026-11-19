@@ -94,6 +94,8 @@ pub const Workspace = struct {
     /// Multi-literal absence filter for wide start-literal alternations
     /// whose literals have distinct first bytes.
     pair_filter: ?*prefilter.PairSet = null,
+    /// Absence filter for a whole-pattern case-folded literal (`(?i)STRASSE`).
+    fold_filter: ?prefilter.FoldFilter = null,
     /// The first set covers most of the alphabet, so the start prefilter
     /// barely skips. Programs with a nullable prefix (like `.*foo`) then
     /// restart the DFA at almost every position, and one required-literal
@@ -150,6 +152,7 @@ pub const Workspace = struct {
             .line_start_only = startsAtLineStart(program),
             .first_filter = prefilter.FirstFilter.init(program.first),
             .pair_filter = pair_filter,
+            .fold_filter = if (program.caseless_literal) |literal| prefilter.FoldFilter.init(literal) else null,
         };
     }
 
@@ -199,6 +202,9 @@ pub const Workspace = struct {
         var from = search_start;
         if (self.pair_filter) |filter| {
             from = filter.indexOfAny(input, search_start) orelse return null;
+        }
+        if (self.fold_filter) |filter| {
+            from = filter.indexOf(input, from) orelse return null;
         }
         if (self.fast_dfa) |dfa| {
             if (self.requiredByteMiss(input, from)) return null;
@@ -528,6 +534,9 @@ pub const Workspace = struct {
         var from = search_start;
         if (self.pair_filter) |filter| {
             from = filter.indexOfAny(input, search_start) orelse return null;
+        }
+        if (self.fold_filter) |filter| {
+            from = filter.indexOf(input, from) orelse return null;
         }
         if (self.program.literal) |literal| {
             if (self.program.capture_count == 0) {

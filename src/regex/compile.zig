@@ -26,6 +26,10 @@ pub const Program = struct {
     /// Fixed literal prefix that every match must start with. Used to skip
     /// impossible search positions.
     literal_prefix: ?[]const u8 = null,
+    /// Lowercase ASCII form of a whole-pattern literal under simple case
+    /// folding (`(?i)STRASSE` -> `strasse`). Not serialized; deserialized
+    /// programs simply skip the optimization.
+    caseless_literal: ?[]const u8 = null,
     /// True when a context-free lazy DFA can evaluate boolean full matches.
     dfa_eligible: bool = false,
     /// True when the program needs the extended backtracking VM.
@@ -461,8 +465,75 @@ const LiteralBuilder = struct {
     }
 };
 
-const PrefixBuilder = struct {
+/// Lowercase ASCII canonical byte for every rune in `rune`'s simple case-fold
+/// class, or null when the class has no ASCII canonical form (for example a
+/// non-ASCII letter without an ASCII peer, or a class mixing letters).
+fn foldCanonical(rune: u21) ?u8 {
+    var canonical: ?u8 = null;
+    var peer = rune;
+    while (true) {
+        if (peer < 0x80) {
+            const byte: u8 = @intCast(peer);
+            const lower: ?u8 = if (byte >= 'A' and byte <= 'Z')
+                byte + 32
+            else if (byte >= 'a' and byte <= 'z')
+                byte
+            else
+                null;
+            if (lower) |value| {
+                if (canonical) |existing| {
+                    if (existing != value) return null;
+                } else canonical = value;
+            }
+        }
+        peer = model.unicode.foldNext(peer);
+        if (peer == rune) break;
+    }
+    if (canonical) |value| return value;
+    // No ASCII letter: only a single ASCII non-letter qualifies.
+    if (rune < 0x80 and model.unicode.foldNext(rune) == rune) return @intCast(rune);
+    return null;
+}
+
+/// The canonical byte for a set that is exactly one case-fold class, or null.
+fn caselessCanonical(set: model.Set) ?u8 {
+    var canonical: ?u8 = null;
+    for (set.ranges) |range| {
+        var rune: u32 = range.first;
+        while (rune <= range.last) : (rune += 1) {
+            const folded = foldCanonical(@intCast(rune)) orelse return null;
+            if (canonical) |existing| {
+                if (existing != folded) return null;
+            } else canonical = folded;
+        }
+    }
+    return canonical;
+}
+
+/// Extract the lowercase ASCII form of a whole-pattern literal whose sets are
+/// simple case-fold classes. A byte-wise folded scan can then look for the
+/// literal; non-ASCII input bytes stay conservative at verification time.
+const CaselessLiteralBuilder = struct {
     allocator: std.mem.Allocator,
+    bytes: std.ArrayList(u8) = .empty,
+    /// Returns false as soon as the subtree is not a caseless literal.
+    fn append(self: *CaselessLiteralBuilder, value: *const model.Node) model.Error!bool {
+        return switch (value.*) {
+            .empty, .flag_change => true,
+            .group => |child| self.append(child),
+            .capture => |capture| self.append(capture.child),
+            .set => |set| blk: {
+                const canonical = caselessCanonical(set) orelse break :blk false;
+                try self.bytes.append(self.allocator, canonical);
+                break :blk true;
+            },
+            .pair => |pair| (try self.append(pair.left)) and (try self.append(pair.right)),
+            else => false,
+        };
+    }
+};
+
+const PrefixBuilder = struct {    allocator: std.mem.Allocator,
     bytes: std.ArrayList(u8) = .empty,
     /// Append the longest fixed literal prefix. Zero-width assertions and
     /// lookarounds are skipped; alternation, `\C`, backrefs, and other
@@ -743,6 +814,13 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
     else
         null;
     const literal_prefix = literal orelse prefix_bytes;
+    var caseless_builder = CaselessLiteralBuilder{ .allocator = allocator };
+    defer caseless_builder.bytes.deinit(allocator);
+    const caseless_literal: ?[]const u8 = if (literal == null and !limits.auto_callout and
+        try caseless_builder.append(parsed.root) and caseless_builder.bytes.items.len >= 2)
+        try caseless_builder.bytes.toOwnedSlice(allocator)
+    else
+        null;
     var dfa_eligible = true;
     var needs_ucp_word = false;
     for (instructions) |instruction| switch (instruction) {
@@ -771,6 +849,7 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         .extra_slots = builder.extra_slots,
         .literal = literal,
         .literal_prefix = literal_prefix,
+        .caseless_literal = caseless_literal,
         .dfa_eligible = dfa_eligible,
         .extended = extended,
         .newline = parsed.newline,

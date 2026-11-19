@@ -203,7 +203,7 @@ Measured on an Apple Silicon macOS host. "Before" is the initial commit state;
 | `find` `(?m)\w+$` no-match, 23 KiB | ~490 µs | ~30 µs | ~31 µs | — |
 | `find` `\w+\s+\w+`, 23 KiB | ~128 µs | ~35 µs | ~20 µs | — |
 | `find` large alternation (24 literals) no-match, 23 KiB | ~48 µs | ~7.4 µs (3.0 GiB/s) | ~11 µs | — |
-| `find` `(?i)STRASSE` no-match, 23 KiB | ~15 µs | ~15 µs | ~2 µs | — |
+| `find` `(?i)STRASSE` no-match, 23 KiB | ~15 µs | ~1.4 µs (16.2 GiB/s) | ~2.3 µs | — |
 | `find` loop-exit no-match, 23 KiB | ~120 µs | ~4.7 µs | ~31.8 µs | — |
 | `find` suffix no-match, 23 KiB | ~238 µs | ~14 µs | ~155 µs | — |
 | `find` extended no-match, 23 KiB | ~275 µs | ~2.5 µs | — | — |
@@ -268,10 +268,12 @@ Where the remaining time goes:
   exact two-byte absence bitmap (`PairSet`): the 24-literal sample dropped
   from ~48 µs to ~7.4 µs, ahead of the same-host Rust reference (~11 µs).
   The scan is still one byte at a time; a Teddy-style SIMD prefilter could
-  reach the ~15 GiB/s of the first-byte path. Case-folded literals
-  (`(?i)STRASSE`, ~15 µs vs ~2 µs) still only prefilter on the folded first
-  byte and need the same multi-substring treatment; that is the next large
-  prefilter step.
+  reach the ~15 GiB/s of the first-byte path. Case-folded literals now use a
+  SIMD scan for the rarest folded byte pair of the whole-pattern literal
+  (`(?i)STRASSE` dropped from ~29 µs to ~1.4 µs on English text, ahead of
+  the same-host Rust reference at ~2.3 µs); non-ASCII bytes stay
+  conservative so Unicode fold peers like U+017F still verify through the
+  engine.
 - **One-shot boolean match** now reuses a persistent workspace/DFA, but the
   lazy DFA still starts cold for each new `Regex`. Precomputing a DFA for
   small programs would remove the first-call construction cost.

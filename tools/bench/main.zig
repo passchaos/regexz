@@ -263,6 +263,12 @@ pub fn main() !void {
         .{},
     );
 
+    var she_haystack: std.ArrayList(u8) = .empty;
+    defer she_haystack.deinit(gpa);
+    const she_line = "she sells sea shells by the seashore ";
+    while (she_haystack.items.len + she_line.len <= 23 * 1024) try she_haystack.appendSlice(gpa, she_line);
+    try benchFindFirst(io, out, "find (?i) literal no-match", "(?i)STRASSE", she_haystack.items, 20000, .{});
+
     var long: std.ArrayList(u8) = .empty;
     defer long.deinit(gpa);
     for (0..2000) |_| try long.appendSlice(gpa, "aaa bbb aaa bbb ");

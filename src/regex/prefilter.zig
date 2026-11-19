@@ -212,6 +212,94 @@ pub const FirstFilter = struct {
     }
 };
 
+/// English letter frequency ranks (0 = most common) used to pick the rarest
+/// two-byte pair of a case-folded literal; other bytes rank as rare.
+const letter_rarity: [256]u8 = blk: {
+    var table = [_]u8{26} ** 256;
+    const order = "etaoinshrdlucmfwypvbgkqjxz";
+    for (order, 0..) |byte, rank| table[byte] = @intCast(rank);
+    break :blk table;
+};
+
+fn foldByte(byte: u8) u8 {
+    return if (byte >= 'A' and byte <= 'Z') byte + 32 else byte;
+}
+
+fn foldChunk(chunk: Vec) Vec {
+    const upper = (chunk >= @as(Vec, @splat('A'))) & (chunk <= @as(Vec, @splat('Z')));
+    return chunk + @select(u8, upper, @as(Vec, @splat(32)), @as(Vec, @splat(0)));
+}
+
+/// Absence filter for a case-folded literal: scans 16 bytes at a time for the
+/// rarest adjacent folded byte pair. A hit keeps the candidate; non-ASCII
+/// bytes stay conservative because a UTF-8 rune can fold to an ASCII letter
+/// (U+017F folds to `s`), so the caller verifies with the engine.
+pub const FoldFilter = struct {
+    a: u8,
+    b: u8,
+    /// Offset of the pair inside the literal; a hit at `p` implies a match
+    /// can only start at `p - offset`.
+    offset: usize,
+
+    pub fn init(literal: []const u8) ?FoldFilter {
+        if (literal.len < 2) return null;
+        var best: ?FoldFilter = null;
+        var best_score: u16 = 0;
+        var index: usize = 0;
+        while (index + 1 < literal.len) : (index += 1) {
+            const a = literal[index];
+            const b = literal[index + 1];
+            // A non-ASCII literal byte never equals a folded input byte.
+            if (a >= 0x80 or b >= 0x80) continue;
+            const score = @as(u16, letter_rarity[a]) + letter_rarity[b];
+            if (best == null or score > best_score) {
+                best = .{ .a = a, .b = b, .offset = index };
+                best_score = score;
+            }
+        }
+        return best;
+    }
+
+    /// Earliest possible match start given the first pair hit at or after
+    /// `start`, or null when the pair is absent.
+    pub fn indexOf(self: FoldFilter, input: []const u8, start: usize) ?usize {
+        if (start + 1 >= input.len) return null;
+        const splat_a: Vec = @splat(self.a);
+        const splat_b: Vec = @splat(self.b);
+        const nonascii: Vec = @splat(@as(u8, 0x80));
+        var offset = start;
+        while (offset + 16 <= input.len - 1) : (offset += 16) {
+            const raw_a: [16]u8 = input[offset..][0..16].*;
+            const raw_b: [16]u8 = input[offset + 1 ..][0..16].*;
+            const chunk_a: Vec = @bitCast(raw_a);
+            const chunk_b: Vec = @bitCast(raw_b);
+            var mask = (foldChunk(chunk_a) == splat_a) & (foldChunk(chunk_b) == splat_b);
+            mask = mask | (chunk_a >= nonascii) | (chunk_b >= nonascii);
+            if (@reduce(.Or, mask)) {
+                var i: usize = 0;
+                while (i < 16) : (i += 1) {
+                    if (self.matchesAt(input, offset + i)) return self.candidateStart(offset + i, start);
+                }
+            }
+        }
+        while (offset + 1 < input.len) : (offset += 1) {
+            if (self.matchesAt(input, offset)) return self.candidateStart(offset, start);
+        }
+        return null;
+    }
+
+    fn candidateStart(self: FoldFilter, hit: usize, start: usize) usize {
+        return if (hit >= self.offset) hit - self.offset else start;
+    }
+
+    fn matchesAt(self: FoldFilter, input: []const u8, offset: usize) bool {
+        const a = input[offset];
+        const b = input[offset + 1];
+        if (a >= 0x80 or b >= 0x80) return true;
+        return foldByte(a) == self.a and foldByte(b) == self.b;
+    }
+};
+
 /// Multi-literal start filter: scans 16 bytes at a time for the two-byte
 /// prefixes of a small literal set, then verifies the full literal.
 pub const MultiFilter = struct {

@@ -586,3 +586,31 @@ test "wide start alternation absence filter" {
     try std.testing.expectEqual(@as(usize, 3), loop_match.start);
     try std.testing.expectEqual(@as(usize, 9), loop_match.end);
 }
+
+test "case-folded literal absence filter" {
+    var value = try regex.Regex.init(gpa, "(?i)strasse", .{});
+    defer value.deinit();
+    try std.testing.expect(value.program.caseless_literal != null);
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fold_filter != null);
+    try std.testing.expect((try workspace.find("she sells sea shells", 0)) == null);
+    const upper = (try workspace.find("xx STRASSE yy", 0)).?;
+    try std.testing.expectEqual(@as(usize, 3), upper.start);
+    try std.testing.expectEqual(@as(usize, 10), upper.end);
+    // Simple Unicode folding: U+017F LATIN SMALL LETTER LONG S folds to `s`.
+    const long_s = (try workspace.find("xx \u{017F}tra\u{017F}\u{017F}e yy", 0)).?;
+    try std.testing.expectEqual(@as(usize, 3), long_s.start);
+    // Three 2-byte long-s runes plus four ASCII bytes.
+    try std.testing.expectEqual(@as(usize, 13), long_s.end);
+
+    // The rarest pair may sit inside the literal; hits must map back to the
+    // candidate match start.
+    var hello = try regex.Regex.init(gpa, "(?i)hello", .{});
+    defer hello.deinit();
+    var hello_workspace = try regex.ReplaceWorkspace.init(gpa, hello.program, .{});
+    defer hello_workspace.deinit();
+    const found = (try hello_workspace.find("say HELLO!", 0)).?;
+    try std.testing.expectEqual(@as(usize, 4), found.start);
+    try std.testing.expectEqual(@as(usize, 9), found.end);
+}
