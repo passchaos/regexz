@@ -322,7 +322,13 @@ Where the remaining time goes:
    inputs (`[A-Za-z0-9._-]+`, xDS-like) improved by ~8-10%. Applying the same
    row-offset encoding to the byte-mode *search* DFA was evaluated and
    reverted: the Han scan measured the same within noise and the table would
-   double in size. Remaining:
+   double in size. Two rune-DFA accept-path experiments were also reverted:
+   a separate accept-flag table (no win, one extra load) and branchless
+   accept recording with conditional moves (Qwen regressed ~7%, so the
+   predictable accept branch is cheaper than per-byte cmovs). The Qwen scan
+   is ~10 cycles/byte against ~9 for the same-host Rust reference, so the
+   remaining gap is the dependent state chain rather than a specific load or
+   branch. Remaining:
    byte-level lookahead gating (Qwen's `(?!\S)`), iteration-aware priorities
    for loops whose exits compete with later choices, and closing the last few
    percent. An
