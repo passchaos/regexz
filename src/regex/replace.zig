@@ -13,9 +13,8 @@ const Program = @import("compile.zig").Program;
 const pike = @import("pike.zig");
 const backtrack = @import("backtrack.zig");
 const search_dfa = @import("search_dfa.zig");
-const utf8_set = @import("utf8_set.zig");
-const utf8_run_mod = @import("utf8_run.zig");
 const deferred_utf8 = @import("deferred_utf8_run.zig");
+const utf8_run_search = @import("utf8_run_search.zig");
 const prefilter = @import("prefilter.zig");
 const shapes = @import("shapes.zig");
 const capture_run_mod = @import("capture_run.zig");
@@ -26,12 +25,13 @@ const unicode = @import("unicode.zig");
 const unset = std.math.maxInt(usize);
 const AnchoredRun = struct { kind: model.Assertion, set: model.Set };
 
-/// The single deterministic fast path selected at init (the shapes are
-/// mutually exclusive).
+/// The deterministic shape selected at init. Unicode set runs switch to the
+/// prepared state once their optional UTF-8 table is available.
 pub const FastKind = enum {
     none,
     set_run,
     utf8_run,
+    utf8_run_prepared,
     chain,
     anchored,
     line,
@@ -127,9 +127,9 @@ pub const Workspace = struct {
     chain_tables: ?ChainTables = null,
     /// Byte membership for the `set+` search path.
     simple_set_table: [256]bool = .{false} ** 256,
-    /// Expanded UTF-8 automaton for a non-ASCII `set+` program (`\p{Han}+`):
-    /// one 256-entry transition row per state.
-    utf8_run: ?utf8_run_mod.Utf8Run = null,
+    /// Non-ASCII `set+` programs reuse the ASCII table and prepare optional
+    /// UTF-8 transition rows after repeated probes or a long Unicode run.
+    utf8_run: ?deferred_utf8.CompactRun = null,
     /// Dedicated scan for a dominant alternation branch (tokenizer shape).
     fast_branch: ?FastBranch = null,
     /// `(?m)^.*$`: match one line at a time with a newline scan.
@@ -147,9 +147,8 @@ pub const Workspace = struct {
     /// `-?\d+(?:\.\d+)?`: match a JSON-style number.
     number_run: bool = false,
     number_table: [256]bool = .{false} ** 256,
-    /// The single deterministic fast path selected at init. The shapes are
-    /// mutually exclusive, so `find` dispatches with one switch instead of a
-    /// chain of optional checks on every call.
+    /// The deterministic shape and its preparation state. `find` dispatches
+    /// with one switch; Unicode set runs update it after preparing a table.
     fast_kind: FastKind = .none,
     /// The first set covers most of the alphabet, so the start prefilter
     /// barely skips. Programs with a nullable prefix (like `.*foo`) then
@@ -195,11 +194,10 @@ pub const Workspace = struct {
         const simple_chain = if (limits.longest) null else shapes.chain(program);
         const set_run = if (limits.longest) null else shapes.setRun(program);
         const capture_run = if (limits.longest) null else capture_run_mod.Plan.init(program);
-        const utf8_run: ?utf8_run_mod.Utf8Run = if (set_run) |set|
-            (if (set.ascii_only) null else try utf8_run_mod.Utf8Run.init(allocator, set))
+        const utf8_run: ?deferred_utf8.CompactRun = if (set_run) |set|
+            (if (set.ascii_only) null else deferred_utf8.CompactRun.init(set))
         else
             null;
-        errdefer if (utf8_run) |*value| value.deinit(allocator);
         const simple_set: ?model.Set = if (set_run) |set| (if (set.ascii_only) set else null) else null;
         const simple_anchored = if (limits.longest) null else detectAnchoredRun(program);
         const line_run = shapes.lineRun(program);
@@ -259,6 +257,8 @@ pub const Workspace = struct {
                 if (set_run orelse (if (capture_run) |plan| plan.set else null)) |set| {
                     if (set.ascii_only) {
                         table = byte_table.init(256, set);
+                    } else if (utf8_run != null) {
+                        table[0..128].* = byte_table.init(128, set);
                     }
                 }
                 break :blk table;
@@ -337,6 +337,7 @@ pub const Workspace = struct {
             },
             .set_run => return self.findSetRun(self.simple_set.?, input, search_start),
             .utf8_run => return self.findSetRunUtf8(&self.utf8_run.?, input, search_start),
+            .utf8_run_prepared => return self.findPreparedSetRunUtf8(&self.utf8_run.?, input, search_start),
             .chain => return self.findChain(&self.simple_chain.?, input, search_start),
             .anchored => return self.findAnchoredRun(self.simple_anchored.?, input, search_start),
             .line => return self.findLineRun(input, search_start),
@@ -706,6 +707,7 @@ pub const Workspace = struct {
             },
             .set_run => return self.findSetRun(self.simple_set.?, input, search_start),
             .utf8_run => return self.findSetRunUtf8(&self.utf8_run.?, input, search_start),
+            .utf8_run_prepared => return self.findPreparedSetRunUtf8(&self.utf8_run.?, input, search_start),
             .chain => return self.findChain(&self.simple_chain.?, input, search_start),
             .anchored => return self.findAnchoredRun(self.simple_anchored.?, input, search_start),
             .line => return self.findLineRun(input, search_start),
@@ -1045,52 +1047,20 @@ pub const Workspace = struct {
         return null;
     }
 
-    /// `set+` for a non-ASCII set: walk the UTF-8 automaton one byte per
-    /// transition. The first-byte filter skips spans that cannot start a
-    /// member rune; `accept` marks a complete in-set rune.
-    fn findSetRunUtf8(self: *Workspace, utf8: *const utf8_run_mod.Utf8Run, input: []const u8, search_start: usize) ?Match {
-        const table = utf8.table;
-        var offset = search_start;
-        var state: u16 = 0;
-        var rune_start = search_start;
-        while (offset < input.len) {
-            if (state == 0) {
-                offset = self.first_filter.indexOf(input, offset) orelse return null;
-                rune_start = offset;
-            }
-            const next = table[@as(usize, state) * 256 + input[offset]];
-            if (next == utf8_set.accept) break;
-            if (next == utf8_set.dead) {
-                state = 0;
-                offset += 1;
-                continue;
-            }
-            state = next;
-            offset += 1;
-        }
-        if (offset >= input.len) return null;
-        const start = rune_start;
-        var end = offset + 1;
-        var rune_begin = end;
-        state = 0;
-        while (end < input.len) {
-            const next = table[@as(usize, state) * 256 + input[end]];
-            if (next == utf8_set.accept) {
-                state = 0;
-                end += 1;
-                rune_begin = end;
-            } else if (next == utf8_set.dead) {
-                end = rune_begin;
-                break;
-            } else {
-                state = next;
-                end += 1;
-            }
-        }
-        if (state != 0) end = rune_begin;
-        self.slots[0] = start;
-        self.slots[1] = end;
-        return .{ .start = start, .end = end, .slots = self.slots };
+    fn findSetRunUtf8(self: *Workspace, utf8: *deferred_utf8.CompactRun, input: []const u8, search_start: usize) ?Match {
+        const found = utf8_run_search.findDeferred(utf8, self.allocator, &self.simple_set_table, &self.first_filter, input, search_start);
+        if (found.prepared) self.fast_kind = .utf8_run_prepared;
+        const span = found.span orelse return null;
+        self.slots[0] = span.start;
+        self.slots[1] = span.end;
+        return .{ .start = span.start, .end = span.end, .slots = self.slots };
+    }
+
+    fn findPreparedSetRunUtf8(self: *Workspace, utf8: *const deferred_utf8.CompactRun, input: []const u8, search_start: usize) ?Match {
+        const span = utf8_run_search.findPrepared(&utf8.table.?, &self.first_filter, input, search_start) orelse return null;
+        self.slots[0] = span.start;
+        self.slots[1] = span.end;
+        return .{ .start = span.start, .end = span.end, .slots = self.slots };
     }
 
     /// `setA+ separator setB+ tail` search. The separator cannot start a

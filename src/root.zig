@@ -396,6 +396,7 @@ test {
     _ = @import("regex/search_graph_tests.zig");
     _ = @import("regex/deferred_run_tests.zig");
     _ = @import("regex/deferred_workspace_tests.zig");
+    _ = @import("regex/deferred_search_tests.zig");
     _ = @import("regex/extended_tests.zig");
     _ = @import("regex/api_tests.zig");
     _ = @import("regex/set_tests.zig");

@@ -2,6 +2,37 @@ const std = @import("std");
 const regex = @import("../root.zig");
 const prefilter = @import("prefilter.zig");
 
+test "FirstFilter finds non-ASCII bytes across unaligned blocks and tails" {
+    const filter = prefilter.FirstFilter.init(.{ .nonascii = true });
+    var storage: [128]u8 = undefined;
+    for (0..16) |alignment| {
+        for ([_]usize{ 0, 1, 15, 16, 17, 31, 32, 33, 63, 64, 65, 79, 96 }) |length| {
+            const input = storage[alignment..][0..length];
+            @memset(input, 'a');
+            for (0..length + 2) |from| try std.testing.expect(filter.indexOf(input, from) == null);
+            for ([_]u8{ 0x80, 0xc3, 0xe7, 0xff }) |byte| {
+                for ([_]usize{ 0, 1, 15, 16, 31, 32, 63, 95 }) |position| {
+                    if (position >= length) continue;
+                    @memset(input, 'a');
+                    input[position] = byte;
+                    if (position + 17 < length) input[position + 17] = 0xc2;
+                    for (0..length + 2) |from| {
+                        var expected: ?usize = null;
+                        var offset = from;
+                        while (offset < input.len) : (offset += 1) {
+                            if (input[offset] >= 0x80) {
+                                expected = offset;
+                                break;
+                            }
+                        }
+                        try std.testing.expectEqual(expected, filter.indexOf(input, from));
+                    }
+                }
+            }
+        }
+    }
+}
+
 fn naive(input: []const u8, from: usize, literals: []const []const u8) ?usize {
     if (from > input.len) return null;
     var best: ?usize = null;

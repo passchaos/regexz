@@ -3,7 +3,8 @@
 //! ASCII first-byte sets are scanned 16 bytes at a time: small sets compare
 //! against up to eight byte splats, and sets that form at most four contiguous
 //! ranges (classes like `[A-Z]` or `\w`) compare against the range bounds.
-//! Everything else falls back to the byte-at-a-time bitmap loop.
+//! Pure Unicode start sets skip ASCII in 32-byte blocks. Other sets fall back
+//! to the byte-at-a-time bitmap loop.
 const std = @import("std");
 const model = @import("model.zig");
 const nibble_filter = @import("nibble_filter.zig");
@@ -243,11 +244,14 @@ pub const FirstFilter = struct {
         const count: usize = self.count;
         if (count == 0) {
             if (!self.first.nonascii) return null;
-            var offset = start;
-            while (offset < input.len) : (offset += 1) {
-                if (input[offset] >= 0x80) return offset;
+            if (input[start] >= 0x80) return start;
+            const probe_end = start + @min(input.len - start, 16);
+            var probe = start + 1;
+            while (probe < probe_end) : (probe += 1) {
+                if (input[probe] >= 0x80) return probe;
             }
-            return null;
+            if (probe == input.len) return null;
+            return indexOfNonAscii(input, probe);
         }
         const nonascii: Vec = @splat(@as(u8, 0x80));
         var offset = start;
@@ -266,6 +270,23 @@ pub const FirstFilter = struct {
             }
         }
         return byteLoop(input, offset, self.first);
+    }
+
+    noinline fn indexOfNonAscii(input: []const u8, start: usize) ?usize {
+        var offset = start;
+        while (offset + 32 <= input.len) : (offset += 32) {
+            const a: Vec = input[offset..][0..16].*;
+            const b: Vec = input[offset + 16 ..][0..16].*;
+            if (@reduce(.Max, @max(a, b)) >= 0x80) {
+                for (0..32) |index| {
+                    if (input[offset + index] >= 0x80) return offset + index;
+                }
+            }
+        }
+        while (offset < input.len) : (offset += 1) {
+            if (input[offset] >= 0x80) return offset;
+        }
+        return null;
     }
 
     fn indexOfRanges(self: *const FirstFilter, input: []const u8, start: usize) ?usize {

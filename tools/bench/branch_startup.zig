@@ -25,18 +25,19 @@ fn workload(workspace: *regexz.ReplaceWorkspace, input: []const u8, mode: Mode) 
     }
 }
 
-fn bench(io: std.Io, out: *std.Io.Writer, name: []const u8, input: []const u8, mode: Mode) !void {
-    var value = try regexz.Regex.init(gpa, pattern, .{});
+fn bench(io: std.Io, out: *std.Io.Writer, name: []const u8, expression: []const u8, input: []const u8, mode: Mode) !void {
+    var value = try regexz.Regex.init(gpa, expression, .{});
     defer value.deinit();
     const subject = try gpa.dupe(u8, input);
     defer gpa.free(subject);
     var warm = try regexz.ReplaceWorkspace.init(gpa, value.program, .{});
     defer warm.deinit();
     for (0..8) |_| std.mem.doNotOptimizeAway(try pass(&warm, subject));
+    const full_scan = subject.len > 64 and (try warm.find(subject, 0)) == null;
     const iterations: usize = switch (mode) {
         .init, .first => 100,
         .cold_pass => 20,
-        .warm_first => 20000,
+        .warm_first => if (full_scan) 80 else 20000,
         .warm_pass => if (subject.len > 64) 80 else 20000,
     };
     var samples: [5]i96 = undefined;
@@ -85,15 +86,23 @@ pub fn main() !void {
         try mixed.appendSlice(gpa, "Hello, world! This is a mixed tokenizer sample. Unicode 你好世界 café Ελληνικά 12345.\n");
     }
     for (0..4000) |_| try cjk.appendSlice(gpa, "你好世界，这是一个中文分词测试。\n");
-    const cases = [_]struct { name: []const u8, input: []const u8 }{
+    const cases = [_]struct { name: []const u8, expression: []const u8 = pattern, input: []const u8 }{
         .{ .name = "ASCII token", .input = "hello" },
         .{ .name = "Unicode token", .input = "Σ猫" },
         .{ .name = "ASCII text", .input = ascii.items },
         .{ .name = "mixed text", .input = mixed.items },
         .{ .name = "CJK text", .input = cjk.items },
+        .{ .name = "letters ASCII", .expression = "\\p{L}+", .input = "hello" },
+        .{ .name = "letters Unicode", .expression = "\\p{L}+", .input = "Σ猫" },
+        .{ .name = "letters text", .expression = "\\p{L}+", .input = ascii.items },
+        .{ .name = "letters mixed", .expression = "\\p{L}+", .input = mixed.items },
+        .{ .name = "Han text", .expression = "\\p{Han}+", .input = cjk.items },
+        .{ .name = "Han ASCII miss", .expression = "\\p{Han}+", .input = ascii.items },
+        .{ .name = "Han short miss", .expression = "\\p{Han}+", .input = "plain ascii" },
+        .{ .name = "Greek CJK miss", .expression = "\\p{Greek}+", .input = cjk.items },
     };
     for (cases) |case| for ([_]Mode{ .init, .first, .cold_pass, .warm_first, .warm_pass }) |mode| {
-        try bench(io, &stdout.interface, case.name, case.input, mode);
+        try bench(io, &stdout.interface, case.name, case.expression, case.input, mode);
     };
     try stdout.interface.flush();
 }
