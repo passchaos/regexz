@@ -31,17 +31,7 @@ pub const Run = struct {
     }
 
     noinline fn unicodeRuneAt(self: *Run, allocator: std.mem.Allocator, input: []const u8, offset: usize) ?usize {
-        if (self.table) |*table| return table.runeAt(input, offset);
-        if (self.set.ascii_only) return null;
-        const length = std.unicode.utf8ByteSequenceLength(input[offset]) catch return null;
-        if (length > input.len - offset) return null;
-        const rune = std.unicode.utf8Decode(input[offset..][0..length]) catch return null;
-        const matches = self.set.matches(rune);
-        if (!self.failed) {
-            self.unicode_probes +|= 1;
-            if (self.unicode_probes >= 4) self.prepare(allocator);
-        }
-        return if (matches) length else null;
+        return unicodeProbe(self, allocator, input, offset);
     }
 
     pub fn runEnd(self: *Run, allocator: std.mem.Allocator, input: []const u8, offset: usize) usize {
@@ -68,10 +58,74 @@ pub const Run = struct {
     }
 
     noinline fn prepare(self: *Run, allocator: std.mem.Allocator) void {
-        if (self.table != null or self.failed) return;
-        self.table = utf8.Utf8Run.init(allocator, self.set) catch {
-            self.failed = true;
-            return;
-        };
+        prepareTable(self, allocator);
     }
 };
+
+/// Full-match workspaces already own an ASCII table, so their deferred run
+/// keeps only the materialized set and optional UTF-8 storage.
+pub const CompactRun = struct {
+    set: model.Set,
+    table: ?utf8.Utf8Run = null,
+    unicode_probes: u8 = 0,
+    failed: bool = false,
+
+    pub fn init(set: model.Set) CompactRun {
+        return .{ .set = set };
+    }
+
+    pub fn deinit(self: *CompactRun, allocator: std.mem.Allocator) void {
+        if (self.table) |*table| table.deinit(allocator);
+        self.* = undefined;
+    }
+
+    pub fn runeAt(self: *CompactRun, allocator: std.mem.Allocator, input: []const u8, offset: usize) ?usize {
+        if (offset >= input.len) return null;
+        const byte = input[offset];
+        if (byte < 0x80) return if (self.set.matches(byte)) 1 else null;
+        if (self.table) |*table| return table.runeAt(input, offset);
+        return self.unicodeRuneAt(allocator, input, offset);
+    }
+
+    noinline fn unicodeRuneAt(self: *CompactRun, allocator: std.mem.Allocator, input: []const u8, offset: usize) ?usize {
+        return unicodeProbe(self, allocator, input, offset);
+    }
+
+    pub fn runEnd(self: *CompactRun, allocator: std.mem.Allocator, input: []const u8, offset: usize) usize {
+        if (self.table) |*table| return table.runEnd(input, offset);
+        var end = offset;
+        while (self.set.matchAdvance(input, end)) |next| {
+            if (!self.failed and input[end] >= 0x80 and input.len - end >= 64) {
+                self.prepare(allocator);
+                if (self.table) |*table| return table.runEnd(input, end);
+            }
+            end = next;
+        }
+        return end;
+    }
+
+    noinline fn prepare(self: *CompactRun, allocator: std.mem.Allocator) void {
+        prepareTable(self, allocator);
+    }
+};
+
+fn unicodeProbe(self: anytype, allocator: std.mem.Allocator, input: []const u8, offset: usize) ?usize {
+    if (self.set.ascii_only) return null;
+    const length = std.unicode.utf8ByteSequenceLength(input[offset]) catch return null;
+    if (length > input.len - offset) return null;
+    const rune = std.unicode.utf8Decode(input[offset..][0..length]) catch return null;
+    const matches = self.set.matches(rune);
+    if (!self.failed) {
+        self.unicode_probes +|= 1;
+        if (self.unicode_probes >= 4) self.prepare(allocator);
+    }
+    return if (matches) length else null;
+}
+
+fn prepareTable(self: anytype, allocator: std.mem.Allocator) void {
+    if (self.table != null or self.failed) return;
+    self.table = utf8.Utf8Run.init(allocator, self.set) catch {
+        self.failed = true;
+        return;
+    };
+}

@@ -251,8 +251,8 @@ pub const Regex = struct {
         const workspace = try self.ensureWorkspace();
         return workspace.matchesBorrowed(&self.program, input);
     }
-    /// Reuse a caller-owned workspace. This is the allocation-free hot path
-    /// for repeated matching of linear programs.
+    /// Reuse a caller-owned workspace without taking the internal lock.
+    /// The workspace may prepare optional execution caches on demand.
     pub fn matchesWithWorkspace(self: *const Regex, workspace: *Workspace, input: []const u8) bool {
         return workspace.matchesBorrowed(&self.program, input);
     }
@@ -395,6 +395,7 @@ test {
     _ = @import("regex/search_cache_tests.zig");
     _ = @import("regex/search_graph_tests.zig");
     _ = @import("regex/deferred_run_tests.zig");
+    _ = @import("regex/deferred_workspace_tests.zig");
     _ = @import("regex/extended_tests.zig");
     _ = @import("regex/api_tests.zig");
     _ = @import("regex/set_tests.zig");

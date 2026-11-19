@@ -9,6 +9,7 @@ const budget_mod = @import("budget.zig");
 const newline = @import("newline.zig");
 const shapes = @import("shapes.zig");
 const utf8_run_mod = @import("utf8_run.zig");
+const deferred_utf8 = @import("deferred_utf8_run.zig");
 const rune_cache = @import("rune_cache.zig");
 pub const Stats = struct { input_bytes: usize = 0, states_visited: usize = 0 };
 pub const PartialResult = model.PartialResult;
@@ -132,14 +133,14 @@ pub const Workspace = struct {
     simple_loop: bool = false,
     loop_a: [256]bool = .{false} ** 256,
     loop_b: [256]bool = .{false} ** 256,
-    /// Non-ASCII `set+` (`\p{Han}+`): one expanded UTF-8 automaton decides a
-    /// full match with one table load per byte instead of the DFA.
-    utf8_run: ?utf8_run_mod.Utf8Run = null,
+    /// Non-ASCII `set+` (`\p{Han}+`): reuse the ASCII table, then prepare
+    /// expanded UTF-8 storage after repeated probes or a long Unicode run.
+    utf8_run: ?deferred_utf8.CompactRun = null,
     /// Non-ASCII `(?:set+ sep)+` (`(?:\p{Han}+\n)+`): runs of `set`
     /// separated by one literal byte.
     utf8_loop: ?Utf8Loop = null,
 
-    const Utf8Loop = struct { run: utf8_run_mod.Utf8Run, separator: u8 };
+    const Utf8Loop = struct { run: deferred_utf8.CompactRun, separator: u8 };
     pub fn init(allocator: std.mem.Allocator, program: Program) std.mem.Allocator.Error!Workspace {
         if (program.literal != null) return .{ .allocator = allocator, .storage = &.{}, .seen = &.{} };
         const count = program.instructions.len;
@@ -155,6 +156,9 @@ pub const Workspace = struct {
             if (set.ascii_only) {
                 workspace.simple_set = true;
                 workspace.simple_table = byte_table.init(256, set);
+            } else {
+                workspace.utf8_run = deferred_utf8.CompactRun.init(set);
+                workspace.simple_table[0..128].* = byte_table.init(128, set);
             }
         }
         if (shapes.setLoop(program)) |loop| {
@@ -162,16 +166,12 @@ pub const Workspace = struct {
             workspace.loop_a = byte_table.init(256, loop.a);
             workspace.loop_b = byte_table.init(256, loop.b);
         }
-        if (shapes.setRun(program)) |set| {
-            if (!set.ascii_only) {
-                workspace.utf8_run = try utf8_run_mod.Utf8Run.init(allocator, set);
-            }
-        }
         if (shapes.utf8Loop(program)) |loop| {
             workspace.utf8_loop = .{
-                .run = try utf8_run_mod.Utf8Run.init(allocator, loop.run),
+                .run = deferred_utf8.CompactRun.init(loop.run),
                 .separator = loop.separator,
             };
+            workspace.simple_table[0..128].* = byte_table.init(128, loop.run);
         }
         return workspace;
     }
@@ -476,7 +476,12 @@ pub const Workspace = struct {
         if (self.simple_loop) return self.matchesSetLoop(input);
         if (self.utf8_run) |*run| {
             if (input.len == 0) return false;
-            return run.runEnd(input, 0) == input.len;
+            if (run.table) |*table| return table.runEnd(input, 0) == input.len;
+            var end: usize = 0;
+            while (end < input.len and self.simple_table[input[end]]) end += 1;
+            if (end == input.len) return true;
+            if (input[end] < 0x80 or run.runeAt(self.allocator, input, end) == null) return false;
+            return run.runEnd(self.allocator, input, end) == input.len;
         }
         if (self.utf8_loop) |*loop| return self.matchesUtf8Loop(loop, input);
         if (program.dfa_eligible and !self.dfa_failed) {
@@ -500,15 +505,32 @@ pub const Workspace = struct {
         }
     }
 
-    fn matchesUtf8Loop(self: *Workspace, loop: *const Utf8Loop, input: []const u8) bool {
-        _ = self;
+    fn matchesUtf8Loop(self: *Workspace, loop: *Utf8Loop, input: []const u8) bool {
         if (input.len == 0) return false;
+        if (loop.run.table) |*table| return matchesPreparedUtf8Loop(table, loop.separator, input, 0);
         var offset: usize = 0;
         while (true) {
-            const run_end = loop.run.runEnd(input, offset);
+            var run_end = offset;
+            while (run_end < input.len and self.simple_table[input[run_end]]) run_end += 1;
+            if (run_end < input.len and input[run_end] >= 0x80) {
+                if (loop.run.runeAt(self.allocator, input, run_end) != null) {
+                    run_end = loop.run.runEnd(self.allocator, input, run_end);
+                }
+            }
             if (run_end == offset) return false;
             if (run_end >= input.len or input[run_end] != loop.separator) return false;
             offset = run_end + 1;
+            if (offset == input.len) return true;
+            if (loop.run.table) |*table| return matchesPreparedUtf8Loop(table, loop.separator, input, offset);
+        }
+    }
+
+    fn matchesPreparedUtf8Loop(run: *const utf8_run_mod.Utf8Run, separator: u8, input: []const u8, start: usize) bool {
+        var offset = start;
+        while (true) {
+            const end = run.runEnd(input, offset);
+            if (end == offset or end >= input.len or input[end] != separator) return false;
+            offset = end + 1;
             if (offset == input.len) return true;
         }
     }

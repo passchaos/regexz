@@ -77,6 +77,8 @@ def generate(case_count: int, seed: int) -> list[dict]:
     wide = "alpha|bravo|charlie|delta|echo|foxtrot|golf|hotel|india|juliet|kilo|lima|mike|november|oscar|papa|quebec|romeo|sierra|tango|uniform|victor|whiskey|xray"
     seeds += [("(?:" + wide + ")", "u"), ("(" + wide + ")", "u")]
     seeds += [("(?:\\p{Script=Greek}|[0-9])+", "u"), ("(?:\\p{Script=Han}|[0-9])+", "u")]
+    deferred_runs = ["\\p{L}+", "\\p{Script=Greek}+", "\\p{Script=Han}+", "(?:\\p{L}+\\n)+", "(?:\\p{Script=Han}+\\n)+"]
+    seeds += [(pattern, "u") for pattern in deferred_runs]
     seeds += [(pattern, "u") for pattern in [
         "[a-z]+(?=\\p{Script=Han})", "[a-z]+(?!\\p{Script=Han})", "\\p{L}+(?!\\p{L})",
     ]]
@@ -101,6 +103,8 @@ def generate(case_count: int, seed: int) -> list[dict]:
     # Legacy JS /i does not fold long s into ASCII word characters.
     # Keep this Unicode-caseless probe on the explicit Qwen seed.
     for case in cases:
+        if case["pattern"] in deferred_runs and case["flags"] == "u":
+            case["inputs"] = case["inputs"] + ["abcdefghijklmnop", "猫Σé", "Ελληνικά", "猫\n世界\n", "猫\n世界", "猫" * 24, "猫" * 24 + "\n世界\n"]
         if case["flags"] == "iu" and case["pattern"].startswith("(?:'s|'t|'re|'ve|'m|'ll|'d)|"):
             case["inputs"] = case["inputs"] + ["'ſ café 猫。\n"]
     return cases

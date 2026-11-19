@@ -48,12 +48,16 @@ fn bench(io: std.Io, out: *std.Io.Writer, name: []const u8, pattern: []const u8,
     defer workspace.deinit();
     const init_allocations = counter.allocations;
     const init_bytes = counter.allocated_bytes;
-    for (0..3) |_| std.mem.doNotOptimizeAway(workspace.matchesBorrowed(&value.program, input));
+    std.mem.doNotOptimizeAway(workspace.matchesBorrowed(&value.program, input));
+    const first_allocations = counter.allocations - init_allocations;
+    const first_bytes = counter.allocated_bytes - init_bytes;
+    for (0..2) |_| std.mem.doNotOptimizeAway(workspace.matchesBorrowed(&value.program, input));
     const cache_bytes = if (workspace.dfa) |dfa| dfa.unicode_cache.len * @sizeOf(@TypeOf(dfa.unicode_cache[0])) else 0;
-    try out.print("{s:<20} {s:<13} {d:>12.1} ns/iter init_allocations={d} scratch_bytes={d} dfa_allocations={d} dfa_requested_bytes={d} unicode_cache_bytes={d}\n", .{
+    try out.print("{s:<20} {s:<13} {d:>12.1} ns/iter init_allocations={d} scratch_bytes={d} post_init_allocations={d} post_init_requested_bytes={d} unicode_cache_bytes={d} init_bytes={d} workspace_bytes={d} first_allocations={d} first_requested_bytes={d}\n", .{
         name,                                 @tagName(mode),                                              @as(f64, @floatFromInt(samples[2])) / @as(f64, @floatFromInt(iterations)),
         init_allocations,                     (workspace.storage.len + workspace.seen.len) * @sizeOf(u32), counter.allocations - init_allocations,
-        counter.allocated_bytes - init_bytes, cache_bytes,
+        counter.allocated_bytes - init_bytes, cache_bytes,                                                 init_bytes,
+        @sizeOf(regexz.Workspace),            first_allocations,                                           first_bytes,
     });
 }
 
@@ -89,6 +93,10 @@ pub fn main() !void {
         .{ .name = "Unicode ASCII input", .pattern = "(?:\\p{Greek}|[0-9])+", .input = "123456789012" },
         .{ .name = "varied Unicode", .pattern = "(?:\\p{Han}|[0-9])+", .input = varied.items },
         .{ .name = "Unicode collisions", .pattern = "(?:\\p{Han}|[0-9])+", .input = collisions.items },
+        .{ .name = "Unicode letters ASCII", .pattern = "\\p{L}+", .input = "abcdefghijklmnop" },
+        .{ .name = "Unicode letters", .pattern = "\\p{L}+", .input = "猫Σé" },
+        .{ .name = "Greek run", .pattern = "\\p{Greek}+", .input = "Ελληνικά" },
+        .{ .name = "Han line loop", .pattern = "(?:\\p{Han}+\\n)+", .input = "你好\n世界\n" },
     };
     for (cases) |case| {
         for ([_]Mode{ .compile_first, .init, .cold, .dfa_cold, .warm }) |mode| {
