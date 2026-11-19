@@ -9,9 +9,12 @@ fn bench(io: std.Io, out: *std.Io.Writer, name: []const u8, pattern: []const u8,
     defer value.deinit();
     var warm = try regexz.Workspace.init(gpa, value.program);
     defer warm.deinit();
-    for (0..1000) |_| std.mem.doNotOptimizeAway(warm.matchesBorrowed(&value.program, input));
+    const warmups: usize = if (input.len > 64) 8 else 1000;
+    for (0..warmups) |_| std.mem.doNotOptimizeAway(warm.matchesBorrowed(&value.program, input));
     var subject = input;
-    const iterations: usize = if (mode == .warm) 100000 else 2000;
+    const iterations: usize = if (input.len > 64)
+        (if (mode == .warm) @max(20, 1000000 / input.len) else @max(8, 8192 / input.len))
+    else if (mode == .warm) 100000 else 2000;
     var samples: [5]i96 = undefined;
     for (&samples) |*sample| {
         const start = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds;
@@ -46,10 +49,11 @@ fn bench(io: std.Io, out: *std.Io.Writer, name: []const u8, pattern: []const u8,
     const init_allocations = counter.allocations;
     const init_bytes = counter.allocated_bytes;
     for (0..3) |_| std.mem.doNotOptimizeAway(workspace.matchesBorrowed(&value.program, input));
-    try out.print("{s:<20} {s:<13} {d:>12.1} ns/iter init_allocations={d} scratch_bytes={d} dfa_allocations={d} dfa_requested_bytes={d}\n", .{
+    const cache_bytes = if (workspace.dfa) |dfa| dfa.unicode_cache.len * @sizeOf(@TypeOf(dfa.unicode_cache[0])) else 0;
+    try out.print("{s:<20} {s:<13} {d:>12.1} ns/iter init_allocations={d} scratch_bytes={d} dfa_allocations={d} dfa_requested_bytes={d} unicode_cache_bytes={d}\n", .{
         name,                                 @tagName(mode),                                              @as(f64, @floatFromInt(samples[2])) / @as(f64, @floatFromInt(iterations)),
         init_allocations,                     (workspace.storage.len + workspace.seen.len) * @sizeOf(u32), counter.allocations - init_allocations,
-        counter.allocated_bytes - init_bytes,
+        counter.allocated_bytes - init_bytes, cache_bytes,
     });
 }
 
@@ -59,6 +63,20 @@ pub fn main() !void {
     const io = threaded.io();
     var buffer: [4096]u8 = undefined;
     var stdout = std.Io.File.stdout().writerStreaming(io, &buffer);
+    var varied: std.ArrayList(u8) = .empty;
+    defer varied.deinit(gpa);
+    var collisions: std.ArrayList(u8) = .empty;
+    defer collisions.deinit(gpa);
+    for (0..4096) |index| {
+        var encoded: [4]u8 = undefined;
+        const length = try std.unicode.utf8Encode(@intCast(0x4e00 + index), &encoded);
+        try varied.appendSlice(gpa, encoded[0..length]);
+        try varied.append(gpa, '0');
+    }
+    for (0..512) |_| {
+        // These Han runes share a slot in the original 4096-entry cache.
+        try collisions.appendSlice(gpa, "一币0");
+    }
     const cases = [_]struct { name: []const u8, pattern: []const u8, input: []const u8 }{
         .{ .name = "literal", .pattern = "hello, world!", .input = "hello, world!" },
         .{ .name = "ASCII class", .pattern = "[A-Za-z0-9._-]+", .input = "User.Name_42" },
@@ -68,6 +86,9 @@ pub fn main() !void {
         .{ .name = "xDS path", .pattern = "/(?:demo|test)\\.[A-Z][A-Za-z]+/(Get|List)", .input = "/demo.Service/Get" },
         .{ .name = "Unicode run", .pattern = "\\p{Han}+", .input = "你好世界" },
         .{ .name = "mixed Unicode", .pattern = "(?:\\p{Greek}|[0-9])+", .input = "Δ1σ2Δ" },
+        .{ .name = "Unicode ASCII input", .pattern = "(?:\\p{Greek}|[0-9])+", .input = "123456789012" },
+        .{ .name = "varied Unicode", .pattern = "(?:\\p{Han}|[0-9])+", .input = varied.items },
+        .{ .name = "Unicode collisions", .pattern = "(?:\\p{Han}|[0-9])+", .input = collisions.items },
     };
     for (cases) |case| {
         for ([_]Mode{ .compile_first, .init, .cold, .dfa_cold, .warm }) |mode| {
