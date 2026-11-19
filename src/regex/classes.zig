@@ -106,9 +106,20 @@ pub fn fromRanges(ranges: []const m.Range) m.Set {
     for (ranges) |range| {
         if (range.last >= 128) ascii_only = false;
         const end: u32 = @min(@as(u32, range.last), 127);
-        var rune: u32 = range.first;
-        while (rune <= end) : (rune += 1) {
-            bitmap[@intCast(rune >> 6)] |= @as(u64, 1) << @intCast(rune & 63);
+        if (range.first > end) continue;
+        const first_word: usize = @intCast(range.first >> 6);
+        if (range.first == end) {
+            bitmap[first_word] |= @as(u64, 1) << @intCast(range.first & 63);
+            continue;
+        }
+        const last_word: usize = @intCast(end >> 6);
+        const first_mask = @as(u64, std.math.maxInt(u64)) << @as(u6, @intCast(range.first & 63));
+        const last_mask = @as(u64, std.math.maxInt(u64)) >> @as(u6, @intCast(63 - (end & 63)));
+        if (first_word == last_word) {
+            bitmap[first_word] |= first_mask & last_mask;
+        } else {
+            bitmap[first_word] |= first_mask;
+            bitmap[last_word] |= last_mask;
         }
     }
     return .{ .ranges = ranges, .ascii = bitmap, .ascii_only = ascii_only };
