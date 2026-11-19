@@ -96,6 +96,10 @@ pub const Workspace = struct {
     pair_filter: ?*prefilter.PairSet = null,
     /// Absence filter for a whole-pattern case-folded literal (`(?i)STRASSE`).
     fold_filter: ?prefilter.FoldFilter = null,
+    /// Byte membership tables for the chain fast path. `Set.matches` is a
+    /// binary search over rune ranges; the per-byte chain scans run several
+    /// lookups per input byte, so cache the answers once per workspace.
+    chain_tables: ?ChainTables = null,
     /// The first set covers most of the alphabet, so the start prefilter
     /// barely skips. Programs with a nullable prefix (like `.*foo`) then
     /// restart the DFA at almost every position, and one required-literal
@@ -132,6 +136,7 @@ pub const Workspace = struct {
         errdefer allocator.free(best_slots);
         const pair_filter = try buildPairFilter(allocator, program);
         errdefer if (pair_filter) |filter| allocator.destroy(filter);
+        const simple_chain = if (limits.longest) null else shapes.chain(program);
         return .{
             .allocator = allocator,
             .program = program,
@@ -144,8 +149,9 @@ pub const Workspace = struct {
                 if (!set.ascii_only) break :blk null;
                 break :blk set;
             },
-            .simple_chain = if (limits.longest) null else shapes.chain(program),
+            .simple_chain = simple_chain,
             .simple_anchored = if (limits.longest) null else detectAnchoredRun(program),
+            .chain_tables = if (simple_chain) |chain| ChainTables.init(chain) else null,
             .weak_first = @as(usize, @popCount(program.first.ascii[0])) + @popCount(program.first.ascii[1]) >= 48,
             .prefix_set = detectPrefixSet(program),
             .start_anchored = startsAtTextStart(program),
@@ -703,10 +709,44 @@ pub const Workspace = struct {
     }
 
     /// Chain with a set-run separator (`\w+\s+\w+`): each separator run is
-    /// tried in order, and the whole run is skipped when it fails. The scan
-    /// also tracks the preceding `setA` run so the match start is known
-    /// without a backward pass.
+    /// tried in order, and the whole run is skipped when it fails. The SIMD
+    /// separator filter jumps between candidates, and the cached byte tables
+    /// answer membership without the rune-range binary search.
     fn findChainSet(self: *Workspace, chain: *const shapes.Chain, set_s: model.Set, input: []const u8, search_start: usize) ?Match {
+        const tables = if (self.chain_tables) |*value| value else return self.findChainSetSlow(chain, set_s, input, search_start);
+        var scan = search_start;
+        while (scan < input.len) {
+            var run_start: ?usize = null;
+            var pos = scan;
+            while (pos < input.len and !tables.s[input[pos]]) {
+                if (tables.a[input[pos]]) {
+                    if (run_start == null) run_start = pos;
+                } else run_start = null;
+                pos += 1;
+            }
+            if (pos >= input.len) return null;
+            const separator_at = pos;
+            while (pos < input.len and tables.s[input[pos]]) pos += 1;
+            const separator_end = pos;
+            if (chain.star_a) {
+                if (run_start) |start| {
+                    if (separator_at - start >= chain.min_a) {
+                        if (self.chainMatchFrom(chain, input, start, separator_at, separator_end)) |match| return match;
+                    }
+                }
+            } else if (separator_at >= chain.min_a) {
+                const start = separator_at - chain.min_a;
+                if (start >= search_start and allSetBytes(&tables.a, input[start..separator_at])) {
+                    if (self.chainMatchFrom(chain, input, start, separator_at, separator_end)) |match| return match;
+                }
+            }
+            scan = separator_end;
+        }
+        return null;
+    }
+
+    /// Table-free fallback for callers without a cached chain table.
+    fn findChainSetSlow(self: *Workspace, chain: *const shapes.Chain, set_s: model.Set, input: []const u8, search_start: usize) ?Match {
         var scan = search_start;
         while (scan < input.len) {
             var run_start: ?usize = null;
@@ -747,9 +787,11 @@ pub const Workspace = struct {
             if (separator_at < chain.min_a) return null;
             start = separator_at - chain.min_a;
             if (start < search_start) return null;
-            for (input[start..separator_at]) |byte| {
-                if (!chain.set_a.matches(byte)) return null;
-            }
+            const matched = if (self.chain_tables) |*tables|
+                allSetBytes(&tables.a, input[start..separator_at])
+            else
+                allSetMatches(chain.set_a, input[start..separator_at]);
+            if (!matched) return null;
         }
         return self.chainMatchFrom(chain, input, start, separator_at, separator_end);
     }
@@ -760,14 +802,19 @@ pub const Workspace = struct {
         var run_end: usize = run_from;
         if (chain.set_b) |set_b| {
             if (chain.star_b) {
-                run_end = chainRunEnd(input, set_b, run_from);
+                run_end = if (self.chain_tables) |*tables|
+                    chainRunEndTable(input, &tables.b, run_from, set_b)
+                else
+                    chainRunEnd(input, set_b, run_from);
                 if (run_end - run_from < chain.min_b) return null;
             } else {
                 run_end = run_from + chain.min_b;
                 if (run_end > input.len) return null;
-                for (input[run_from..run_end]) |byte| {
-                    if (!set_b.matches(byte)) return null;
-                }
+                const matched = if (self.chain_tables) |*tables|
+                    allSetBytes(&tables.b, input[run_from..run_end])
+                else
+                    allSetMatches(set_b, input[run_from..run_end]);
+                if (!matched) return null;
             }
             if (!tailMatches(input, run_end, chain.tail[0..chain.tail_len])) return null;
             match_end = run_end + chain.tail_len;
@@ -1797,6 +1844,50 @@ fn runeLenAt(input: []const u8, offset: usize) usize {
 /// Start of the maximal `set` run ending at `separator_at`, clamped to
 /// `floor`. Bytes outside an ASCII-only set never match, so the backward
 /// scan is byte-wise in that case.
+/// Byte membership tables and a SIMD separator filter for the chain fast
+/// path. Table lookups replace `Set.matches` calls in the per-byte scans;
+/// the SIMD filter jumps straight to the next separator candidate.
+const ChainTables = struct {
+    a: [256]bool,
+    s: [256]bool,
+    b: [256]bool,
+
+    fn init(chain: shapes.Chain) ChainTables {
+        const empty = model.Set{ .ranges = &.{} };
+        var tables: ChainTables = undefined;
+        fillSetBytes(&tables.a, chain.set_a);
+        fillSetBytes(&tables.s, chain.separator_set orelse empty);
+        fillSetBytes(&tables.b, chain.set_b orelse empty);
+        return tables;
+    }
+};
+
+fn fillSetBytes(table: *[256]bool, set: model.Set) void {
+    for (0..256) |byte| table[byte] = set.matches(@intCast(byte));
+}
+
+fn allSetBytes(table: *const [256]bool, bytes: []const u8) bool {
+    for (bytes) |byte| {
+        if (!table[byte]) return false;
+    }
+    return true;
+}
+
+fn allSetMatches(set: model.Set, bytes: []const u8) bool {
+    for (bytes) |byte| {
+        if (!set.matches(byte)) return false;
+    }
+    return true;
+}
+
+/// Maximal `set` run end, using the byte table when the set is ASCII-only.
+fn chainRunEndTable(input: []const u8, table: *const [256]bool, from: usize, set: model.Set) usize {
+    if (!set.ascii_only) return chainRunEnd(input, set, from);
+    var pos = from;
+    while (pos < input.len and table[input[pos]]) pos += 1;
+    return pos;
+}
+
 fn chainRunStart(input: []const u8, set: model.Set, separator_at: usize, floor: usize) usize {
     var pos = separator_at;
     if (set.ascii_only) {

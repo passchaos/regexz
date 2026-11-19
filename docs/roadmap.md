@@ -201,7 +201,7 @@ Measured on an Apple Silicon macOS host. "Before" is the initial commit state;
 | `find` `\d{3}-\d{4}` no-match, 23 KiB | ~19 µs | ~2.0 µs | ~1.9 µs | — |
 | `find` `(?m)^\w+`, 23 KiB | ~161 µs | ~7.3 µs | ~8.1 µs | — |
 | `find` `(?m)\w+$` no-match, 23 KiB | ~490 µs | ~30 µs | ~31 µs | — |
-| `find` `\w+\s+\w+`, 23 KiB | ~128 µs | ~35 µs | ~20 µs | — |
+| `find` `\w+\s+\w+`, 23 KiB | ~128 µs | ~20 µs (1.2 GiB/s) | ~27 µs | — |
 | `find` large alternation (24 literals) no-match, 23 KiB | ~48 µs | ~7.4 µs (3.0 GiB/s) | ~11 µs | — |
 | `find` `(?i)STRASSE` no-match, 23 KiB | ~15 µs | ~1.4 µs (16.2 GiB/s) | ~2.3 µs | — |
 | `find` loop-exit no-match, 23 KiB | ~120 µs | ~4.7 µs | ~31.8 µs | — |
@@ -338,8 +338,10 @@ Where the remaining time goes:
    `setA{min,} separator setB{min,} tail` (fixed counts such as
    `\d{3}-\d{4}` and set-run separators such as `\w+\s+\w+` included),
    requires the separator to end the first run and the tail to end the
-   second, and reports the capture slots directly; `\w+\s+\w+` dropped from
-   ~67 µs to ~35 µs.
+   second, and reports the capture slots directly. The per-byte chain scans
+   now use cached 256-byte membership tables instead of rune-range probes,
+   so `\w+\s+\w+` went from ~128 µs to ~20 µs, ahead of the same-host Rust
+   reference (~27 µs).
    The first-byte prefilter also matches contiguous ASCII ranges with vector
    compares (up to four runs), so class scans like `[A-Z]+` skip 16 bytes at
    a time: the no-match scan dropped from ~88 µs to ~4 µs, and `\d{3}-\d{4}`

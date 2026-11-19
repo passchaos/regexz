@@ -185,6 +185,7 @@ pub fn main() !void {
     for (0..800) |_| try email_text.appendSlice(gpa, "user.name@example.com ");
     try benchFind(io, out, "find capture email tokens", "(\\w+)@(\\w+)\\.com", email_text.items, 100, .{});
     try benchFind(io, out, "find ASCII run scan", "[a-z]+", text.items, 100, .{});
+    try benchFind(io, out, "find word space word", "\\w+\\s+\\w+", text.items, 100, .{});
     try benchFind(io, out, "find capture no-match", "(\\p{L}+)@(\\p{L}+)", text.items, 20, .{});
     try benchFindFirst(io, out, "find loop-exit no-match", "[a-z]*(?:foo|bar)", text.items, 200, .{});
     try benchFindFirst(io, out, "find extended no-match", "(?=foo)bar", text.items, 2000, .{});
