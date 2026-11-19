@@ -54,6 +54,48 @@ pub fn indexOfPair(input: []const u8, start: usize, a: u8, b: u8) ?usize {
     return null;
 }
 
+/// Conservative multi-literal absence filter for start literals with
+/// distinct first bytes: an exact bitmap of each literal's first two bytes.
+/// A literal occurrence implies a bitmap hit, so a scan without hits proves
+/// that no literal occurs. Hits verify the full literals.
+pub const PairSet = struct {
+    literals: []const []const u8,
+    bits: [8192]u8 = .{0} ** 8192,
+
+    /// Returns null unless every literal is at least two bytes (a shorter
+    /// literal could occur without a pair hit).
+    pub fn init(literals: []const []const u8) ?PairSet {
+        if (literals.len == 0) return null;
+        var set = PairSet{ .literals = literals };
+        for (literals) |literal| {
+            if (literal.len < 2) return null;
+            const pair = (@as(u16, literal[0]) << 8) | literal[1];
+            set.bits[pair >> 3] |= @as(u8, 1) << @intCast(pair & 7);
+        }
+        return set;
+    }
+
+    /// First offset at or after `start` where a literal occurs, or null.
+    pub fn indexOfAny(self: *const PairSet, input: []const u8, start: usize) ?usize {
+        var offset = start;
+        while (offset + 1 < input.len) : (offset += 1) {
+            const first = input[offset];
+            const pair = (@as(u16, first) << 8) | input[offset + 1];
+            if (self.bits[pair >> 3] & (@as(u8, 1) << @intCast(pair & 7)) == 0) continue;
+            for (self.literals) |literal| {
+                if (literal[0] != first or literal[1] != input[offset + 1]) continue;
+                if (literal.len <= input.len - offset and std.mem.eql(u8, input[offset..][0..literal.len], literal)) return offset;
+            }
+        }
+        return null;
+    }
+
+    /// Whether any literal occurs at or after `start`.
+    pub fn containsAny(self: *const PairSet, input: []const u8, start: usize) bool {
+        return self.indexOfAny(input, start) != null;
+    }
+};
+
 /// Cached first-byte filter. Building the ASCII byte list costs 128 set
 /// probes, so workspaces construct this once instead of on every search.
 pub const FirstFilter = struct {

@@ -250,6 +250,19 @@ pub fn main() !void {
     try token_haystack.appendSlice(gpa, "POST");
     try benchFindFirst(io, out, "find multi-literal after 4KB prefix", "(?:GET|POST|PUT|DELETE)", token_haystack.items, 20000, .{});
 
+    var alt_haystack: std.ArrayList(u8) = .empty;
+    defer alt_haystack.deinit(gpa);
+    for (0..23 * 1024) |index| try alt_haystack.append(gpa, 'x' + @as(u8, @intCast(index % 3)));
+    try benchFindFirst(
+        io,
+        out,
+        "find large alternation (24 literals) no-match",
+        "(?:alpha|bravo|charlie|delta|echo|foxtrot|golf|hotel|india|juliet|kilo|lima|mike|november|oscar|papa|quebec|romeo|sierra|tango|uniform|victor|whiskey|xray)",
+        alt_haystack.items,
+        20000,
+        .{},
+    );
+
     var long: std.ArrayList(u8) = .empty;
     defer long.deinit(gpa);
     for (0..2000) |_| try long.appendSlice(gpa, "aaa bbb aaa bbb ");

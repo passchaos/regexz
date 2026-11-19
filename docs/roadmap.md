@@ -202,7 +202,7 @@ Measured on an Apple Silicon macOS host. "Before" is the initial commit state;
 | `find` `(?m)^\w+`, 23 KiB | ~161 µs | ~7.3 µs | ~8.1 µs | — |
 | `find` `(?m)\w+$` no-match, 23 KiB | ~490 µs | ~30 µs | ~31 µs | — |
 | `find` `\w+\s+\w+`, 23 KiB | ~128 µs | ~35 µs | ~20 µs | — |
-| `find` large alternation (24 literals) no-match, 23 KiB | ~48 µs | ~48 µs | ~11 µs | — |
+| `find` large alternation (24 literals) no-match, 23 KiB | ~48 µs | ~7.4 µs (3.0 GiB/s) | ~11 µs | — |
 | `find` `(?i)STRASSE` no-match, 23 KiB | ~15 µs | ~15 µs | ~2 µs | — |
 | `find` loop-exit no-match, 23 KiB | ~120 µs | ~4.7 µs | ~31.8 µs | — |
 | `find` suffix no-match, 23 KiB | ~238 µs | ~14 µs | ~155 µs | — |
@@ -264,13 +264,14 @@ against `tools/bench/baseline.json`.
 
 Where the remaining time goes:
 
-- **Multi-literal prefilters**: a 24-literal alternation with distinct first
-  bytes still scans candidate positions with the DFA (~48 µs on the 23 KiB
-  sample) while the same-host Rust reference finds that no literal occurs in
-  one pass (~11 µs). Case-folded literals (`(?i)STRASSE`, ~15 µs vs ~2 µs)
-  have the same shape of problem: the start filter is only the folded first
-  byte. Both need a SIMD multi-substring prefilter (Teddy-style) or an
-  Aho-Corasick automaton; that is the next large prefilter step.
+- **Multi-literal prefilters**: wide start-literal alternations now use an
+  exact two-byte absence bitmap (`PairSet`): the 24-literal sample dropped
+  from ~48 µs to ~7.4 µs, ahead of the same-host Rust reference (~11 µs).
+  The scan is still one byte at a time; a Teddy-style SIMD prefilter could
+  reach the ~15 GiB/s of the first-byte path. Case-folded literals
+  (`(?i)STRASSE`, ~15 µs vs ~2 µs) still only prefilter on the folded first
+  byte and need the same multi-substring treatment; that is the next large
+  prefilter step.
 - **One-shot boolean match** now reuses a persistent workspace/DFA, but the
   lazy DFA still starts cold for each new `Regex`. Precomputing a DFA for
   small programs would remove the first-call construction cost.

@@ -91,6 +91,9 @@ pub const Workspace = struct {
     /// A `set+` program ending in a line/text-end assertion scans runs and
     /// checks the assertion once at each run end.
     simple_anchored: ?AnchoredRun = null,
+    /// Multi-literal absence filter for wide start-literal alternations
+    /// whose literals have distinct first bytes.
+    pair_filter: ?*prefilter.PairSet = null,
     /// The first set covers most of the alphabet, so the start prefilter
     /// barely skips. Programs with a nullable prefix (like `.*foo`) then
     /// restart the DFA at almost every position, and one required-literal
@@ -125,6 +128,8 @@ pub const Workspace = struct {
         const best_slots = try allocator.alloc(usize, slot_count);
         @memset(best_slots, unset);
         errdefer allocator.free(best_slots);
+        const pair_filter = try buildPairFilter(allocator, program);
+        errdefer if (pair_filter) |filter| allocator.destroy(filter);
         return .{
             .allocator = allocator,
             .program = program,
@@ -144,10 +149,12 @@ pub const Workspace = struct {
             .start_anchored = startsAtTextStart(program),
             .line_start_only = startsAtLineStart(program),
             .first_filter = prefilter.FirstFilter.init(program.first),
+            .pair_filter = pair_filter,
         };
     }
 
     pub fn deinit(self: *Workspace) void {
+        if (self.pair_filter) |filter| self.allocator.destroy(filter);
         if (self.pike_workspace) |*workspace| workspace.deinit();
         if (self.backtrack_workspace) |*workspace| workspace.deinit();
         if (self.search_dfa_workspace) |*workspace| workspace.deinit();
@@ -186,15 +193,22 @@ pub const Workspace = struct {
         if (self.simple_set) |set| return self.findSetRun(set, input, search_start);
         if (self.simple_chain) |*chain| return self.findChain(chain, input, search_start);
         if (self.simple_anchored) |anchored_run| return self.findAnchoredRun(anchored_run, input, search_start);
+        // Every match must start at a start-literal occurrence, so the first
+        // occurrence bounds the leftmost match start and the DFA can skip
+        // the prefix before it.
+        var from = search_start;
+        if (self.pair_filter) |filter| {
+            from = filter.indexOfAny(input, search_start) orelse return null;
+        }
         if (self.fast_dfa) |dfa| {
-            if (self.requiredByteMiss(input, search_start)) return null;
-            if (self.weak_first and self.requiredLiteralMiss(input, search_start)) return null;
-            const found = (try dfa.find(input, search_start)) orelse return null;
+            if (self.requiredByteMiss(input, from)) return null;
+            if (self.weak_first and self.requiredLiteralMiss(input, from)) return null;
+            const found = (try dfa.find(input, from)) orelse return null;
             self.slots[0] = found.start;
             self.slots[1] = found.end;
             return .{ .start = found.start, .end = found.end, .slots = self.slots };
         }
-        return self.findInternal(input, search_start);
+        return self.findInternal(input, from);
     }
 
     /// Replace every non-overlapping leftmost-first match. RE2 substitution
@@ -511,20 +525,24 @@ pub const Workspace = struct {
         if (self.simple_set) |set| return self.findSetRun(set, input, search_start);
         if (self.simple_chain) |*chain| return self.findChain(chain, input, search_start);
         if (self.simple_anchored) |anchored_run| return self.findAnchoredRun(anchored_run, input, search_start);
+        var from = search_start;
+        if (self.pair_filter) |filter| {
+            from = filter.indexOfAny(input, search_start) orelse return null;
+        }
         if (self.program.literal) |literal| {
             if (self.program.capture_count == 0) {
-                const found = indexOfLiteral(input, search_start, literal) orelse return null;
+                const found = indexOfLiteral(input, from, literal) orelse return null;
                 self.slots[0] = found;
                 self.slots[1] = found + literal.len;
                 return .{ .start = found, .end = found + literal.len, .slots = self.slots };
             }
         }
         if (self.program.extended) {
-            if (self.requiredLiteralMiss(input, search_start)) return null;
+            if (self.requiredLiteralMiss(input, from)) return null;
             if (self.backtrack_workspace == null) {
                 self.backtrack_workspace = try backtrack.Workspace.init(self.allocator, self.program, self.limits);
             }
-            const found = try self.backtrack_workspace.?.find(input, search_start) orelse return null;
+            const found = try self.backtrack_workspace.?.find(input, from) orelse return null;
             return .{
                 .start = found.start,
                 .end = found.end,
@@ -537,11 +555,11 @@ pub const Workspace = struct {
         // instructions, so replay the winning path to fill the slots; a
         // disagreement falls back to the interpreter below.
         if (!self.limits.longest and !self.search_dfa_failed and !self.search_dfa_ineligible) {
-            if (self.requiredByteMiss(input, search_start)) return null;
+            if (self.requiredByteMiss(input, from)) return null;
             // A nullable first set disables the start prefilter, so patterns
             // like `.*foo` restart the DFA at every position. One literal
             // scan rules the whole search out when the literal is absent.
-            if (self.weak_first and self.requiredLiteralMiss(input, search_start)) return null;
+            if (self.weak_first and self.requiredLiteralMiss(input, from)) return null;
             if (self.search_dfa_workspace == null) {
                 self.search_dfa_workspace = search_dfa.Workspace.init(self.allocator, self.program) catch blk: {
                     self.search_dfa_failed = true;
@@ -557,7 +575,7 @@ pub const Workspace = struct {
                 self.fast_dfa = &self.search_dfa_workspace.?;
             }
             if (self.search_dfa_workspace) |*dfa| {
-                const found = dfa.find(input, search_start) catch |err| switch (err) {
+                const found = dfa.find(input, from) catch |err| switch (err) {
                     error.OutOfMemory, error.RegexLimitExceeded => blk: {
                         self.search_dfa_failed = true;
                         break :blk null;
@@ -579,8 +597,8 @@ pub const Workspace = struct {
                 }
             }
         }
-        if (self.requiredLiteralMiss(input, search_start)) return null;
-        var start = search_start;
+        if (self.requiredLiteralMiss(input, from)) return null;
+        var start = from;
         while (start <= input.len) {
             if (self.program.literal_prefix) |prefix| {
                 if (prefix.len != 0) {
@@ -1630,6 +1648,19 @@ fn position(input: []const u8, offset: usize, newline_mode: model.Newline) Posit
         .previous = if (offset == 0) null else input[offset - 1],
         .next = if (offset == input.len) null else input[offset],
     };
+}
+
+/// Build the multi-literal absence filter for wide start-literal
+/// alternations whose literals do not share a first byte (the multi-literal
+/// start filter handles the shared case).
+fn buildPairFilter(allocator: std.mem.Allocator, program: Program) std.mem.Allocator.Error!?*prefilter.PairSet {
+    const literals = program.start_literals orelse return null;
+    if (literals.len < 2) return null;
+    if (prefilter.MultiFilter.init(literals) != null) return null;
+    const set = prefilter.PairSet.init(literals) orelse return null;
+    const filter = try allocator.create(prefilter.PairSet);
+    filter.* = set;
+    return filter;
 }
 
 /// `save0 -> consume(set) -> star(set) -> assertion -> save1 -> accept`

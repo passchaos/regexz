@@ -7,7 +7,7 @@
 const std = @import("std");
 const model = @import("model.zig");
 
-const max_literals: usize = 16;
+const max_literals: usize = 32;
 const max_literal_len: usize = 32;
 const max_total_bytes: usize = 256;
 
@@ -64,6 +64,11 @@ fn concat(
     depth: usize,
 ) model.Error!?[]const []const u8 {
     const left_list = (try literalsOf(allocator, left, depth + 1)) orelse return null;
+    // Combining a prefix list with the right side is only sound when the left
+    // node matches exactly one of those literals. A variable-length left (for
+    // example `(?:a|b)+`) matches longer text, so the right side does not
+    // follow its prefix directly; keep the left prefix set alone.
+    if (!isFixedLiteral(left)) return left_list;
     const right_list = (try literalsOf(allocator, right, depth + 1)) orelse {
         // The left side alone is still a safe prefix for every match.
         return left_list;
@@ -82,6 +87,22 @@ fn concat(
     }
     const owned: []const []const u8 = try result.toOwnedSlice(allocator);
     return owned;
+}
+
+/// Whether every match of `node` is exactly one of its extracted literals
+/// (no repetition, no variable length). Only then does the text after the
+/// node begin where the literal ends.
+fn isFixedLiteral(node: *const model.Node) bool {
+    return switch (node.*) {
+        .set => |set| set.ranges.len == 1 and set.ranges[0].first == set.ranges[0].last,
+        .pair => |pair| isFixedLiteral(pair.left) and isFixedLiteral(pair.right),
+        .alternate => |pair| isFixedLiteral(pair.left) and isFixedLiteral(pair.right),
+        .group => |child| isFixedLiteral(child),
+        .capture => |capture| isFixedLiteral(capture.child),
+        .atomic => |child| isFixedLiteral(child),
+        .repeat => |repeat| repeat.minimum == 1 and repeat.maximum == 1 and isFixedLiteral(repeat.child),
+        else => false,
+    };
 }
 
 fn unionLists(

@@ -561,3 +561,28 @@ test "literal alternation start prefilter" {
     defer classy.deinit();
     try std.testing.expect(classy.program.start_literals == null);
 }
+
+test "wide start alternation absence filter" {
+    const pattern = "(?:alpha|bravo|charlie|delta|echo|foxtrot|golf|hotel|india|juliet|kilo|lima|mike|november|oscar|papa|quebec|romeo|sierra|tango|uniform|victor|whiskey|xray)";
+    var value = try regex.Regex.init(gpa, pattern, .{});
+    defer value.deinit();
+    try std.testing.expectEqual(@as(usize, 24), value.program.start_literals.?.len);
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.pair_filter != null);
+    try std.testing.expect((try workspace.find("xx yy zz xyzzy", 0)) == null);
+    try std.testing.expect((try workspace.find("a brav hote", 0)) == null);
+    const found = (try workspace.find("yy charlie zz", 0)).?;
+    try std.testing.expectEqual(@as(usize, 3), found.start);
+    try std.testing.expectEqual(@as(usize, 10), found.end);
+
+    // A repeated alternation contributes only its first-byte prefix: the
+    // extracted literals must not be combined with the text after the loop.
+    var looped = try regex.Regex.init(gpa, "(?:ab|ac)+de", .{});
+    defer looped.deinit();
+    var looped_workspace = try regex.ReplaceWorkspace.init(gpa, looped.program, .{});
+    defer looped_workspace.deinit();
+    const loop_match = (try looped_workspace.find("xx ababde yy", 0)).?;
+    try std.testing.expectEqual(@as(usize, 3), loop_match.start);
+    try std.testing.expectEqual(@as(usize, 9), loop_match.end);
+}
