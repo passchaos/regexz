@@ -59,13 +59,15 @@ pub fn sameSet(a: model.Set, b: model.Set) bool {
     return true;
 }
 
-/// A chain `setA+ separator setB+ tail` where the separator cannot start a
+/// A chain `setA+ separator [setB+ tail]` where the separator cannot start a
 /// `setA` run and the tail cannot start a `setB` run. The match is then
-/// determined by the first separator occurrence that has a non-empty run on
-/// both sides.
+/// determined by the first separator occurrence that has a non-empty run
+/// before it (and a valid run and tail after it, when present).
 pub const Chain = struct {
     set_a: model.Set,
-    set_b: model.Set,
+    /// The trailing run after the separator; null when the pattern ends at
+    /// the separator (e.g. `\w+@`).
+    set_b: ?model.Set = null,
     separator: [8]u8 = undefined,
     separator_len: u8 = 0,
     tail: [8]u8 = undefined,
@@ -106,7 +108,7 @@ fn appendLiteral(bytes: *[max_literal_bytes]u8, length: *u8, instruction: model.
 pub fn chain(program: Program) ?Chain {
     if (program.extended or program.capture_count > 2) return null;
     const ins = program.instructions;
-    if (ins.len < 10 or ins.len > 40) return null;
+    if (ins.len < 8 or ins.len > 40) return null;
     if (program.accept != 0) return null;
     if (std.meta.activeTag(ins[0]) != .accept or std.meta.activeTag(ins[1]) != .sub_accept or
         std.meta.activeTag(ins[2]) != .ret) return null;
@@ -114,7 +116,7 @@ pub fn chain(program: Program) ?Chain {
     const start = ins[program.start];
     if (std.meta.activeTag(start) != .save) return null;
     if (start.save.slot != 0 or start.save.next != program.body) return null;
-    var result = Chain{ .set_a = undefined, .set_b = undefined };
+    var result = Chain{ .set_a = undefined };
     // 0, 1, 2, and the save0 instruction.
     var visited: usize = 4;
     var pc = program.body;
@@ -143,23 +145,24 @@ pub fn chain(program: Program) ?Chain {
         if (pc >= ins.len or visited > ins.len) return null;
     }
     if (result.separator_len == 0 or visited > ins.len) return null;
-    if (std.meta.activeTag(ins[pc]) == .save) {
+    if (std.meta.activeTag(ins[pc]) == .save and ins[pc].save.slot != 1) {
         result.slot_b = ins[pc].save.slot;
         visited += 1;
         pc = ins[pc].save.next;
         if (pc >= ins.len) return null;
     }
-    const run_b = runBody(ins, pc) orelse return null;
-    result.set_b = run_b.set;
-    visited += 2;
-    pc = ins[run_b.star].star.next;
-    if (pc >= ins.len) return null;
-    if (std.meta.activeTag(ins[pc]) == .save and ins[pc].save.slot != 1) {
-        if (result.slot_b == 0 or ins[pc].save.slot != result.slot_b + 1) return null;
-        visited += 1;
-        pc = ins[pc].save.next;
+    if (runBody(ins, pc)) |run_b| {
+        result.set_b = run_b.set;
+        visited += 2;
+        pc = ins[run_b.star].star.next;
         if (pc >= ins.len) return null;
-    } else if (result.slot_b != 0) return null;
+        if (std.meta.activeTag(ins[pc]) == .save and ins[pc].save.slot != 1) {
+            if (result.slot_b == 0 or ins[pc].save.slot != result.slot_b + 1) return null;
+            visited += 1;
+            pc = ins[pc].save.next;
+            if (pc >= ins.len) return null;
+        } else if (result.slot_b != 0) return null;
+    }
     while (isLiteral(ins[pc])) {
         if (!appendLiteral(&result.tail, &result.tail_len, ins[pc])) return null;
         visited += 1;
@@ -174,15 +177,22 @@ pub fn chain(program: Program) ?Chain {
     // Capture slots must be a matched pair, and their presence must agree
     // with the program's capture count.
     if (result.slot_a != 0) {
-        if (result.slot_b != result.slot_a + 2 or program.capture_count != 2) return null;
+        if (result.slot_b != 0) {
+            if (result.slot_b != result.slot_a + 2 or program.capture_count != 2) return null;
+        } else if (program.capture_count != 1) return null;
     } else if (result.slot_b != 0 or program.capture_count != 0) return null;
-    if (result.set_a.ranges.len == 0 or result.set_b.ranges.len == 0) return null;
+    if (result.set_a.ranges.len == 0) return null;
+    if (result.set_b) |set_b| {
+        if (set_b.ranges.len == 0) return null;
+    }
     // The separator must end the first run, and the tail must end the second.
     const separator_first = firstRune(result.separator[0..result.separator_len]) orelse return null;
     if (result.set_a.matches(separator_first)) return null;
     if (result.tail_len != 0) {
         const tail_first = firstRune(result.tail[0..result.tail_len]) orelse return null;
-        if (result.set_b.matches(tail_first)) return null;
+        if (result.set_b) |set_b| {
+            if (set_b.matches(tail_first)) return null;
+        }
     }
     return result;
 }

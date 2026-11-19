@@ -648,6 +648,12 @@ test "chain search finds matches from the separator" {
         .{ .pattern = "(\\w+)::(\\w+)", .input = "ab::cd", .spans = &.{.{ 0, 6 }}, .groups = &.{ "ab::cd", "ab", "cd" } },
         .{ .pattern = "(\\d+)\\.(\\d+)ms", .input = "12.34ms", .spans = &.{.{ 0, 7 }}, .groups = &.{ "12.34ms", "12", "34" } },
         .{ .pattern = "(\\w+)@(\\w+)", .input = "abc", .spans = &.{}, .groups = &.{} },
+        // `set+ literal` without a trailing run takes the same chain path.
+        .{ .pattern = "\\w+@", .input = "ab@cd@", .spans = &.{ .{ 0, 3 }, .{ 3, 6 } }, .groups = &.{"ab@"} },
+        .{ .pattern = "(\\w+)@", .input = "ab@cd@", .spans = &.{ .{ 0, 3 }, .{ 3, 6 } }, .groups = &.{ "ab@", "ab" } },
+        .{ .pattern = "\\d+-", .input = "12-345-6", .spans = &.{ .{ 0, 3 }, .{ 3, 7 } }, .groups = &.{"12-"} },
+        .{ .pattern = "\\w+ 12345", .input = "a 12345 b 12345", .spans = &.{ .{ 0, 7 }, .{ 8, 15 } }, .groups = &.{"a 12345"} },
+        .{ .pattern = "\\w+::", .input = "ab::cd::", .spans = &.{ .{ 0, 4 }, .{ 4, 8 } }, .groups = &.{"ab::"} },
         // Shapes the detector rejects (separator or tail inside a set) must
         // still search correctly through the general engine.
         .{ .pattern = "([a-z]+)a([a-z]+)", .input = "xay", .spans = &.{.{ 0, 3 }}, .groups = &.{ "xay", "x", "y" } },

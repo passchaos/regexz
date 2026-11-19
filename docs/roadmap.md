@@ -314,7 +314,11 @@ Where the remaining time goes:
    The first-byte prefilter also matches contiguous ASCII ranges with vector
    compares (up to four runs), so class scans like `[A-Z]+` skip 16 bytes at
    a time: the no-match scan dropped from ~88 µs to ~4 µs, and `\d{3}-\d{4}`
-   from ~19 µs to ~10 µs.
+   from ~19 µs to ~10 µs. The chain detector now also accepts
+   `setA+ literal` without a trailing run (`\w+@`, `\d+-`, `\w+ 12345`),
+   and a mandatory `\A`/`^` at the body start makes searches past offset zero
+   return immediately (`^Hello` 3.8 µs -> 23 ns). Required-literal scans use
+   the SIMD byte scan (`.*foo` 8.5 -> 4.1 µs, `\w*foo` 6.6 -> 4.2 µs).
    `extractCaptures` also tries a deterministic replay for straight-line
    programs of saves, literals, and forced greedy runs, which took the email
    benchmark from ~68 µs to ~42 µs before the chain path; shapes that need

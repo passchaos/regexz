@@ -95,6 +95,9 @@ pub const Workspace = struct {
     /// After a failed interpreter search from `start`, no match can start
     /// inside the loop's run, so the next search starts at the run end.
     prefix_set: ?model.Set = null,
+    /// The body begins with a mandatory `\A`/`^` (text start) assertion, so
+    /// no match can start past offset zero.
+    start_anchored: bool = false,
     first_filter: prefilter.FirstFilter,
 
     pub fn init(
@@ -129,6 +132,7 @@ pub const Workspace = struct {
             .simple_chain = if (limits.longest) null else shapes.chain(program),
             .weak_first = @as(usize, @popCount(program.first.ascii[0])) + @popCount(program.first.ascii[1]) >= 48,
             .prefix_set = detectPrefixSet(program),
+            .start_anchored = startsAtTextStart(program),
             .first_filter = prefilter.FirstFilter.init(program.first),
         };
     }
@@ -168,6 +172,7 @@ pub const Workspace = struct {
         search_start: usize,
     ) Error!?Match {
         self.steps = 0;
+        if (self.start_anchored and search_start != 0) return null;
         if (self.simple_set) |set| return self.findSetRun(set, input, search_start);
         if (self.simple_chain) |*chain| return self.findChain(chain, input, search_start);
         if (self.fast_dfa) |dfa| {
@@ -491,6 +496,7 @@ pub const Workspace = struct {
         search_start: usize,
     ) Error!?Match {
         if (search_start > input.len) return null;
+        if (self.start_anchored and search_start != 0) return null;
         if (self.simple_set) |set| return self.findSetRun(set, input, search_start);
         if (self.simple_chain) |*chain| return self.findChain(chain, input, search_start);
         if (self.program.literal) |literal| {
@@ -652,16 +658,30 @@ pub const Workspace = struct {
                 const start = chainRunStart(input, chain.set_a, separator_at, search_start);
                 if (start < separator_at) {
                     const run_from = separator_at + chain.separator_len;
-                    const end = chainRunEnd(input, chain.set_b, run_from);
-                    if (end > run_from and tailMatches(input, end, chain.tail[0..chain.tail_len])) {
-                        const match_end = end + chain.tail_len;
+                    var matched = false;
+                    var match_end: usize = 0;
+                    var run_end: usize = run_from;
+                    if (chain.set_b) |set_b| {
+                        const end = chainRunEnd(input, set_b, run_from);
+                        if (end > run_from and tailMatches(input, end, chain.tail[0..chain.tail_len])) {
+                            matched = true;
+                            run_end = end;
+                            match_end = end + chain.tail_len;
+                        }
+                    } else if (tailMatches(input, run_from, chain.tail[0..chain.tail_len])) {
+                        matched = true;
+                        match_end = run_from + chain.tail_len;
+                    }
+                    if (matched) {
                         self.slots[0] = start;
                         self.slots[1] = match_end;
                         if (chain.slot_a != 0) {
                             self.slots[chain.slot_a] = start;
                             self.slots[chain.slot_a + 1] = separator_at;
+                        }
+                        if (chain.slot_b != 0) {
                             self.slots[chain.slot_b] = run_from;
-                            self.slots[chain.slot_b + 1] = end;
+                            self.slots[chain.slot_b + 1] = run_end;
                         }
                         return .{ .start = start, .end = match_end, .slots = self.slots };
                     }
@@ -1510,6 +1530,24 @@ fn position(input: []const u8, offset: usize, newline_mode: model.Newline) Posit
         .previous = if (offset == 0) null else input[offset - 1],
         .next = if (offset == input.len) null else input[offset],
     };
+}
+
+/// Whether the body begins with a mandatory text-start assertion (`\A` or
+/// `^` outside multiline mode).
+fn startsAtTextStart(program: Program) bool {
+    const ins = program.instructions;
+    var pc = program.body;
+    var steps: usize = 0;
+    while (steps < 8) : (steps += 1) {
+        if (pc >= ins.len) return false;
+        switch (ins[pc]) {
+            .save => |save| pc = save.next,
+            .reset_captures => |reset| pc = reset.next,
+            .assertion => |assertion| return assertion.kind == .start_text,
+            else => return false,
+        }
+    }
+    return false;
 }
 
 /// The single-set unbounded loop that starts the program body, if any.

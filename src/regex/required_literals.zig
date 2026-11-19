@@ -34,7 +34,9 @@ pub fn analyze(allocator: std.mem.Allocator, root: *const model.Node) std.mem.Al
 pub fn containsAny(input: []const u8, start: usize, literals: []const []const u8) bool {
     for (literals) |literal| {
         if (literal.len == 0) return true;
-        if (indexOfLiteral(input, start, literal) != null) return true;
+        if (literal.len == 1) {
+            if (containsByte(input, start, literal[0])) return true;
+        } else if (containsLiteral(input, start, literal)) return true;
     }
     return false;
 }
@@ -44,14 +46,14 @@ pub fn containsByte(input: []const u8, start: usize, byte: u8) bool {
     return prefilter.indexOfByte(input, start, byte) != null;
 }
 
-fn indexOfLiteral(input: []const u8, start: usize, needle: []const u8) ?usize {
-    if (start > input.len) return null;
+/// Whether `needle` (at least two bytes) occurs at or after `start`.
+pub fn containsLiteral(input: []const u8, start: usize, needle: []const u8) bool {
     var offset = start;
-    while (std.mem.indexOfScalarPos(u8, input, offset, needle[0])) |found| {
-        if (needle.len <= input.len - found and std.mem.eql(u8, input[found..][0..needle.len], needle)) return found;
+    while (prefilter.indexOfByte(input, offset, needle[0])) |found| {
+        if (needle.len <= input.len - found and std.mem.eql(u8, input[found..][0..needle.len], needle)) return true;
         offset = found + 1;
     }
-    return null;
+    return false;
 }
 
 fn pureLiteral(allocator: std.mem.Allocator, node: *const model.Node, depth: usize) std.mem.Allocator.Error!?[]const u8 {
