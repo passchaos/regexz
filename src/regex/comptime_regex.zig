@@ -319,6 +319,42 @@ const Parser = struct {
         return node;
     }
 
+    fn hexDigit(byte: u8) ?u21 {
+        return switch (byte) {
+            '0'...'9' => byte - '0',
+            'a'...'f' => byte - 'a' + 10,
+            'A'...'F' => byte - 'A' + 10,
+            else => null,
+        };
+    }
+
+    fn parseHex(self: *Parser, digits: usize) ?u21 {
+        var value: u21 = 0;
+        var index: usize = 0;
+        while (index < digits) : (index += 1) {
+            const byte = self.peek() orelse return null;
+            const digit = hexDigit(byte) orelse return null;
+            _ = self.consume();
+            value = value * 16 + digit;
+        }
+        return value;
+    }
+
+    fn parseHexUntil(self: *Parser, terminator: u8) ?u21 {
+        var value: u21 = 0;
+        var count: usize = 0;
+        while (self.peek()) |byte| {
+            if (byte == terminator) break;
+            const digit = hexDigit(byte) orelse return null;
+            _ = self.consume();
+            value = value * 16 + digit;
+            count += 1;
+            if (count > 6) return null;
+        }
+        if (count == 0) return null;
+        return value;
+    }
+
     fn parseCaptureName(self: *Parser) []const u8 {
         const start = self.pos;
         while (self.peek()) |byte| {
@@ -343,6 +379,21 @@ const Parser = struct {
             'n' => return Ast{ .literal = .{ .value = '\n', .caseless = false } },
             'r' => return Ast{ .literal = .{ .value = '\r', .caseless = false } },
             't' => return Ast{ .literal = .{ .value = '\t', .caseless = false } },
+            'x' => {
+                const value = self.parseHex(2) orelse @compileError("comptime regex: bad \\x escape");
+                return Ast{ .literal = .{ .value = value, .caseless = self.caseless } };
+            },
+            'u' => {
+                var value: u21 = undefined;
+                if (self.peek() == '{') {
+                    _ = self.consume();
+                    value = self.parseHexUntil('}') orelse @compileError("comptime regex: bad \\u{...} escape");
+                    _ = self.consume();
+                } else {
+                    value = self.parseHex(4) orelse @compileError("comptime regex: bad \\u escape");
+                }
+                return Ast{ .literal = .{ .value = value, .caseless = self.caseless } };
+            },
             'b' => return Ast{ .word_boundary = .{ .negative = false } },
             'B' => return Ast{ .word_boundary = .{ .negative = true } },
             'A' => return Ast{ .anchor_start = .{ .multiline = false } },
@@ -1086,4 +1137,18 @@ test "comptime regex word boundaries" {
     // A non-ASCII neighbour is a non-word character, so the boundary holds.
     const mixed = Regex("\\bfoo\\b");
     try std.testing.expect(mixed.search("caf\u{00e9} foo") != null);
+}
+
+test "comptime regex hex escapes" {
+    const x = Regex("a\\x62c");
+    try std.testing.expect(x.match("abc") != null);
+    try std.testing.expect(x.match("a\\x62c") == null);
+
+    const brace = Regex("\\u{4f60}\\u{597d}");
+    const found = brace.search("xx \u{4f60}\u{597d} yy").?;
+    try std.testing.expectEqual(@as(usize, 3), found.start);
+    try std.testing.expectEqual(@as(usize, 9), found.end);
+
+    const plain = Regex("\\u4F60");
+    try std.testing.expect(plain.match("\u{4f60}") != null);
 }
