@@ -4,6 +4,9 @@ Bounded regular-expression engine with a **linear RE2-style core** and an
 **extended PCRE-style backtracking mode**. Extracted from the xDS safe-regex
 implementation in `netz` so it can be reused independently of gRPC/xDS.
 
+See `docs/architecture.md` for the module map, pipeline, and engine
+selection rules.
+
 The engine picks the execution strategy automatically:
 
 - **Linear mode** for RE2-compatible patterns: Thompson NFA, lazy full-match
@@ -19,6 +22,8 @@ The engine picks the execution strategy automatically:
 
 - RE2-style syntax subset with explicit limits for program size, states,
   instructions, and replacement expansion.
+- A compile-time engine (`comptime_regex`) that parses a pattern subset in
+  the comptime evaluator and emits matcher code with no runtime tables.
 - Linear-time boolean full matching:
   - Thompson NFA with deduplicated epsilon closures.
   - Exact-literal fast path (`Program.literal`) for plain literal patterns.

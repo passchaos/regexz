@@ -29,8 +29,9 @@ pub const Match = @import("regex/replace.zig").Match;
 pub const StreamScanner = @import("regex/stream.zig").Scanner;
 pub const StreamMatch = @import("regex/stream.zig").StreamMatch;
 pub const StreamEmitFn = @import("regex/stream.zig").EmitFn;
-pub const validateSubstitution = @import("regex/replace.zig").validateSubstitution;
-pub const validateSubstitutionFor = @import("regex/replace.zig").validateSubstitutionFor;
+const substitution_mod = @import("regex/substitution.zig");
+pub const validateSubstitution = substitution_mod.validateSubstitution;
+pub const validateSubstitutionFor = substitution_mod.validateSubstitutionFor;
 pub const Program = @import("regex/compile.zig").Program;
 pub const comptime_regex = @import("regex/comptime_regex.zig");
 const unset = std.math.maxInt(usize);
@@ -353,7 +354,7 @@ pub const Regex = struct {
     }
     /// Expand a replacement template for one match without searching again.
     pub fn expandMatch(self: *const Regex, gpa: std.mem.Allocator, input: []const u8, match: Match, substitution: []const u8) Error![]u8 {
-        return replace_mod.expandMatch(gpa, self.program, input, match.slots, substitution, self.limits.full_case_mapping);
+        return substitution_mod.expandMatch(gpa, self.program, input, match.slots, substitution, self.limits.full_case_mapping);
     }
     pub fn replaceAll(self: *const Regex, gpa: std.mem.Allocator, input: []const u8, substitution: []const u8) Error![]u8 {
         var workspace = try ReplaceWorkspace.init(gpa, self.program, self.limits);

@@ -1,0 +1,31 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Zig
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.16.0
+
+      - name: Format check
+        run: zig fmt --check build.zig src tools
+
+      - name: Unit tests
+        run: zig build test
+
+      - name: Benchmark smoke
+        run: zig build bench -Doptimize=ReleaseFast
+
+      - name: Differential fuzz (smoke)
+        run: |
+          python3 tools/fuzz/run.py --cases 100 --seed 1
+          python3 tools/fuzz/replace.py --cases 100 --seed 1

@@ -451,14 +451,18 @@ on the tokenizer and xDS workloads.
 14. ~~Program serialization for cross-process caches~~: done.
     `Program.serialize`/`deserialize` with a validated versioned format.
 15. Differential fuzzing: seeded V8 harnesses cover the linear engine
-    (`tools/fuzz/run.py`, 37,800 comparisons) and the extended engine
-    (`tools/fuzz/extended.py`, 28,500 comparisons) including captures,
-    `capture_reset`, and `unset_backref_empty`. A three-way Rust `regex`
-    1.13 / Node / regexz harness (`tools/fuzz/rust.py`) adds 54,000
-    comparisons; Node is the semantic arbiter for the few ambiguous
-    alternation cases where Rust's DFA differs from PCRE2/Perl. Benchmark
-    regression gating is in place via `tools/bench/check.py` against
-    `tools/bench/baseline.json`. Extending to PCRE2 and RE2 remains.
+    (`tools/fuzz/run.py`) and the extended engine
+    (`tools/fuzz/extended.py`) including captures, `capture_reset`, and
+    `unset_backref_empty`. A three-way Rust `regex` 1.13 / Node / regexz
+    harness (`tools/fuzz/rust.py`) adds tens of thousands of comparisons
+    per run; Node is the semantic arbiter for the few ambiguous alternation
+    cases where Rust's DFA differs from PCRE2/Perl. A replacement harness
+    (`tools/fuzz/replace.py`) diffs `replaceAll` output against V8.
+    Benchmark regression gating is in place via `tools/bench/check.py`
+    against `tools/bench/baseline.json`, and
+    `.github/workflows/ci.yml` runs format, tests, a bench smoke, and a
+    fuzz smoke on every push. Extending to PCRE2 and RE2 remains (no PCRE2
+    toolchain is available in the current environment).
 16. ~~**`RegexSet` single-pass DFA**~~: done (`set_dfa.zig`). Patterns without
     assertions or extended features share one unanchored subset construction;
     the rest stay on their per-pattern engines.
@@ -472,7 +476,7 @@ For the workloads in `tools/bench/main.zig`, on an idle host:
 - Full match, reused workspace: **≤ 20 ns** for ASCII class patterns
   (achieved: ~8 ns).
 - Qwen tokenizer search: **≥ 200 MiB/s** (achieved: ~508 MiB/s).
-- `replaceAll` `a+`: **≥ 400 MiB/s** (achieved: ~450–480 MiB/s).
+- `replaceAll` `a+`: **≥ 400 MiB/s** (achieved: ~442 MiB/s).
 - Compile xDS-like pattern: **≤ 2 µs** (achieved: ~1.5 µs with
   `std.heap.smp_allocator`; ~3.1–3.9 µs with `page_allocator`).
 - Workspace memory: **≤ 48 bytes/instruction** (achieved: 44).

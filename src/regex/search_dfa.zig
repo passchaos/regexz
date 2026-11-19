@@ -1132,25 +1132,6 @@ fn singleRuneLoop(ins: []const model.Instruction, start: usize, target: usize) b
     return false;
 }
 
-fn loopsBack(ins: []const model.Instruction, start: usize, target: usize) bool {
-    var pc = start;
-    var steps: usize = 0;
-    while (steps < 8) : (steps += 1) {
-        if (pc == target) return true;
-        if (pc >= ins.len) return false;
-        pc = switch (ins[pc]) {
-            .consume => |consume| consume.next,
-            .literal_byte => |literal| literal.next,
-            .literal_rune => |literal| literal.next,
-            .save => |save| save.next,
-            .reset_captures => |reset| reset.next,
-            .star => |star| star.next,
-            else => return false,
-        };
-    }
-    return false;
-}
-
 fn runeAt(input: []const u8, offset: usize) ?struct { value: u21, len: usize } {
     if (offset >= input.len) return null;
     const byte = input[offset];
