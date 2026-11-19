@@ -15,6 +15,7 @@ const backtrack = @import("backtrack.zig");
 const search_dfa = @import("search_dfa.zig");
 const utf8_set = @import("utf8_set.zig");
 const utf8_run_mod = @import("utf8_run.zig");
+const deferred_utf8 = @import("deferred_utf8_run.zig");
 const prefilter = @import("prefilter.zig");
 const shapes = @import("shapes.zig");
 const capture_run_mod = @import("capture_run.zig");
@@ -238,15 +239,10 @@ pub const Workspace = struct {
             .number
         else
             .none;
-        const fast_branch: ?FastBranch = if (program.fast_branch) |plan| blk: {
-            var run_table = try utf8_run_mod.Utf8Run.init(allocator, plan.run);
-            errdefer run_table.deinit(allocator);
-            const prefix: ?utf8_run_mod.Utf8Run = if (plan.prefix) |set| try utf8_run_mod.Utf8Run.init(allocator, set) else null;
-            break :blk .{
-                .prior = prefilter.FirstFilter.init(plan.prior_first),
-                .prefix = prefix,
-                .run = run_table,
-            };
+        const fast_branch: ?FastBranch = if (program.fast_branch) |plan| .{
+            .prior = prefilter.FirstFilter.init(plan.prior_first),
+            .prefix = if (plan.prefix) |set| deferred_utf8.Run.init(set) else null,
+            .run = deferred_utf8.Run.init(plan.run),
         } else null;
         errdefer if (fast_branch) |*value| value.deinit(allocator);
         return .{
@@ -1025,23 +1021,23 @@ pub const Workspace = struct {
         return null;
     }
 
-    fn findFastBranch(self: *Workspace, branch: *const FastBranch, input: []const u8, search_start: usize) ?Match {
+    fn findFastBranch(self: *Workspace, branch: *FastBranch, input: []const u8, search_start: usize) ?Match {
         if (search_start >= input.len) return null;
         if (branch.prior.first.allowsByte(input[search_start])) return null;
         // Greedy optional prefix first: one prefix rune followed by a run.
         if (branch.prefix) |*prefix| {
-            if (prefix.runeAt(input, search_start)) |prefix_len| {
+            if (prefix.runeAt(self.allocator, input, search_start)) |prefix_len| {
                 const next = search_start + prefix_len;
-                if (next < input.len and branch.run.runeAt(input, next) != null) {
-                    const end = branch.run.runEnd(input, next);
+                if (next < input.len and branch.run.runeAt(self.allocator, input, next) != null) {
+                    const end = branch.run.runEnd(self.allocator, input, next);
                     self.slots[0] = search_start;
                     self.slots[1] = end;
                     return .{ .start = search_start, .end = end, .slots = self.slots };
                 }
             }
         }
-        if (branch.run.runeAt(input, search_start) != null) {
-            const end = branch.run.runEnd(input, search_start);
+        if (branch.run.runeAt(self.allocator, input, search_start) != null) {
+            const end = branch.run.runEnd(self.allocator, input, search_start);
             self.slots[0] = search_start;
             self.slots[1] = end;
             return .{ .start = search_start, .end = end, .slots = self.slots };
@@ -1910,8 +1906,8 @@ fn runeLenAt(input: []const u8, offset: usize) usize {
 /// branch alone decides the match, so a dedicated run scan replaces the DFA.
 const FastBranch = struct {
     prior: prefilter.FirstFilter,
-    prefix: ?utf8_run_mod.Utf8Run,
-    run: utf8_run_mod.Utf8Run,
+    prefix: ?deferred_utf8.Run,
+    run: deferred_utf8.Run,
 
     fn deinit(self: *FastBranch, allocator: std.mem.Allocator) void {
         if (self.prefix) |*prefix| prefix.deinit(allocator);

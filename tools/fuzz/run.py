@@ -58,6 +58,7 @@ def generate(case_count: int, seed: int) -> list[dict]:
     inputs += ["a", "b", "ab", "aab", "abc", "a1", "  ", "\n", "\u732b", "\u0394\u03c3", "AaBb"]
     inputs += ["sunday saturday september", "seed suit sail", "STRASSE xx strasse", "x" * 15 + "sunday", "foobax foobar foobaz"]
     inputs += ["alpha bravo whiskey xray", "Δ1σ2Δ", "一1伀0币", "hello一", "abcdefghijZ hello123XYZ aab"]
+    inputs += ["'s 'S foo café 猫。\n"]
     cases = []
     seen = set()
     # Keep capture-of-run shapes represented: quantifying the existing `(a)`
@@ -82,6 +83,7 @@ def generate(case_count: int, seed: int) -> list[dict]:
     seeds += [(pattern, "u") for pattern in [
         "(?:ab)?(?:cd)?(?:ef)?(?:gh)?(?:ij)?Z", "([a-z]+[0-9]+[A-Z]+)", "a*?b*",
     ]]
+    seeds += [("(?:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+", "iu")]
     for pattern, flags in seeds[:case_count]:
         seen.add((pattern, flags))
         cases.append({"pattern": pattern, "flags": flags, "inputs": inputs})
@@ -96,6 +98,11 @@ def generate(case_count: int, seed: int) -> list[dict]:
             continue
         seen.add(key)
         cases.append({"pattern": pattern, "flags": flags, "inputs": inputs})
+    # Legacy JS /i does not fold long s into ASCII word characters.
+    # Keep this Unicode-caseless probe on the explicit Qwen seed.
+    for case in cases:
+        if case["flags"] == "iu" and case["pattern"].startswith("(?:'s|'t|'re|'ve|'m|'ll|'d)|"):
+            case["inputs"] = case["inputs"] + ["'ſ café 猫。\n"]
     return cases
 
 

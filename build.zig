@@ -122,6 +122,7 @@ pub fn build(b: *std.Build) void {
     addRegexBench(b, regexz_mod, target, optimize, "comptime", "Compare generated and runtime matchers with runtime input barriers");
     addRegexBench(b, regexz_mod, target, optimize, "startup", "Measure compilation, workspace construction and cold versus warm matching");
     addRegexBench(b, regexz_mod, target, optimize, "search_startup", "Measure search DFA construction, first searches and warmed calls");
+    addRegexBench(b, regexz_mod, target, optimize, "branch_startup", "Measure dominant branch initialization and cold or warm token passes");
 }
 
 fn addRegexBench(b: *std.Build, regexz_mod: *std.Build.Module, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, name: []const u8, description: []const u8) void {

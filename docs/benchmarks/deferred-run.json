@@ -1,0 +1,1480 @@
+{
+  "baseline": "1579f7c",
+  "platform": "macOS aarch64, Zig 0.16.0 ReleaseFast, SMP allocator",
+  "method": "three alternating before/after executions per suite; branch cases report median of five batches",
+  "executables": {
+    "branch": {
+      "before": {
+        "path": "/private/var/folders/3h/rw6tyryn6ps_mw9bcstc2lfm0000gn/T/regexz-deferred-run-baseline.39hq7t3e/.zig-cache/o/2ecd807b409153388d7509dd4563e1f6/regexz-branch_startup-bench",
+        "sha256": "b7bb47555265ab334d33245cceff6a968558c43dc2603befedcf75c3256a8370"
+      },
+      "after": {
+        "path": "/private/var/folders/3h/rw6tyryn6ps_mw9bcstc2lfm0000gn/T/regexz-deferred-run-prefix.n6ybwvl1/.zig-cache/o/2cbc1ba8acb51404d23976ec683892af/regexz-branch_startup-bench",
+        "sha256": "c72236ec516900cd159c59bab1006f6dd422867e4a166dc84e5c42f8c5fe3a16"
+      }
+    },
+    "main": {
+      "before": {
+        "path": "/private/var/folders/3h/rw6tyryn6ps_mw9bcstc2lfm0000gn/T/regexz-deferred-run-baseline.39hq7t3e/.zig-cache/o/e9ab4f028dd974b8c73270d810dc05c6/regexz-bench",
+        "sha256": "e58eb895caa13c330931fe9ff993529a4ce76aa3975968e00f981447a3e4cc8e"
+      },
+      "after": {
+        "path": "/private/var/folders/3h/rw6tyryn6ps_mw9bcstc2lfm0000gn/T/regexz-deferred-run-prefix.n6ybwvl1/.zig-cache/o/6b784f958481be6bed3ea9ae120c7945/regexz-bench",
+        "sha256": "1a9771d3124e6f0064413d4b104f2269cab5032942613745021d69970759ba96"
+      }
+    }
+  },
+  "medians": {
+    "branch/ASCII token init": {
+      "before": 886032.9,
+      "after": 514.2,
+      "unit": "ns/iter",
+      "speedup": 1723.1289381563593
+    },
+    "branch/ASCII token first": {
+      "before": 886328.8,
+      "after": 476.7,
+      "unit": "ns/iter",
+      "speedup": 1859.301027900147
+    },
+    "branch/ASCII token cold_pass": {
+      "before": 873683.4,
+      "after": 489.6,
+      "unit": "ns/iter",
+      "speedup": 1784.484068627451
+    },
+    "branch/ASCII token warm_first": {
+      "before": 5.5,
+      "after": 7.0,
+      "unit": "ns/iter",
+      "speedup": 0.7857142857142857
+    },
+    "branch/ASCII token warm_pass": {
+      "before": 5.2,
+      "after": 5.1,
+      "unit": "ns/iter",
+      "speedup": 1.019607843137255
+    },
+    "branch/Unicode token init": {
+      "before": 872775.8,
+      "after": 442.9,
+      "unit": "ns/iter",
+      "speedup": 1970.5933619327163
+    },
+    "branch/Unicode token first": {
+      "before": 881532.1,
+      "after": 484.2,
+      "unit": "ns/iter",
+      "speedup": 1820.5950020652622
+    },
+    "branch/Unicode token cold_pass": {
+      "before": 897381.3,
+      "after": 510.4,
+      "unit": "ns/iter",
+      "speedup": 1758.1922021943576
+    },
+    "branch/Unicode token warm_first": {
+      "before": 6.0,
+      "after": 7.3,
+      "unit": "ns/iter",
+      "speedup": 0.8219178082191781
+    },
+    "branch/Unicode token warm_pass": {
+      "before": 6.0,
+      "after": 7.5,
+      "unit": "ns/iter",
+      "speedup": 0.8
+    },
+    "branch/ASCII text init": {
+      "before": 885078.3,
+      "after": 451.7,
+      "unit": "ns/iter",
+      "speedup": 1959.4383440336508
+    },
+    "branch/ASCII text first": {
+      "before": 866960.4,
+      "after": 450.0,
+      "unit": "ns/iter",
+      "speedup": 1926.5786666666668
+    },
+    "branch/ASCII text cold_pass": {
+      "before": 901273.0,
+      "after": 45148.0,
+      "unit": "ns/iter",
+      "speedup": 19.962634003721096
+    },
+    "branch/ASCII text warm_first": {
+      "before": 5.3,
+      "after": 6.8,
+      "unit": "ns/iter",
+      "speedup": 0.7794117647058824
+    },
+    "branch/ASCII text warm_pass": {
+      "before": 37437.0,
+      "after": 39894.3,
+      "unit": "ns/iter",
+      "speedup": 0.9384047345109451
+    },
+    "branch/mixed text init": {
+      "before": 859805.8,
+      "after": 446.7,
+      "unit": "ns/iter",
+      "speedup": 1924.7947168121784
+    },
+    "branch/mixed text first": {
+      "before": 862791.7,
+      "after": 449.2,
+      "unit": "ns/iter",
+      "speedup": 1920.729519145147
+    },
+    "branch/mixed text cold_pass": {
+      "before": 905395.9,
+      "after": 484858.4,
+      "unit": "ns/iter",
+      "speedup": 1.8673408566294818
+    },
+    "branch/mixed text warm_first": {
+      "before": 5.5,
+      "after": 6.0,
+      "unit": "ns/iter",
+      "speedup": 0.9166666666666666
+    },
+    "branch/mixed text warm_pass": {
+      "before": 36676.0,
+      "after": 36954.7,
+      "unit": "ns/iter",
+      "speedup": 0.992458334122588
+    },
+    "branch/CJK text init": {
+      "before": 884235.0,
+      "after": 437.5,
+      "unit": "ns/iter",
+      "speedup": 2021.1085714285714
+    },
+    "branch/CJK text first": {
+      "before": 870755.8,
+      "after": 434636.7,
+      "unit": "ns/iter",
+      "speedup": 2.003410664584928
+    },
+    "branch/CJK text cold_pass": {
+      "before": 1119254.2,
+      "after": 1096812.5,
+      "unit": "ns/iter",
+      "speedup": 1.020460835375235
+    },
+    "branch/CJK text warm_first": {
+      "before": 9.5,
+      "after": 10.1,
+      "unit": "ns/iter",
+      "speedup": 0.9405940594059407
+    },
+    "branch/CJK text warm_pass": {
+      "before": 165606.8,
+      "after": 173245.3,
+      "unit": "ns/iter",
+      "speedup": 0.9559093378002174
+    },
+    "main/compile xDS-like": {
+      "before": 3619.1,
+      "after": 3532.1,
+      "unit": "ns/iter",
+      "speedup": 1.024631239206138
+    },
+    "main/compile xDS-like (smp allocator)": {
+      "before": 1927.9,
+      "after": 1981.2,
+      "unit": "ns/iter",
+      "speedup": 0.9730971128608924
+    },
+    "main/fullmatch literal (warm Regex API)": {
+      "before": 1.9,
+      "after": 2.0,
+      "unit": "ns/iter",
+      "speedup": 0.95
+    },
+    "main/fullmatch literal (reuse)": {
+      "before": 1.7,
+      "after": 1.7,
+      "unit": "ns/iter",
+      "speedup": 1.0
+    },
+    "main/fullmatch class (warm Regex API)": {
+      "before": 5.8,
+      "after": 5.9,
+      "unit": "ns/iter",
+      "speedup": 0.983050847457627
+    },
+    "main/fullmatch class (reuse)": {
+      "before": 4.2,
+      "after": 4.5,
+      "unit": "ns/iter",
+      "speedup": 0.9333333333333333
+    },
+    "main/fullmatch xDS-like (warm Regex API)": {
+      "before": 9.8,
+      "after": 10.6,
+      "unit": "ns/iter",
+      "speedup": 0.9245283018867926
+    },
+    "main/fullmatch xDS-like (reuse)": {
+      "before": 8.4,
+      "after": 8.8,
+      "unit": "ns/iter",
+      "speedup": 0.9545454545454545
+    },
+    "main/fullmatch unicode (reuse)": {
+      "before": 9.4,
+      "after": 9.1,
+      "unit": "ns/iter",
+      "speedup": 1.032967032967033
+    },
+    "main/fullmatch (?i) literal (reuse)": {
+      "before": 4.7,
+      "after": 4.8,
+      "unit": "ns/iter",
+      "speedup": 0.9791666666666667
+    },
+    "main/comptime fullmatch literal": {
+      "before": 0.5,
+      "after": 0.5,
+      "unit": "ns/iter",
+      "speedup": 1.0
+    },
+    "main/comptime fullmatch class": {
+      "before": 3.8,
+      "after": 3.9,
+      "unit": "ns/iter",
+      "speedup": 0.9743589743589743
+    },
+    "main/runtime input literal control": {
+      "before": 1.8,
+      "after": 1.7,
+      "unit": "ns/iter",
+      "speedup": 1.0588235294117647
+    },
+    "main/runtime input class control": {
+      "before": 5.6,
+      "after": 5.1,
+      "unit": "ns/iter",
+      "speedup": 1.0980392156862746
+    },
+    "main/fullmatch backref (Regex)": {
+      "before": 18.6,
+      "after": 18.2,
+      "unit": "ns/iter",
+      "speedup": 1.0219780219780221
+    },
+    "main/fullmatch atomic (Regex)": {
+      "before": 23.7,
+      "after": 24.3,
+      "unit": "ns/iter",
+      "speedup": 0.9753086419753085
+    },
+    "main/find Qwen tokenizer": {
+      "before": 50823.3,
+      "after": 52046.7,
+      "unit": "ns/iter",
+      "speedup": 0.9764941869513342
+    },
+    "main/find capture email tokens": {
+      "before": 12705.0,
+      "after": 13011.7,
+      "unit": "ns/iter",
+      "speedup": 0.9764289062920294
+    },
+    "main/find ASCII run scan": {
+      "before": 16039.6,
+      "after": 15939.2,
+      "unit": "ns/iter",
+      "speedup": 1.0062989359566352
+    },
+    "main/find word space word": {
+      "before": 20572.9,
+      "after": 20082.5,
+      "unit": "ns/iter",
+      "speedup": 1.02441927050915
+    },
+    "main/find capture no-match": {
+      "before": 2214.6,
+      "after": 1916.7,
+      "unit": "ns/iter",
+      "speedup": 1.1554233839411487
+    },
+    "main/find loop-exit no-match": {
+      "before": 3864.6,
+      "after": 3955.2,
+      "unit": "ns/iter",
+      "speedup": 0.9770934466019418
+    },
+    "main/find extended no-match": {
+      "before": 2057.4,
+      "after": 1964.1,
+      "unit": "ns/iter",
+      "speedup": 1.047502672979991
+    },
+    "main/find suffix no-match": {
+      "before": 3753.5,
+      "after": 3695.0,
+      "unit": "ns/iter",
+      "speedup": 1.015832205683356
+    },
+    "main/find byte escape scan": {
+      "before": 14.2,
+      "after": 14.2,
+      "unit": "ns/iter",
+      "speedup": 1.0
+    },
+    "main/find shared-prefix no-match": {
+      "before": 2331.2,
+      "after": 2330.9,
+      "unit": "ns/iter",
+      "speedup": 1.000128705650178
+    },
+    "main/find CJK tokenizer": {
+      "before": 172155.0,
+      "after": 179635.0,
+      "unit": "ns/iter",
+      "speedup": 0.9583600077935814
+    },
+    "main/find CJK tokenizer (no lookahead)": {
+      "before": 162649.2,
+      "after": 178000.8,
+      "unit": "ns/iter",
+      "speedup": 0.9137554437957583
+    },
+    "main/find Han class scan": {
+      "before": 124545.8,
+      "after": 131971.7,
+      "unit": "ns/iter",
+      "speedup": 0.9437311181109282
+    },
+    "main/fullmatch Han class (191 KiB)": {
+      "before": 51154.2,
+      "after": 51133.3,
+      "unit": "ns/iter",
+      "speedup": 1.0004087355989149
+    },
+    "main/find JSON string literal": {
+      "before": 18068.3,
+      "after": 18326.7,
+      "unit": "ns/iter",
+      "speedup": 0.985900353036826
+    },
+    "main/find HTML tag": {
+      "before": 122201.9,
+      "after": 119667.5,
+      "unit": "ns/iter",
+      "speedup": 1.0211786825997033
+    },
+    "main/find URL": {
+      "before": 80528.3,
+      "after": 79067.5,
+      "unit": "ns/iter",
+      "speedup": 1.0184753533373383
+    },
+    "main/compile Qwen tokenizer (page)": {
+      "before": 249155.1,
+      "after": 252115.8,
+      "unit": "ns/iter",
+      "speedup": 0.9882565868541362
+    },
+    "main/compile Qwen tokenizer (smp)": {
+      "before": 243628.6,
+      "after": 239818.6,
+      "unit": "ns/iter",
+      "speedup": 1.0158870079301605
+    },
+    "main/split whitespace (22 KiB)": {
+      "before": 36443.3,
+      "after": 38361.0,
+      "unit": "ns/iter",
+      "speedup": 0.9500091238497433
+    },
+    "main/find key-value key": {
+      "before": 33147.1,
+      "after": 31172.7,
+      "unit": "ns/iter",
+      "speedup": 1.0633374715696746
+    },
+    "main/find JSON number": {
+      "before": 26212.3,
+      "after": 27149.6,
+      "unit": "ns/iter",
+      "speedup": 0.96547647110823
+    },
+    "main/find trailing spaces": {
+      "before": 3.3,
+      "after": 3.5,
+      "unit": "ns/iter",
+      "speedup": 0.9428571428571428
+    },
+    "main/find word boundary": {
+      "before": 62433.5,
+      "after": 61112.9,
+      "unit": "ns/iter",
+      "speedup": 1.0216091856220209
+    },
+    "main/find digits": {
+      "before": 23872.3,
+      "after": 24954.8,
+      "unit": "ns/iter",
+      "speedup": 0.9566215718018177
+    },
+    "main/fullmatch ASCII class (216 KiB)": {
+      "before": 51884.2,
+      "after": 51958.3,
+      "unit": "ns/iter",
+      "speedup": 0.99857385634249
+    },
+    "main/fullmatch ASCII loop (216 KiB)": {
+      "before": 73108.3,
+      "after": 77818.3,
+      "unit": "ns/iter",
+      "speedup": 0.9394743909851538
+    },
+    "main/find line (?m)^.*$": {
+      "before": 31252.5,
+      "after": 32262.5,
+      "unit": "ns/iter",
+      "speedup": 0.9686943045331267
+    },
+    "main/stream [a-z]+ (216 KiB, 4 KiB chunks)": {
+      "before": 159004.2,
+      "after": 156162.5,
+      "unit": "ns/iter",
+      "speedup": 1.0181970703594014
+    },
+    "main/stream [a-z]* (216 KiB, 4 KiB chunks)": {
+      "before": 191033.3,
+      "after": 182768.8,
+      "unit": "ns/iter",
+      "speedup": 1.0452183304809135
+    },
+    "main/stream [a-z]+ [a-z]+ (216 KiB, 4 KiB chunks)": {
+      "before": 286916.7,
+      "after": 282781.3,
+      "unit": "ns/iter",
+      "speedup": 1.0146240221683684
+    },
+    "main/stream Han chain (191 KiB, 4 KiB chunks)": {
+      "before": 414262.5,
+      "after": 411920.9,
+      "unit": "ns/iter",
+      "speedup": 1.0056845865310549
+    },
+    "main/RegexSet 9 no-match patterns": {
+      "before": 36773.8,
+      "after": 36051.7,
+      "unit": "ns/iter",
+      "speedup": 1.0200295686472485
+    },
+    "main/find xDS-like after 4KB prefix": {
+      "before": 282.2,
+      "after": 242.5,
+      "unit": "ns/iter",
+      "speedup": 1.1637113402061856
+    },
+    "main/find literal after 4KB prefix": {
+      "before": 135.3,
+      "after": 88.4,
+      "unit": "ns/iter",
+      "speedup": 1.5305429864253395
+    },
+    "main/find multi-literal after 4KB prefix": {
+      "before": 299.5,
+      "after": 299.1,
+      "unit": "ns/iter",
+      "speedup": 1.0013373453694416
+    },
+    "main/find large alternation (24 literals) no-match": {
+      "before": 1965.1,
+      "after": 1962.4,
+      "unit": "ns/iter",
+      "speedup": 1.00137586628618
+    },
+    "main/find (?i) literal no-match": {
+      "before": 1441.4,
+      "after": 1491.9,
+      "unit": "ns/iter",
+      "speedup": 0.9661505462832629
+    },
+    "main/replaceAll a+ -> x": {
+      "before": 38929.6,
+      "after": 42838.1,
+      "unit": "ns/iter",
+      "speedup": 0.9087611261937387
+    },
+    "main/Workspace.init Qwen program": {
+      "before": 50.2,
+      "after": 51.0,
+      "unit": "ns/iter",
+      "speedup": 0.9843137254901961
+    }
+  },
+  "rounds": {
+    "branch": [
+      {
+        "order": [
+          "before",
+          "after"
+        ],
+        "before": {
+          "branch/ASCII token init": 870027.1,
+          "branch/ASCII token first": 864671.7,
+          "branch/ASCII token cold_pass": 858433.4,
+          "branch/ASCII token warm_first": 5.4,
+          "branch/ASCII token warm_pass": 5.2,
+          "branch/Unicode token init": 872775.8,
+          "branch/Unicode token first": 881532.1,
+          "branch/Unicode token cold_pass": 893104.2,
+          "branch/Unicode token warm_first": 6.4,
+          "branch/Unicode token warm_pass": 6.0,
+          "branch/ASCII text init": 864208.8,
+          "branch/ASCII text first": 866960.4,
+          "branch/ASCII text cold_pass": 897631.3,
+          "branch/ASCII text warm_first": 5.3,
+          "branch/ASCII text warm_pass": 40070.3,
+          "branch/mixed text init": 859805.8,
+          "branch/mixed text first": 856747.1,
+          "branch/mixed text cold_pass": 905395.9,
+          "branch/mixed text warm_first": 5.4,
+          "branch/mixed text warm_pass": 44081.8,
+          "branch/CJK text init": 860957.5,
+          "branch/CJK text first": 878297.1,
+          "branch/CJK text cold_pass": 1338487.5,
+          "branch/CJK text warm_first": 9.5,
+          "branch/CJK text warm_pass": 165606.8
+        },
+        "after": {
+          "branch/ASCII token init": 617.9,
+          "branch/ASCII token first": 476.7,
+          "branch/ASCII token cold_pass": 618.8,
+          "branch/ASCII token warm_first": 7.4,
+          "branch/ASCII token warm_pass": 5.2,
+          "branch/Unicode token init": 442.9,
+          "branch/Unicode token first": 696.3,
+          "branch/Unicode token cold_pass": 514.6,
+          "branch/Unicode token warm_first": 8.6,
+          "branch/Unicode token warm_pass": 9.1,
+          "branch/ASCII text init": 683.3,
+          "branch/ASCII text first": 694.2,
+          "branch/ASCII text cold_pass": 49802.1,
+          "branch/ASCII text warm_first": 7.6,
+          "branch/ASCII text warm_pass": 43375.5,
+          "branch/mixed text init": 489.6,
+          "branch/mixed text first": 620.8,
+          "branch/mixed text cold_pass": 484858.4,
+          "branch/mixed text warm_first": 6.0,
+          "branch/mixed text warm_pass": 42772.4,
+          "branch/CJK text init": 437.5,
+          "branch/CJK text first": 448038.8,
+          "branch/CJK text cold_pass": 1096812.5,
+          "branch/CJK text warm_first": 10.0,
+          "branch/CJK text warm_pass": 181124.5
+        }
+      },
+      {
+        "order": [
+          "after",
+          "before"
+        ],
+        "after": {
+          "branch/ASCII token init": 450.0,
+          "branch/ASCII token first": 502.5,
+          "branch/ASCII token cold_pass": 489.6,
+          "branch/ASCII token warm_first": 6.8,
+          "branch/ASCII token warm_pass": 5.0,
+          "branch/Unicode token init": 431.7,
+          "branch/Unicode token first": 467.5,
+          "branch/Unicode token cold_pass": 470.9,
+          "branch/Unicode token warm_first": 6.9,
+          "branch/Unicode token warm_pass": 6.8,
+          "branch/ASCII text init": 451.7,
+          "branch/ASCII text first": 435.0,
+          "branch/ASCII text cold_pass": 45148.0,
+          "branch/ASCII text warm_first": 6.4,
+          "branch/ASCII text warm_pass": 38577.6,
+          "branch/mixed text init": 431.7,
+          "branch/mixed text first": 436.3,
+          "branch/mixed text cold_pass": 486262.5,
+          "branch/mixed text warm_first": 6.0,
+          "branch/mixed text warm_pass": 36954.7,
+          "branch/CJK text init": 488.3,
+          "branch/CJK text first": 434636.7,
+          "branch/CJK text cold_pass": 1113075.0,
+          "branch/CJK text warm_first": 10.1,
+          "branch/CJK text warm_pass": 173245.3
+        },
+        "before": {
+          "branch/ASCII token init": 913719.2,
+          "branch/ASCII token first": 921122.1,
+          "branch/ASCII token cold_pass": 945733.4,
+          "branch/ASCII token warm_first": 5.5,
+          "branch/ASCII token warm_pass": 5.2,
+          "branch/Unicode token init": 946238.8,
+          "branch/Unicode token first": 935630.0,
+          "branch/Unicode token cold_pass": 897381.3,
+          "branch/Unicode token warm_first": 6.0,
+          "branch/Unicode token warm_pass": 5.9,
+          "branch/ASCII text init": 903696.3,
+          "branch/ASCII text first": 917495.4,
+          "branch/ASCII text cold_pass": 971781.3,
+          "branch/ASCII text warm_first": 5.3,
+          "branch/ASCII text warm_pass": 37437.0,
+          "branch/mixed text init": 947719.6,
+          "branch/mixed text first": 895068.3,
+          "branch/mixed text cold_pass": 928193.8,
+          "branch/mixed text warm_first": 5.5,
+          "branch/mixed text warm_pass": 36676.0,
+          "branch/CJK text init": 884235.0,
+          "branch/CJK text first": 865132.1,
+          "branch/CJK text cold_pass": 1119254.2,
+          "branch/CJK text warm_first": 9.3,
+          "branch/CJK text warm_pass": 180853.6
+        }
+      },
+      {
+        "order": [
+          "before",
+          "after"
+        ],
+        "before": {
+          "branch/ASCII token init": 886032.9,
+          "branch/ASCII token first": 886328.8,
+          "branch/ASCII token cold_pass": 873683.4,
+          "branch/ASCII token warm_first": 5.5,
+          "branch/ASCII token warm_pass": 5.2,
+          "branch/Unicode token init": 868716.3,
+          "branch/Unicode token first": 861962.9,
+          "branch/Unicode token cold_pass": 932200.0,
+          "branch/Unicode token warm_first": 6.0,
+          "branch/Unicode token warm_pass": 6.0,
+          "branch/ASCII text init": 885078.3,
+          "branch/ASCII text first": 847012.9,
+          "branch/ASCII text cold_pass": 901273.0,
+          "branch/ASCII text warm_first": 5.3,
+          "branch/ASCII text warm_pass": 35256.8,
+          "branch/mixed text init": 857494.6,
+          "branch/mixed text first": 862791.7,
+          "branch/mixed text cold_pass": 901081.3,
+          "branch/mixed text warm_first": 5.5,
+          "branch/mixed text warm_pass": 35252.6,
+          "branch/CJK text init": 889565.8,
+          "branch/CJK text first": 870755.8,
+          "branch/CJK text cold_pass": 1026497.9,
+          "branch/CJK text warm_first": 10.0,
+          "branch/CJK text warm_pass": 162605.7
+        },
+        "after": {
+          "branch/ASCII token init": 514.2,
+          "branch/ASCII token first": 450.0,
+          "branch/ASCII token cold_pass": 456.3,
+          "branch/ASCII token warm_first": 7.0,
+          "branch/ASCII token warm_pass": 5.1,
+          "branch/Unicode token init": 458.3,
+          "branch/Unicode token first": 484.2,
+          "branch/Unicode token cold_pass": 510.4,
+          "branch/Unicode token warm_first": 7.3,
+          "branch/Unicode token warm_pass": 7.5,
+          "branch/ASCII text init": 449.2,
+          "branch/ASCII text first": 450.0,
+          "branch/ASCII text cold_pass": 44193.8,
+          "branch/ASCII text warm_first": 6.8,
+          "branch/ASCII text warm_pass": 39894.3,
+          "branch/mixed text init": 446.7,
+          "branch/mixed text first": 449.2,
+          "branch/mixed text cold_pass": 467837.5,
+          "branch/mixed text warm_first": 6.0,
+          "branch/mixed text warm_pass": 36127.1,
+          "branch/CJK text init": 435.8,
+          "branch/CJK text first": 419220.8,
+          "branch/CJK text cold_pass": 1057989.6,
+          "branch/CJK text warm_first": 10.1,
+          "branch/CJK text warm_pass": 172075.0
+        }
+      }
+    ],
+    "main": [
+      {
+        "order": [
+          "before",
+          "after"
+        ],
+        "before": {
+          "main/compile xDS-like": 3619.1,
+          "main/compile xDS-like (smp allocator)": 1965.9,
+          "main/fullmatch literal (warm Regex API)": 1.9,
+          "main/fullmatch literal (reuse)": 1.4,
+          "main/fullmatch class (warm Regex API)": 5.8,
+          "main/fullmatch class (reuse)": 4.2,
+          "main/fullmatch xDS-like (warm Regex API)": 9.8,
+          "main/fullmatch xDS-like (reuse)": 8.4,
+          "main/fullmatch unicode (reuse)": 9.4,
+          "main/fullmatch (?i) literal (reuse)": 4.8,
+          "main/comptime fullmatch literal": 0.5,
+          "main/comptime fullmatch class": 5.0,
+          "main/runtime input literal control": 2.3,
+          "main/runtime input class control": 5.7,
+          "main/fullmatch backref (Regex)": 23.1,
+          "main/fullmatch atomic (Regex)": 24.6,
+          "main/find Qwen tokenizer": 60047.5,
+          "main/find capture email tokens": 15428.8,
+          "main/find ASCII run scan": 17042.5,
+          "main/find word space word": 21702.1,
+          "main/find capture no-match": 2377.1,
+          "main/find loop-exit no-match": 4209.2,
+          "main/find extended no-match": 2124.3,
+          "main/find suffix no-match": 3817.1,
+          "main/find byte escape scan": 14.2,
+          "main/find shared-prefix no-match": 2473.7,
+          "main/find CJK tokenizer": 172155.0,
+          "main/find CJK tokenizer (no lookahead)": 165092.5,
+          "main/find Han class scan": 118416.7,
+          "main/fullmatch Han class (191 KiB)": 49415.8,
+          "main/find JSON string literal": 18068.3,
+          "main/find HTML tag": 117965.0,
+          "main/find URL": 72015.2,
+          "main/compile Qwen tokenizer (page)": 244778.5,
+          "main/compile Qwen tokenizer (smp)": 243628.6,
+          "main/split whitespace (22 KiB)": 36443.3,
+          "main/find key-value key": 33317.3,
+          "main/find JSON number": 26851.9,
+          "main/find trailing spaces": 3.3,
+          "main/find word boundary": 62016.7,
+          "main/find digits": 22775.6,
+          "main/fullmatch ASCII class (216 KiB)": 51884.2,
+          "main/fullmatch ASCII loop (216 KiB)": 73108.3,
+          "main/find line (?m)^.*$": 31180.8,
+          "main/stream [a-z]+ (216 KiB, 4 KiB chunks)": 159004.2,
+          "main/stream [a-z]* (216 KiB, 4 KiB chunks)": 180462.5,
+          "main/stream [a-z]+ [a-z]+ (216 KiB, 4 KiB chunks)": 268133.4,
+          "main/stream Han chain (191 KiB, 4 KiB chunks)": 383585.5,
+          "main/RegexSet 9 no-match patterns": 38634.0,
+          "main/find xDS-like after 4KB prefix": 310.2,
+          "main/find literal after 4KB prefix": 134.8,
+          "main/find multi-literal after 4KB prefix": 327.4,
+          "main/find large alternation (24 literals) no-match": 1965.1,
+          "main/find (?i) literal no-match": 1431.1,
+          "main/replaceAll a+ -> x": 38929.6,
+          "main/Workspace.init Qwen program": 50.1
+        },
+        "after": {
+          "main/compile xDS-like": 3426.0,
+          "main/compile xDS-like (smp allocator)": 1922.6,
+          "main/fullmatch literal (warm Regex API)": 1.9,
+          "main/fullmatch literal (reuse)": 1.7,
+          "main/fullmatch class (warm Regex API)": 6.1,
+          "main/fullmatch class (reuse)": 4.5,
+          "main/fullmatch xDS-like (warm Regex API)": 10.5,
+          "main/fullmatch xDS-like (reuse)": 8.8,
+          "main/fullmatch unicode (reuse)": 8.5,
+          "main/fullmatch (?i) literal (reuse)": 4.8,
+          "main/comptime fullmatch literal": 0.5,
+          "main/comptime fullmatch class": 3.8,
+          "main/runtime input literal control": 1.7,
+          "main/runtime input class control": 4.8,
+          "main/fullmatch backref (Regex)": 17.8,
+          "main/fullmatch atomic (Regex)": 23.5,
+          "main/find Qwen tokenizer": 48478.3,
+          "main/find capture email tokens": 12907.5,
+          "main/find ASCII run scan": 15187.9,
+          "main/find word space word": 19971.7,
+          "main/find capture no-match": 1902.1,
+          "main/find loop-exit no-match": 3687.5,
+          "main/find extended no-match": 1903.6,
+          "main/find suffix no-match": 3695.0,
+          "main/find byte escape scan": 12.5,
+          "main/find shared-prefix no-match": 2204.3,
+          "main/find CJK tokenizer": 188962.5,
+          "main/find CJK tokenizer (no lookahead)": 181862.5,
+          "main/find Han class scan": 120658.3,
+          "main/fullmatch Han class (191 KiB)": 50281.7,
+          "main/find JSON string literal": 17724.8,
+          "main/find HTML tag": 118209.2,
+          "main/find URL": 77564.2,
+          "main/compile Qwen tokenizer (page)": 252115.8,
+          "main/compile Qwen tokenizer (smp)": 239241.1,
+          "main/split whitespace (22 KiB)": 38361.0,
+          "main/find key-value key": 31172.7,
+          "main/find JSON number": 27149.6,
+          "main/find trailing spaces": 3.8,
+          "main/find word boundary": 61133.3,
+          "main/find digits": 26063.8,
+          "main/fullmatch ASCII class (216 KiB)": 51958.3,
+          "main/fullmatch ASCII loop (216 KiB)": 77818.3,
+          "main/find line (?m)^.*$": 32262.5,
+          "main/stream [a-z]+ (216 KiB, 4 KiB chunks)": 160912.5,
+          "main/stream [a-z]* (216 KiB, 4 KiB chunks)": 193745.8,
+          "main/stream [a-z]+ [a-z]+ (216 KiB, 4 KiB chunks)": 288793.8,
+          "main/stream Han chain (191 KiB, 4 KiB chunks)": 421335.4,
+          "main/RegexSet 9 no-match patterns": 43454.0,
+          "main/find xDS-like after 4KB prefix": 262.9,
+          "main/find literal after 4KB prefix": 86.8,
+          "main/find multi-literal after 4KB prefix": 421.4,
+          "main/find large alternation (24 literals) no-match": 1974.7,
+          "main/find (?i) literal no-match": 1491.9,
+          "main/replaceAll a+ -> x": 43800.8,
+          "main/Workspace.init Qwen program": 51.9
+        }
+      },
+      {
+        "order": [
+          "after",
+          "before"
+        ],
+        "after": {
+          "main/compile xDS-like": 3532.1,
+          "main/compile xDS-like (smp allocator)": 1995.7,
+          "main/fullmatch literal (warm Regex API)": 2.0,
+          "main/fullmatch literal (reuse)": 1.7,
+          "main/fullmatch class (warm Regex API)": 5.9,
+          "main/fullmatch class (reuse)": 4.6,
+          "main/fullmatch xDS-like (warm Regex API)": 10.6,
+          "main/fullmatch xDS-like (reuse)": 8.2,
+          "main/fullmatch unicode (reuse)": 9.1,
+          "main/fullmatch (?i) literal (reuse)": 4.7,
+          "main/comptime fullmatch literal": 0.5,
+          "main/comptime fullmatch class": 3.9,
+          "main/runtime input literal control": 1.5,
+          "main/runtime input class control": 5.1,
+          "main/fullmatch backref (Regex)": 18.2,
+          "main/fullmatch atomic (Regex)": 24.3,
+          "main/find Qwen tokenizer": 52046.7,
+          "main/find capture email tokens": 13011.7,
+          "main/find ASCII run scan": 15939.2,
+          "main/find word space word": 20082.5,
+          "main/find capture no-match": 1916.7,
+          "main/find loop-exit no-match": 3955.2,
+          "main/find extended no-match": 2019.0,
+          "main/find suffix no-match": 3527.9,
+          "main/find byte escape scan": 14.2,
+          "main/find shared-prefix no-match": 2330.9,
+          "main/find CJK tokenizer": 179635.0,
+          "main/find CJK tokenizer (no lookahead)": 178000.8,
+          "main/find Han class scan": 131971.7,
+          "main/fullmatch Han class (191 KiB)": 51133.3,
+          "main/find JSON string literal": 18326.7,
+          "main/find HTML tag": 119667.5,
+          "main/find URL": 79067.5,
+          "main/compile Qwen tokenizer (page)": 256163.2,
+          "main/compile Qwen tokenizer (smp)": 257736.8,
+          "main/split whitespace (22 KiB)": 38680.0,
+          "main/find key-value key": 30747.5,
+          "main/find JSON number": 27410.8,
+          "main/find trailing spaces": 3.3,
+          "main/find word boundary": 61112.9,
+          "main/find digits": 24954.8,
+          "main/fullmatch ASCII class (216 KiB)": 55223.3,
+          "main/fullmatch ASCII loop (216 KiB)": 78815.0,
+          "main/find line (?m)^.*$": 32460.0,
+          "main/stream [a-z]+ (216 KiB, 4 KiB chunks)": 156162.5,
+          "main/stream [a-z]* (216 KiB, 4 KiB chunks)": 182768.8,
+          "main/stream [a-z]+ [a-z]+ (216 KiB, 4 KiB chunks)": 282781.3,
+          "main/stream Han chain (191 KiB, 4 KiB chunks)": 406079.2,
+          "main/RegexSet 9 no-match patterns": 36051.7,
+          "main/find xDS-like after 4KB prefix": 242.5,
+          "main/find literal after 4KB prefix": 91.7,
+          "main/find multi-literal after 4KB prefix": 299.1,
+          "main/find large alternation (24 literals) no-match": 1830.1,
+          "main/find (?i) literal no-match": 1472.9,
+          "main/replaceAll a+ -> x": 42338.3,
+          "main/Workspace.init Qwen program": 51.0
+        },
+        "before": {
+          "main/compile xDS-like": 3553.0,
+          "main/compile xDS-like (smp allocator)": 1921.1,
+          "main/fullmatch literal (warm Regex API)": 2.0,
+          "main/fullmatch literal (reuse)": 1.7,
+          "main/fullmatch class (warm Regex API)": 5.7,
+          "main/fullmatch class (reuse)": 4.2,
+          "main/fullmatch xDS-like (warm Regex API)": 11.5,
+          "main/fullmatch xDS-like (reuse)": 10.0,
+          "main/fullmatch unicode (reuse)": 10.3,
+          "main/fullmatch (?i) literal (reuse)": 4.7,
+          "main/comptime fullmatch literal": 0.5,
+          "main/comptime fullmatch class": 3.6,
+          "main/runtime input literal control": 1.7,
+          "main/runtime input class control": 4.4,
+          "main/fullmatch backref (Regex)": 18.6,
+          "main/fullmatch atomic (Regex)": 23.7,
+          "main/find Qwen tokenizer": 50823.3,
+          "main/find capture email tokens": 12705.0,
+          "main/find ASCII run scan": 16039.6,
+          "main/find word space word": 20572.9,
+          "main/find capture no-match": 2214.6,
+          "main/find loop-exit no-match": 3827.1,
+          "main/find extended no-match": 2057.4,
+          "main/find suffix no-match": 3753.5,
+          "main/find byte escape scan": 14.2,
+          "main/find shared-prefix no-match": 2331.2,
+          "main/find CJK tokenizer": 173520.0,
+          "main/find CJK tokenizer (no lookahead)": 162649.2,
+          "main/find Han class scan": 124545.8,
+          "main/fullmatch Han class (191 KiB)": 57321.7,
+          "main/find JSON string literal": 18421.7,
+          "main/find HTML tag": 122201.9,
+          "main/find URL": 80528.3,
+          "main/compile Qwen tokenizer (page)": 257884.7,
+          "main/compile Qwen tokenizer (smp)": 251849.4,
+          "main/split whitespace (22 KiB)": 40295.2,
+          "main/find key-value key": 33147.1,
+          "main/find JSON number": 26212.3,
+          "main/find trailing spaces": 4.0,
+          "main/find word boundary": 63608.8,
+          "main/find digits": 23872.3,
+          "main/fullmatch ASCII class (216 KiB)": 52495.0,
+          "main/fullmatch ASCII loop (216 KiB)": 76384.2,
+          "main/find line (?m)^.*$": 34188.3,
+          "main/stream [a-z]+ (216 KiB, 4 KiB chunks)": 167591.7,
+          "main/stream [a-z]* (216 KiB, 4 KiB chunks)": 230143.8,
+          "main/stream [a-z]+ [a-z]+ (216 KiB, 4 KiB chunks)": 286916.7,
+          "main/stream Han chain (191 KiB, 4 KiB chunks)": 418887.5,
+          "main/RegexSet 9 no-match patterns": 36773.8,
+          "main/find xDS-like after 4KB prefix": 282.2,
+          "main/find literal after 4KB prefix": 141.5,
+          "main/find multi-literal after 4KB prefix": 299.5,
+          "main/find large alternation (24 literals) no-match": 2004.0,
+          "main/find (?i) literal no-match": 1482.7,
+          "main/replaceAll a+ -> x": 43392.3,
+          "main/Workspace.init Qwen program": 54.0
+        }
+      },
+      {
+        "order": [
+          "before",
+          "after"
+        ],
+        "before": {
+          "main/compile xDS-like": 3785.7,
+          "main/compile xDS-like (smp allocator)": 1927.9,
+          "main/fullmatch literal (warm Regex API)": 1.9,
+          "main/fullmatch literal (reuse)": 1.7,
+          "main/fullmatch class (warm Regex API)": 6.3,
+          "main/fullmatch class (reuse)": 4.3,
+          "main/fullmatch xDS-like (warm Regex API)": 9.4,
+          "main/fullmatch xDS-like (reuse)": 8.0,
+          "main/fullmatch unicode (reuse)": 9.2,
+          "main/fullmatch (?i) literal (reuse)": 4.5,
+          "main/comptime fullmatch literal": 0.5,
+          "main/comptime fullmatch class": 3.8,
+          "main/runtime input literal control": 1.8,
+          "main/runtime input class control": 5.6,
+          "main/fullmatch backref (Regex)": 18.3,
+          "main/fullmatch atomic (Regex)": 23.6,
+          "main/find Qwen tokenizer": 48524.2,
+          "main/find capture email tokens": 12207.5,
+          "main/find ASCII run scan": 14607.5,
+          "main/find word space word": 19967.1,
+          "main/find capture no-match": 2179.2,
+          "main/find loop-exit no-match": 3864.6,
+          "main/find extended no-match": 2037.4,
+          "main/find suffix no-match": 3705.4,
+          "main/find byte escape scan": 12.5,
+          "main/find shared-prefix no-match": 1979.9,
+          "main/find CJK tokenizer": 160749.2,
+          "main/find CJK tokenizer (no lookahead)": 156994.2,
+          "main/find Han class scan": 125137.5,
+          "main/fullmatch Han class (191 KiB)": 51154.2,
+          "main/find JSON string literal": 17936.7,
+          "main/find HTML tag": 122945.4,
+          "main/find URL": 81568.1,
+          "main/compile Qwen tokenizer (page)": 249155.1,
+          "main/compile Qwen tokenizer (smp)": 241456.3,
+          "main/split whitespace (22 KiB)": 36303.3,
+          "main/find key-value key": 32916.9,
+          "main/find JSON number": 26193.3,
+          "main/find trailing spaces": 3.3,
+          "main/find word boundary": 62433.5,
+          "main/find digits": 24752.9,
+          "main/fullmatch ASCII class (216 KiB)": 51677.5,
+          "main/fullmatch ASCII loop (216 KiB)": 72038.3,
+          "main/find line (?m)^.*$": 31252.5,
+          "main/stream [a-z]+ (216 KiB, 4 KiB chunks)": 157656.3,
+          "main/stream [a-z]* (216 KiB, 4 KiB chunks)": 191033.3,
+          "main/stream [a-z]+ [a-z]+ (216 KiB, 4 KiB chunks)": 297204.2,
+          "main/stream Han chain (191 KiB, 4 KiB chunks)": 414262.5,
+          "main/RegexSet 9 no-match patterns": 36351.3,
+          "main/find xDS-like after 4KB prefix": 267.8,
+          "main/find literal after 4KB prefix": 135.3,
+          "main/find multi-literal after 4KB prefix": 297.8,
+          "main/find large alternation (24 literals) no-match": 1938.8,
+          "main/find (?i) literal no-match": 1441.4,
+          "main/replaceAll a+ -> x": 38615.2,
+          "main/Workspace.init Qwen program": 50.2
+        },
+        "after": {
+          "main/compile xDS-like": 3547.4,
+          "main/compile xDS-like (smp allocator)": 1981.2,
+          "main/fullmatch literal (warm Regex API)": 2.2,
+          "main/fullmatch literal (reuse)": 3.8,
+          "main/fullmatch class (warm Regex API)": 5.4,
+          "main/fullmatch class (reuse)": 4.2,
+          "main/fullmatch xDS-like (warm Regex API)": 11.3,
+          "main/fullmatch xDS-like (reuse)": 8.8,
+          "main/fullmatch unicode (reuse)": 10.0,
+          "main/fullmatch (?i) literal (reuse)": 5.0,
+          "main/comptime fullmatch literal": 0.5,
+          "main/comptime fullmatch class": 4.5,
+          "main/runtime input literal control": 1.7,
+          "main/runtime input class control": 5.3,
+          "main/fullmatch backref (Regex)": 18.7,
+          "main/fullmatch atomic (Regex)": 24.7,
+          "main/find Qwen tokenizer": 55955.0,
+          "main/find capture email tokens": 13513.8,
+          "main/find ASCII run scan": 16067.5,
+          "main/find word space word": 20862.1,
+          "main/find capture no-match": 2073.0,
+          "main/find loop-exit no-match": 3978.1,
+          "main/find extended no-match": 1964.1,
+          "main/find suffix no-match": 3803.1,
+          "main/find byte escape scan": 14.2,
+          "main/find shared-prefix no-match": 2342.6,
+          "main/find CJK tokenizer": 163679.2,
+          "main/find CJK tokenizer (no lookahead)": 165311.7,
+          "main/find Han class scan": 135678.3,
+          "main/fullmatch Han class (191 KiB)": 53753.3,
+          "main/find JSON string literal": 18478.5,
+          "main/find HTML tag": 120247.7,
+          "main/find URL": 80904.4,
+          "main/compile Qwen tokenizer (page)": 245869.8,
+          "main/compile Qwen tokenizer (smp)": 239818.6,
+          "main/split whitespace (22 KiB)": 36977.5,
+          "main/find key-value key": 33951.3,
+          "main/find JSON number": 26051.3,
+          "main/find trailing spaces": 3.5,
+          "main/find word boundary": 57815.8,
+          "main/find digits": 24080.2,
+          "main/fullmatch ASCII class (216 KiB)": 51520.0,
+          "main/fullmatch ASCII loop (216 KiB)": 71993.3,
+          "main/find line (?m)^.*$": 31283.3,
+          "main/stream [a-z]+ (216 KiB, 4 KiB chunks)": 155587.5,
+          "main/stream [a-z]* (216 KiB, 4 KiB chunks)": 180787.5,
+          "main/stream [a-z]+ [a-z]+ (216 KiB, 4 KiB chunks)": 273472.9,
+          "main/stream Han chain (191 KiB, 4 KiB chunks)": 411920.9,
+          "main/RegexSet 9 no-match patterns": 34205.6,
+          "main/find xDS-like after 4KB prefix": 220.9,
+          "main/find literal after 4KB prefix": 88.4,
+          "main/find multi-literal after 4KB prefix": 281.7,
+          "main/find large alternation (24 literals) no-match": 1962.4,
+          "main/find (?i) literal no-match": 1531.2,
+          "main/replaceAll a+ -> x": 42838.1,
+          "main/Workspace.init Qwen program": 50.6
+        }
+      }
+    ]
+  },
+  "counters": {
+    "branch/ASCII token init": {
+      "before": {
+        "init_allocations": 46,
+        "init_bytes": 3466208,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 5920
+      },
+      "after": {
+        "init_allocations": 2,
+        "init_bytes": 32,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 6544
+      }
+    },
+    "branch/ASCII token first": {
+      "before": {
+        "init_allocations": 46,
+        "init_bytes": 3466208,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 5920
+      },
+      "after": {
+        "init_allocations": 2,
+        "init_bytes": 32,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 6544
+      }
+    },
+    "branch/ASCII token cold_pass": {
+      "before": {
+        "init_allocations": 46,
+        "init_bytes": 3466208,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 5920
+      },
+      "after": {
+        "init_allocations": 2,
+        "init_bytes": 32,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 6544
+      }
+    },
+    "branch/ASCII token warm_first": {
+      "before": {
+        "init_allocations": 46,
+        "init_bytes": 3466208,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 5920
+      },
+      "after": {
+        "init_allocations": 2,
+        "init_bytes": 32,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 6544
+      }
+    },
+    "branch/ASCII token warm_pass": {
+      "before": {
+        "init_allocations": 46,
+        "init_bytes": 3466208,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 5920
+      },
+      "after": {
+        "init_allocations": 2,
+        "init_bytes": 32,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 6544
+      }
+    },
+    "branch/Unicode token init": {
+      "before": {
+        "init_allocations": 46,
+        "init_bytes": 3466208,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 5920
+      },
+      "after": {
+        "init_allocations": 2,
+        "init_bytes": 32,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 6544
+      }
+    },
+    "branch/Unicode token first": {
+      "before": {
+        "init_allocations": 46,
+        "init_bytes": 3466208,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 5920
+      },
+      "after": {
+        "init_allocations": 2,
+        "init_bytes": 32,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 6544
+      }
+    },
+    "branch/Unicode token cold_pass": {
+      "before": {
+        "init_allocations": 46,
+        "init_bytes": 3466208,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 5920
+      },
+      "after": {
+        "init_allocations": 2,
+        "init_bytes": 32,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 6544
+      }
+    },
+    "branch/Unicode token warm_first": {
+      "before": {
+        "init_allocations": 46,
+        "init_bytes": 3466208,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 5920
+      },
+      "after": {
+        "init_allocations": 2,
+        "init_bytes": 32,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 6544
+      }
+    },
+    "branch/Unicode token warm_pass": {
+      "before": {
+        "init_allocations": 46,
+        "init_bytes": 3466208,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 5920
+      },
+      "after": {
+        "init_allocations": 2,
+        "init_bytes": 32,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 6544
+      }
+    },
+    "branch/ASCII text init": {
+      "before": {
+        "init_allocations": 46,
+        "init_bytes": 3466208,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 5920
+      },
+      "after": {
+        "init_allocations": 2,
+        "init_bytes": 32,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 6544
+      }
+    },
+    "branch/ASCII text first": {
+      "before": {
+        "init_allocations": 46,
+        "init_bytes": 3466208,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 5920
+      },
+      "after": {
+        "init_allocations": 2,
+        "init_bytes": 32,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 6544
+      }
+    },
+    "branch/ASCII text cold_pass": {
+      "before": {
+        "init_allocations": 46,
+        "init_bytes": 3466208,
+        "first_allocations": 23,
+        "first_bytes": 30640,
+        "workspace_bytes": 5920
+      },
+      "after": {
+        "init_allocations": 2,
+        "init_bytes": 32,
+        "first_allocations": 23,
+        "first_bytes": 30640,
+        "workspace_bytes": 6544
+      }
+    },
+    "branch/ASCII text warm_first": {
+      "before": {
+        "init_allocations": 46,
+        "init_bytes": 3466208,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 5920
+      },
+      "after": {
+        "init_allocations": 2,
+        "init_bytes": 32,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 6544
+      }
+    },
+    "branch/ASCII text warm_pass": {
+      "before": {
+        "init_allocations": 46,
+        "init_bytes": 3466208,
+        "first_allocations": 23,
+        "first_bytes": 30640,
+        "workspace_bytes": 5920
+      },
+      "after": {
+        "init_allocations": 2,
+        "init_bytes": 32,
+        "first_allocations": 23,
+        "first_bytes": 30640,
+        "workspace_bytes": 6544
+      }
+    },
+    "branch/mixed text init": {
+      "before": {
+        "init_allocations": 46,
+        "init_bytes": 3466208,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 5920
+      },
+      "after": {
+        "init_allocations": 2,
+        "init_bytes": 32,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 6544
+      }
+    },
+    "branch/mixed text first": {
+      "before": {
+        "init_allocations": 46,
+        "init_bytes": 3466208,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 5920
+      },
+      "after": {
+        "init_allocations": 2,
+        "init_bytes": 32,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 6544
+      }
+    },
+    "branch/mixed text cold_pass": {
+      "before": {
+        "init_allocations": 46,
+        "init_bytes": 3466208,
+        "first_allocations": 23,
+        "first_bytes": 30640,
+        "workspace_bytes": 5920
+      },
+      "after": {
+        "init_allocations": 2,
+        "init_bytes": 32,
+        "first_allocations": 46,
+        "first_bytes": 1868864,
+        "workspace_bytes": 6544
+      }
+    },
+    "branch/mixed text warm_first": {
+      "before": {
+        "init_allocations": 46,
+        "init_bytes": 3466208,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 5920
+      },
+      "after": {
+        "init_allocations": 2,
+        "init_bytes": 32,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 6544
+      }
+    },
+    "branch/mixed text warm_pass": {
+      "before": {
+        "init_allocations": 46,
+        "init_bytes": 3466208,
+        "first_allocations": 23,
+        "first_bytes": 30640,
+        "workspace_bytes": 5920
+      },
+      "after": {
+        "init_allocations": 2,
+        "init_bytes": 32,
+        "first_allocations": 46,
+        "first_bytes": 1868864,
+        "workspace_bytes": 6544
+      }
+    },
+    "branch/CJK text init": {
+      "before": {
+        "init_allocations": 46,
+        "init_bytes": 3466208,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 5920
+      },
+      "after": {
+        "init_allocations": 2,
+        "init_bytes": 32,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 6544
+      }
+    },
+    "branch/CJK text first": {
+      "before": {
+        "init_allocations": 46,
+        "init_bytes": 3466208,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 5920
+      },
+      "after": {
+        "init_allocations": 2,
+        "init_bytes": 32,
+        "first_allocations": 23,
+        "first_bytes": 1838224,
+        "workspace_bytes": 6544
+      }
+    },
+    "branch/CJK text cold_pass": {
+      "before": {
+        "init_allocations": 46,
+        "init_bytes": 3466208,
+        "first_allocations": 22,
+        "first_bytes": 121856,
+        "workspace_bytes": 5920
+      },
+      "after": {
+        "init_allocations": 2,
+        "init_bytes": 32,
+        "first_allocations": 66,
+        "first_bytes": 3588032,
+        "workspace_bytes": 6544
+      }
+    },
+    "branch/CJK text warm_first": {
+      "before": {
+        "init_allocations": 46,
+        "init_bytes": 3466208,
+        "first_allocations": 0,
+        "first_bytes": 0,
+        "workspace_bytes": 5920
+      },
+      "after": {
+        "init_allocations": 2,
+        "init_bytes": 32,
+        "first_allocations": 23,
+        "first_bytes": 1838224,
+        "workspace_bytes": 6544
+      }
+    },
+    "branch/CJK text warm_pass": {
+      "before": {
+        "init_allocations": 46,
+        "init_bytes": 3466208,
+        "first_allocations": 22,
+        "first_bytes": 121856,
+        "workspace_bytes": 5920
+      },
+      "after": {
+        "init_allocations": 2,
+        "init_bytes": 32,
+        "first_allocations": 66,
+        "first_bytes": 3588032,
+        "workspace_bytes": 6544
+      }
+    }
+  },
+  "integration": {
+    "source_base": "1579f7c",
+    "executable": "/Users/bytedance/project-z/regexz/.zig-cache/o/82c9b998e4f5245087704b25d40aa431/regexz-branch_startup-bench",
+    "sha256": "7496bce633b2138473bb90092a2566344d789368f945ab120dc1f741f23c192c",
+    "scoped_tests": 12,
+    "v8_comparisons": 8703,
+    "performance_gate_cases": 56,
+    "observed_init_allocations": 2,
+    "observed_init_requested_bytes": 32,
+    "workspace_bytes": 6544
+  }
+}

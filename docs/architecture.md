@@ -76,6 +76,7 @@ anything it cannot prove.
 | `search_dfa.zig` | Leftmost-first search DFA with priority-annotated accepts. Two constructions: rune-level (lookaheads, tokenizers) and byte-level (UTF-8 automata for non-ASCII sets, `\C`). Includes the per-state rune-transition front cache. |
 | `pike.zig` | Capture-aware Pike VM; the linear-time fallback when the backtracking budget is exhausted. |
 | `capture_run.zig` | Recognizes `set+` programs with fixed capture saves when the workspace is initialized. ASCII scans use byte tables; Unicode scans use materialized rune sets and retain literal prefixes. Both write slots without DFA construction or capture trails and retain strict replay budgets. |
+| `deferred_utf8_run.zig` | Dominant-branch sets scan inline ASCII tables immediately. Short Unicode probes start with exact scalar membership; repeated probes or long matching runs prepare the existing UTF-8 tables. Failed optional preparation retains scalar matching. |
 | `byte_table.zig` | Expands materialized membership bitmaps and Latin-1 ranges into fixed byte tables. Shared by full-match, search and streaming workspace initialization. |
 | `utf8_set.zig`, `utf8_run.zig` | Construct compact UTF-8 tries using shared build arrays, then expand disjoint edge intervals into byte transition rows. The same tables serve full-match and search set runs. |
 | `backtrack.zig` | Extended mode: general lookaround, backrefs, atomic/possessive, conditionals, recursion, `\K`, callouts, `(*MARK)`, verbs. Bounded by step/choice/trail/depth limits and fails closed. |
