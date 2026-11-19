@@ -298,7 +298,9 @@ if (comptime ct.Regex("abc[0-9]+").match("abc42")) |span| {
 `ct.Regex(pattern)` parses and compiles the pattern during compilation and
 returns a type whose `match` (full match) and `search` (leftmost-first)
 methods are generated code: no `Program`, no `Workspace`, no allocation, and
-no data tables at runtime. The matcher uses continuation-passing
+no data tables at runtime. Both return a capture-aware `Match` with
+`start`/`end` and `group(index)` spans (1-based, `group(0)` is the whole
+match); the CPS backtracker restores capture slots on every failed path. The matcher uses continuation-passing
 backtracking, so alternation and greedy/lazy repetition explore every path
 in leftmost-first order. Supported syntax: literals and escapes
 (`\n \r \t \\ \d \D \w \W \s \S`), classes (`[a-z0-9_]`, `[^...]`),
@@ -307,15 +309,14 @@ non-capturing groups, anchors (`^ $ \A \z`), and the inline flags `(?i)`,
 `(?s)`, `(?m)`.
 
 On the same host the generated matcher is ~3x faster than the runtime engine
-for short literal and class matches (0.2 ns vs 0.6 ns, 3.1 ns vs 9.9 ns) and
+for short literal and class matches (0.2 ns vs 0.6 ns, 3.3 ns vs 8.4 ns) and
 ~1.7x slower for multi-run searches, which the runtime engine accelerates
-with its chain fast path. Only the whole match span is reported: capture
-groups are parsed but not filled. For large patterns use the runtime engine;
-the full parser needs `std.mem.Allocator`, whose byte-allocation wrapper
-calls `@memset(undefined)`, which the comptime evaluator rejects. The
-compile-time path therefore follows the ctregex.zig construction style
-(comptime locals plus `&const_local` for the tree) and keeps the whole
-pipeline allocation-free.
+with its chain fast path. For large patterns use the runtime engine; the full
+parser needs `std.mem.Allocator`, whose byte-allocation wrapper calls
+`@memset(undefined)`, which the comptime evaluator rejects. The compile-time
+path therefore follows the ctregex.zig construction style (comptime locals
+plus `&const_local` for the tree) and keeps the whole pipeline
+allocation-free.
 
 ## Build and test
 

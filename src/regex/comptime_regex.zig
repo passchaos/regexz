@@ -74,6 +74,7 @@ const Ast = union(enum) {
     concat: struct { left: *const Ast, right: *const Ast },
     alternate: struct { left: *const Ast, right: *const Ast },
     repeat: struct { child: *const Ast, min: u32, max: ?u32, lazy: bool },
+    capture: struct { index: u16, child: *const Ast },
     anchor_start: struct { multiline: bool },
     anchor_end: struct { multiline: bool, strict: bool },
 };
@@ -84,6 +85,7 @@ const Parser = struct {
     caseless: bool = false,
     dotall: bool = false,
     multiline: bool = false,
+    capture_count: u16 = 0,
 
     fn peek(self: *const Parser) ?u8 {
         if (self.pos >= self.pattern.len) return null;
@@ -261,6 +263,7 @@ const Parser = struct {
 
     fn parseGroup(self: *Parser) ?Ast {
         _ = self.consume();
+        var capturing = true;
         if (self.peek() == '?') {
             _ = self.consume();
             const flag = self.peek() orelse @compileError("comptime regex: unterminated group");
@@ -279,6 +282,7 @@ const Parser = struct {
                 },
                 ':' => {
                     _ = self.consume();
+                    capturing = false;
                 },
                 else => @compileError("comptime regex: unsupported group prefix"),
             }
@@ -291,8 +295,10 @@ const Parser = struct {
         const inner = self.parseAlternation() orelse @compileError("comptime regex: empty group");
         if (self.peek() != ')') @compileError("comptime regex: missing ')'");
         _ = self.consume();
-        // Capturing groups are accepted but only the whole match is reported.
-        return inner;
+        if (!capturing) return inner;
+        self.capture_count += 1;
+        const node = Ast{ .capture = .{ .index = self.capture_count, .child = &inner } };
+        return node;
     }
 
     fn parseEscape(self: *Parser) ?Ast {
@@ -490,32 +496,55 @@ fn computeFirst(comptime node: Ast) First {
             if (repeat.min >= 1) break :blk child;
             break :blk .{ .ascii = child.ascii, .nonascii = child.nonascii, .empty = true };
         },
+        .capture => |capture| computeFirst(capture.child.*),
         .anchor_start, .anchor_end => .{ .empty = true },
     };
 }
 
 /// A parsed pattern. Build it at comptime: `const re = comptime Regex("...")`.
 pub fn Regex(comptime pattern: []const u8) type {
-    const ast = compile: {
+    const parsed = compile: {
         @setEvalBranchQuota(200_000);
         comptime var parser = Parser{ .pattern = pattern };
         const root = parser.parseAlternation() orelse
             @compileError("comptime regex: invalid pattern '" ++ pattern ++ "'");
         if (parser.pos != pattern.len) @compileError("comptime regex: unexpected input at end of pattern");
-        break :compile root;
+        break :compile .{ .ast = root, .captures = parser.capture_count };
     };
+    const ast = parsed.ast;
+    const capture_count = parsed.captures;
     return struct {
         pub const source = pattern;
+        pub const capture_total = capture_count;
+
+        pub const Match = struct {
+            start: usize,
+            end: usize,
+            captures: [capture_count]?Span,
+
+            pub fn span(self: Match) Span {
+                return .{ .start = self.start, .end = self.end };
+            }
+
+            /// Span of capture group `index` (1-based), or null when the
+            /// group did not participate in the match.
+            pub fn group(self: Match, index: usize) ?Span {
+                if (index == 0) return self.span();
+                if (index > capture_count) return null;
+                return self.captures[index - 1];
+            }
+        };
 
         /// Full match: the whole input must match.
-        pub fn match(input: []const u8) ?Span {
-            const end = matchNode(ast, input, 0, EndCont(){}) orelse return null;
+        pub fn match(input: []const u8) ?Match {
+            var slots: [capture_count]?Span = .{null} ** capture_count;
+            const end = matchNode(ast, input, 0, EndCont(){}, &slots) orelse return null;
             if (end != input.len) return null;
-            return .{ .start = 0, .end = end };
+            return .{ .start = 0, .end = end, .captures = slots };
         }
 
         /// Leftmost-first search.
-        pub fn search(input: []const u8) ?Span {
+        pub fn search(input: []const u8) ?Match {
             const first = comptime computeFirst(ast);
             var start: usize = 0;
             while (start <= input.len) {
@@ -524,8 +553,9 @@ pub fn Regex(comptime pattern: []const u8) type {
                     start += @min(len, input.len - start);
                     continue;
                 }
-                if (matchNode(ast, input, start, AnyCont(){})) |end| {
-                    return .{ .start = start, .end = end };
+                var slots: [capture_count]?Span = .{null} ** capture_count;
+                if (matchNode(ast, input, start, AnyCont(){}, &slots)) |end| {
+                    return .{ .start = start, .end = end, .captures = slots };
                 }
                 if (start == input.len) break;
                 const len = std.unicode.utf8ByteSequenceLength(input[start]) catch 1;
@@ -538,9 +568,10 @@ pub fn Regex(comptime pattern: []const u8) type {
 
 fn EndCont() type {
     return struct {
-        pub fn match(self: @This(), input: []const u8, pos: usize) ?usize {
+        pub fn match(self: @This(), input: []const u8, pos: usize, slots: []?Span) ?usize {
             _ = self;
             _ = input;
+            _ = slots;
             return pos;
         }
     };
@@ -548,9 +579,10 @@ fn EndCont() type {
 
 fn AnyCont() type {
     return struct {
-        pub fn match(self: @This(), input: []const u8, pos: usize) ?usize {
+        pub fn match(self: @This(), input: []const u8, pos: usize, slots: []?Span) ?usize {
             _ = self;
             _ = input;
+            _ = slots;
             return pos;
         }
     };
@@ -562,7 +594,7 @@ fn RepeatCont(comptime Cont: type, comptime child: Ast, comptime min: u32, compt
         count: u32,
         last: usize,
 
-        pub fn match(self: @This(), input: []const u8, pos: usize) ?usize {
+        pub fn match(self: @This(), input: []const u8, pos: usize, slots: []?Span) ?usize {
             const can_repeat = (max == null or self.count < max.?) and
                 !(self.count > 0 and pos == self.last);
             if (can_repeat) {
@@ -571,14 +603,14 @@ fn RepeatCont(comptime Cont: type, comptime child: Ast, comptime min: u32, compt
                 if (lazy) {
                     // Lazy: prefer the continuation, fall back to more repeats.
                     if (self.count >= min) {
-                        if (self.cont.match(input, pos)) |result| return result;
+                        if (self.cont.match(input, pos, slots)) |result| return result;
                     }
-                    if (matchNode(child, input, pos, next_cont)) |result| return result;
+                    if (matchNode(child, input, pos, next_cont, slots)) |result| return result;
                     return null;
                 }
-                if (matchNode(child, input, pos, next_cont)) |result| return result;
+                if (matchNode(child, input, pos, next_cont, slots)) |result| return result;
             }
-            if (self.count >= min) return self.cont.match(input, pos);
+            if (self.count >= min) return self.cont.match(input, pos, slots);
             return null;
         }
     };
@@ -587,59 +619,80 @@ fn RepeatCont(comptime Cont: type, comptime child: Ast, comptime min: u32, compt
 fn ConcatCont(comptime Cont: type, comptime right: Ast) type {
     return struct {
         cont: Cont,
-        pub fn match(self: @This(), input: []const u8, pos: usize) ?usize {
-            return matchNode(right, input, pos, self.cont);
+        pub fn match(self: @This(), input: []const u8, pos: usize, slots: []?Span) ?usize {
+            return matchNode(right, input, pos, self.cont, slots);
         }
     };
 }
 
-fn matchNode(comptime node: Ast, input: []const u8, pos: usize, cont: anytype) ?usize {
+fn matchNode(comptime node: Ast, input: []const u8, pos: usize, cont: anytype, slots: []?Span) ?usize {
     switch (node) {
-        .empty => return cont.match(input, pos),
+        .empty => return cont.match(input, pos, slots),
         .literal => |literal| {
             const decoded = decodeRune(input, pos) orelse return null;
             if (!runeEquals(decoded.value, literal.value, literal.caseless)) return null;
-            return cont.match(input, pos + decoded.len);
+            return cont.match(input, pos + decoded.len, slots);
         },
         .literal_seq => |seq| {
             if (input.len - pos < seq.bytes.len) return null;
             if (!std.mem.eql(u8, input[pos..][0..seq.bytes.len], seq.bytes)) return null;
-            return cont.match(input, pos + seq.bytes.len);
+            return cont.match(input, pos + seq.bytes.len, slots);
         },
         .set => |set| {
             const byte = input[pos];
             if (byte < 0x80) {
                 const member = (set.ascii[byte >> 6] >> @intCast(byte & 63)) & 1 != 0;
                 if (!member) return null;
-                return cont.match(input, pos + 1);
+                return cont.match(input, pos + 1, slots);
             }
             if (!set.nonascii) return null;
             const decoded = decodeRune(input, pos) orelse return null;
             if (!setContains(set, decoded.value)) return null;
-            return cont.match(input, pos + decoded.len);
+            return cont.match(input, pos + decoded.len, slots);
         },
         .any => |any| {
             const decoded = decodeRune(input, pos) orelse return null;
             if (!any.dotall and decoded.value == '\n') return null;
-            return cont.match(input, pos + decoded.len);
+            return cont.match(input, pos + decoded.len, slots);
         },
         .concat => |concat| {
-            return matchNode(concat.left.*, input, pos, ConcatCont(@TypeOf(cont), concat.right.*){ .cont = cont });
+            return matchNode(concat.left.*, input, pos, ConcatCont(@TypeOf(cont), concat.right.*){ .cont = cont }, slots);
         },
         .alternate => |alternate| {
-            if (matchNode(alternate.left.*, input, pos, cont)) |result| return result;
-            return matchNode(alternate.right.*, input, pos, cont);
+            if (matchNode(alternate.left.*, input, pos, cont, slots)) |result| return result;
+            return matchNode(alternate.right.*, input, pos, cont, slots);
         },
         .repeat => |repeat| {
             const Start = RepeatCont(@TypeOf(cont), repeat.child.*, repeat.min, repeat.max, repeat.lazy);
             const start = Start{ .cont = cont, .count = 0, .last = pos };
-            return start.match(input, pos);
+            return start.match(input, pos, slots);
+        },
+        .capture => |capture| {
+            const CaptureCont = struct {
+                cont: @TypeOf(cont),
+                start: usize,
+                index: usize,
+
+                pub fn match(self: @This(), text: []const u8, offset: usize, track: []?Span) ?usize {
+                    const saved = track[self.index];
+                    track[self.index] = .{ .start = self.start, .end = offset };
+                    if (self.cont.match(text, offset, track)) |end| {
+                        track[self.index] = .{ .start = self.start, .end = end };
+                        return end;
+                    }
+                    // Backtrack: restore the previous capture value.
+                    track[self.index] = saved;
+                    return null;
+                }
+            };
+            const capture_cont = CaptureCont{ .cont = cont, .start = pos, .index = capture.index - 1 };
+            return capture_cont.match(input, pos, slots);
         },
         .anchor_start => |anchor| {
             if (anchor.multiline) {
                 if (!(pos == 0 or input[pos - 1] == '\n')) return null;
             } else if (pos != 0) return null;
-            return cont.match(input, pos);
+            return cont.match(input, pos, slots);
         },
         .anchor_end => |anchor| {
             if (anchor.multiline) {
@@ -649,7 +702,7 @@ fn matchNode(comptime node: Ast, input: []const u8, pos: usize, cont: anytype) ?
                 const final_newline = !anchor.strict and pos + 1 == input.len and input[pos] == '\n';
                 if (!final_newline) return null;
             }
-            return cont.match(input, pos);
+            return cont.match(input, pos, slots);
         },
     }
 }
@@ -833,4 +886,75 @@ test "comptime regex evaluates during compilation" {
     try std.testing.expectEqual(@as(usize, 5), span.?.end);
     const missing = comptime re.match("abc");
     try std.testing.expect(missing == null);
+}
+
+test "comptime regex captures match the runtime engine" {
+    const regex = @import("../root.zig").Regex;
+    const unset = std.math.maxInt(usize);
+    const cases = [_]struct { pattern: []const u8, inputs: []const []const u8 }{
+        .{ .pattern = "(a)(b)", .inputs = &.{ "ab", "xab", "a" } },
+        .{ .pattern = "(a|ab)c", .inputs = &.{ "abc", "ac", "ab" } },
+        .{ .pattern = "(a)+", .inputs = &.{ "aaa", "b", "ba" } },
+        .{ .pattern = "((a)(b))", .inputs = &.{ "ab", "xab" } },
+        .{ .pattern = "(x)?y", .inputs = &.{ "y", "xy", "z" } },
+        .{ .pattern = "(a*)b", .inputs = &.{ "b", "aab", "c" } },
+        .{ .pattern = "(?i)(foo|bar)[0-9]+", .inputs = &.{ "FOO42", "xx bar7", "baz" } },
+        .{ .pattern = "(\\w+)@(\\w+)", .inputs = &.{ "user@host", "a b@c", "nope" } },
+    };
+    for (cases) |case| {
+        const compiled = @field(Captures, case.pattern);
+        var value = try regex.Regex.init(std.testing.allocator, case.pattern, .{});
+        defer value.deinit();
+        var workspace = try regex.ReplaceWorkspace.init(std.testing.allocator, value.program, .{});
+        defer workspace.deinit();
+        for (case.inputs) |input| {
+            const runtime_find = try workspace.find(input, 0);
+            const ct_find = compiled.search(input);
+            if (runtime_find) |found| {
+                try std.testing.expect(ct_find != null);
+                try std.testing.expectEqual(found.start, ct_find.?.start);
+                try std.testing.expectEqual(found.end, ct_find.?.end);
+                var group: usize = 1;
+                while (group <= compiled.capture_total) : (group += 1) {
+                    const runtime_start = found.slots[group * 2];
+                    const runtime_end = found.slots[group * 2 + 1];
+                    const ct_span = ct_find.?.group(group);
+                    if (runtime_start == unset or runtime_end == unset) {
+                        try std.testing.expect(ct_span == null);
+                    } else {
+                        try std.testing.expect(ct_span != null);
+                        try std.testing.expectEqual(runtime_start, ct_span.?.start);
+                        try std.testing.expectEqual(runtime_end, ct_span.?.end);
+                    }
+                }
+            } else {
+                try std.testing.expect(ct_find == null);
+            }
+        }
+    }
+}
+
+const Captures = struct {
+    pub const ab = Regex("(a)(b)");
+    pub const alt = Regex("(a|ab)c");
+    pub const plus = Regex("(a)+");
+    pub const nested = Regex("((a)(b))");
+    pub const optional = Regex("(x)?y");
+    pub const empty_group = Regex("(a*)b");
+    pub const ci = Regex("(?i)(foo|bar)[0-9]+");
+    pub const words = Regex("(\\w+)@(\\w+)");
+};
+
+test "comptime regex capture group access" {
+    const re = Regex("(?i)(foo|bar)-([0-9]+)");
+    try std.testing.expectEqual(@as(usize, 2), re.capture_total);
+    const m = re.search("xx BAR-42 yy").?;
+    try std.testing.expectEqual(@as(usize, 3), m.start);
+    try std.testing.expectEqual(@as(usize, 9), m.end);
+    try std.testing.expectEqual(@as(usize, 3), m.group(1).?.start);
+    try std.testing.expectEqual(@as(usize, 6), m.group(1).?.end);
+    try std.testing.expectEqual(@as(usize, 7), m.group(2).?.start);
+    try std.testing.expectEqual(@as(usize, 9), m.group(2).?.end);
+    try std.testing.expect(m.group(3) == null);
+    try std.testing.expectEqual(m.span().start, m.group(0).?.start);
 }
