@@ -117,6 +117,7 @@ const Dfa = struct {
 /// not be shared between threads.
 pub const Workspace = struct {
     allocator: std.mem.Allocator,
+    /// Disjoint views into one allocation; storage starts at its base.
     storage: []u32,
     seen: []u32,
     epoch: u32 = 0,
@@ -144,11 +145,15 @@ pub const Workspace = struct {
 
     const Utf8Loop = struct { run: utf8_run_mod.Utf8Run, separator: u8 };
     pub fn init(allocator: std.mem.Allocator, program: Program) std.mem.Allocator.Error!Workspace {
-        const storage = try allocator.alloc(u32, program.instructions.len * 6);
-        errdefer allocator.free(storage);
-        const seen = try allocator.alloc(u32, program.instructions.len * 5);
-        @memset(seen, 0);
-        var workspace = Workspace{ .allocator = allocator, .storage = storage, .seen = seen };
+        const count = program.instructions.len;
+        const buffers = try allocator.alloc(u32, count * 11);
+        var workspace = Workspace{
+            .allocator = allocator,
+            .storage = buffers[0 .. count * 6],
+            .seen = buffers[count * 6 ..],
+        };
+        errdefer workspace.deinit();
+        @memset(workspace.seen, 0);
         if (shapes.setRun(program)) |set| {
             if (set.ascii_only) {
                 workspace.simple_set = true;
@@ -177,8 +182,7 @@ pub const Workspace = struct {
         if (self.utf8_run) |*run| run.deinit(self.allocator);
         if (self.utf8_loop) |*loop| loop.run.deinit(self.allocator);
         if (self.dfa) |*dfa| dfa.deinit();
-        self.allocator.free(self.storage);
-        self.allocator.free(self.seen);
+        self.allocator.free(self.storage.ptr[0 .. self.storage.len + self.seen.len]);
         self.* = undefined;
     }
     fn push(self: *Workspace, seen: []u32, stack: []u32, count: *usize, index: usize) void {

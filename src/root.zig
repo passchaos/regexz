@@ -380,6 +380,7 @@ pub const Regex = struct {
 test {
     _ = @import("regex/tests.zig");
     _ = @import("regex/utf8_set.zig");
+    _ = @import("regex/utf8_allocation_tests.zig");
     _ = @import("regex/budget_tests.zig");
     _ = @import("regex/engine_tests.zig");
     _ = @import("regex/borrowed_program_tests.zig");

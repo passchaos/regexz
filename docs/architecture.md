@@ -73,6 +73,7 @@ anything it cannot prove.
 | `search_dfa.zig` | Leftmost-first search DFA with priority-annotated accepts. Two constructions: rune-level (lookaheads, tokenizers) and byte-level (UTF-8 automata for non-ASCII sets, `\C`). Includes the per-state rune-transition front cache. |
 | `pike.zig` | Capture-aware Pike VM; the linear-time fallback when the backtracking budget is exhausted. |
 | `capture_run.zig` | Recognizes ASCII `set+` programs with fixed capture saves when the workspace is initialized. Scans directly and writes start/end slots without DFA construction or capture trails; strict callers retain replay step limits. |
+| `utf8_set.zig`, `utf8_run.zig` | Construct compact UTF-8 tries using shared build arrays, then expand disjoint edge intervals into byte transition rows. The same tables serve full-match and search set runs. |
 | `backtrack.zig` | Extended mode: general lookaround, backrefs, atomic/possessive, conditionals, recursion, `\K`, callouts, `(*MARK)`, verbs. Bounded by step/choice/trail/depth limits and fails closed. |
 | `replace.zig` | `ReplaceWorkspace`: leftmost-first `find`, replacement entry points, and the deterministic fast paths (`set+` runs, chains, dominant branch, anchored runs) that bypass the DFA. |
 | `substitution.zig` | Substitution syntax: `$1`, `$<name>`, `${name}`, `$&`, `$$`, `` $` ``, `$'`, `$+`, `$_`, `\1`..`\9`, and `\U \L \E \u \l` case transforms. Pure functions; no engine state. |

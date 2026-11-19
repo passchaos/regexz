@@ -17,9 +17,12 @@ pub const Utf8Run = struct {
         const states = automaton.stateCount();
         const table = try allocator.alloc(u16, states * 256);
         errdefer allocator.free(table);
-        for (0..states) |state| {
-            for (0..256) |byte| {
-                table[state * 256 + byte] = automaton.advance(@intCast(state), @intCast(byte));
+        @memset(table, utf8_set.dead);
+        for (automaton.nodes, 0..) |node, state| {
+            for (automaton.edges[node.start..][0..node.count]) |edge| {
+                const start = state * 256 + edge.lo;
+                const end = state * 256 + @as(usize, edge.hi) + 1;
+                @memset(table[start..end], edge.next);
             }
         }
         return .{ .table = table };

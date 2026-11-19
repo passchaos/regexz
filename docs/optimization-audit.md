@@ -83,7 +83,7 @@ and warmed matching. See [benchmark calibration](benchmarks/calibration.md).
 
 | Priority | Owning code | Evidence and next measurement |
 | --- | --- | --- |
-| 1 | `execute.zig`, `search_dfa.zig`, `tools/bench/main.zig` | Main matching benchmarks warm the workspace first. Add separate compile-plus-first-match and repeated-match cases before deciding whether eager DFA construction or smaller workspace initialization pays off. |
+| 1 | `execute.zig`, `search_dfa.zig`, `tools/bench/startup.zig` | Startup measurements now separate construction from matching. [Unicode initialization](benchmarks/unicode-init.md) is down from about 48 us to 13 us; evaluate precomputed/persisted small DFAs and the remaining workspace table setup cost next. |
 | 2 | `prefilter.zig`: `PairSet.indexOfAny` | Dense literal start sets still probe the pair bitmap byte by byte. Measure a SIMD multi-literal filter on both misses and frequent prefix collisions; preserve exact literal verification and earliest-match ordering. |
 | 3 | `capture_run.zig`, `replace.zig`: `replayLinear` | Fixed ASCII `set+` capture saves now scan directly; see [capture-run measurements](benchmarks/capture-run.md). General straight-line replay and Unicode capture runs remain candidates for precomputed plans. |
 | 4 | `replace.zig` | The file combines the API, search dispatch, deterministic scanners, capture replay, and interpreter in roughly 2,000 lines. Extract a cohesive scanner module when changing those paths; keep budget and capture state ownership explicit. |

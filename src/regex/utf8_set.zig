@@ -75,16 +75,20 @@ pub const Automaton = struct {
 };
 
 const ByteRange = struct { lo: u8, hi: u8 };
+const no_edge = std.math.maxInt(u32);
 
 const BuildNode = struct {
-    edges: std.ArrayListUnmanaged(ByteRange) = .empty,
-    children: std.ArrayListUnmanaged(u32) = .empty,
+    first: u32 = no_edge,
+    last: u32 = no_edge,
+    count: u16 = 0,
     leaf: bool = false,
 };
+const BuildEdge = struct { range: ByteRange, child: u32, next: u32 = no_edge };
 
 const Builder = struct {
     gpa: std.mem.Allocator,
     nodes: std.ArrayList(BuildNode) = .empty,
+    edges: std.ArrayList(BuildEdge) = .empty,
 
     fn init(gpa: std.mem.Allocator) !Builder {
         var self: Builder = .{ .gpa = gpa };
@@ -93,30 +97,33 @@ const Builder = struct {
     }
 
     fn deinit(self: *Builder) void {
-        for (self.nodes.items) |*node| {
-            node.edges.deinit(self.gpa);
-            node.children.deinit(self.gpa);
-        }
+        self.edges.deinit(self.gpa);
         self.nodes.deinit(self.gpa);
     }
 
     /// Return the child reached by an edge covering exactly `[lo, hi]`,
     /// creating it when absent. Identical prefixes share one subtree.
     fn child(self: *Builder, node: u32, lo: u8, hi: u8) !u32 {
-        const target = &self.nodes.items[node];
-        for (target.edges.items, target.children.items) |edge, existing| {
-            if (edge.lo == lo and edge.hi == hi) return existing;
+        const target = self.nodes.items[node];
+        var edge_index = target.first;
+        while (edge_index != no_edge) {
+            const edge = self.edges.items[edge_index];
+            if (edge.range.lo == lo and edge.range.hi == hi) return edge.child;
+            edge_index = edge.next;
         }
         // Sequences are emitted in increasing byte order, so appending keeps
         // each node's edges sorted by `lo`.
-        std.debug.assert(target.edges.items.len == 0 or target.edges.items[target.edges.items.len - 1].lo < lo);
+        std.debug.assert(target.last == no_edge or self.edges.items[target.last].range.lo < lo);
         const created: u32 = @intCast(self.nodes.items.len);
         try self.nodes.append(self.gpa, .{});
+        const edge: u32 = @intCast(self.edges.items.len);
+        try self.edges.append(self.gpa, .{ .range = .{ .lo = lo, .hi = hi }, .child = created });
         // `append` may reallocate; re-read the node instead of holding a
         // pointer across it.
         const owner = &self.nodes.items[node];
-        try owner.edges.append(self.gpa, .{ .lo = lo, .hi = hi });
-        try owner.children.append(self.gpa, created);
+        if (owner.last != no_edge) self.edges.items[owner.last].next = edge else owner.first = edge;
+        owner.last = edge;
+        owner.count += 1;
         return created;
     }
 
@@ -127,22 +134,23 @@ const Builder = struct {
     }
 
     fn finish(self: *Builder) !Automaton {
-        var total: usize = 0;
-        for (self.nodes.items) |node| total += node.edges.items.len;
         const nodes = try self.gpa.alloc(Node, self.nodes.items.len);
         errdefer self.gpa.free(nodes);
-        const edges = try self.gpa.alloc(Edge, total);
+        const edges = try self.gpa.alloc(Edge, self.edges.items.len);
         errdefer self.gpa.free(edges);
         var offset: usize = 0;
         for (self.nodes.items, 0..) |node, index| {
-            nodes[index] = .{ .start = @intCast(offset), .count = @intCast(node.edges.items.len) };
-            for (node.edges.items, node.children.items) |edge, target| {
+            nodes[index] = .{ .start = @intCast(offset), .count = node.count };
+            var edge_index = node.first;
+            while (edge_index != no_edge) {
+                const edge = self.edges.items[edge_index];
                 edges[offset] = .{
-                    .lo = edge.lo,
-                    .hi = edge.hi,
-                    .next = if (self.nodes.items[target].leaf) accept else @intCast(target),
+                    .lo = edge.range.lo,
+                    .hi = edge.range.hi,
+                    .next = if (self.nodes.items[edge.child].leaf) accept else @intCast(edge.child),
                 };
                 offset += 1;
+                edge_index = edge.next;
             }
         }
         return .{ .nodes = nodes, .edges = edges };

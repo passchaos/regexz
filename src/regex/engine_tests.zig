@@ -279,9 +279,9 @@ test "Regex.matches is safe across threads" {
 test "lazy DFA falls back when its cache cannot be allocated" {
     var value = try regex.Regex.init(std.testing.allocator, "(?:a|aa)*b", .{});
     defer value.deinit();
-    // Workspace.init consumes the first two allocations; the DFA cache
+    // Workspace.init consumes one allocation; the DFA cache
     // allocation then fails and matching must fall back to the NFA.
-    var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 2 });
+    var failing = std.testing.FailingAllocator.init(std.testing.allocator, .{ .fail_index = 1 });
     const allocator = failing.allocator();
     var workspace = try regex.Workspace.init(allocator, value.program);
     defer workspace.deinit();
