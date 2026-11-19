@@ -36,7 +36,7 @@ def main() -> int:
     args = parser.parse_args()
 
     steps: list[tuple[str, list[str]]] = [
-        ("format", ["zig", "fmt", "--check", "src", "build.zig"]),
+        ("format", ["zig", "fmt", "--check", "src", "tools", "build.zig"]),
         ("tests", ["zig", "build", "test"]),
     ]
     if not args.skip_codegen:

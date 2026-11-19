@@ -537,7 +537,8 @@ const CaselessLiteralBuilder = struct {
     }
 };
 
-const PrefixBuilder = struct {    allocator: std.mem.Allocator,
+const PrefixBuilder = struct {
+    allocator: std.mem.Allocator,
     bytes: std.ArrayList(u8) = .empty,
     /// Append the longest fixed literal prefix. Zero-width assertions and
     /// lookarounds are skipped; alternation, `\C`, backrefs, and other
