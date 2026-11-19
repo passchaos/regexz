@@ -81,7 +81,7 @@ anything it cannot prove.
 | `byte_table.zig` | Expands materialized membership bitmaps and Latin-1 ranges into fixed byte tables. Shared by full-match, search and streaming workspace initialization. |
 | `utf8_set.zig`, `utf8_run.zig` | Construct compact UTF-8 tries using shared build arrays, then expand disjoint edge intervals into byte transition rows. The same tables serve full-match and search set runs. |
 | `backtrack.zig` | Extended mode: general lookaround, backrefs, atomic/possessive, conditionals, recursion, `\K`, callouts, `(*MARK)`, verbs. Bounded by step/choice/trail/depth limits and fails closed. |
-| `replace.zig` | `ReplaceWorkspace`: leftmost-first `find`, replacement entry points, and the deterministic fast paths (`set+` runs, chains, dominant branch, anchored runs) that bypass the DFA. |
+| `replace.zig` | `ReplaceWorkspace`: leftmost-first `find`, replacement entry points, and deterministic fast paths (`set+` runs, chains, dominant branch, anchored runs) that bypass the DFA. Active captures and longest-match backups use disjoint views of one owned allocation. |
 | `substitution.zig` | Substitution syntax: `$1`, `$<name>`, `${name}`, `$&`, `$$`, `` $` ``, `$'`, `$+`, `$_`, `\1`..`\9`, and `\U \L \E \u \l` case transforms. Pure functions; no engine state. |
 | `stream.zig` | `StreamScanner`: persistent NFA state across chunks, rune-safe boundaries, chain fast path. |
 | `set.zig`, `set_dfa.zig` | `RegexSet`: one unanchored subset construction over all patterns; per-pattern engines remain for assertions and extended patterns. |

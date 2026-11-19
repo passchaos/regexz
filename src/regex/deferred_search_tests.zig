@@ -13,10 +13,10 @@ fn compare(workspace: *regex.ReplaceWorkspace, reference: *regex.ReplaceWorkspac
     }
 }
 
-test "deferred search retains two allocations across ASCII searches" {
+test "deferred search retains one allocation across ASCII searches" {
     var value = try regex.Regex.init(gpa, "\\p{L}+", .{});
     defer value.deinit();
-    var failing = std.testing.FailingAllocator.init(gpa, .{ .fail_index = 2 });
+    var failing = std.testing.FailingAllocator.init(gpa, .{ .fail_index = 1 });
     var workspace = try regex.ReplaceWorkspace.init(failing.allocator(), value.program, .{});
     defer workspace.deinit();
     for (0..10) |_| {
@@ -28,7 +28,7 @@ test "deferred search retains two allocations across ASCII searches" {
         try std.testing.expectEqual(@as(usize, 11), second.end);
         try std.testing.expect((try workspace.find("1234", 0)) == null);
     }
-    try std.testing.expectEqual(@as(usize, 2), failing.allocations);
+    try std.testing.expectEqual(@as(usize, 1), failing.allocations);
     try std.testing.expect(!failing.has_induced_failure);
     try std.testing.expect(workspace.utf8_run.?.table == null);
     try std.testing.expectEqual(@as(u8, 0), workspace.utf8_run.?.unicode_probes);
@@ -132,12 +132,12 @@ test "deferred search optional allocation failures retain scalar bounds and clea
         defer value.deinit();
         var counted = std.testing.FailingAllocator.init(gpa, .{});
         try Harness.check(counted.allocator(), value.program, case.input);
-        try std.testing.expect(counted.allocations > 2);
+        try std.testing.expect(counted.allocations > 1);
         for (0..counted.allocations) |fail_index| {
             var failing = std.testing.FailingAllocator.init(gpa, .{ .fail_index = fail_index });
             Harness.check(failing.allocator(), value.program, case.input) catch |err| {
                 try std.testing.expectEqual(error.OutOfMemory, err);
-                try std.testing.expect(fail_index < 2);
+                try std.testing.expectEqual(@as(usize, 0), fail_index);
             };
             try std.testing.expect(failing.has_induced_failure);
             try std.testing.expectEqual(failing.allocated_bytes, failing.freed_bytes);
@@ -148,7 +148,7 @@ test "deferred search optional allocation failures retain scalar bounds and clea
 test "deferred search rejects malformed probes and warms valid misses" {
     var value = try regex.Regex.init(gpa, "\\p{L}+", .{});
     defer value.deinit();
-    var failing = std.testing.FailingAllocator.init(gpa, .{ .fail_index = 2 });
+    var failing = std.testing.FailingAllocator.init(gpa, .{ .fail_index = 1 });
     var workspace = try regex.ReplaceWorkspace.init(failing.allocator(), value.program, .{});
     defer workspace.deinit();
     for ([_][]const u8{ "\xff", "\xe0\x80\x80", "\xe7\x8c", "\x80", "\xed\xa0\x80", "\xf4\x90\x80\x80" }) |input| {

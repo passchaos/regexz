@@ -7,7 +7,7 @@ const pattern = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M
 test "deferred run avoids UTF-8 allocation on ASCII dominant branches" {
     var value = try regex.Regex.init(gpa, pattern, .{});
     defer value.deinit();
-    var failing = std.testing.FailingAllocator.init(gpa, .{ .fail_index = 2 });
+    var failing = std.testing.FailingAllocator.init(gpa, .{ .fail_index = 1 });
     var workspace = try regex.ReplaceWorkspace.init(failing.allocator(), value.program, .{});
     defer workspace.deinit();
     const initial = failing.allocations;

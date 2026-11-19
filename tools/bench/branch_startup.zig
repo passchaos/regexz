@@ -10,7 +10,7 @@ fn pass(workspace: *regexz.ReplaceWorkspace, input: []const u8) !usize {
     var checksum: usize = 0;
     while (offset < input.len) {
         const found = (try workspace.find(input, offset)) orelse break;
-        checksum +%= found.start +% found.end;
+        for (found.slots) |slot| checksum +%= slot;
         if (found.end <= offset) break;
         offset = found.end;
     }
@@ -94,6 +94,9 @@ pub fn main() !void {
         .{ .name = "CJK text", .input = cjk.items },
         .{ .name = "letters ASCII", .expression = "\\p{L}+", .input = "hello" },
         .{ .name = "letters Unicode", .expression = "\\p{L}+", .input = "Σ猫" },
+        .{ .name = "letters capture", .expression = "(\\p{L}+)", .input = "Σ猫" },
+        .{ .name = "nested capture", .expression = "((\\p{L}+))", .input = "Σ猫" },
+        .{ .name = "word capture", .expression = "(\\w+)", .input = "hello" },
         .{ .name = "letters text", .expression = "\\p{L}+", .input = ascii.items },
         .{ .name = "letters mixed", .expression = "\\p{L}+", .input = mixed.items },
         .{ .name = "Han text", .expression = "\\p{Han}+", .input = cjk.items },

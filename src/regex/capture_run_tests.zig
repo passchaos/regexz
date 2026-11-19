@@ -74,7 +74,7 @@ test "capture run preserves strict budgets and linear fallback captures" {
 test "capture run needs no allocations after workspace setup" {
     var value = try regex.Regex.init(gpa, "()(\\w+)()", .{});
     defer value.deinit();
-    var counter = std.testing.FailingAllocator.init(gpa, .{ .fail_index = 2 });
+    var counter = std.testing.FailingAllocator.init(gpa, .{ .fail_index = 1 });
     var workspace = try regex.ReplaceWorkspace.init(counter.allocator(), value.program, .{ .max_execution_steps = 1 });
     defer workspace.deinit();
     const input = "#" ** 40 ++ "abc 123";

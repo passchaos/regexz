@@ -92,6 +92,7 @@ pub const Workspace = struct {
     allocator: std.mem.Allocator,
     program: Program,
     limits: model.Limits,
+    /// Disjoint views into one allocation, with slots at its base.
     slots: []usize,
     best_slots: []usize,
     choices: std.ArrayList(Choice) = .empty,
@@ -178,12 +179,11 @@ pub const Workspace = struct {
         effective.max_backtrack_choices = @min(effective.max_backtrack_choices, program.limit_heap_choices);
         effective.max_capture_trail = @min(effective.max_capture_trail, program.limit_heap_choices);
         const slot_count = 2 * (@as(usize, program.trackedCaptures()) + 1);
-        const slots = try allocator.alloc(usize, slot_count);
-        @memset(slots, unset);
-        errdefer allocator.free(slots);
-        const best_slots = try allocator.alloc(usize, slot_count);
-        @memset(best_slots, unset);
-        errdefer allocator.free(best_slots);
+        const slot_storage = try allocator.alloc(usize, slot_count * 2);
+        @memset(slot_storage, unset);
+        errdefer allocator.free(slot_storage);
+        const slots = slot_storage[0..slot_count];
+        const best_slots = slot_storage[slot_count..];
         const pair_filter = try buildPairFilter(allocator, program);
         const word_run_set = shapes.wordRun(program);
         var word_table: [256]bool = .{false} ** 256;
@@ -300,8 +300,7 @@ pub const Workspace = struct {
         if (self.search_dfa_workspace) |*workspace| workspace.deinit();
         self.choices.deinit(self.allocator);
         self.trail.deinit(self.allocator);
-        self.allocator.free(self.slots);
-        self.allocator.free(self.best_slots);
+        self.allocator.free(self.slots.ptr[0 .. self.slots.len + self.best_slots.len]);
         self.* = undefined;
     }
 
