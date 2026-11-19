@@ -310,7 +310,7 @@ pub const FoldFilter = struct {
     /// Earliest possible match start given the first pair hit at or after
     /// `start`, or null when the pair is absent.
     pub fn indexOf(self: FoldFilter, input: []const u8, start: usize) ?usize {
-        if (start + 1 >= input.len) return null;
+        if (start >= input.len or input.len - start < 2) return null;
         const splat_a: Vec = @splat(self.a);
         const splat_b: Vec = @splat(self.b);
         const nonascii: Vec = @splat(@as(u8, 0x80));
@@ -322,12 +322,7 @@ pub const FoldFilter = struct {
             const chunk_b: Vec = @bitCast(raw_b);
             var mask = (foldChunk(chunk_a) == splat_a) & (foldChunk(chunk_b) == splat_b);
             mask = mask | (chunk_a >= nonascii) | (chunk_b >= nonascii);
-            if (@reduce(.Or, mask)) {
-                var i: usize = 0;
-                while (i < 16) : (i += 1) {
-                    if (self.matchesAt(input, offset + i)) return self.candidateStart(offset + i, start);
-                }
-            }
+            if (std.simd.firstTrue(mask)) |index| return self.candidateStart(offset + index, start);
         }
         while (offset + 1 < input.len) : (offset += 1) {
             if (self.matchesAt(input, offset)) return self.candidateStart(offset, start);
@@ -336,7 +331,7 @@ pub const FoldFilter = struct {
     }
 
     fn candidateStart(self: FoldFilter, hit: usize, start: usize) usize {
-        return if (hit >= self.offset) hit - self.offset else start;
+        return @max(start, hit -| self.offset);
     }
 
     fn matchesAt(self: FoldFilter, input: []const u8, offset: usize) bool {
@@ -358,6 +353,7 @@ pub const MultiFilter = struct {
 
     pub fn init(literals: []const []const u8) ?MultiFilter {
         if (literals.len == 0 or literals.len > max_pairs) return null;
+        if (literals[0].len < 2) return null;
         var filter = MultiFilter{ .literals = literals };
         const shared_first = literals[0][0];
         for (literals) |literal| {
@@ -392,36 +388,47 @@ pub const MultiFilter = struct {
     }
 
     pub fn indexOf(self: *const MultiFilter, input: []const u8, start: usize) ?usize {
-        if (start >= input.len) return null;
-        var first_splats: [max_pairs]Vec = undefined;
+        if (start >= input.len or input.len - start < 2) return null;
+        const first: Vec = @splat(@intCast(self.pairs[0] >> 8));
         var second_splats: [max_pairs]Vec = undefined;
         var pair_index: usize = 0;
         while (pair_index < self.pair_count) : (pair_index += 1) {
             const pair = self.pairs[pair_index];
-            first_splats[pair_index] = @splat(@intCast(pair >> 8));
             second_splats[pair_index] = @splat(@intCast(pair & 0xFF));
         }
         const count: usize = self.pair_count;
         var offset = start;
         while (offset + 17 <= input.len) : (offset += 16) {
             const raw: [16]u8 = input[offset..][0..16].*;
-            const next_raw: [16]u8 = input[offset + 1 ..][0..16].*;
             const chunk: Vec = @bitCast(raw);
+            const first_mask = chunk == first;
+            if (!@reduce(.Or, first_mask)) continue;
+            const next_raw: [16]u8 = input[offset + 1 ..][0..16].*;
             const next: Vec = @bitCast(next_raw);
-            var mask = @as(@Vector(16, bool), @splat(false));
+            var seconds = @as(@Vector(16, bool), @splat(false));
             pair_index = 0;
             while (pair_index < count) : (pair_index += 1) {
-                mask = mask | ((chunk == first_splats[pair_index]) & (next == second_splats[pair_index]));
+                seconds = seconds | (next == second_splats[pair_index]);
             }
+            var mask = first_mask & seconds;
             if (@reduce(.Or, mask)) {
-                var index: usize = 0;
-                while (index < 16) : (index += 1) {
-                    if (self.matchesAt(input, offset + index)) return offset + index;
+                if (@reduce(.And, mask)) {
+                    // Dense collisions already require every literal check;
+                    // a scalar pass avoids extracting the same 16 candidates.
+                    var index: usize = 0;
+                    while (index < 16) : (index += 1) {
+                        if (self.matchesAt(input, offset + index)) return offset + index;
+                    }
+                } else {
+                    while (std.simd.firstTrue(mask)) |index| {
+                        if (self.matchesAt(input, offset + index)) return offset + index;
+                        mask = mask & (std.simd.iota(u8, 16) != @as(Vec, @splat(index)));
+                    }
                 }
             }
         }
-        while (offset < input.len) : (offset += 1) {
-            if (self.matchesAt(input, offset)) return offset;
+        while (offset < input.len - 1) : (offset += 1) {
+            if (input[offset] == @as(u8, @intCast(self.pairs[0] >> 8)) and self.matchesAt(input, offset)) return offset;
         }
         return null;
     }

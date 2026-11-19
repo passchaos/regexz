@@ -1,0 +1,31 @@
+{
+  "baseline_revision": "4ec5c3b",
+  "date": "2026-11-19",
+  "command": "zig build bench-prefilter -Doptimize=ReleaseFast",
+  "runs": [
+    {
+      "version": "before",
+      "output": "three pairs absent                 2435.7 ns/search\nthree pairs collisions            93096.5 ns/search\nlate complete literal             95961.7 ns/search\nsixteen pairs absent              10706.6 ns/search\ndense candidates control         115946.8 ns/search\nshort literal hit                    12.0 ns/search\nregex prefix collisions          102864.7 ns/search\nregex late literal               104117.5 ns/search\nwide alternatives control         11088.6 ns/search\ncase-folded control                2395.5 ns/search\ncapture run control                   7.6 ns/search\n"
+    },
+    {
+      "version": "after",
+      "output": "three pairs absent                  616.4 ns/search\nthree pairs collisions            26026.6 ns/search\nlate complete literal             25844.7 ns/search\nsixteen pairs absent                606.2 ns/search\ndense candidates control         115510.1 ns/search\nshort literal hit                     4.0 ns/search\nregex prefix collisions           26666.4 ns/search\nregex late literal                26836.4 ns/search\nwide alternatives control         11596.6 ns/search\ncase-folded control                1909.8 ns/search\ncapture run control                   7.8 ns/search\n"
+    },
+    {
+      "version": "after",
+      "output": "three pairs absent                  611.5 ns/search\nthree pairs collisions            26098.0 ns/search\nlate complete literal             26269.9 ns/search\nsixteen pairs absent                612.3 ns/search\ndense candidates control         117304.1 ns/search\nshort literal hit                     3.9 ns/search\nregex prefix collisions           27504.0 ns/search\nregex late literal                27002.1 ns/search\nwide alternatives control         11015.4 ns/search\ncase-folded control                1955.8 ns/search\ncapture run control                   7.4 ns/search\n"
+    },
+    {
+      "version": "before",
+      "output": "three pairs absent                 2507.4 ns/search\nthree pairs collisions            95668.4 ns/search\nlate complete literal             93081.1 ns/search\nsixteen pairs absent              10185.8 ns/search\ndense candidates control         116525.1 ns/search\nshort literal hit                    12.0 ns/search\nregex prefix collisions          103980.6 ns/search\nregex late literal               105375.2 ns/search\nwide alternatives control         11470.8 ns/search\ncase-folded control                1858.7 ns/search\ncapture run control                   7.8 ns/search\n"
+    },
+    {
+      "version": "before",
+      "output": "three pairs absent                 2440.6 ns/search\nthree pairs collisions            94880.9 ns/search\nlate complete literal             94944.2 ns/search\nsixteen pairs absent              10858.2 ns/search\ndense candidates control         118581.5 ns/search\nshort literal hit                    12.3 ns/search\nregex prefix collisions          104866.0 ns/search\nregex late literal               104325.1 ns/search\nwide alternatives control         13403.8 ns/search\ncase-folded control                1948.2 ns/search\ncapture run control                   9.4 ns/search\n"
+    },
+    {
+      "version": "after",
+      "output": "three pairs absent                  627.9 ns/search\nthree pairs collisions            29872.7 ns/search\nlate complete literal             29223.6 ns/search\nsixteen pairs absent                617.0 ns/search\ndense candidates control         122936.9 ns/search\nshort literal hit                     3.9 ns/search\nregex prefix collisions           27980.6 ns/search\nregex late literal                30124.7 ns/search\nwide alternatives control         14625.3 ns/search\ncase-folded control                2192.2 ns/search\ncapture run control                   8.9 ns/search\n"
+    }
+  ]
+}

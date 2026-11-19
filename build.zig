@@ -85,4 +85,37 @@ pub fn build(b: *std.Build) void {
     const run_capture_bench = b.addRunArtifact(capture_bench_exe);
     const capture_bench_step = b.step("bench-capture", "Run scoped capture-search benchmarks and count first-find allocations");
     capture_bench_step.dependOn(&run_capture_bench.step);
+
+    const prefilter_mod = b.createModule(.{
+        .root_source_file = b.path("src/regex/prefilter.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    const prefilter_bench_mod = b.createModule(.{
+        .root_source_file = b.path("tools/bench/prefilter.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    prefilter_bench_mod.addImport("prefilter", prefilter_mod);
+    const prefilter_bench_exe = b.addExecutable(.{
+        .name = "regexz-prefilter-bench",
+        .root_module = prefilter_bench_mod,
+    });
+    const run_prefilter_bench = b.addRunArtifact(prefilter_bench_exe);
+    const prefilter_bench_step = b.step("bench-prefilter", "Run scoped shared-prefix and case-folded search benchmarks");
+    prefilter_bench_step.dependOn(&run_prefilter_bench.step);
+
+    const prefilter_search_mod = b.createModule(.{
+        .root_source_file = b.path("tools/bench/prefilter_search.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    prefilter_search_mod.addImport("regexz", regexz_mod);
+    const prefilter_search_exe = b.addExecutable(.{
+        .name = "regexz-prefilter-search-bench",
+        .root_module = prefilter_search_mod,
+    });
+    const run_prefilter_search = b.addRunArtifact(prefilter_search_exe);
+    run_prefilter_search.step.dependOn(&run_prefilter_bench.step);
+    prefilter_bench_step.dependOn(&run_prefilter_search.step);
 }

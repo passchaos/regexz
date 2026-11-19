@@ -383,6 +383,7 @@ test {
     _ = @import("regex/budget_tests.zig");
     _ = @import("regex/engine_tests.zig");
     _ = @import("regex/capture_run_tests.zig");
+    _ = @import("regex/prefilter_tests.zig");
     _ = @import("regex/extended_tests.zig");
     _ = @import("regex/api_tests.zig");
     _ = @import("regex/set_tests.zig");

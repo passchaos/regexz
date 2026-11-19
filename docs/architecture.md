@@ -84,9 +84,9 @@ anything it cannot prove.
 | Filter | Used for |
 | --- | --- |
 | `FirstFilter` | SIMD 16-byte first-byte scan (byte splats or up to four ranges). Cached per workspace. |
-| `MultiFilter` | SIMD two-byte prefixes for shared-first-byte literal sets. |
+| `MultiFilter` | SIMD two-byte prefixes for shared-first-byte literal sets. Checks the shared byte once per block and verifies only candidate lanes; dense collisions retain a scalar verification pass. |
 | `PairSet` | Exact two-byte bitmap for wide start-literal alternations; returns the first occurrence so the DFA can start there. |
-| `FoldFilter` | Case-folded whole-pattern literals: SIMD scan for the rarest folded pair; non-ASCII bytes stay conservative. |
+| `FoldFilter` | Case-folded whole-pattern literals: SIMD scan for the rarest folded pair; non-ASCII bytes stay conservative, and candidate starts are clamped to the caller's requested offset. |
 
 ### Compile-time engine
 

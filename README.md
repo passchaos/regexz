@@ -331,6 +331,7 @@ zig build test-lib -Dtest-filter="..."
 zig build bench -Doptimize=ReleaseFast
 zig build bench-replace -Doptimize=ReleaseFast # scoped timings and output allocation counts
 zig build bench-capture -Doptimize=ReleaseFast # capture search and first-find allocations
+zig build bench-prefilter -Doptimize=ReleaseFast # shared-prefix filters and Regex API searches
 python3 tools/bench/check.py         # compare against tools/bench/baseline.json (--update to refresh)
 python3 tools/fuzz/run.py            # fuzz full match, find spans, and captures against V8
 python3 tools/fuzz/extended.py       # fuzz lookaround/backref/capture semantics against V8
