@@ -48,6 +48,7 @@ pub fn containsByte(input: []const u8, start: usize, byte: u8) bool {
 
 /// Whether `needle` (at least two bytes) occurs at or after `start`.
 pub fn containsLiteral(input: []const u8, start: usize, needle: []const u8) bool {
+    if (needle.len == 2) return prefilter.indexOfPair(input, start, needle[0], needle[1]) != null;
     var offset = start;
     while (prefilter.indexOfByte(input, offset, needle[0])) |found| {
         if (needle.len <= input.len - found and std.mem.eql(u8, input[found..][0..needle.len], needle)) return true;

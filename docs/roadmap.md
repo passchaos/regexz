@@ -322,7 +322,9 @@ Where the remaining time goes:
    `setA+ literal` without a trailing run (`\w+@`, `\d+-`, `\w+ 12345`),
    and a mandatory `\A`/`^` at the body start makes searches past offset zero
    return immediately (`^Hello` 3.8 µs -> 23 ns). Required-literal scans use
-   the SIMD byte scan (`.*foo` 8.5 -> 4.1 µs, `\w*foo` 6.6 -> 4.2 µs).
+   the SIMD byte scan (`.*foo` 8.5 -> 4.1 µs, `\w*foo` 6.6 -> 4.2 µs), and
+   two-byte literals use a SIMD pair scan (`((a)(b))+` no-match 4.5 us ->
+   0.7 us, against ~0.5 us for the same-host Rust reference).
    `extractCaptures` also tries a deterministic replay for straight-line
    programs of saves, literals, and forced greedy runs, which took the email
    benchmark from ~68 µs to ~42 µs before the chain path; shapes that need

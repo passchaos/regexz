@@ -30,6 +30,30 @@ pub fn indexOfByte(input: []const u8, start: usize, byte: u8) ?usize {
     return null;
 }
 
+/// First offset at or after `start` where `a` is immediately followed by
+/// `b`, scanned 16 bytes at a time. Returns null when the pair is absent.
+pub fn indexOfPair(input: []const u8, start: usize, a: u8, b: u8) ?usize {
+    if (start + 1 >= input.len) return null;
+    const splat_a: Vec = @splat(a);
+    const splat_b: Vec = @splat(b);
+    var offset = start;
+    while (offset + 16 <= input.len - 1) : (offset += 16) {
+        const chunk_a: Vec = input[offset..][0..16].*;
+        const chunk_b: Vec = input[offset + 1 ..][0..16].*;
+        const mask = (chunk_a == splat_a) & (chunk_b == splat_b);
+        if (@reduce(.Or, mask)) {
+            var i: usize = 0;
+            while (i < 16) : (i += 1) {
+                if (input[offset + i] == a and input[offset + i + 1] == b) return offset + i;
+            }
+        }
+    }
+    while (offset + 1 < input.len) : (offset += 1) {
+        if (input[offset] == a and input[offset + 1] == b) return offset;
+    }
+    return null;
+}
+
 /// Cached first-byte filter. Building the ASCII byte list costs 128 set
 /// probes, so workspaces construct this once instead of on every search.
 pub const FirstFilter = struct {

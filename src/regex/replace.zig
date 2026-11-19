@@ -55,6 +55,7 @@ pub const ReplaceFn = *const fn (
 
 fn indexOfLiteral(input: []const u8, start: usize, needle: []const u8) ?usize {
     if (needle.len == 0) return if (start <= input.len) start else null;
+    if (needle.len == 2) return prefilter.indexOfPair(input, start, needle[0], needle[1]);
     var offset = start;
     while (prefilter.indexOfByte(input, offset, needle[0])) |found| {
         if (needle.len <= input.len - found and std.mem.eql(u8, input[found..][0..needle.len], needle)) return found;
