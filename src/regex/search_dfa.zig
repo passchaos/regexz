@@ -26,6 +26,7 @@ const Program = @import("compile.zig").Program;
 const prefilter = @import("prefilter.zig");
 const utf8_set = @import("utf8_set.zig");
 const search_cache = @import("search_cache.zig");
+const search_graph = @import("search_graph.zig");
 
 pub const Match = struct { start: usize, end: usize };
 const Error = std.mem.Allocator.Error || error{RegexLimitExceeded};
@@ -156,9 +157,12 @@ pub const Workspace = struct {
     /// Returns null when the program is not eligible for the search DFA.
     pub fn init(allocator: std.mem.Allocator, program: Program) std.mem.Allocator.Error!?Workspace {
         const mode = eligibility(program) orelse return null;
-        const bits = (try assignBits(allocator, program)) orelse return null;
-        errdefer allocator.free(bits);
         const count = program.instructions.len;
+        var walk = try search_graph.Walk.init(allocator, count);
+        var walk_live = true;
+        defer if (walk_live) walk.deinit(allocator);
+        const bits = (try assignBits(allocator, program, &walk)) orelse return null;
+        errdefer allocator.free(bits);
         const body_mask = try allocator.alloc(u64, count);
         errdefer allocator.free(body_mask);
         @memset(body_mask, 0);
@@ -168,7 +172,7 @@ pub const Workspace = struct {
         const loop_split = try allocator.alloc(bool, count);
         errdefer allocator.free(loop_split);
         @memset(loop_split, false);
-        try computeLoopMasks(allocator, program, bits, body_mask, body_left, loop_split);
+        computeLoopMasks(program, bits, body_mask, body_left, loop_split, &walk);
         // Static choice-bit priorities are exact for alternations and simple
         // single-set loops, but a loop body with internal choices needs
         // iteration-aware priority tracking. Keep those programs on the
@@ -192,7 +196,7 @@ pub const Workspace = struct {
                     continue,
                 else => continue,
             };
-            if (!try exitPathSafe(allocator, program, exit)) {
+            if (!exitPathSafe(program, exit, &walk)) {
                 allocator.free(bits);
                 allocator.free(body_mask);
                 allocator.free(body_left);
@@ -222,7 +226,7 @@ pub const Workspace = struct {
             };
             if (split.alternation or !loop_split[index] or body_left[index]) continue;
             if (lazy_first) continue;
-            if (!try zeroWidthExitSafe(allocator, program, split.left)) {
+            if (!zeroWidthExitSafe(program, split.left, &walk)) {
                 allocator.free(bits);
                 allocator.free(body_mask);
                 allocator.free(body_left);
@@ -230,6 +234,8 @@ pub const Workspace = struct {
                 return null;
             }
         }
+        walk.deinit(allocator);
+        walk_live = false;
         const automata = try allocator.alloc(?utf8_set.Automaton, count);
         errdefer allocator.free(automata);
         @memset(automata, null);
@@ -414,22 +420,14 @@ pub const Workspace = struct {
 
     /// Assign a priority bit to every choice instruction. Pre-order, left
     /// first; ancestors receive more significant bits than descendants.
-    fn assignBits(allocator: std.mem.Allocator, program: Program) std.mem.Allocator.Error!?[]u8 {
+    fn assignBits(allocator: std.mem.Allocator, program: Program, walk: *search_graph.Walk) std.mem.Allocator.Error!?[]u8 {
         const count = program.instructions.len;
         const bits = try allocator.alloc(u8, count);
         errdefer allocator.free(bits);
         @memset(bits, 0xFF);
-        const seen = try allocator.alloc(bool, count);
-        defer allocator.free(seen);
-        @memset(seen, false);
-        var stack: std.ArrayList(u32) = .empty;
-        defer stack.deinit(allocator);
-        try stack.ensureTotalCapacity(allocator, count);
         var counter: usize = 0;
-        try stack.append(allocator, @intCast(program.body));
-        while (stack.pop()) |pc| {
-            if (seen[pc]) continue;
-            seen[pc] = true;
+        walk.reset(program.body);
+        while (walk.pop()) |pc| {
             switch (program.instructions[pc]) {
                 .split => |split| {
                     if (counter >= 64) {
@@ -438,8 +436,8 @@ pub const Workspace = struct {
                     }
                     bits[pc] = @intCast(63 - counter);
                     counter += 1;
-                    try stack.append(allocator, @intCast(split.right));
-                    try stack.append(allocator, @intCast(split.left));
+                    walk.push(split.right);
+                    walk.push(split.left);
                 },
                 .star => |star| {
                     if (counter >= 64) {
@@ -448,14 +446,14 @@ pub const Workspace = struct {
                     }
                     bits[pc] = @intCast(63 - counter);
                     counter += 1;
-                    try stack.append(allocator, @intCast(star.next));
+                    walk.push(star.next);
                 },
-                .save => |save| try stack.append(allocator, @intCast(save.next)),
-                .reset_captures => |reset| try stack.append(allocator, @intCast(reset.next)),
-                .lookahead => |look| try stack.append(allocator, @intCast(look.next)),
-                .consume => |consume| try stack.append(allocator, @intCast(consume.next)),
-                .literal_byte => |literal| try stack.append(allocator, @intCast(literal.next)),
-                .literal_rune => |literal| try stack.append(allocator, @intCast(literal.next)),
+                .save => |save| walk.push(save.next),
+                .reset_captures => |reset| walk.push(reset.next),
+                .lookahead => |look| walk.push(look.next),
+                .consume => |consume| walk.push(consume.next),
+                .literal_byte => |literal| walk.push(literal.next),
+                .literal_rune => |literal| walk.push(literal.next),
                 .accept, .sub_accept, .ret => {},
                 else => {
                     allocator.free(bits);
@@ -466,37 +464,28 @@ pub const Workspace = struct {
         return bits;
     }
 
-    fn successorSeen(program: Program, pc: usize, target: usize, seen: []bool, stack: *std.ArrayList(u32), allocator: std.mem.Allocator) std.mem.Allocator.Error!bool {
-        if (seen[pc]) return false;
-        seen[pc] = true;
-        if (pc == target) return true;
+    fn pushSuccessors(program: Program, pc: usize, walk: *search_graph.Walk) void {
         switch (program.instructions[pc]) {
             .split => |split| {
-                try stack.append(allocator, @intCast(split.left));
-                try stack.append(allocator, @intCast(split.right));
+                walk.push(split.left);
+                walk.push(split.right);
             },
-            .star => |star| try stack.append(allocator, @intCast(star.next)),
-            .consume => |consume| try stack.append(allocator, @intCast(consume.next)),
-            .literal_byte => |literal| try stack.append(allocator, @intCast(literal.next)),
-            .literal_rune => |literal| try stack.append(allocator, @intCast(literal.next)),
-            .save => |save| try stack.append(allocator, @intCast(save.next)),
-            .reset_captures => |reset| try stack.append(allocator, @intCast(reset.next)),
-            .lookahead => |look| try stack.append(allocator, @intCast(look.next)),
+            .star => |star| walk.push(star.next),
+            .consume => |consume| walk.push(consume.next),
+            .literal_byte => |literal| walk.push(literal.next),
+            .literal_rune => |literal| walk.push(literal.next),
+            .save => |save| walk.push(save.next),
+            .reset_captures => |reset| walk.push(reset.next),
+            .lookahead => |look| walk.push(look.next),
             else => {},
         }
-        return false;
     }
 
-    fn reaches(allocator: std.mem.Allocator, program: Program, start: usize, target: usize) std.mem.Allocator.Error!bool {
-        const count = program.instructions.len;
-        const seen = try allocator.alloc(bool, count);
-        defer allocator.free(seen);
-        @memset(seen, false);
-        var stack: std.ArrayList(u32) = .empty;
-        defer stack.deinit(allocator);
-        try stack.append(allocator, @intCast(start));
-        while (stack.pop()) |pc| {
-            if (try successorSeen(program, pc, target, seen, &stack, allocator)) return true;
+    fn reaches(program: Program, start: usize, target: usize, walk: *search_graph.Walk) bool {
+        walk.reset(start);
+        while (walk.pop()) |pc| {
+            if (pc == target) return true;
+            pushSuccessors(program, pc, walk);
         }
         return false;
     }
@@ -508,22 +497,14 @@ pub const Workspace = struct {
     /// Lazy loops prefer the first successful exit. A static priority bit
     /// cannot distinguish later exits, so a lazy unbounded loop is only safe
     /// on the DFA when its exit reaches accept without consuming or looping.
-    fn zeroWidthExitSafe(allocator: std.mem.Allocator, program: Program, start: usize) std.mem.Allocator.Error!bool {
-        const count = program.instructions.len;
-        const seen = try allocator.alloc(bool, count);
-        defer allocator.free(seen);
-        @memset(seen, false);
-        var stack: std.ArrayList(u32) = .empty;
-        defer stack.deinit(allocator);
-        try stack.append(allocator, @intCast(start));
-        while (stack.pop()) |pc| {
-            if (seen[pc]) continue;
-            seen[pc] = true;
+    fn zeroWidthExitSafe(program: Program, start: usize, walk: *search_graph.Walk) bool {
+        walk.reset(start);
+        while (walk.pop()) |pc| {
             switch (program.instructions[pc]) {
                 .split, .star, .dispatch, .consume, .literal_byte, .literal_rune, .grapheme, .byte => return false,
-                .save => |save| try stack.append(allocator, @intCast(save.next)),
-                .reset_captures => |reset| try stack.append(allocator, @intCast(reset.next)),
-                .lookahead => |look| try stack.append(allocator, @intCast(look.next)),
+                .save => |save| walk.push(save.next),
+                .reset_captures => |reset| walk.push(reset.next),
+                .lookahead => |look| walk.push(look.next),
                 .accept, .sub_accept, .ret => {},
                 else => return false,
             }
@@ -531,26 +512,18 @@ pub const Workspace = struct {
         return true;
     }
 
-    fn exitPathSafe(allocator: std.mem.Allocator, program: Program, start: usize) std.mem.Allocator.Error!bool {
-        const count = program.instructions.len;
-        const seen = try allocator.alloc(bool, count);
-        defer allocator.free(seen);
-        @memset(seen, false);
-        var stack: std.ArrayList(u32) = .empty;
-        defer stack.deinit(allocator);
-        try stack.append(allocator, @intCast(start));
-        while (stack.pop()) |pc| {
-            if (seen[pc]) continue;
-            seen[pc] = true;
+    fn exitPathSafe(program: Program, start: usize, walk: *search_graph.Walk) bool {
+        walk.reset(start);
+        while (walk.pop()) |pc| {
             switch (program.instructions[pc]) {
                 .split, .dispatch => return false,
-                .star => |star| try stack.append(allocator, @intCast(star.next)),
-                .consume => |consume| try stack.append(allocator, @intCast(consume.next)),
-                .literal_byte => |literal| try stack.append(allocator, @intCast(literal.next)),
-                .literal_rune => |literal| try stack.append(allocator, @intCast(literal.next)),
-                .save => |save| try stack.append(allocator, @intCast(save.next)),
-                .reset_captures => |reset| try stack.append(allocator, @intCast(reset.next)),
-                .lookahead => |look| try stack.append(allocator, @intCast(look.next)),
+                .star => |star| walk.push(star.next),
+                .consume => |consume| walk.push(consume.next),
+                .literal_byte => |literal| walk.push(literal.next),
+                .literal_rune => |literal| walk.push(literal.next),
+                .save => |save| walk.push(save.next),
+                .reset_captures => |reset| walk.push(reset.next),
+                .lookahead => |look| walk.push(look.next),
                 .accept, .sub_accept, .ret => {},
                 else => return false,
             }
@@ -558,50 +531,42 @@ pub const Workspace = struct {
         return true;
     }
 
-    fn computeLoopMasks(allocator: std.mem.Allocator, program: Program, bits: []const u8, body_mask: []u64, body_left: []bool, loop_split: []bool) std.mem.Allocator.Error!void {
-        const count = program.instructions.len;
-        const seen = try allocator.alloc(bool, count);
-        defer allocator.free(seen);
-        var stack: std.ArrayList(u32) = .empty;
-        defer stack.deinit(allocator);
+    fn computeLoopMasks(program: Program, bits: []const u8, body_mask: []u64, body_left: []bool, loop_split: []bool, walk: *search_graph.Walk) void {
         for (program.instructions, 0..) |instruction, index| {
             const split = switch (instruction) {
                 .split => |value| value,
                 else => continue,
             };
             if (split.alternation) continue;
-            const left_reaches = try reaches(allocator, program, split.left, index);
-            const right_reaches = try reaches(allocator, program, split.right, index);
+            const left_reaches = reaches(program, split.left, index, walk);
+            const right_reaches = reaches(program, split.right, index, walk);
             if (left_reaches == right_reaches) continue;
             loop_split[index] = true;
             const left_is_body = left_reaches;
             const body = if (left_is_body) split.left else split.right;
             body_left[index] = left_is_body;
-            @memset(seen, false);
-            stack.clearRetainingCapacity();
-            try stack.append(allocator, @intCast(body));
+            walk.reset(body);
             var mask: u64 = 0;
-            while (stack.pop()) |pc| {
-                if (pc == index or seen[pc]) continue;
-                seen[pc] = true;
+            while (walk.pop()) |pc| {
+                if (pc == index) continue;
                 switch (program.instructions[pc]) {
                     .split => |value| {
                         const bit = bits[pc];
                         if (bit != 0xFF) mask |= @as(u64, 1) << @intCast(bit);
-                        try stack.append(allocator, @intCast(value.left));
-                        try stack.append(allocator, @intCast(value.right));
+                        walk.push(value.left);
+                        walk.push(value.right);
                     },
                     .star => |value| {
                         const bit = bits[pc];
                         if (bit != 0xFF) mask |= @as(u64, 1) << @intCast(bit);
-                        try stack.append(allocator, @intCast(value.next));
+                        walk.push(value.next);
                     },
-                    .consume => |value| try stack.append(allocator, @intCast(value.next)),
-                    .literal_byte => |value| try stack.append(allocator, @intCast(value.next)),
-                    .literal_rune => |value| try stack.append(allocator, @intCast(value.next)),
-                    .save => |value| try stack.append(allocator, @intCast(value.next)),
-                    .reset_captures => |value| try stack.append(allocator, @intCast(value.next)),
-                    .lookahead => |value| try stack.append(allocator, @intCast(value.next)),
+                    .consume => |value| walk.push(value.next),
+                    .literal_byte => |value| walk.push(value.next),
+                    .literal_rune => |value| walk.push(value.next),
+                    .save => |value| walk.push(value.next),
+                    .reset_captures => |value| walk.push(value.next),
+                    .lookahead => |value| walk.push(value.next),
                     else => {},
                 }
             }

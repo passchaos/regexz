@@ -57,7 +57,7 @@ def generate(case_count: int, seed: int) -> list[dict]:
         inputs.append("".join(random.choice(ALPHABET) for _ in range(random.randint(1, 8))))
     inputs += ["a", "b", "ab", "aab", "abc", "a1", "  ", "\n", "\u732b", "\u0394\u03c3", "AaBb"]
     inputs += ["sunday saturday september", "seed suit sail", "STRASSE xx strasse", "x" * 15 + "sunday", "foobax foobar foobaz"]
-    inputs += ["alpha bravo whiskey xray", "Δ1σ2Δ", "一1伀0币", "hello一"]
+    inputs += ["alpha bravo whiskey xray", "Δ1σ2Δ", "一1伀0币", "hello一", "abcdefghijZ hello123XYZ aab"]
     cases = []
     seen = set()
     # Keep capture-of-run shapes represented: quantifying the existing `(a)`
@@ -78,6 +78,9 @@ def generate(case_count: int, seed: int) -> list[dict]:
     seeds += [("(?:\\p{Script=Greek}|[0-9])+", "u"), ("(?:\\p{Script=Han}|[0-9])+", "u")]
     seeds += [(pattern, "u") for pattern in [
         "[a-z]+(?=\\p{Script=Han})", "[a-z]+(?!\\p{Script=Han})", "\\p{L}+(?!\\p{L})",
+    ]]
+    seeds += [(pattern, "u") for pattern in [
+        "(?:ab)?(?:cd)?(?:ef)?(?:gh)?(?:ij)?Z", "([a-z]+[0-9]+[A-Z]+)", "a*?b*",
     ]]
     for pattern, flags in seeds[:case_count]:
         seen.add((pattern, flags))

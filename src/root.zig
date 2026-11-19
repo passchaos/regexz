@@ -393,6 +393,7 @@ test {
     _ = @import("regex/nibble_filter_tests.zig");
     _ = @import("regex/rune_cache_tests.zig");
     _ = @import("regex/search_cache_tests.zig");
+    _ = @import("regex/search_graph_tests.zig");
     _ = @import("regex/extended_tests.zig");
     _ = @import("regex/api_tests.zig");
     _ = @import("regex/set_tests.zig");

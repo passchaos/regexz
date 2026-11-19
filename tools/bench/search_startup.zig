@@ -79,6 +79,10 @@ pub fn main() !void {
         .{ .name = "byte DFA control", .pattern = "\\p{Han}+x", .input = "你好x" },
         .{ .name = "literal API control", .pattern = "hello", .input = "xx hello" },
         .{ .name = "ineligible control", .pattern = "(?:ab|a)*b", .input = "aab" },
+        .{ .name = "optional chain", .pattern = "(?:ab)?(?:cd)?(?:ef)?(?:gh)?(?:ij)?Z", .input = "abcdefghijZ" },
+        .{ .name = "greedy capture chain", .pattern = "([a-z]+[0-9]+[A-Z]+)", .input = "hello123XYZ" },
+        .{ .name = "mixed lazy rejection", .pattern = "a*?b*", .input = "aab" },
+        .{ .name = "Qwen setup", .pattern = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+", .input = "hello! world 猫" },
     };
     for (cases) |case| {
         for ([_]Mode{ .dfa_init, .dfa_cold, .api_cold, .dfa_warm, .api_warm }) |mode| {
