@@ -220,7 +220,9 @@ Measured on an Apple Silicon macOS host. "Before" is the initial commit state;
 | `replaceAll` `a+`, 32 KiB | ~265 µs | ~64 µs (480 MiB/s) | ~96 µs | ~47 µs |
 | `replaceAll` capture email `$2 <$1>`, 18 KiB | — | ~39 µs (~430 MiB/s) | ~84 µs (~200 MiB/s) | — |
 | `replaceAll` word capture `[$1]`, 23 KiB | — | ~209 µs (~115 MiB/s) | ~723 µs (~33 MiB/s) | — |
-| Compile xDS-like pattern | ~2.9 µs | ~3.1–3.9 µs | ~10.8 µs | ~61 ns† |
+| Compile xDS-like pattern | ~2.9 µs | ~3.7 µs (smp ~1.9 µs) | ~20.8 µs | ~61 ns† |
+| Compile Qwen tokenizer | — | ~249 µs | ~403 µs | — |
+| `split` whitespace, 22 KiB | — | ~42 µs (570 MiB/s) | ~62 µs | — |
 | Compile xDS-like (smp allocator) | — | ~1.5 µs | — | — |
 
 \* Rust baseline omits the `\s+(?!\S)` branch because Rust `regex` has no

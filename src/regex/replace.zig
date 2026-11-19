@@ -319,7 +319,6 @@ pub const Workspace = struct {
         input: []const u8,
         search_start: usize,
     ) Error!?Match {
-        self.steps = 0;
         if (self.start_anchored and search_start != 0) return null;
         switch (self.fast_kind) {
             .none => {
@@ -649,6 +648,9 @@ pub const Workspace = struct {
     /// Leftmost-first search honoring `(*NOTEMPTY)` and
     /// `(*NOTEMPTY_ATSTART)`: rejected empty matches advance by one rune.
     fn findInternal(self: *Workspace, input: []const u8, search_start: usize) Error!?Match {
+        // The deterministic fast paths above never consume the step budget,
+        // so the reset lives here instead of on every find call.
+        self.steps = 0;
         var start = search_start;
         while (true) {
             const match = (try self.findOnce(input, start)) orelse return null;

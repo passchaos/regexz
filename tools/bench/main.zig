@@ -235,6 +235,41 @@ pub fn main() !void {
     for (0..1500) |_| try url_text.appendSlice(gpa, "see https://example.com/a/b?c=1 and http://x.y ");
     try benchFind(io, out, "find URL", "https?://[^\\s]+", url_text.items, 200, .{});
 
+    {
+        // Large-pattern compile: the tokenizer's Unicode classes produce a
+        // large program.
+        const iterations = 2000;
+        const start = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds;
+        for (0..iterations) |_| {
+            var compiled = try regexz.Regex.init(gpa, qwen_no_lookahead, ucp);
+            compiled.deinit();
+        }
+        try report(out, "compile Qwen tokenizer (page)", iterations, 0, elapsed(io, .{ .nanoseconds = start }));
+        const start2 = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds;
+        for (0..iterations) |_| {
+            var compiled = try regexz.Regex.init(std.heap.smp_allocator, qwen_no_lookahead, ucp);
+            compiled.deinit();
+        }
+        try report(out, "compile Qwen tokenizer (smp)", iterations, 0, elapsed(io, .{ .nanoseconds = start2 }));
+    }
+
+    {
+        // Split throughput: findAll + slice assembly.
+        var value = try regexz.Regex.init(gpa, "\\s+", .{});
+        defer value.deinit();
+        const iterations = 200;
+        for (0..20) |_| {
+            const parts = try value.split(gpa, text.items);
+            gpa.free(parts);
+        }
+        const start = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds;
+        for (0..iterations) |_| {
+            const parts = try value.split(gpa, text.items);
+            gpa.free(parts);
+        }
+        try report(out, "split whitespace (22 KiB)", iterations, text.items.len, elapsed(io, .{ .nanoseconds = start }));
+    }
+
     var kv_text: std.ArrayList(u8) = .empty;
     defer kv_text.deinit(gpa);
     for (0..2000) |_| try kv_text.appendSlice(gpa, "server.port: 8080\nlog.level: debug\n");
