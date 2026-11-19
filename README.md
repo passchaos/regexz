@@ -346,30 +346,30 @@ busy Apple Silicon host (absolute numbers vary with load):
 | `Regex.matches`, class pattern | ~3.7 µs | ~9 ns |
 | `Regex.matches`, xDS-like pattern | ~3.6 µs | ~15 ns |
 | Reused workspace, class pattern | ~171 ns | ~8 ns |
-| Reused workspace, xDS-like pattern | ~233 ns | ~16 ns |
-| Reused workspace, `(?i)` literal | ~72 ns | ~5 ns |
+| Reused workspace, xDS-like pattern | ~233 ns | ~12 ns |
+| Reused workspace, `(?i)` literal | ~72 ns | ~7 ns |
 | Full match, backref `(a)\1` (reuse) | ~5.5 µs | ~17 ns |
 | Full match, atomic `(?>a+)a` (reuse) | ~5.2 µs | ~23 ns |
 | `StreamScanner` `[a-z]+` (216 KiB, 4 KiB chunks) | ~31 ms | ~0.32 ms (650 MiB/s) |
 | `StreamScanner` `[a-z]*` (216 KiB, 4 KiB chunks) | ~3.5 ms | ~0.51 ms (416 MiB/s) |
-| `StreamScanner` `[a-z]+ [a-z]+` (216 KiB, 4 KiB chunks) | — | ~0.36 ms (585 MiB/s) |
+| `StreamScanner` `[a-z]+ [a-z]+` (216 KiB, 4 KiB chunks) | — | ~0.42 ms (505 MiB/s) |
 | `StreamScanner` `\w+@` (18 KiB, 4 KiB chunks) | ~2.9 ms | ~0.032 ms (517 MiB/s) |
 | `StreamScanner` Han chain (191 KiB, 4 KiB chunks) | — | ~0.41 ms (456 MiB/s) |
-| `find` ASCII run `[a-z]+` (216 KiB) | ~27.6 µs | ~18 µs (1.3 GiB/s) |
-| Qwen tokenizer `find` (22 KiB) | ~842 µs | ~68 µs (350 MiB/s) |
-| CJK tokenizer `find` (191 KiB) | — | ~200–230 µs (~850–980 MiB/s) |
-| `\p{Han}+` class scan (191 KiB) | ~635 µs | ~173–200 µs (~940–1080 MiB/s) |
+| `find` ASCII run `[a-z]+` (216 KiB) | ~27.6 µs | ~39 µs (615 MiB/s) |
+| Qwen tokenizer `find` (22 KiB) | ~842 µs | ~47 µs (508 MiB/s) |
+| CJK tokenizer `find` (191 KiB) | — | ~164 µs (~1.1 GiB/s) |
+| `\p{Han}+` class scan (191 KiB) | ~635 µs | ~125 µs (1.5 GiB/s) |
 | Full match, Han class (191 KiB) | — | ~204 µs (~800 MiB/s) |
 | Full match, ASCII class (216 KiB) | — | ~52 µs (~4.0 GiB/s) |
-| Full match, ASCII loop (216 KiB) | — | ~311 µs (~675 MiB/s) |
-| `replaceAll` `a+` (32 KiB) | ~265 µs | ~64 µs |
-| `find` literal after a 4 KiB prefix | — | ~55 ns |
-| `find` xDS-like after a 4 KiB prefix | — | ~94 ns |
-| `find` multi-literal after a 4 KiB prefix | ~2.0 µs | ~0.22 µs |
+| Full match, ASCII loop (216 KiB) | — | ~74 µs (~2.8 GiB/s) |
+| `replaceAll` `a+` (32 KiB) | ~265 µs | ~69 µs |
+| `find` literal after a 4 KiB prefix | — | ~85 ns |
+| `find` xDS-like after a 4 KiB prefix | — | ~215 ns |
+| `find` multi-literal after a 4 KiB prefix | ~2.0 µs | ~1.4 µs |
 | `find` capture email tokens (18 KiB) | ~161 µs | ~11 µs |
 | `find` capture no-match scan (23 KiB) | ~617 µs | ~2.2 µs |
 | `find` loop-exit no-match (23 KiB) | ~120 µs | ~4.7 µs |
-| `find` suffix no-match (23 KiB) | ~238 µs | ~14 µs |
+| `find` suffix no-match (23 KiB) | ~238 µs | ~4 µs |
 | `find` extended no-match (23 KiB) | ~275 µs | ~2.5 µs |
 | `RegexSet`, 9 no-match patterns (23 KiB) | ~1.7 ms | ~40 µs |
 | Compile xDS-like pattern | ~2.9 µs | ~3.1–3.9 µs |
@@ -389,12 +389,15 @@ only the matched slice to recover groups.
 
 For external context on the same host and load, Rust `regex` 1.13 full-matches
 these short patterns in ~8–11 ns and Node 26 in ~9–14 ns. The Qwen search
-takes ~67 µs in Rust (without the lookahead branch) and ~195 µs in Node; the
-`replaceAll` case takes ~91 µs in Rust and ~47 µs in Node. The remaining gap
-to Rust is the fully dynamic leftmost-first DFA needed for loops whose exits
-compete with later choices; capture programs use DFA bounds plus a short
-replay (with backtracking/Pike fallback) and the Pike VM remains the
-linear-time guarantee; see [docs/roadmap.md](docs/roadmap.md).
+takes ~59 µs in Rust (without the lookahead branch) and ~195 µs in Node; the
+CJK tokenizer takes ~200–216 µs in Rust; the `replaceAll` case takes ~91 µs
+in Rust and ~47 µs in Node. The Qwen/CJK tokenizer searches, the Han class
+scan, the ASCII loop full match, and the replacement cases now run ahead of
+the same-host Rust reference; the remaining differences are nanosecond-scale
+per-call overheads. Capture programs use DFA bounds plus a short replay
+(with backtracking/Pike fallback) and the Pike VM remains the linear-time
+guarantee; see [docs/roadmap.md](docs/roadmap.md) and
+[docs/architecture.md](docs/architecture.md).
 
 Extended patterns intentionally trade the linear guarantee for feature
 coverage. They still have hard step, choice, capture-trail, and
