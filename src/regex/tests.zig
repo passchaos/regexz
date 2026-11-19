@@ -953,3 +953,35 @@ test "front cache survives lazy DFA state growth" {
         }
     }
 }
+
+test "number run fast path" {
+    var value = try regex.Regex.init(gpa, "-?\\d+(?:\\.\\d+)?", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.number_run);
+
+    const cases = [_]struct { input: []const u8, spans: []const [2]usize }{
+        .{ .input = "", .spans = &.{} },
+        .{ .input = "42", .spans = &.{.{ 0, 2 }} },
+        .{ .input = "-12.5", .spans = &.{.{ 0, 5 }} },
+        .{ .input = "x=-3 y=0.25", .spans = &.{ .{ 2, 4 }, .{ 7, 11 } } },
+        .{ .input = "3.", .spans = &.{.{ 0, 1 }} },
+        .{ .input = "-", .spans = &.{} },
+        .{ .input = "-x 7", .spans = &.{.{ 3, 4 }} },
+        .{ .input = "1.2.3", .spans = &.{ .{ 0, 3 }, .{ 4, 5 } } },
+        .{ .input = "12.x", .spans = &.{.{ 0, 2 }} },
+        .{ .input = "--12", .spans = &.{.{ 1, 4 }} },
+    };
+    for (cases) |case| {
+        var offset: usize = 0;
+        var index: usize = 0;
+        while (offset <= case.input.len and index < case.spans.len) : (index += 1) {
+            const m = (try workspace.find(case.input, offset)) orelse break;
+            try std.testing.expectEqual(case.spans[index][0], m.start);
+            try std.testing.expectEqual(case.spans[index][1], m.end);
+            offset = m.end;
+        }
+        try std.testing.expectEqual(case.spans.len, index);
+    }
+}

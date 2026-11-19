@@ -648,3 +648,44 @@ fn isAllExceptTwo(set: model.Set, a: u8, b: u8) bool {
     }
     return false;
 }
+
+/// `-?\d+(?:\.\d+)?`: a JSON-style number. The optional sign, the digit run,
+/// and the optional fraction must all share one ASCII digit set.
+pub fn numberRun(program: Program) ?model.Set {
+    if (program.capture_count != 0 or program.extended) return null;
+    const ins = program.instructions;
+    if (ins.len != 13) return null;
+    if (std.meta.activeTag(ins[0]) != .accept or std.meta.activeTag(ins[1]) != .sub_accept or
+        std.meta.activeTag(ins[2]) != .ret) return null;
+    if (std.meta.activeTag(ins[3]) != .save or std.meta.activeTag(ins[4]) != .star or
+        std.meta.activeTag(ins[5]) != .consume or std.meta.activeTag(ins[6]) != .literal_byte or
+        std.meta.activeTag(ins[7]) != .split or std.meta.activeTag(ins[8]) != .star or
+        std.meta.activeTag(ins[9]) != .consume or std.meta.activeTag(ins[10]) != .literal_byte or
+        std.meta.activeTag(ins[11]) != .split or std.meta.activeTag(ins[12]) != .save) return null;
+    if (program.start != 12 or program.body != 11) return null;
+    const save1 = ins[3].save;
+    if (save1.slot != 1 or save1.next != program.accept) return null;
+    const star_b = ins[4].star;
+    if (star_b.next != 3) return null;
+    const member_b = ins[5].consume;
+    if (member_b.next != 4) return null;
+    const dot = ins[6].literal_byte;
+    if (dot.value != '.' or dot.next != 5) return null;
+    const fraction = ins[7].split;
+    if (fraction.alternation or fraction.left != 6 or fraction.right != 3) return null;
+    const star_a = ins[8].star;
+    if (star_a.next != 7) return null;
+    const member_a = ins[9].consume;
+    if (member_a.next != 8) return null;
+    const sign = ins[10].literal_byte;
+    if (sign.value != '-' or sign.next != 9) return null;
+    const optional_sign = ins[11].split;
+    if (optional_sign.alternation or optional_sign.left != 10 or optional_sign.right != 9) return null;
+    const save0 = ins[12].save;
+    if (save0.slot != 0 or save0.next != 11) return null;
+    if (!sameSet(member_a.set, star_a.set)) return null;
+    if (!sameSet(member_a.set, member_b.set)) return null;
+    if (!sameSet(member_a.set, star_b.set)) return null;
+    if (!member_a.set.ascii_only or member_a.set.ranges.len == 0) return null;
+    return member_a.set;
+}

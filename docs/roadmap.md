@@ -209,6 +209,7 @@ Measured on an Apple Silicon macOS host. "Before" is the initial commit state;
 | `find` `<[^>]+>` HTML tags, 94 KiB | — | ~118 µs (~630 MiB/s) | ~125 µs | — |
 | `find` `(?m)^[^:\n]+:` keys, 44 KiB | — | ~32 µs (2.0 GiB/s) | — | — |
 | `find` `\s*$` trailing spaces, 44 KiB | — | ~3 ns (one backward scan) | — | — |
+| `find` `-?\d+(?:\.\d+)?` numbers, 54 KiB | — | ~26 µs (1.4 GiB/s) | ~55 µs | — |
 | `find` `\w+\s+\w+`, 23 KiB | ~128 µs | ~20 µs (1.2 GiB/s) | ~27 µs | — |
 | `find` large alternation (24 literals) no-match, 23 KiB | ~48 µs | ~7.4 µs (3.0 GiB/s) | ~11 µs | — |
 | `find` `(?i)STRASSE` no-match, 23 KiB | ~15 µs | ~1.4 µs (16.2 GiB/s) | ~2.3 µs | — |

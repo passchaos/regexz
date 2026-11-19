@@ -36,6 +36,7 @@ pub const FastKind = enum {
     word,
     trailing_space,
     line_delimited,
+    number,
 };
 pub const Error = model.Error;
 
@@ -136,6 +137,9 @@ pub const Workspace = struct {
     trailing_space_table: [256]bool = .{false} ** 256,
     /// `(?m)^[^d\n]+d`: match a key from the line start to the delimiter.
     line_delimited: ?shapes.LineDelimited = null,
+    /// `-?\d+(?:\.\d+)?`: match a JSON-style number.
+    number_run: bool = false,
+    number_table: [256]bool = .{false} ** 256,
     /// The single deterministic fast path selected at init. The shapes are
     /// mutually exclusive, so `find` dispatches with one switch instead of a
     /// chain of optional checks on every call.
@@ -194,6 +198,11 @@ pub const Workspace = struct {
         const delimited_run = shapes.delimitedRun(program);
         const trailing_space_set = shapes.trailingSpaceRun(program);
         const line_delimited = shapes.lineDelimitedRun(program);
+        const number_run_set = shapes.numberRun(program);
+        var number_table: [256]bool = .{false} ** 256;
+        if (number_run_set) |set| {
+            for (0..256) |byte| number_table[byte] = set.matches(@intCast(byte));
+        }
         var trailing_table: [256]bool = .{false} ** 256;
         if (trailing_space_set) |set| {
             for (0..256) |byte| trailing_table[byte] = set.matches(@intCast(byte));
@@ -216,6 +225,8 @@ pub const Workspace = struct {
             .trailing_space
         else if (line_delimited != null)
             .line_delimited
+        else if (number_run_set != null)
+            .number
         else
             .none;
         const fast_branch: ?FastBranch = if (program.fast_branch) |plan| blk: {
@@ -255,6 +266,8 @@ pub const Workspace = struct {
             .trailing_space = trailing_space_set != null,
             .trailing_space_table = trailing_table,
             .line_delimited = line_delimited,
+            .number_run = number_run_set != null,
+            .number_table = number_table,
             .fast_kind = fast_kind,
             .word_run_table = word_table,
             .utf8_run = utf8_run,
@@ -323,6 +336,7 @@ pub const Workspace = struct {
             .word => return self.findWordRun(input, search_start),
             .trailing_space => return self.findTrailingSpaceRun(input, search_start),
             .line_delimited => return self.findLineDelimitedRun(self.line_delimited.?, input, search_start),
+            .number => return self.findNumberRun(input, search_start),
         }
         // Every match must start at a start-literal occurrence, so the first
         // occurrence bounds the leftmost match start and the DFA can skip
@@ -671,6 +685,7 @@ pub const Workspace = struct {
             .word => return self.findWordRun(input, search_start),
             .trailing_space => return self.findTrailingSpaceRun(input, search_start),
             .line_delimited => return self.findLineDelimitedRun(self.line_delimited.?, input, search_start),
+            .number => return self.findNumberRun(input, search_start),
         }
         var from = search_start;
         if (self.pair_filter) |filter| {
@@ -916,6 +931,30 @@ pub const Workspace = struct {
             }
             if (offset >= input.len) return null;
             start = nextLineStart(input, offset) orelse return null;
+        }
+        return null;
+    }
+
+    /// `-?\d+(?:\.\d+)?`: sign, digit run, and an optional fraction whose
+    /// dot must be followed by at least one digit.
+    fn findNumberRun(self: *Workspace, input: []const u8, search_start: usize) ?Match {
+        const table = &self.number_table;
+        var offset = search_start;
+        while (offset < input.len) : (offset += 1) {
+            const start = offset;
+            var end = offset;
+            if (input[start] == '-') {
+                if (start + 1 >= input.len or !table[input[start + 1]]) continue;
+                end = start + 1;
+            } else if (!table[input[start]]) continue;
+            while (end < input.len and table[input[end]]) end += 1;
+            if (end + 1 < input.len and input[end] == '.' and table[input[end + 1]]) {
+                end += 1;
+                while (end < input.len and table[input[end]]) end += 1;
+            }
+            self.slots[0] = start;
+            self.slots[1] = end;
+            return .{ .start = start, .end = end, .slots = self.slots };
         }
         return null;
     }
