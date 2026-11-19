@@ -99,7 +99,7 @@ Implemented functionality:
   case transforms `\U`/`\L`/`\E`/`\u`/`\l` (simple Unicode by default;
   `Limits.full_case_mapping` enables full SpecialCasing), and callback
   replacement via `replaceAllWithFn`.
-- 204 tests, including recursion, branch reset, conditional assertions,
+- 205 tests, including recursion, branch reset, conditional assertions,
   grapheme clusters, binary properties, Unicode blocks, partial matching,
   control verbs, thread safety, allocation-failure, and differential coverage
   against V8 for the supported subset.
@@ -196,7 +196,7 @@ Measured on an Apple Silicon macOS host. "Before" is the initial commit state;
 | `find` loop-exit no-match, 23 KiB | ~120 µs | ~4.7 µs | ~31.8 µs | — |
 | `find` suffix no-match, 23 KiB | ~238 µs | ~14 µs | ~155 µs | — |
 | `find` extended no-match, 23 KiB | ~275 µs | ~2.5 µs | — | — |
-| `RegexSet`, 9 no-match patterns, 23 KiB | ~1.7 ms | ~44 µs | ~104 µs | — |
+| `RegexSet`, 9 no-match patterns, 23 KiB | ~1.7 ms | ~40 µs | ~104 µs | — |
 | `replaceAll` `a+`, 32 KiB | ~265 µs | ~64 µs (480 MiB/s) | ~91 µs | ~47 µs |
 | Compile xDS-like pattern | ~2.9 µs | ~3.1–3.9 µs | ~10.8 µs | ~61 ns† |
 | Compile xDS-like (smp allocator) | — | ~1.5 µs | — | — |
@@ -230,9 +230,11 @@ at ~650 MiB/s, `[a-z]+ [a-z]+` at ~585 MiB/s, and the `set*` scan (which must
 also report the empty matches between runs) at ~416 MiB/s, 6.9× faster than
 the generic thread list. The `RegexSet` DFA flattens its per-state ASCII
 rows and accept masks into power-of-two-stride tables, taking the 9-pattern
-no-match scan from ~63 µs to ~44 µs. The bench gate now covers 37 cases;
+no-match scan from ~63 µs to ~40 µs; up to 32 patterns also pack the
+accept mask into the 64-bit transition entry, removing a dependent load.
+The bench gate now covers 37 cases;
 `replaceAll` ~85 µs, compile ~1.5 µs with `smp_allocator`, and all
-204 tests plus the V8/Rust/extended/replacement differential fuzzers pass. On the
+205 tests plus the V8/Rust/extended/replacement differential fuzzers pass. On the
 feature side, PCRE2 forward numeric/named references, `\e` and isolated `\E`,
 the full substitution reference syntax (`$<name>`, `$+`, `$_`, `` $` ``, `$'`),
 `escape`/`splitn`/`replacen`, and compile diagnostics (`diagnose`) are covered.

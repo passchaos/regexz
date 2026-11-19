@@ -41,12 +41,14 @@ pub const Workspace = struct {
     seen: []u32,
     epoch: u32 = 0,
     states: std.ArrayList(State) = .empty,
-    /// Flat [state][byte] transitions: 0 = unprepared, otherwise next id + 1.
-    /// A separate power-of-two-stride table keeps the scan loop's address
-    /// cheap; the per-state struct also holds a large bitset slice.
-    ascii_table: std.ArrayList(u32) = .empty,
-    /// Accept mask per state, flat for the same reason.
+    /// Flat [state][byte] transitions: 0 = unprepared, otherwise the low 32
+    /// bits hold `next id + 1` and, when the pattern count fits, the high 32
+    /// bits hold the target's accept mask so the scan needs one load.
+    ascii_table: std.ArrayList(u64) = .empty,
+    /// Accept mask per state, used when the mask does not fit in the packed
+    /// entry (> 32 patterns).
     state_accept: std.ArrayList(u64) = .empty,
+    packed_masks: bool = false,
     index: std.StringHashMapUnmanaged(u32) = .empty,
     unicode: std.AutoHashMapUnmanaged(u64, u32) = .empty,
     arena: std.heap.ArenaAllocator,
@@ -111,9 +113,12 @@ pub const Workspace = struct {
             .seen = seen,
             .arena = arena,
             .start_state = 0,
+            .packed_masks = included.items.len <= 32,
         };
         errdefer allocator.free(self.included);
         errdefer self.states.deinit(allocator);
+        errdefer self.ascii_table.deinit(allocator);
+        errdefer self.state_accept.deinit(allocator);
         errdefer self.index.deinit(allocator);
         errdefer self.unicode.deinit(allocator);
         self.start_state = try self.startState();
@@ -155,23 +160,46 @@ pub const Workspace = struct {
         var mask = self.state_accept.items[state];
         const full = allMask(self.included.len);
         var offset = start;
-        while (offset < input.len) {
-            const byte = input[offset];
-            if (byte < 0x80) {
-                const cached = self.ascii_table.items[@as(usize, state) * 128 + byte];
-                if (cached != 0) {
-                    state = cached - 1;
-                    mask |= self.state_accept.items[state];
-                    offset += 1;
-                    if (mask == full) break;
-                    continue;
+        if (self.packed_masks) {
+            // The accept mask rides in the transition entry, so the hot path
+            // is one load plus a truncate.
+            while (offset < input.len) {
+                const byte = input[offset];
+                if (byte < 0x80) {
+                    const cached = self.ascii_table.items[@as(usize, state) * 128 + byte];
+                    if (cached != 0) {
+                        state = @as(u32, @truncate(cached)) - 1;
+                        mask |= cached >> 32;
+                        offset += 1;
+                        if (mask == full) break;
+                        continue;
+                    }
                 }
+                const rune = runeAt(input, offset) orelse return error.InvalidUtf8;
+                state = try self.transition(state, rune.value);
+                mask |= self.state_accept.items[state];
+                offset += rune.len;
+                if (mask == full) break;
             }
-            const rune = runeAt(input, offset) orelse return error.InvalidUtf8;
-            state = try self.transition(state, rune.value);
-            mask |= self.state_accept.items[state];
-            offset += rune.len;
-            if (mask == full) break;
+        } else {
+            while (offset < input.len) {
+                const byte = input[offset];
+                if (byte < 0x80) {
+                    const cached = self.ascii_table.items[@as(usize, state) * 128 + byte];
+                    if (cached != 0) {
+                        state = @as(u32, @truncate(cached)) - 1;
+                        mask |= self.state_accept.items[state];
+                        offset += 1;
+                        if (mask == full) break;
+                        continue;
+                    }
+                }
+                const rune = runeAt(input, offset) orelse return error.InvalidUtf8;
+                state = try self.transition(state, rune.value);
+                mask |= self.state_accept.items[state];
+                offset += rune.len;
+                if (mask == full) break;
+            }
         }
         var slot: usize = 0;
         while (slot < self.included.len) : (slot += 1) {
@@ -279,7 +307,7 @@ pub const Workspace = struct {
     fn transition(self: *Workspace, state_id: u32, rune: u21) Error!u32 {
         if (rune < 128) {
             const cached = self.ascii_table.items[@as(usize, state_id) * 128 + rune];
-            if (cached != 0) return cached - 1;
+            if (cached != 0) return @as(u32, @truncate(cached)) - 1;
         } else {
             const key = (@as(u64, state_id) << 21) | rune;
             if (self.unicode.get(key)) |cached| return cached;
@@ -322,7 +350,8 @@ pub const Workspace = struct {
         try self.closure();
         const next = try self.buildState();
         if (rune < 128) {
-            self.ascii_table.items[@as(usize, state_id) * 128 + rune] = next + 1;
+            const packed_mask: u64 = if (self.packed_masks) self.state_accept.items[next] else 0;
+            self.ascii_table.items[@as(usize, state_id) * 128 + rune] = (@as(u64, next) + 1) | (packed_mask << 32);
         } else {
             try self.unicode.put(self.allocator, (@as(u64, state_id) << 21) | rune, next);
         }

@@ -158,6 +158,25 @@ test "regex set handles empty patterns and empty input" {
     try std.testing.expectEqualSlices(bool, &.{ true, true, true }, &matched);
 }
 
+test "regex set DFA handles more patterns than a packed mask" {
+    const allocator = std.testing.allocator;
+    var pattern_buf: [40][16]u8 = undefined;
+    var patterns: [40][]const u8 = undefined;
+    for (0..40) |index| {
+        patterns[index] = try std.fmt.bufPrint(&pattern_buf[index], "x{d}@", .{index % 10});
+    }
+    var set = try regex.RegexSet.init(allocator, &patterns, .{});
+    defer set.deinit();
+    try std.testing.expect(set.dfa != null);
+    try std.testing.expect(!set.dfa.?.packed_masks);
+    var matched: [40]bool = undefined;
+    try set.matches("x3@ x7@", &matched);
+    for (0..40) |index| {
+        const digit = index % 10;
+        try std.testing.expectEqual(digit == 3 or digit == 7, matched[index]);
+    }
+}
+
 test "regex set falls back on invalid UTF-8" {
     const allocator = std.testing.allocator;
     const patterns = [_][]const u8{ "a", ".*", "" };
