@@ -141,6 +141,9 @@ fall through when their preconditions are not provable.
   searches.
 - **Workspace ownership.** A workspace is bound to one `Program` and is not
   thread-safe; `Program` itself is immutable and shareable.
+  Full-match workspaces for exact whole-pattern literals use empty NFA scratch
+  views and require no allocation; budget and partial-match semantics remain
+  on the literal path.
 
 ## Testing and gates
 

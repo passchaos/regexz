@@ -141,6 +141,7 @@ pub const Workspace = struct {
 
     const Utf8Loop = struct { run: utf8_run_mod.Utf8Run, separator: u8 };
     pub fn init(allocator: std.mem.Allocator, program: Program) std.mem.Allocator.Error!Workspace {
+        if (program.literal != null) return .{ .allocator = allocator, .storage = &.{}, .seen = &.{} };
         const count = program.instructions.len;
         const buffers = try allocator.alloc(u32, count * 11);
         var workspace = Workspace{
@@ -536,7 +537,6 @@ pub const Workspace = struct {
     }
     fn execute(self: *Workspace, program: *const Program, input: []const u8, budget: ?budget_mod.Budget) budget_mod.Error!bool {
         const n = program.instructions.len;
-        std.debug.assert(self.storage.len >= n * 6 and self.seen.len >= n * 5);
         self.stats = .{ .input_bytes = input.len };
         self.budget = budget;
         self.partial = false;
@@ -546,6 +546,7 @@ pub const Workspace = struct {
             self.partial = input.len < literal.len and std.mem.startsWith(u8, literal, input);
             return false;
         }
+        std.debug.assert(self.storage.len >= n * 6 and self.seen.len >= n * 5);
         @memset(self.seen, 0);
         var counts = [_]usize{0} ** 5;
         const stack = self.storage[n * 5 ..][0..n];

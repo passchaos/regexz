@@ -387,6 +387,7 @@ test {
     _ = @import("regex/byte_table_tests.zig");
     _ = @import("regex/range_mask_tests.zig");
     _ = @import("regex/dfa_allocation_tests.zig");
+    _ = @import("regex/literal_workspace_tests.zig");
     _ = @import("regex/capture_run_tests.zig");
     _ = @import("regex/prefilter_tests.zig");
     _ = @import("regex/nibble_filter_tests.zig");
