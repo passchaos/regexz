@@ -4,12 +4,12 @@ const Plan = @import("capture_run.zig").Plan;
 const gpa = std.testing.allocator;
 
 test "capture run detector accepts fixed saves and rejects competing paths" {
-    for ([_][]const u8{ "(a+)", "(\\w+)", "((\\d+))", "()(\\w+)()", "(?<word>[a-z]+)", "(?i)(a+)", "([\\x00-\\x7f]+)" }) |pattern| {
+    for ([_][]const u8{ "(a+)", "(\\w+)", "((\\d+))", "()(\\w+)()", "(?<word>[a-z]+)", "(?i)(a+)", "([\\x00-\\x7f]+)", "(猫+)", "(\\p{L}+)" }) |pattern| {
         var value = try regex.Regex.init(gpa, pattern, .{});
         defer value.deinit();
         try std.testing.expect(Plan.init(value.program) != null);
     }
-    for ([_][]const u8{ "a+", "(a*)", "(a+?)", "(a)+", "(a+)(b+)", "(a+b*)", "(a|b)+", "(猫+)", "^(a+)", "(a+)(?=b)", "(a+)\\1" }) |pattern| {
+    for ([_][]const u8{ "a+", "(a*)", "(a+?)", "(a)+", "(a+)(b+)", "(a+b*)", "(a|b)+", "^(a+)", "(a+)(?=b)", "(a+)\\1" }) |pattern| {
         var value = try regex.Regex.init(gpa, pattern, .{});
         defer value.deinit();
         try std.testing.expect(Plan.init(value.program) == null);
@@ -120,4 +120,35 @@ test "capture run reconstructs captures from serialized programs" {
     try std.testing.expectEqualStrings("", match.group(input, 1).?);
     try std.testing.expectEqualStrings("abc", match.group(input, 2).?);
     try std.testing.expectEqualStrings("", match.group(input, 3).?);
+}
+
+test "Unicode capture runs agree with general search at every byte offset" {
+    const patterns = [_][]const u8{ "(猫+)", "(\\p{L}+)", "((\\p{Greek}+))", "()(\\p{Han}+)()", "(?i)(k+)", "([^0-9]+)" };
+    const inputs = [_][]const u8{ "", "abc 你好 Ελληνικά", "猫猫 x 猫", "123 ΔσΩ 123", "kKK kk", "\xffa\x80猫", "\xe4a", "猫\xe4\xb8", "x\xed\xa0\x80a" };
+    for (patterns) |pattern| {
+        var value = try regex.Regex.init(gpa, pattern, .{});
+        defer value.deinit();
+        var direct = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+        defer direct.deinit();
+        var reference = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+        defer reference.deinit();
+        reference.fast_kind = .none;
+        for (inputs) |input| for (0..input.len + 2) |from| try compare(input, from, &direct, &reference);
+    }
+}
+
+test "Unicode capture run budgets count runes rather than bytes" {
+    var value = try regex.Regex.init(gpa, "()(\\p{L}+)()", .{});
+    defer value.deinit();
+    for ([_]bool{ false, true }) |fallback| {
+        for ([_]usize{ 0, 1, 8, 9, 10, 100 }) |budget| {
+            const limits = regex.Limits{ .max_execution_steps = budget, .linear_fallback = fallback };
+            var direct = try regex.ReplaceWorkspace.init(gpa, value.program, limits);
+            defer direct.deinit();
+            var reference = try regex.ReplaceWorkspace.init(gpa, value.program, limits);
+            defer reference.deinit();
+            reference.fast_kind = .none;
+            for ([_][]const u8{ "猫", "猫猫", "ΔσΩ", "abc", "123", "x\xff猫" }) |input| try compare(input, 0, &direct, &reference);
+        }
+    }
 }

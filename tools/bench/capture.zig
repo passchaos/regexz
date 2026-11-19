@@ -65,7 +65,10 @@ pub fn main() !void {
     try bench(io, out, "empty adjacent captures", "()(\\w+)()", words.items);
     try bench(io, out, "adjacent run control", "(\\w+) (\\w+)", words.items);
     try bench(io, out, "repeated capture control", "(a)+", words.items);
-    try bench(io, out, "Unicode capture control", "(\\p{L}+)", unicode.items);
+    try bench(io, out, "Unicode letters capture", "(\\p{L}+)", unicode.items);
+    try bench(io, out, "Unicode nested capture", "((\\p{L}+))", unicode.items);
+    try bench(io, out, "Han capture", "(\\p{Han}+)", unicode.items);
+    try bench(io, out, "Unicode literal capture", "(猫+)", unicode.items);
     try bench(io, out, "capture-free control", "\\w+", words.items);
     try bench(io, out, "no-match control", "([A-Z]+)", words.items);
     try out.flush();

@@ -1,4 +1,4 @@
-//! Deterministic ASCII set runs with capture saves before and after the run.
+//! Deterministic set runs with capture saves before and after the run.
 //! The shape has one mandatory member followed by a greedy star and accepts
 //! immediately, so every capture save has a fixed start or end position.
 const std = @import("std");
@@ -49,10 +49,10 @@ pub const Plan = struct {
         };
         if (pc >= instructions.len or std.meta.activeTag(instructions[pc]) != .star) return null;
         const star = instructions[pc].star;
-        if (!star.set.ascii_only or star.set.ranges.len == 0) return null;
+        if (star.set.ranges.len == 0) return null;
         switch (member) {
             .consume => |value| {
-                if (!value.set.ascii_only or !shapes.sameSet(value.set, star.set) or
+                if (value.set.ascii_only != star.set.ascii_only or !shapes.sameSet(value.set, star.set) or
                     !std.mem.eql(u64, &value.set.ascii, &star.set.ascii)) return null;
             },
             .literal_byte => |value| if (!singleton(star.set, value.value)) return null,
@@ -84,6 +84,52 @@ pub const Plan = struct {
     }
 
     pub const Span = struct { start: usize, end: usize };
+
+    pub fn findUnicode(
+        self: *const Plan,
+        first: *const prefilter.FirstFilter,
+        input: []const u8,
+        from: usize,
+        slots: []usize,
+        steps: *usize,
+        max_steps: usize,
+        linear_fallback: bool,
+    ) error{RegexLimitExceeded}!?Span {
+        steps.* = 0;
+        var start = from;
+        while (start < input.len) {
+            start = first.indexOf(input, start) orelse return null;
+            const first_end = self.set.matchAdvance(input, start) orelse {
+                const length = std.unicode.utf8ByteSequenceLength(input[start]) catch 1;
+                var advance: usize = 1;
+                if (length <= input.len - start) {
+                    if (std.unicode.utf8Decode(input[start..][0..length])) |_| {
+                        advance = length;
+                    } else |_| {}
+                }
+                start += advance;
+                continue;
+            };
+            if (!linear_fallback and max_steps < self.instruction_steps) {
+                steps.* = max_steps +| 1;
+                return error.RegexLimitExceeded;
+            }
+            var end = first_end;
+            var extra: usize = 0;
+            while (self.set.matchAdvance(input, end)) |next| {
+                if (!linear_fallback and extra == max_steps - self.instruction_steps) {
+                    steps.* = max_steps +| 1;
+                    return error.RegexLimitExceeded;
+                }
+                end = next;
+                extra += 1;
+            }
+            steps.* = self.instruction_steps +| extra;
+            self.fillSlots(slots, start, end);
+            return .{ .start = start, .end = end };
+        }
+        return null;
+    }
 
     pub fn find(
         self: *const Plan,
@@ -128,12 +174,16 @@ pub const Plan = struct {
         // This scan is itself linear and needs no choices or capture trail.
         // With fallback enabled it supplies the same captures as the Pike VM;
         // strict callers retain the deterministic replay's step limit.
+        self.fillSlots(slots, start, offset);
+        return .{ .start = start, .end = offset };
+    }
+
+    fn fillSlots(self: *const Plan, slots: []usize, start: usize, end: usize) void {
         @memset(slots, unset);
         writeSlots(self.start_slots[0..self.slot_words], slots, start);
-        writeSlots(self.end_slots[0..self.slot_words], slots, offset);
+        writeSlots(self.end_slots[0..self.slot_words], slots, end);
         slots[0] = start;
-        slots[1] = offset;
-        return .{ .start = start, .end = offset };
+        slots[1] = end;
     }
 };
 

@@ -72,7 +72,7 @@ anything it cannot prove.
 | `execute.zig` | Boolean full match: Thompson NFA, lazy full-match DFA, `set+` / `(?:setA+ setB)+` byte-table fast paths, partial matching. |
 | `search_dfa.zig` | Leftmost-first search DFA with priority-annotated accepts. Two constructions: rune-level (lookaheads, tokenizers) and byte-level (UTF-8 automata for non-ASCII sets, `\C`). Includes the per-state rune-transition front cache. |
 | `pike.zig` | Capture-aware Pike VM; the linear-time fallback when the backtracking budget is exhausted. |
-| `capture_run.zig` | Recognizes ASCII `set+` programs with fixed capture saves when the workspace is initialized. Scans directly and writes start/end slots without DFA construction or capture trails; strict callers retain replay step limits. |
+| `capture_run.zig` | Recognizes `set+` programs with fixed capture saves when the workspace is initialized. ASCII scans use byte tables; Unicode scans use materialized rune sets and retain literal prefixes. Both write slots without DFA construction or capture trails and retain strict replay budgets. |
 | `byte_table.zig` | Expands materialized membership bitmaps and Latin-1 ranges into fixed byte tables. Shared by full-match, search and streaming workspace initialization. |
 | `utf8_set.zig`, `utf8_run.zig` | Construct compact UTF-8 tries using shared build arrays, then expand disjoint edge intervals into byte transition rows. The same tables serve full-match and search set runs. |
 | `backtrack.zig` | Extended mode: general lookaround, backrefs, atomic/possessive, conditionals, recursion, `\K`, callouts, `(*MARK)`, verbs. Bounded by step/choice/trail/depth limits and fails closed. |
@@ -105,7 +105,7 @@ Supported syntax is a deliberate subset (see the file header).
 1. **Literal** — the whole pattern is one literal: `memcmp`.
 2. **`set+` run** — `shapes.setRun`; ASCII sets scan a byte table, non-ASCII
    sets walk an expanded UTF-8 automaton.
-   `capture_run.Plan` also handles ASCII runs with capture saves before/after
+   `capture_run.Plan` also handles ASCII/Unicode runs with capture saves before/after
    the run, including nested captures and adjacent empty groups.
 3. **Dominant branch** — `fast_branch.zig`: when the byte at the search start
    cannot begin an earlier branch, the `set? setB+` branch decides the match.
