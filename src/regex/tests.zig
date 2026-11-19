@@ -690,3 +690,29 @@ test "multi-rune loops do not skip candidate starts" {
         try std.testing.expectEqual(case.span[1], found.end);
     }
 }
+test "set loop full match fast path" {
+    var value = try regex.Regex.init(gpa, "(?:[a-z0-9]+[ \\n])+", .{});
+    defer value.deinit();
+    const cases = [_]struct { input: []const u8, matches: bool }{
+        .{ .input = "", .matches = false },
+        .{ .input = "abc ", .matches = true },
+        .{ .input = "abc def ", .matches = true },
+        .{ .input = "abc def\nghi ", .matches = true },
+        .{ .input = "abc", .matches = false },
+        .{ .input = " abc ", .matches = false },
+        .{ .input = "abc  ", .matches = false },
+        .{ .input = "abc \n", .matches = false },
+        .{ .input = "abc d", .matches = false },
+        .{ .input = "abc \u{4f60}", .matches = false },
+    };
+    for (cases) |case| {
+        try std.testing.expectEqual(case.matches, try value.matches(gpa, case.input));
+    }
+
+    // Overlapping sets do not take the fast path; the engine result stands.
+    var overlap = try regex.Regex.init(gpa, "(?:[a-z]+[a-z])+", .{});
+    defer overlap.deinit();
+    try std.testing.expect(try overlap.matches(gpa, "abc"));
+    // Greedy A+ takes both bytes, then backtracks one to let B match.
+    try std.testing.expect(try overlap.matches(gpa, "ab"));
+}

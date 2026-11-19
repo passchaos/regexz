@@ -382,3 +382,44 @@ pub fn setStar(program: Program) ?model.Set {
     if (star.set.ranges.len == 0) return null;
     return star.set;
 }
+
+/// `(?:setA+ setB)+` over disjoint ASCII-only sets. Every iteration is a
+/// non-empty run of A followed by exactly one B, and a full match must cover
+/// the whole input. The disjointness condition keeps the greedy A+ run from
+/// competing with B, so no backtracking can change the outcome.
+pub const SetLoop = struct { a: model.Set, b: model.Set };
+
+pub fn setLoop(program: Program) ?SetLoop {
+    if (program.capture_count != 0 or program.extended) return null;
+    const ins = program.instructions;
+    if (ins.len != 9) return null;
+    if (std.meta.activeTag(ins[0]) != .accept or std.meta.activeTag(ins[1]) != .sub_accept or
+        std.meta.activeTag(ins[2]) != .ret) return null;
+    if (std.meta.activeTag(ins[3]) != .save or std.meta.activeTag(ins[4]) != .split or
+        std.meta.activeTag(ins[5]) != .consume or std.meta.activeTag(ins[6]) != .star or
+        std.meta.activeTag(ins[7]) != .consume or std.meta.activeTag(ins[8]) != .save) return null;
+    if (program.start != 8 or program.body != 7) return null;
+    const save1 = ins[3].save;
+    if (save1.slot != 1 or save1.next != program.accept) return null;
+    const split = ins[4].split;
+    if (split.alternation or split.left != 7 or split.right != 3) return null;
+    const b = ins[5].consume;
+    if (b.next != 4) return null;
+    // The star may keep its backtrack flag: with disjoint sets, backtracking
+    // the greedy A run can only move the B check onto A members, so the
+    // greedy run already decides the outcome.
+    const star = ins[6].star;
+    if (star.next != 5) return null;
+    const a = ins[7].consume;
+    if (a.next != 6) return null;
+    const save0 = ins[8].save;
+    if (save0.slot != 0 or save0.next != 7) return null;
+    if (!sameSet(a.set, star.set)) return null;
+    if (a.set.ranges.len == 0 or b.set.ranges.len == 0) return null;
+    if (!a.set.ascii_only or !b.set.ascii_only) return null;
+    var byte: usize = 0;
+    while (byte < 128) : (byte += 1) {
+        if (a.set.matches(@intCast(byte)) and b.set.matches(@intCast(byte))) return null;
+    }
+    return .{ .a = a.set, .b = b.set };
+}
