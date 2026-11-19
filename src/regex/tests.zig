@@ -614,3 +614,29 @@ test "case-folded literal absence filter" {
     try std.testing.expectEqual(@as(usize, 4), found.start);
     try std.testing.expectEqual(@as(usize, 9), found.end);
 }
+
+test "non-ASCII set run scan" {
+    var value = try regex.Regex.init(gpa, "\\p{Han}+", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.utf8_run != null);
+    try std.testing.expect(workspace.simple_set == null);
+
+    // A pure Han run matches from the first rune through the last.
+    const han = "abc \u{4f60}\u{597d}\u{4e16}\u{754c} def";
+    const first = (try workspace.find(han, 0)).?;
+    try std.testing.expectEqual(@as(usize, 4), first.start);
+    try std.testing.expectEqual(@as(usize, 16), first.end);
+    // A later search resumes past the run.
+    try std.testing.expect((try workspace.find(han, 16)) == null);
+
+    // ASCII input skips through the first-byte filter.
+    try std.testing.expect((try workspace.find("plain ascii text", 0)) == null);
+
+    // A truncated rune at the end of input is not part of the run.
+    const truncated = "xx \u{4f60}\u{597d}"[0..7];
+    const partial = (try workspace.find(truncated, 0)).?;
+    try std.testing.expectEqual(@as(usize, 3), partial.start);
+    try std.testing.expectEqual(@as(usize, 6), partial.end);
+}

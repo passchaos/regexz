@@ -180,7 +180,7 @@ Measured on an Apple Silicon macOS host. "Before" is the initial commit state;
 | Full match, Unicode (reused) | ~64 ns | ~12 ns | ~8 ns | ~13 ns |
 | Qwen tokenizer search, 22 KiB | ~842 µs | ~66 µs (~350 MiB/s) | ~59 µs* (~400 MiB/s) | ~195 µs |
 | CJK tokenizer search, 191 KiB | — | ~200–230 µs (~850–980 MiB/s) | ~200–216 µs* (864–933 MiB/s) | — |
-| Han class scan, 191 KiB | — | ~173–220 µs (940–1080 MiB/s) | ~157–169 µs (1104 MiB/s) | — |
+| Han class scan, 191 KiB | — | ~125 µs (1.5 GiB/s) | ~157–169 µs (1104 MiB/s) | — |
 | Full match, Han class, 191 KiB | — | ~190–205 µs (~830 MiB/s) | ~213 µs | — |
 | Full match, ASCII class, 216 KiB | — | ~52 µs (~4.0 GiB/s) | ~54 µs | — |
 | Full match, ASCII loop, 216 KiB | — | ~310 µs (~675 MiB/s) | ~273 µs | — |
@@ -227,8 +227,8 @@ replacing the Unicode hash map with a direct-mapped cache plus a fast UTF-8
 decoder, adding a shared-prefix multi-literal prefilter, and determinizing
 lookahead-free programs over UTF-8 bytes, full-pattern
 Qwen search is ~68–74 µs (~330–353 MiB/s), CJK tokenizer search is ~200–230 µs
-(~850–980 MiB/s), Han class scans are ~173–200 µs (~940–1080 MiB/s, down from
-~635 µs), greedy `\C+` scans collapse to a single full-span match (~8 ns), large
+(~850–980 MiB/s), Han class scans are ~125 µs (1.5 GiB/s, ahead of the
+same-host Rust reference), greedy `\C+` scans collapse to a single full-span match (~8 ns), large
 Unicode full matches scan at ~800 MiB/s, and extended full matches reuse a
 persistent backtracking workspace (~17 ns for a backreference pattern), and
 shared-prefix no-match scans are ~1.55 µs (15.5 GiB/s). A plain ASCII `set+`
@@ -326,10 +326,13 @@ Where the remaining time goes:
    tokenizer search to ~330 MiB/s, against a same-host Rust reference of
    ~427 MiB/s. Lookahead-free programs with non-ASCII sets are determinized
    over UTF-8 bytes (`utf8_set.zig`), taking `\p{Han}+` from ~635 µs to
-   ~173–200 µs. The CJK tokenizer is now ~1.05x the same-host Rust reference
-   after the byte-keyed transition cache and inlined start-state lookup, so
-   the remaining gap is per-transition cost rather than per-start restart
-   overhead. Match-dense capture searches are no longer the largest gap:
+   ~173–200 µs. A dedicated `set+` fast path now expands the same automaton
+   into 256-entry transition rows and scans one table load per byte, which
+   brought the Han class scan to ~125 µs, ahead of the same-host Rust
+   reference (~157–169 µs). The CJK tokenizer is now ~1.05x the same-host
+   Rust reference after the byte-keyed transition cache and inlined
+   start-state lookup, so the remaining gap is per-transition cost rather
+   than per-start restart overhead. Match-dense capture searches are no longer the largest gap:
    `(\w+)@(\w+)\.com` over repeated `user.name@example.com` runs scans for
    the separator and derives both run boundaries directly, at ~11 µs for the
    18 KiB sample against ~29 µs for the same-host Rust reference (2.6x

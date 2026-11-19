@@ -12,6 +12,7 @@ const Program = @import("compile.zig").Program;
 const pike = @import("pike.zig");
 const backtrack = @import("backtrack.zig");
 const search_dfa = @import("search_dfa.zig");
+const utf8_set = @import("utf8_set.zig");
 const prefilter = @import("prefilter.zig");
 const shapes = @import("shapes.zig");
 const newline = @import("newline.zig");
@@ -100,6 +101,9 @@ pub const Workspace = struct {
     /// binary search over rune ranges; the per-byte chain scans run several
     /// lookups per input byte, so cache the answers once per workspace.
     chain_tables: ?ChainTables = null,
+    /// Expanded UTF-8 automaton for a non-ASCII `set+` program (`\p{Han}+`):
+    /// one 256-entry transition row per state.
+    utf8_run: ?Utf8Run = null,
     /// The first set covers most of the alphabet, so the start prefilter
     /// barely skips. Programs with a nullable prefix (like `.*foo`) then
     /// restart the DFA at almost every position, and one required-literal
@@ -137,6 +141,12 @@ pub const Workspace = struct {
         const pair_filter = try buildPairFilter(allocator, program);
         errdefer if (pair_filter) |filter| allocator.destroy(filter);
         const simple_chain = if (limits.longest) null else shapes.chain(program);
+        const set_run = if (limits.longest) null else shapes.setRun(program);
+        const utf8_run: ?Utf8Run = if (set_run) |set|
+            (if (set.ascii_only) null else try Utf8Run.init(allocator, set))
+        else
+            null;
+        errdefer if (utf8_run) |*value| value.deinit(allocator);
         return .{
             .allocator = allocator,
             .program = program,
@@ -144,14 +154,11 @@ pub const Workspace = struct {
             .slots = slots,
             .best_slots = best_slots,
             .pike_eligible = pike.eligible(program),
-            .simple_set = if (limits.longest) null else blk: {
-                const set = shapes.setRun(program) orelse break :blk null;
-                if (!set.ascii_only) break :blk null;
-                break :blk set;
-            },
+            .simple_set = if (set_run) |set| (if (set.ascii_only) set else null) else null,
             .simple_chain = simple_chain,
             .simple_anchored = if (limits.longest) null else detectAnchoredRun(program),
             .chain_tables = if (simple_chain) |chain| ChainTables.init(chain) else null,
+            .utf8_run = utf8_run,
             .weak_first = @as(usize, @popCount(program.first.ascii[0])) + @popCount(program.first.ascii[1]) >= 48,
             .prefix_set = detectPrefixSet(program),
             .start_anchored = startsAtTextStart(program),
@@ -164,6 +171,7 @@ pub const Workspace = struct {
 
     pub fn deinit(self: *Workspace) void {
         if (self.pair_filter) |filter| self.allocator.destroy(filter);
+        if (self.utf8_run) |*value| value.deinit(self.allocator);
         if (self.pike_workspace) |*workspace| workspace.deinit();
         if (self.backtrack_workspace) |*workspace| workspace.deinit();
         if (self.search_dfa_workspace) |*workspace| workspace.deinit();
@@ -200,6 +208,7 @@ pub const Workspace = struct {
         self.steps = 0;
         if (self.start_anchored and search_start != 0) return null;
         if (self.simple_set) |set| return self.findSetRun(set, input, search_start);
+        if (self.utf8_run) |*utf8| return self.findSetRunUtf8(utf8, input, search_start);
         if (self.simple_chain) |*chain| return self.findChain(chain, input, search_start);
         if (self.simple_anchored) |anchored_run| return self.findAnchoredRun(anchored_run, input, search_start);
         // Every match must start at a start-literal occurrence, so the first
@@ -535,6 +544,7 @@ pub const Workspace = struct {
         if (search_start > input.len) return null;
         if (self.start_anchored and search_start != 0) return null;
         if (self.simple_set) |set| return self.findSetRun(set, input, search_start);
+        if (self.utf8_run) |*utf8| return self.findSetRunUtf8(utf8, input, search_start);
         if (self.simple_chain) |*chain| return self.findChain(chain, input, search_start);
         if (self.simple_anchored) |anchored_run| return self.findAnchoredRun(anchored_run, input, search_start);
         var from = search_start;
@@ -692,6 +702,54 @@ pub const Workspace = struct {
         self.slots[0] = start;
         self.slots[1] = offset;
         return .{ .start = start, .end = offset, .slots = self.slots };
+    }
+
+    /// `set+` for a non-ASCII set: walk the UTF-8 automaton one byte per
+    /// transition. The first-byte filter skips spans that cannot start a
+    /// member rune; `accept` marks a complete in-set rune.
+    fn findSetRunUtf8(self: *Workspace, utf8: *const Utf8Run, input: []const u8, search_start: usize) ?Match {
+        const table = utf8.table;
+        var offset = search_start;
+        var state: u16 = 0;
+        var rune_start = search_start;
+        while (offset < input.len) {
+            if (state == 0) {
+                offset = self.first_filter.indexOf(input, offset) orelse return null;
+                rune_start = offset;
+            }
+            const next = table[@as(usize, state) * 256 + input[offset]];
+            if (next == utf8_set.accept) break;
+            if (next == utf8_set.dead) {
+                state = 0;
+                offset += 1;
+                continue;
+            }
+            state = next;
+            offset += 1;
+        }
+        if (offset >= input.len) return null;
+        const start = rune_start;
+        var end = offset + 1;
+        var rune_begin = end;
+        state = 0;
+        while (end < input.len) {
+            const next = table[@as(usize, state) * 256 + input[end]];
+            if (next == utf8_set.accept) {
+                state = 0;
+                end += 1;
+                rune_begin = end;
+            } else if (next == utf8_set.dead) {
+                end = rune_begin;
+                break;
+            } else {
+                state = next;
+                end += 1;
+            }
+        }
+        if (state != 0) end = rune_begin;
+        self.slots[0] = start;
+        self.slots[1] = end;
+        return .{ .start = start, .end = end, .slots = self.slots };
     }
 
     /// `setA+ separator setB+ tail` search. The separator cannot start a
@@ -1844,6 +1902,31 @@ fn runeLenAt(input: []const u8, offset: usize) usize {
 /// Start of the maximal `set` run ending at `separator_at`, clamped to
 /// `floor`. Bytes outside an ASCII-only set never match, so the backward
 /// scan is byte-wise in that case.
+/// Expanded UTF-8 automaton for a non-ASCII `set+` program. Each state owns a
+/// 256-entry transition row, so the run scan is one table load per byte.
+const Utf8Run = struct {
+    table: []u16,
+
+    fn init(allocator: std.mem.Allocator, set: model.Set) std.mem.Allocator.Error!Utf8Run {
+        var automaton = try utf8_set.build(allocator, set.ranges);
+        defer automaton.deinit(allocator);
+        const states = automaton.stateCount();
+        const table = try allocator.alloc(u16, states * 256);
+        errdefer allocator.free(table);
+        for (0..states) |state| {
+            for (0..256) |byte| {
+                table[state * 256 + byte] = automaton.advance(@intCast(state), @intCast(byte));
+            }
+        }
+        return .{ .table = table };
+    }
+
+    fn deinit(self: *Utf8Run, allocator: std.mem.Allocator) void {
+        allocator.free(self.table);
+        self.* = undefined;
+    }
+};
+
 /// Byte membership tables and a SIMD separator filter for the chain fast
 /// path. Table lookups replace `Set.matches` calls in the per-byte scans;
 /// the SIMD filter jumps straight to the next separator candidate.
