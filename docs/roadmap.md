@@ -99,7 +99,7 @@ Implemented functionality:
   case transforms `\U`/`\L`/`\E`/`\u`/`\l` (simple Unicode by default;
   `Limits.full_case_mapping` enables full SpecialCasing), and callback
   replacement via `replaceAllWithFn`.
-- 205 tests, including recursion, branch reset, conditional assertions,
+- 206 tests, including recursion, branch reset, conditional assertions,
   grapheme clusters, binary properties, Unicode blocks, partial matching,
   control verbs, thread safety, allocation-failure, and differential coverage
   against V8 for the supported subset.
@@ -232,9 +232,14 @@ the generic thread list. The `RegexSet` DFA flattens its per-state ASCII
 rows and accept masks into power-of-two-stride tables, taking the 9-pattern
 no-match scan from ~63 µs to ~40 µs; up to 32 patterns also pack the
 accept mask into the 64-bit transition entry, removing a dependent load.
+Unbounded `x{min,}` repetitions with `min >= 1` now enter the loop body
+directly instead of compiling a second mandatory copy, so programs are
+smaller (`(?:[a-z0-9]+[ \n])+` 12 -> 9 instructions, `(?:foo|bar)+` 20 ->
+13) and behaviorally equal DFA states stay merged (4 -> 3 for the ASCII
+loop full match).
 The bench gate now covers 37 cases;
 `replaceAll` ~85 µs, compile ~1.5 µs with `smp_allocator`, and all
-205 tests plus the V8/Rust/extended/replacement differential fuzzers pass. On the
+206 tests plus the V8/Rust/extended/replacement differential fuzzers pass. On the
 feature side, PCRE2 forward numeric/named references, `\e` and isolated `\E`,
 the full substitution reference syntax (`$<name>`, `$+`, `$_`, `` $` ``, `$'`),
 `escape`/`splitn`/`replacen`, and compile diagnostics (`diagnose`) are covered.

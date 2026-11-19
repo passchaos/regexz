@@ -202,16 +202,29 @@ const Builder = struct {
                 else
                     .{ .split = .{ .left = child, .right = next } });
             }
-        } else {
+            for (0..repeat.minimum) |_| next = try self.repeatChild(repeat.child, next);
+            return next;
+        }
+        if (repeat.minimum == 0) {
             const split = try self.emit(.{ .split = .{ .left = 0, .right = 0 } });
             const child = try self.repeatChild(repeat.child, split);
             self.instructions.items[split].split = if (repeat.lazy)
                 .{ .left = next, .right = child }
             else
                 .{ .left = child, .right = next };
-            next = split;
+            return split;
         }
-        for (0..repeat.minimum) |_| next = try self.repeatChild(repeat.child, next);
+        // `x{min,}` with min >= 1: enter the loop body directly and reuse it
+        // for the first iteration instead of compiling a second copy. The
+        // smaller program also keeps behaviorally equal DFA states merged.
+        const split = try self.emit(.{ .split = .{ .left = 0, .right = 0 } });
+        next = try self.repeatChild(repeat.child, split);
+        self.instructions.items[split].split = if (repeat.lazy)
+            .{ .left = continuation, .right = next }
+        else
+            .{ .left = next, .right = continuation };
+        var remaining = repeat.minimum - 1;
+        while (remaining != 0) : (remaining -= 1) next = try self.repeatChild(repeat.child, next);
         return next;
     }
     fn node(self: *Builder, value: *const model.Node, continuation: usize) model.Error!usize {

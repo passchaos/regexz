@@ -405,6 +405,33 @@ test "split first-set skipping preserves leftmost-first search" {
     try expectFindSpans(allocator, "(?i:k|s|σ|ß)+", "KSσςx", &.{.{ 0, 6 }}, .{});
 }
 
+test "unbounded repeats reuse the loop body" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // `x+` now enters the loop body directly instead of compiling a second
+    // copy; greedy, lazy, and nullable bodies must behave identically.
+    try expectFindSpans(allocator, "(?:ab)+c", "ababc", &.{.{ 0, 5 }}, .{});
+    try expectFindSpans(allocator, "(?:ab)+?c", "ababc", &.{.{ 0, 5 }}, .{});
+    try expectFindSpans(allocator, "(?:ab)+ab", "ababab", &.{.{ 0, 6 }}, .{});
+    try expectFindSpans(allocator, "(?:a|b)+c", "abbc", &.{.{ 0, 4 }}, .{});
+    try expectFindSpans(allocator, "(?:a?)+b", "aab", &.{.{ 0, 3 }}, .{});
+    try expectFindSpans(allocator, "(?:ab){2,}c", "abababc", &.{.{ 0, 7 }}, .{});
+    try expectFindSpans(allocator, "(?:ab){2,3}c", "abababc", &.{.{ 0, 7 }}, .{});
+    try expectFindSpans(allocator, "((?:ab)+?)c", "ababc", &.{.{ 0, 5 }}, .{});
+
+    var value = try regex.Regex.init(allocator, "((?:ab)+?)c", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(allocator, value.program, .{});
+    defer workspace.deinit();
+    const found = (try workspace.find("ababc", 0)).?;
+    try std.testing.expectEqualStrings("abab", found.group("ababc", 1) orelse "");
+
+    try expectMatches(allocator, "(?:ab)+c", &.{ "ababc", "abc" }, &.{ "abab", "", "ab" }, .{});
+    try expectMatches(allocator, "(?:a|b)+", &.{ "a", "abb", "ba" }, &.{ "", "c" }, .{});
+}
+
 test "set-run fast path scans ASCII runs directly" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
