@@ -316,7 +316,13 @@ Where the remaining time goes:
    to ~311 µs (1.40 ns/byte) against ~273 µs (1.25 ns/byte) for the
    same-host Rust reference, so the gap is ~1.12x. A flat probe confirms the
    row-offset form beats the state-id form (1.17 vs 1.41 ns/byte); the rest
-   is engine selection, most likely Rust's one-pass DFA. ASCII-only programs
+   is engine selection, most likely Rust's one-pass DFA. Four further
+   attempts to reach the probe's 1.17 ns/byte in the real DFA were measured
+   and reverted: 16-bit table entries, a pre-reserved table with a cached
+   base pointer, the canonical `while (...) : (offset += 1)` form, and
+   splitting the sentinel path out of the inner loop. Each stayed at
+   ~1.40 ns/byte, so the overhead is not the element width, pointer reload,
+   loop shape, or the in-loop call. ASCII-only programs
    also use 256-entry rows with the high half pre-filled dead, so their scan
    needs no `byte < 0x80` branch or rune decoding: short full-match DFA
    inputs (`[A-Za-z0-9._-]+`, xDS-like) improved by ~8-10%. Applying the same
