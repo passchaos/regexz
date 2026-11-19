@@ -281,9 +281,14 @@ Where the remaining time goes:
   exceeds 200 MiB/s). Lookahead-free programs are determinized over bytes:
   each rune set compiles to a UTF-8 automaton (`utf8_set.zig`) and a scan is
   one flat table lookup per byte, which removed the per-rune decode + binary
-  search that dominated `\p{Han}+`. Programs with single-rune lookaheads
-  (for example Qwen's `(?!\S)`) still use the rune-level construction; a
-  byte-level gate for lookahead continuations is the next large step.
+  search that dominated `\p{Han}+`. A dedicated `set+` fast path expands
+  the same automaton into 256-entry transition rows, and a per-state front
+  cache keeps the hot rune transitions in L1, so the Han class scan runs
+  ahead of the same-host Rust reference. Programs with single-rune
+  lookaheads (for example Qwen's `(?!\S)`) still use the rune-level
+  construction; the tokenizer scans are within ~1.2x of the same-host Rust
+  reference, and closing that needs either lookahead-aware byte gating or
+  per-branch dedicated scanners.
   Capture programs take DFA bounds and replay only the
   matched slice, which removes the failed-start scans that dominated patterns
   like `(\w+)@(\w+)`. Interpreter fallbacks with a multi-byte required
