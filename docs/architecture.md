@@ -56,7 +56,7 @@ anything it cannot prove.
 | `required_literals.zig` | Literals every match must contain (`[a-z]*(?:foo|bar)`). Drives absence prefilters. |
 | `start_literals.zig` | Literal-alternation start sets; only fixed-length left sides concatenate. |
 | `fast_branch.zig` | Dominant `set? setB+` alternation branch plus the first-byte union of earlier branches. |
-| `shapes.zig` | Deterministic shapes: `set+` runs, `setA+ sep setB+ tail` chains, `(?:setA+ setB)+` loops. Shared by the search engine and the streaming scanner. |
+| `shapes.zig` | Deterministic shapes: `set+` runs, `setA+ sep setB+ tail` chains, `(?:setA+ setB)+` loops. Shared by the search engine and streaming scanner. Range equality accepts shared immutable slices after checking their lengths; distinct slices retain field-wise content comparison. |
 
 ### Compilation
 

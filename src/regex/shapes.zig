@@ -41,10 +41,7 @@ pub fn setRun(program: Program) ?model.Set {
             if (range.first != literal.value or range.last != literal.value) return null;
         },
         .consume => |consume| {
-            if (consume.next != 4 or star.set.ranges.len != consume.set.ranges.len) return null;
-            for (star.set.ranges, consume.set.ranges) |a, b| {
-                if (a.first != b.first or a.last != b.last) return null;
-            }
+            if (consume.next != 4 or !sameSet(star.set, consume.set)) return null;
         },
         else => return null,
     }
@@ -53,6 +50,8 @@ pub fn setRun(program: Program) ?model.Set {
 
 pub fn sameSet(a: model.Set, b: model.Set) bool {
     if (a.ranges.len != b.ranges.len) return false;
+    // Repeated instructions borrow the same immutable materialized ranges.
+    if (a.ranges.ptr == b.ranges.ptr) return true;
     for (a.ranges, b.ranges) |left, right| {
         if (left.first != right.first or left.last != right.last) return false;
     }
