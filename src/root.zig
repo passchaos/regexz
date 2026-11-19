@@ -32,6 +32,7 @@ pub const StreamEmitFn = @import("regex/stream.zig").EmitFn;
 pub const validateSubstitution = @import("regex/replace.zig").validateSubstitution;
 pub const validateSubstitutionFor = @import("regex/replace.zig").validateSubstitutionFor;
 pub const Program = @import("regex/compile.zig").Program;
+pub const comptime_regex = @import("regex/comptime_regex.zig");
 const unset = std.math.maxInt(usize);
 
 /// Caller-owned capture slot buffer for `Regex.find`.

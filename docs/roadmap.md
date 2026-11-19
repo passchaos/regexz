@@ -165,6 +165,7 @@ Strengths:
 | `(*NOTEMPTY)`/`(*NOTEMPTY_ATSTART)` | yes | yes | no | no |
 | `(*LIMIT_MATCH/DEPTH/HEAP=...)` | yes (heap is a choice/trail proxy) | yes | no | no |
 | Turkish/Azeri casing `(*TURKISH_CASING)` | yes | yes (10.45+) | no | no |
+| Compile-time regex construction | yes (`comptime_regex`, codegen subset) | no | no | no |
 
 ## 3. Performance gaps
 

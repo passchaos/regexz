@@ -276,6 +276,42 @@ was initialized with and must not be shared between threads. `Match.slots` point
 workspace (or the caller's `Captures` buffer) and is valid until the next
 find call.
 
+Compile-time regex (`comptime_regex`):
+
+```zig
+const ct = regexz.comptime_regex;
+
+const re = ct.Regex("(?i)foo[0-9]+");       // parsed at compile time
+if (re.search("xx FOO42 yy")) |span| {      // generated matcher, no tables
+    // span.start == 3, span.end == 8
+}
+if (comptime ct.Regex("abc[0-9]+").match("abc42")) |span| {
+    // the whole match ran in the comptime evaluator
+}
+```
+
+`ct.Regex(pattern)` parses and compiles the pattern during compilation and
+returns a type whose `match` (full match) and `search` (leftmost-first)
+methods are generated code: no `Program`, no `Workspace`, no allocation, and
+no data tables at runtime. The matcher uses continuation-passing
+backtracking, so alternation and greedy/lazy repetition explore every path
+in leftmost-first order. Supported syntax: literals and escapes
+(`\n \r \t \\ \d \D \w \W \s \S`), classes (`[a-z0-9_]`, `[^...]`),
+`.`, repetition (`* + ? {n} {n,} {n,m}` and lazy forms), alternation,
+non-capturing groups, anchors (`^ $ \A \z`), and the inline flags `(?i)`,
+`(?s)`, `(?m)`.
+
+On the same host the generated matcher is ~3x faster than the runtime engine
+for short literal and class matches (0.2 ns vs 0.6 ns, 3.1 ns vs 9.9 ns) and
+~1.7x slower for multi-run searches, which the runtime engine accelerates
+with its chain fast path. Only the whole match span is reported: capture
+groups are parsed but not filled. For large patterns use the runtime engine;
+the full parser needs `std.mem.Allocator`, whose byte-allocation wrapper
+calls `@memset(undefined)`, which the comptime evaluator rejects. The
+compile-time path therefore follows the ctregex.zig construction style
+(comptime locals plus `&const_local` for the tree) and keeps the whole
+pipeline allocation-free.
+
 ## Build and test
 
 ```sh
