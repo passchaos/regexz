@@ -380,8 +380,10 @@ pub const Workspace = struct {
         var stars: usize = 0;
         var literals: usize = 0;
         var has_lookahead = false;
+        var has_byte = false;
         for (program.instructions) |instruction| switch (instruction) {
             .accept, .consume, .literal_byte, .literal_rune, .split, .star, .save, .reset_captures, .lookahead, .sub_accept, .ret => {},
+            .byte => has_byte = true,
             else => return null,
         };
         for (program.instructions) |instruction| switch (instruction) {
@@ -411,6 +413,12 @@ pub const Workspace = struct {
             }
         }
         if (choices > 64) return null;
+        // `\C` matches one byte anywhere, which only the byte construction
+        // can express; lookaheads are rune-oriented and stay ineligible.
+        if (has_byte) {
+            if (has_lookahead) return null;
+            return .byte;
+        }
         // Byte-level determinization only pays off for simple scans over
         // non-ASCII sets: it removes per-rune decoding but pays one accept
         // check per byte. Tokenizer-shaped programs (many alternation
@@ -673,7 +681,7 @@ pub const Workspace = struct {
                     // continuation is accept is not treated as dead.
                     try terminals.append(self.allocator, entry);
                 },
-                .consume, .literal_byte, .literal_rune => try terminals.append(self.allocator, entry),
+                .consume, .literal_byte, .literal_rune, .byte => try terminals.append(self.allocator, entry),
                 .star => |star| {
                     try terminals.append(self.allocator, entry);
                     const bit = self.bits[pc];
@@ -863,6 +871,7 @@ pub const Workspace = struct {
                 .literal_byte => |literal| {
                     if (byte == literal.value) try self.push(@intCast(literal.next), entry.priority);
                 },
+                .byte => |next| try self.push(@intCast(next), entry.priority),
                 .accept => {},
                 else => unreachable,
             }

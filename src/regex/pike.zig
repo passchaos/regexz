@@ -31,10 +31,6 @@ pub fn eligible(program: Program) bool {
     if (slot_count > 256) return false;
     const instructions = program.instructions.len;
     if (instructions == 0 or instructions > max_slot_words / slot_count) return false;
-    for (program.instructions) |instruction| switch (instruction) {
-        .byte => return false,
-        else => {},
-    };
     return true;
 }
 
@@ -311,6 +307,22 @@ pub const Workspace = struct {
                             next,
                             thread.slots,
                         );
+                    },
+                    .byte => |next| {
+                        if (offset < input.len) {
+                            try self.add(
+                                program,
+                                self.next,
+                                &next_count,
+                                self.slot_b,
+                                &self.next_used,
+                                next,
+                                thread.start,
+                                input,
+                                offset + 1,
+                                thread.slots,
+                            );
+                        }
                     },
                     .literal_byte => |*literal| {
                         if (offset < input.len and input[offset] == literal.value) {

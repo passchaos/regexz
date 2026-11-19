@@ -640,3 +640,33 @@ test "non-ASCII set run scan" {
     try std.testing.expectEqual(@as(usize, 3), partial.start);
     try std.testing.expectEqual(@as(usize, 6), partial.end);
 }
+
+test "byte escape runs on the DFA and Pike paths" {
+    // Capture-free: search DFA byte mode.
+    var plain = try regex.Regex.init(gpa, "\\C{4}test", .{});
+    defer plain.deinit();
+    var plain_workspace = try regex.ReplaceWorkspace.init(gpa, plain.program, .{});
+    defer plain_workspace.deinit();
+    const plain_match = (try plain_workspace.find("abcxtest", 0)).?;
+    try std.testing.expectEqual(@as(usize, 0), plain_match.start);
+    try std.testing.expectEqual(@as(usize, 8), plain_match.end);
+    try std.testing.expect((try plain_workspace.find("xyztests", 0)) == null);
+
+    // Captures: Pike byte stepping, including mid-rune positions.
+    var captured = try regex.Regex.init(gpa, "(\\C\\C)", .{});
+    defer captured.deinit();
+    var captured_workspace = try regex.ReplaceWorkspace.init(gpa, captured.program, .{});
+    defer captured_workspace.deinit();
+    const split = (try captured_workspace.find("\u{4f60}", 0)).?;
+    try std.testing.expectEqual(@as(usize, 0), split.start);
+    try std.testing.expectEqual(@as(usize, 2), split.end);
+
+    var rune_after = try regex.Regex.init(gpa, "a(\\C)b", .{});
+    defer rune_after.deinit();
+    var rune_workspace = try regex.ReplaceWorkspace.init(gpa, rune_after.program, .{});
+    defer rune_workspace.deinit();
+    // A two-byte rune between the literals cannot satisfy a single \C.
+    try std.testing.expect((try rune_workspace.find("a\u{00e9}b", 0)) == null);
+    const ascii = (try rune_workspace.find("axb", 0)).?;
+    try std.testing.expectEqual(@as(usize, 3), ascii.end);
+}

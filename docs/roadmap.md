@@ -157,7 +157,7 @@ Strengths:
 | Partial match (prefix) | yes (linear + extended, conservative) | yes | yes | yes |
 | True streaming scanner | yes (linear, rune-based) | partial | partial | yes |
 | Multi-pattern `RegexSet` | yes | no (separate calls) | yes | no |
-| `\C` in DFA/Pike | fallback only | yes | no | no |
+| `\C` in DFA/Pike | yes (byte mode) | yes | no | no |
 | Newline conventions `(*CR)`/`(*CRLF)`/`(*ANY)`/`(*NUL)` | yes | yes | no | no |
 | `(?r)`/`(*CASELESS_RESTRICT)` caseless-restrict | yes | yes | no | no |
 | `(?aD)`/`(?aS)`/`(?aW)`/`(?aP)`/`(?aT)` | yes | yes | no | no |
@@ -310,9 +310,9 @@ Where the remaining time goes:
    and string callouts, `(*THEN)`, and `(*MARK:name)` via `Match.mark`.
 2. ~~**True streaming scanner**~~: done. `StreamScanner` persists NFA state
    across chunks for non-extended, rune-based programs.
-3. **`\C` in DFA/Pike**: intentionally documented as a fallback; `\C`
-   programs use the NFA/backtracking paths, while the DFA/Pike fast paths
-   stay rune-oriented.
+3. ~~**`\C` in DFA/Pike**~~: done. Programs with `\C` force the DFA byte
+   construction, where the escape is an any-byte transition; the Pike VM
+   steps one byte for `\C`, so capture programs keep the linear path.
 
 ### P0 — largest linear performance gaps
 
