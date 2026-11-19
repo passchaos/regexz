@@ -174,7 +174,7 @@ pub fn main() !void {
         inline_len += 1;
         if (flag_count != 0) try pattern_buf.appendSlice(gpa, inline_buf[0..inline_len]);
         try pattern_buf.appendSlice(gpa, case.pattern);
-        var value = regexz.Regex.init(gpa, pattern_buf.items, .{ .unicode_perl_space = true, .capture_reset = true }) catch {
+        var value = regexz.Regex.init(gpa, pattern_buf.items, .{ .unicode_perl_space = true, .capture_reset = true, .dollar_endonly = true }) catch {
             for (case.inputs) |input| {
                 std.debug.print("E\t{s}\t{s}\t", .{ case.pattern, case.flags });
                 printHex(input);
@@ -183,7 +183,7 @@ pub fn main() !void {
             continue;
         };
         defer value.deinit();
-        var workspace = regexz.ReplaceWorkspace.init(gpa, value.program, .{ .unicode_perl_space = true, .capture_reset = true }) catch continue;
+        var workspace = regexz.ReplaceWorkspace.init(gpa, value.program, .{ .unicode_perl_space = true, .capture_reset = true, .dollar_endonly = true }) catch continue;
         defer workspace.deinit();
         var captures = regexz.Captures.init(gpa, value.program) catch continue;
         defer captures.deinit(gpa);

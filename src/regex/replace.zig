@@ -18,6 +18,7 @@ const newline = @import("newline.zig");
 const required_literals = @import("required_literals.zig");
 const unicode = @import("unicode.zig");
 const unset = std.math.maxInt(usize);
+const AnchoredRun = struct { kind: model.Assertion, set: model.Set };
 const max_tracked_captures: usize = 9;
 pub const Error = model.Error;
 
@@ -87,6 +88,9 @@ pub const Workspace = struct {
     /// A `set+ separator set+ tail` program is found by scanning for the
     /// separator instead of running the DFA over the whole input.
     simple_chain: ?shapes.Chain = null,
+    /// A `set+` program ending in a line/text-end assertion scans runs and
+    /// checks the assertion once at each run end.
+    simple_anchored: ?AnchoredRun = null,
     /// The first set covers most of the alphabet, so the start prefilter
     /// barely skips. Programs with a nullable prefix (like `.*foo`) then
     /// restart the DFA at almost every position, and one required-literal
@@ -99,6 +103,9 @@ pub const Workspace = struct {
     /// The body begins with a mandatory `\A`/`^` (text start) assertion, so
     /// no match can start past offset zero.
     start_anchored: bool = false,
+    /// The body begins with a mandatory multiline `^`, so every match starts
+    /// at a line start and failed searches can jump to the next line.
+    line_start_only: bool = false,
     first_filter: prefilter.FirstFilter,
 
     pub fn init(
@@ -131,9 +138,11 @@ pub const Workspace = struct {
                 break :blk set;
             },
             .simple_chain = if (limits.longest) null else shapes.chain(program),
+            .simple_anchored = if (limits.longest) null else detectAnchoredRun(program),
             .weak_first = @as(usize, @popCount(program.first.ascii[0])) + @popCount(program.first.ascii[1]) >= 48,
             .prefix_set = detectPrefixSet(program),
             .start_anchored = startsAtTextStart(program),
+            .line_start_only = startsAtLineStart(program),
             .first_filter = prefilter.FirstFilter.init(program.first),
         };
     }
@@ -176,6 +185,7 @@ pub const Workspace = struct {
         if (self.start_anchored and search_start != 0) return null;
         if (self.simple_set) |set| return self.findSetRun(set, input, search_start);
         if (self.simple_chain) |*chain| return self.findChain(chain, input, search_start);
+        if (self.simple_anchored) |anchored_run| return self.findAnchoredRun(anchored_run, input, search_start);
         if (self.fast_dfa) |dfa| {
             if (self.requiredByteMiss(input, search_start)) return null;
             if (self.weak_first and self.requiredLiteralMiss(input, search_start)) return null;
@@ -500,6 +510,7 @@ pub const Workspace = struct {
         if (self.start_anchored and search_start != 0) return null;
         if (self.simple_set) |set| return self.findSetRun(set, input, search_start);
         if (self.simple_chain) |*chain| return self.findChain(chain, input, search_start);
+        if (self.simple_anchored) |anchored_run| return self.findAnchoredRun(anchored_run, input, search_start);
         if (self.program.literal) |literal| {
             if (self.program.capture_count == 0) {
                 const found = indexOfLiteral(input, search_start, literal) orelse return null;
@@ -605,7 +616,10 @@ pub const Workspace = struct {
                 return .{ .start = start, .end = match_end, .slots = self.slots };
             }
             if (start == input.len) break;
-            start = self.nextSearchStart(input, start);
+            start = if (self.line_start_only)
+                nextLineStart(input, start) orelse return null
+            else
+                self.nextSearchStart(input, start);
         }
         return null;
     }
@@ -707,6 +721,36 @@ pub const Workspace = struct {
             self.slots[chain.slot_b + 1] = run_end;
         }
         return .{ .start = start, .end = match_end, .slots = self.slots };
+    }
+
+    /// `set+` ending in a line/text-end assertion: the only candidate end is
+    /// the maximal run end, so scan runs and check the assertion once. When
+    /// it fails, every start inside the run fails too and the scan resumes
+    /// after the run.
+    fn findAnchoredRun(self: *Workspace, anchored: AnchoredRun, input: []const u8, search_start: usize) ?Match {
+        const set = anchored.set;
+        const kind = anchored.kind;
+        var offset = search_start;
+        while (offset < input.len) {
+            if (!set.matches(input[offset])) {
+                offset = self.first_filter.indexOf(input, offset) orelse return null;
+                if (offset >= input.len) return null;
+                if (!set.matches(input[offset])) {
+                    offset += 1;
+                    continue;
+                }
+            }
+            const start = offset;
+            while (offset < input.len and set.matches(input[offset])) offset += 1;
+            if (position(input, offset, self.program.newline).allows(kind)) {
+                self.slots[0] = start;
+                self.slots[1] = offset;
+                return .{ .start = start, .end = offset, .slots = self.slots };
+            }
+            if (offset >= input.len) return null;
+            offset += 1;
+        }
+        return null;
     }
 
     /// Capture-free fast path: no slot trail, no per-instruction capture
@@ -1550,6 +1594,61 @@ fn position(input: []const u8, offset: usize, newline_mode: model.Newline) Posit
     };
 }
 
+/// `save0 -> consume(set) -> star(set) -> assertion -> save1 -> accept`
+/// where the assertion is a line/text-end check and the set cannot consume a
+/// newline. Then only the maximal run end can satisfy the assertion.
+fn detectAnchoredRun(program: Program) ?AnchoredRun {
+    if (program.capture_count != 0 or program.extended) return null;
+    const ins = program.instructions;
+    if (ins.len != 8) return null;
+    if (program.accept != 0 or program.start != 7 or program.body != 6) return null;
+    if (std.meta.activeTag(ins[0]) != .accept or std.meta.activeTag(ins[1]) != .sub_accept or
+        std.meta.activeTag(ins[2]) != .ret or std.meta.activeTag(ins[3]) != .save or
+        std.meta.activeTag(ins[4]) != .assertion or std.meta.activeTag(ins[5]) != .star or
+        std.meta.activeTag(ins[6]) != .consume or std.meta.activeTag(ins[7]) != .save) return null;
+    const save1 = ins[3].save;
+    if (save1.slot != 1 or save1.next != program.accept) return null;
+    const assertion = ins[4].assertion;
+    if (assertion.next != 3) return null;
+    const star = ins[5].star;
+    if (star.next != 4) return null;
+    const consume = ins[6].consume;
+    if (consume.next != 5) return null;
+    const save0 = ins[7].save;
+    if (save0.slot != 0 or save0.next != 6) return null;
+    if (!shapes.sameSet(consume.set, star.set)) return null;
+    switch (assertion.kind) {
+        .end_line, .end_text, .end_text_or_newline => {},
+        else => return null,
+    }
+    if (!consume.set.ascii_only) return null;
+    if (consume.set.matches('\n') or consume.set.matches('\r')) return null;
+    return .{ .kind = assertion.kind, .set = consume.set };
+}
+
+/// Whether the body begins with a mandatory multiline `^`.
+fn startsAtLineStart(program: Program) bool {
+    const ins = program.instructions;
+    var pc = program.body;
+    var steps: usize = 0;
+    while (steps < 8) : (steps += 1) {
+        if (pc >= ins.len) return false;
+        switch (ins[pc]) {
+            .save => |save| pc = save.next,
+            .reset_captures => |reset| pc = reset.next,
+            .assertion => |assertion| return assertion.kind == .start_line,
+            else => return false,
+        }
+    }
+    return false;
+}
+
+/// First line start after `start`.
+fn nextLineStart(input: []const u8, start: usize) ?usize {
+    const found = prefilter.indexOfByte(input, start, '\n') orelse return null;
+    return found + 1;
+}
+
 /// Whether the body begins with a mandatory text-start assertion (`\A` or
 /// `^` outside multiline mode).
 fn startsAtTextStart(program: Program) bool {
@@ -1578,6 +1677,16 @@ fn detectPrefixSet(program: Program) ?model.Set {
             if (singleSetLoop(ins, split.left, program.body)) |set| return set;
             if (singleSetLoop(ins, split.right, program.body)) |set| return set;
             return null;
+        },
+        .consume => |consume| {
+            // `set+` over a multi-member set: the mandatory member followed
+            // by the loop over the same set. The run from a failed start
+            // reaches the same continuation, so later starts inside it fail
+            // too.
+            if (consume.next >= ins.len or std.meta.activeTag(ins[consume.next]) != .star) return null;
+            const star = ins[consume.next].star;
+            if (!shapes.sameSet(consume.set, star.set)) return null;
+            return consume.set;
         },
         else => return null,
     }

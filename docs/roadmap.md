@@ -45,7 +45,9 @@ Implemented functionality:
   `(?P>name)`, `\g<name>` with a depth limit.
 - Leftmost-longest (POSIX) search/replace via `Limits.longest`.
 - `\X` extended grapheme clusters using UAX #29 and Unicode 17.0.0 data.
-- `\K`, `\G`, `\Z`, `\R`, `\N`, `\h`, `\H`.
+- `\K`, `\G`, `\Z`, `\R`, `\N`, `\h`, `\H`. A non-multiline `$`
+  follows PCRE2 and matches before a final newline; `Limits.dollar_endonly`
+  selects `PCRE2_DOLLAR_ENDONLY` for strict end-of-input semantics.
 - Backtracking control verbs `(*FAIL)`, `(*ACCEPT)`, `(*PRUNE)`,
   `(*SKIP)`/`(*SKIP:name)`, `(*COMMIT)`, `(*THEN)`; `(*MARK:name)` is
   recorded and exposed through `Match.mark`, and named
@@ -99,7 +101,7 @@ Implemented functionality:
   case transforms `\U`/`\L`/`\E`/`\u`/`\l` (simple Unicode by default;
   `Limits.full_case_mapping` enables full SpecialCasing), and callback
   replacement via `replaceAllWithFn`.
-- 208 tests, including recursion, branch reset, conditional assertions,
+- 209 tests, including recursion, branch reset, conditional assertions,
   grapheme clusters, binary properties, Unicode blocks, partial matching,
   control verbs, thread safety, allocation-failure, and differential coverage
   against V8 for the supported subset.
@@ -242,7 +244,7 @@ smaller (`(?:[a-z0-9]+[ \n])+` 12 -> 9 instructions, `(?:foo|bar)+` 20 ->
 loop full match).
 The bench gate now covers 37 cases;
 `replaceAll` ~85 µs, compile ~1.5 µs with `smp_allocator`, and all
-208 tests plus the V8/Rust/extended/replacement differential fuzzers pass. On the
+209 tests plus the V8/Rust/extended/replacement differential fuzzers pass. On the
 feature side, PCRE2 forward numeric/named references, `\e` and isolated `\E`,
 the full substitution reference syntax (`$<name>`, `$+`, `$_`, `` $` ``, `$'`),
 `escape`/`splitn`/`replacen`, and compile diagnostics (`diagnose`) are covered.

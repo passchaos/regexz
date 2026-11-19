@@ -171,7 +171,7 @@ pub fn main() !void {
             try pattern_buf.appendSlice(gpa, inline_buf[0..inline_len]);
         }
         try pattern_buf.appendSlice(gpa, case.pattern);
-        var value = regexz.Regex.init(gpa, pattern_buf.items, .{ .capture_reset = true, .unset_backref_empty = true }) catch {
+        var value = regexz.Regex.init(gpa, pattern_buf.items, .{ .capture_reset = true, .unset_backref_empty = true, .dollar_endonly = true }) catch {
             for (case.inputs) |input| {
                 std.debug.print("E\t{s}\t{s}\t", .{ case.pattern, case.flags });
                 printHex(input);

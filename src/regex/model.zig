@@ -55,6 +55,10 @@ pub const Limits = struct {
     /// PCRE2-style `\v`/`\V`: vertical whitespace and its negation. When
     /// false, `\v` is the RE2/Go vertical-tab escape.
     pcre_vertical_whitespace: bool = false,
+    /// PCRE2's `PCRE2_DOLLAR_ENDONLY`: a non-multiline `$` matches only at
+    /// the very end of the input. The default (false) follows PCRE2: `$`
+    /// also matches immediately before a final newline, like `\Z`.
+    dollar_endonly: bool = false,
     /// Optional `(?C...)` callout invoked by the extended VM.
     callout: ?Callout = null,
     /// Insert callout 255 before every consuming atom (PCRE2-style

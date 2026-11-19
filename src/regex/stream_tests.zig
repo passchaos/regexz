@@ -95,6 +95,7 @@ test "streaming scanner agrees with whole-input search" {
         .{ .pattern = "a*", .input = "baaac" },
         .{ .pattern = "^a+$", .input = "aaa" },
         .{ .pattern = "a\\Z", .input = "a\n" },
+        .{ .pattern = "a$", .input = "a\n" },
         .{ .pattern = "(?m)^a$", .input = "x\na\ny" },
         .{ .pattern = "\\Aabc", .input = "abc" },
         .{ .pattern = "\\bword\\b", .input = "a word, wordy word!" },

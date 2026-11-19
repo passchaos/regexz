@@ -124,7 +124,7 @@ pub fn main() !void {
             try pattern_buf.append(gpa, ')');
         }
         try pattern_buf.appendSlice(gpa, case.pattern);
-        var value = regexz.Regex.init(gpa, pattern_buf.items, .{}) catch {
+        var value = regexz.Regex.init(gpa, pattern_buf.items, .{ .dollar_endonly = true }) catch {
             for (case.inputs) |input| {
                 std.debug.print("E\t", .{});
                 printHex(input);

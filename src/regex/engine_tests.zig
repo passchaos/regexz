@@ -405,6 +405,45 @@ test "split first-set skipping preserves leftmost-first search" {
     try expectFindSpans(allocator, "(?i:k|s|σ|ß)+", "KSσςx", &.{.{ 0, 6 }}, .{});
 }
 
+test "dollar matches before a final newline like Z" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // PCRE2 default: a non-multiline `$` also matches immediately before a
+    // final newline, exactly like `\Z`.
+    try expectFindSpans(allocator, "a+$", "aaa\n", &.{.{ 0, 3 }}, .{});
+    try expectFindSpans(allocator, "a+\\Z", "aaa\n", &.{.{ 0, 3 }}, .{});
+    try expectFindSpans(allocator, "a+$", "aaa", &.{.{ 0, 3 }}, .{});
+    // Only one final newline qualifies.
+    try expectFindSpans(allocator, "a+$", "aaa\n\n", &.{}, .{});
+    // `PCRE2_DOLLAR_ENDONLY` keeps the strict end-of-input behavior.
+    try expectFindSpans(allocator, "a+$", "aaa\n", &.{}, .{ .dollar_endonly = true });
+    try expectFindSpans(allocator, "a+$", "aaa", &.{.{ 0, 3 }}, .{ .dollar_endonly = true });
+    // Multiline `$` is unchanged.
+    try expectFindSpans(allocator, "(?m)a+$", "aaa\nb\n", &.{.{ 0, 3 }}, .{});
+}
+
+test "line-anchored and end-anchored runs scan directly" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // Multiline `^` jumps to line starts instead of retrying every position.
+    try expectFindSpans(allocator, "(?m)^\\w+", "abc def\nghi\n", &.{ .{ 0, 3 }, .{ 8, 11 } }, .{});
+    try expectFindSpans(allocator, "(?m)^\\w+", "one\n\ntwo\n", &.{ .{ 0, 3 }, .{ 5, 8 } }, .{});
+    try expectFindSpans(allocator, "(?m)^\\w+", "no newline", &.{.{ 0, 2 }}, .{});
+    // `set+` ending in a line/text-end assertion: only the maximal run end
+    // can satisfy it.
+    try expectFindSpans(allocator, "(?m)\\w+$", "abc def\nghi\n", &.{ .{ 4, 7 }, .{ 8, 11 } }, .{});
+    try expectFindSpans(allocator, "(?m)\\w+$", "abc", &.{.{ 0, 3 }}, .{});
+    try expectFindSpans(allocator, "\\w+$", "abc\ndef\n", &.{.{ 4, 7 }}, .{});
+    try expectFindSpans(allocator, "\\d+$", "12 345\n", &.{.{ 3, 6 }}, .{});
+    // Rejected shapes keep the general engine.
+    try expectFindSpans(allocator, "\\w+\\B", "abc", &.{.{ 0, 2 }}, .{});
+    try expectFindSpans(allocator, "[\\w\\n]+$", "ab\ncd\n", &.{.{ 0, 6 }}, .{});
+}
+
 test "lazy loops use first-accept ties on the DFA" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();

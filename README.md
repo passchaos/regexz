@@ -378,6 +378,10 @@ recursion-depth limits and fail closed with `error.RegexLimitExceeded`.
   forms.
 - UCP applies to `\s` only when `unicode_perl_space` is set, or to
   `\d`/`\w`/`\s` and word boundaries when `unicode_perl_classes` is set.
+- A non-multiline `$` follows PCRE2: it matches at the end of the input and
+  immediately before a final newline (like `\Z`). Set
+  `Limits.dollar_endonly` for `PCRE2_DOLLAR_ENDONLY` (strict end, which is
+  what Rust `regex` and JavaScript do).
 - Invalid UTF-8 bytes are not decoded as U+FFFD; only `\C` can consume them.
 - PCRE2 `(*NOTEMPTY)`/`(*NOTEMPTY_ATSTART)` are supported in full-match,
   search, replace, and streaming paths; `\C` still uses the interpreter.

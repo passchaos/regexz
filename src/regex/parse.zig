@@ -1113,7 +1113,12 @@ pub const Parser = struct {
             '[' => self.characterClass(),
             '.' => self.dotNode(),
             '^' => self.node(.{ .assertion = if (self.flags.multiline) .start_line else .start_text }),
-            '$' => self.node(.{ .assertion = if (self.flags.multiline) .end_line else .end_text }),
+            '$' => self.node(.{ .assertion = if (self.flags.multiline)
+                .end_line
+            else if (self.limits.dollar_endonly)
+                .end_text
+            else
+                .end_text_or_newline }),
             '\\' => blk: {
                 if (self.peek() == 'R') {
                     self.cursor += 1;
