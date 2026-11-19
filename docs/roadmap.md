@@ -99,7 +99,7 @@ Implemented functionality:
   case transforms `\U`/`\L`/`\E`/`\u`/`\l` (simple Unicode by default;
   `Limits.full_case_mapping` enables full SpecialCasing), and callback
   replacement via `replaceAllWithFn`.
-- 206 tests, including recursion, branch reset, conditional assertions,
+- 207 tests, including recursion, branch reset, conditional assertions,
   grapheme clusters, binary properties, Unicode blocks, partial matching,
   control verbs, thread safety, allocation-failure, and differential coverage
   against V8 for the supported subset.
@@ -239,7 +239,7 @@ smaller (`(?:[a-z0-9]+[ \n])+` 12 -> 9 instructions, `(?:foo|bar)+` 20 ->
 loop full match).
 The bench gate now covers 37 cases;
 `replaceAll` ~85 µs, compile ~1.5 µs with `smp_allocator`, and all
-206 tests plus the V8/Rust/extended/replacement differential fuzzers pass. On the
+207 tests plus the V8/Rust/extended/replacement differential fuzzers pass. On the
 feature side, PCRE2 forward numeric/named references, `\e` and isolated `\E`,
 the full substitution reference syntax (`$<name>`, `$+`, `$_`, `` $` ``, `$'`),
 `escape`/`splitn`/`replacen`, and compile diagnostics (`diagnose`) are covered.
@@ -315,7 +315,15 @@ Where the remaining time goes:
    programs of saves, literals, and forced greedy runs, which took the email
    benchmark from ~68 µs to ~42 µs before the chain path; shapes that need
    backtracking (`(a+)ab`, adjacent runs, loops with competing exits) still
-   use the VM. The full-match ASCII table now stores pre-multiplied row
+   use the VM. Nullable-prefix searches (`.*foo`, `.*?end`) used to restart
+   the engine at every position: `.*foo` with the literal absent took
+   ~3.1 ms on the 22 KiB sample. Two fixes: a required-literal absence scan
+   now runs before the DFA when the first set covers most of the alphabet
+   (`.*foo` -> ~8 µs, `\w*foo` -> ~7 µs), and a failed interpreter search
+   over a single-set prefix loop advances to the run end instead of one
+   rune (`.*?end` with the literal present but no match -> ~190 µs from
+   ~6.9 ms; the Rust reference is ~31 µs because its unanchored DFA finds
+   the end in one pass). The full-match ASCII table now stores pre-multiplied row
    offsets (`state * 128`) instead of state ids, which removes the shift from
    the dependent-load address chain: `(?:[a-z0-9]+[ \n])+` went from ~373 µs
    to ~311 µs (1.40 ns/byte) against ~273 µs (1.25 ns/byte) for the

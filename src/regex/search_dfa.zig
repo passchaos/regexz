@@ -46,6 +46,13 @@ const byte_max_states: usize = 250;
 
 const Mode = enum { rune, byte };
 
+/// Result of one anchored scan: the winning end (if any) and the offset the
+/// scan stopped at. `extent` lets the search skip starts that cannot match
+/// when the pattern begins with an unbounded loop (the loop can consume the
+/// skipped span, so any match from a later start is also a match from the
+/// failed start).
+const Scan = struct { end: ?usize, extent: usize };
+
 /// Deterministic 16-byte entry: `priority` first so the cache key has no
 /// padding, then a packed `(pc, automaton state)` key.
 const Entry = extern struct { priority: u64, key: u64 };
@@ -144,6 +151,8 @@ pub const Workspace = struct {
     first: model.FirstSet,
     use_prefix: bool,
     skip_start: bool,
+    /// The body begins with an unbounded loop (`.*`, `.*?`, `\w*`, ...).
+    prefix_loop: bool,
 
     /// Returns null when the program is not eligible for the search DFA.
     pub fn init(allocator: std.mem.Allocator, program: Program) std.mem.Allocator.Error!?Workspace {
@@ -298,6 +307,7 @@ pub const Workspace = struct {
             .first = program.first,
             .use_prefix = use_prefix,
             .skip_start = skip_start,
+            .prefix_loop = isPrefixLoop(program),
         };
     }
 
@@ -870,7 +880,7 @@ pub const Workspace = struct {
         }
     }
 
-    fn anchoredByte(self: *Workspace, input: []const u8, start: usize) Error!?usize {
+    fn anchoredByte(self: *Workspace, input: []const u8, start: usize) Error!Scan {
         var state = try self.startState();
         var offset = start;
         var best_end: usize = std.math.maxInt(usize);
@@ -910,10 +920,13 @@ pub const Workspace = struct {
             }
             state = next;
         }
-        return if (best_end == std.math.maxInt(usize)) null else best_end;
+        return .{
+            .end = if (best_end == std.math.maxInt(usize)) null else best_end,
+            .extent = offset,
+        };
     }
 
-    inline fn anchored(self: *Workspace, input: []const u8, start: usize) Error!?usize {
+    inline fn anchored(self: *Workspace, input: []const u8, start: usize) Error!Scan {
         if (self.mode == .byte) return self.anchoredByte(input, start);
         var state = try self.startState();
         var offset = start;
@@ -989,7 +1002,7 @@ pub const Workspace = struct {
             state = prepared.next;
             offset += length;
         }
-        return best_end;
+        return .{ .end = best_end, .extent = offset };
     }
 
     pub fn find(self: *Workspace, input: []const u8, search_start: usize) Error!?Match {
@@ -1016,13 +1029,50 @@ pub const Workspace = struct {
                 }
                 if (start == input.len) return null;
             }
-            if (try self.anchored(input, start)) |end| return .{ .start = start, .end = end };
+            const scan = try self.anchored(input, start);
+            if (scan.end) |end| return .{ .start = start, .end = end };
             if (start == input.len) break;
-            start += runeLenAt(input, start);
+            // A prefix loop can consume the failed scan's span, so any match
+            // starting inside it would also have matched from `start`.
+            start = if (self.prefix_loop and scan.extent > start) scan.extent else start + runeLenAt(input, start);
         }
         return null;
     }
 };
+
+/// Whether the program body begins with an unbounded loop (`.*`, `.*?`,
+/// `\w*`, ...). Such a loop can consume the span of a failed anchored scan,
+/// so a later start inside that span cannot match when the earlier start did
+/// not: the loop would just consume the skipped bytes and follow the same
+/// continuation.
+fn isPrefixLoop(program: Program) bool {
+    const ins = program.instructions;
+    if (program.body >= ins.len) return false;
+    switch (ins[program.body]) {
+        .star => return true,
+        .split => |split| return loopsBack(ins, split.left, program.body) or loopsBack(ins, split.right, program.body),
+        else => return false,
+    }
+}
+
+fn loopsBack(ins: []const model.Instruction, start: usize, target: usize) bool {
+    var pc = start;
+    var steps: usize = 0;
+    while (steps < 8) : (steps += 1) {
+        if (pc == target) return true;
+        if (pc >= ins.len) return false;
+        pc = switch (ins[pc]) {
+            .consume => |consume| consume.next,
+            .literal_byte => |literal| literal.next,
+            .literal_rune => |literal| literal.next,
+            .save => |save| save.next,
+            .reset_captures => |reset| reset.next,
+            .star => |star| star.next,
+            else => return false,
+        };
+    }
+    return false;
+}
 
 fn runeAt(input: []const u8, offset: usize) ?struct { value: u21, len: usize } {
     if (offset >= input.len) return null;

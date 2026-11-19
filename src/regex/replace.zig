@@ -86,6 +86,15 @@ pub const Workspace = struct {
     /// A `set+ separator set+ tail` program is found by scanning for the
     /// separator instead of running the DFA over the whole input.
     simple_chain: ?shapes.Chain = null,
+    /// The first set covers most of the alphabet, so the start prefilter
+    /// barely skips. Programs with a nullable prefix (like `.*foo`) then
+    /// restart the DFA at almost every position, and one required-literal
+    /// absence scan is much cheaper than the search.
+    weak_first: bool = false,
+    /// The body starts with a single-set unbounded loop (`.*`, `\w*`, ...).
+    /// After a failed interpreter search from `start`, no match can start
+    /// inside the loop's run, so the next search starts at the run end.
+    prefix_set: ?model.Set = null,
     first_filter: prefilter.FirstFilter,
 
     pub fn init(
@@ -118,6 +127,8 @@ pub const Workspace = struct {
                 break :blk set;
             },
             .simple_chain = if (limits.longest) null else shapes.chain(program),
+            .weak_first = @as(usize, @popCount(program.first.ascii[0])) + @popCount(program.first.ascii[1]) >= 48,
+            .prefix_set = detectPrefixSet(program),
             .first_filter = prefilter.FirstFilter.init(program.first),
         };
     }
@@ -161,6 +172,7 @@ pub const Workspace = struct {
         if (self.simple_chain) |*chain| return self.findChain(chain, input, search_start);
         if (self.fast_dfa) |dfa| {
             if (self.requiredByteMiss(input, search_start)) return null;
+            if (self.weak_first and self.requiredLiteralMiss(input, search_start)) return null;
             const found = (try dfa.find(input, search_start)) orelse return null;
             self.slots[0] = found.start;
             self.slots[1] = found.end;
@@ -508,6 +520,10 @@ pub const Workspace = struct {
         // disagreement falls back to the interpreter below.
         if (!self.limits.longest and !self.search_dfa_failed and !self.search_dfa_ineligible) {
             if (self.requiredByteMiss(input, search_start)) return null;
+            // A nullable first set disables the start prefilter, so patterns
+            // like `.*foo` restart the DFA at every position. One literal
+            // scan rules the whole search out when the literal is absent.
+            if (self.weak_first and self.requiredLiteralMiss(input, search_start)) return null;
             if (self.search_dfa_workspace == null) {
                 self.search_dfa_workspace = search_dfa.Workspace.init(self.allocator, self.program) catch blk: {
                     self.search_dfa_failed = true;
@@ -582,9 +598,25 @@ pub const Workspace = struct {
                 return .{ .start = start, .end = match_end, .slots = self.slots };
             }
             if (start == input.len) break;
-            start += runeLenAt(input, start);
+            start = self.nextSearchStart(input, start);
         }
         return null;
+    }
+
+    /// Next start position after a failed search. When the body begins with a
+    /// single-set loop, the failed scan covered the whole run, so every start
+    /// inside it would follow the same continuation and also fail.
+    fn nextSearchStart(self: *Workspace, input: []const u8, start: usize) usize {
+        if (self.prefix_set) |set| {
+            var pos = start;
+            if (set.ascii_only) {
+                while (pos < input.len and set.matches(input[pos])) pos += 1;
+            } else {
+                while (set.matchAdvance(input, pos)) |advanced| pos = advanced;
+            }
+            if (pos > start) return pos;
+        }
+        return start + runeLenAt(input, start);
     }
 
     /// `set+` over an ASCII-only set: skip to the next member with the SIMD
@@ -1477,6 +1509,29 @@ fn position(input: []const u8, offset: usize, newline_mode: model.Newline) Posit
         .line_after = newline.after(input, offset, newline_mode),
         .previous = if (offset == 0) null else input[offset - 1],
         .next = if (offset == input.len) null else input[offset],
+    };
+}
+
+/// The single-set unbounded loop that starts the program body, if any.
+fn detectPrefixSet(program: Program) ?model.Set {
+    const ins = program.instructions;
+    if (program.body >= ins.len) return null;
+    switch (ins[program.body]) {
+        .star => |star| return star.set,
+        .split => |split| {
+            if (singleSetLoop(ins, split.left, program.body)) |set| return set;
+            if (singleSetLoop(ins, split.right, program.body)) |set| return set;
+            return null;
+        },
+        else => return null,
+    }
+}
+
+fn singleSetLoop(ins: []const model.Instruction, start: usize, target: usize) ?model.Set {
+    if (start >= ins.len) return null;
+    return switch (ins[start]) {
+        .consume => |consume| if (consume.next == target) consume.set else null,
+        else => null,
     };
 }
 

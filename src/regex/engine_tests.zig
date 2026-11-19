@@ -405,6 +405,23 @@ test "split first-set skipping preserves leftmost-first search" {
     try expectFindSpans(allocator, "(?i:k|s|σ|ß)+", "KSσςx", &.{.{ 0, 6 }}, .{});
 }
 
+test "prefix loops skip failed start runs" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // A failed search from `start` covers the whole prefix run, so later
+    // starts inside it are skipped instead of rescanning.
+    try expectFindSpans(allocator, ".*?end", "abc end x", &.{.{ 0, 7 }}, .{});
+    try expectFindSpans(allocator, ".*?end", "no match here", &.{}, .{});
+    try expectFindSpans(allocator, "\\w*foo", "bar foo", &.{.{ 4, 7 }}, .{});
+    try expectFindSpans(allocator, ".*foo", "xxfooyy", &.{.{ 0, 5 }}, .{});
+    try expectFindSpans(allocator, ".*?a", "xxxx", &.{}, .{});
+    try expectFindSpans(allocator, "(?s).*?b", "a\nb", &.{.{ 0, 3 }}, .{});
+    try expectFindSpans(allocator, "[a-z]*needle", "hay needle", &.{.{ 4, 10 }}, .{});
+    try expectFindSpans(allocator, "\\p{Han}*x", "abc x", &.{.{ 4, 5 }}, .{});
+}
+
 test "unbounded repeats reuse the loop body" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
