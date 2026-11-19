@@ -8,6 +8,7 @@ const classes = @import("classes.zig");
 const serialize_mod = @import("serialize.zig");
 const required_literals = @import("required_literals.zig");
 const start_literals_mod = @import("start_literals.zig");
+const fast_branch_mod = @import("fast_branch.zig");
 
 pub const Program = struct {
     instructions: []const model.Instruction,
@@ -30,6 +31,9 @@ pub const Program = struct {
     /// folding (`(?i)STRASSE` -> `strasse`). Not serialized; deserialized
     /// programs simply skip the optimization.
     caseless_literal: ?[]const u8 = null,
+    /// A dominant alternation branch (`set? setB+`) that decides the match
+    /// when no earlier branch can start at the current byte. Not serialized.
+    fast_branch: ?fast_branch_mod.Plan = null,
     /// True when a context-free lazy DFA can evaluate boolean full matches.
     dfa_eligible: bool = false,
     /// True when the program needs the extended backtracking VM.
@@ -840,6 +844,10 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
     } else null;
     const required = try required_literals.analyze(allocator, parsed.root);
     const start_literals = try start_literals_mod.analyze(allocator, parsed.root);
+    const fast_branch = if (parsed.capture_count == 0)
+        try fast_branch_mod.analyze(allocator, parsed.root)
+    else
+        null;
     return .{
         .instructions = instructions,
         .start = start,
@@ -870,5 +878,6 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         .skip_start = !program_first.empty and program_first.selective(),
         .required_literals = required,
         .start_literals = start_literals,
+        .fast_branch = fast_branch,
     };
 }

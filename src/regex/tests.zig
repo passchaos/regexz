@@ -716,3 +716,47 @@ test "set loop full match fast path" {
     // Greedy A+ takes both bytes, then backtracks one to let B match.
     try std.testing.expect(try overlap.matches(gpa, "ab"));
 }
+
+test "dominant alternation branch scan" {
+    const qwen = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+";
+    var value = try regex.Regex.init(gpa, qwen, .{});
+    defer value.deinit();
+    try std.testing.expect(value.program.fast_branch != null);
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_branch != null);
+
+    const han = "\u{4f60}\u{597d}\u{4e16}\u{754c}";
+    const first = (try workspace.find(han, 0)).?;
+    try std.testing.expectEqual(@as(usize, 0), first.start);
+    try std.testing.expectEqual(@as(usize, 12), first.end);
+
+    // A leading quote belongs to the earlier literal branch, so the run
+    // branch must not swallow it.
+    const quote = (try workspace.find("'s hello", 0)).?;
+    try std.testing.expectEqual(@as(usize, 0), quote.start);
+    try std.testing.expectEqual(@as(usize, 2), quote.end);
+    const after_quote = (try workspace.find("'x abc", 0)).?;
+    try std.testing.expectEqual(@as(usize, 0), after_quote.start);
+    try std.testing.expectEqual(@as(usize, 2), after_quote.end);
+
+    // The optional prefix is greedy: the prefix rune joins the following run.
+    var greedy = try regex.Regex.init(gpa, "[0-9]?[a-z]+|\\s+", .{});
+    defer greedy.deinit();
+    var greedy_workspace = try regex.ReplaceWorkspace.init(gpa, greedy.program, .{});
+    defer greedy_workspace.deinit();
+    const joined = (try greedy_workspace.find("1ab", 0)).?;
+    try std.testing.expectEqual(@as(usize, 0), joined.start);
+    try std.testing.expectEqual(@as(usize, 3), joined.end);
+    // A prefix without a following run falls back to the general engine.
+    try std.testing.expect((try greedy_workspace.find("1", 0)) == null);
+
+    // Overlapping prefix and run sets keep the greedy prefix order.
+    var overlap = try regex.Regex.init(gpa, "x?[a-z]+|\\s+", .{});
+    defer overlap.deinit();
+    var overlap_workspace = try regex.ReplaceWorkspace.init(gpa, overlap.program, .{});
+    defer overlap_workspace.deinit();
+    const xy = (try overlap_workspace.find("xy", 0)).?;
+    try std.testing.expectEqual(@as(usize, 0), xy.start);
+    try std.testing.expectEqual(@as(usize, 2), xy.end);
+}

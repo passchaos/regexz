@@ -104,6 +104,8 @@ pub const Workspace = struct {
     /// Expanded UTF-8 automaton for a non-ASCII `set+` program (`\p{Han}+`):
     /// one 256-entry transition row per state.
     utf8_run: ?Utf8Run = null,
+    /// Dedicated scan for a dominant alternation branch (tokenizer shape).
+    fast_branch: ?FastBranch = null,
     /// The first set covers most of the alphabet, so the start prefilter
     /// barely skips. Programs with a nullable prefix (like `.*foo`) then
     /// restart the DFA at almost every position, and one required-literal
@@ -147,6 +149,17 @@ pub const Workspace = struct {
         else
             null;
         errdefer if (utf8_run) |*value| value.deinit(allocator);
+        const fast_branch: ?FastBranch = if (program.fast_branch) |plan| blk: {
+            var run_table = try Utf8Run.init(allocator, plan.run);
+            errdefer run_table.deinit(allocator);
+            const prefix: ?Utf8Run = if (plan.prefix) |set| try Utf8Run.init(allocator, set) else null;
+            break :blk .{
+                .prior = prefilter.FirstFilter.init(plan.prior_first),
+                .prefix = prefix,
+                .run = run_table,
+            };
+        } else null;
+        errdefer if (fast_branch) |*value| value.deinit(allocator);
         return .{
             .allocator = allocator,
             .program = program,
@@ -159,6 +172,7 @@ pub const Workspace = struct {
             .simple_anchored = if (limits.longest) null else detectAnchoredRun(program),
             .chain_tables = if (simple_chain) |chain| ChainTables.init(chain) else null,
             .utf8_run = utf8_run,
+            .fast_branch = fast_branch,
             .weak_first = @as(usize, @popCount(program.first.ascii[0])) + @popCount(program.first.ascii[1]) >= 48,
             .prefix_set = detectPrefixSet(program),
             .start_anchored = startsAtTextStart(program),
@@ -172,6 +186,7 @@ pub const Workspace = struct {
     pub fn deinit(self: *Workspace) void {
         if (self.pair_filter) |filter| self.allocator.destroy(filter);
         if (self.utf8_run) |*value| value.deinit(self.allocator);
+        if (self.fast_branch) |*value| value.deinit(self.allocator);
         if (self.pike_workspace) |*workspace| workspace.deinit();
         if (self.backtrack_workspace) |*workspace| workspace.deinit();
         if (self.search_dfa_workspace) |*workspace| workspace.deinit();
@@ -209,6 +224,9 @@ pub const Workspace = struct {
         if (self.start_anchored and search_start != 0) return null;
         if (self.simple_set) |set| return self.findSetRun(set, input, search_start);
         if (self.utf8_run) |*utf8| return self.findSetRunUtf8(utf8, input, search_start);
+        if (self.fast_branch) |*branch| {
+            if (self.findFastBranch(branch, input, search_start)) |match| return match;
+        }
         if (self.simple_chain) |*chain| return self.findChain(chain, input, search_start);
         if (self.simple_anchored) |anchored_run| return self.findAnchoredRun(anchored_run, input, search_start);
         // Every match must start at a start-literal occurrence, so the first
@@ -545,6 +563,9 @@ pub const Workspace = struct {
         if (self.start_anchored and search_start != 0) return null;
         if (self.simple_set) |set| return self.findSetRun(set, input, search_start);
         if (self.utf8_run) |*utf8| return self.findSetRunUtf8(utf8, input, search_start);
+        if (self.fast_branch) |*branch| {
+            if (self.findFastBranch(branch, input, search_start)) |match| return match;
+        }
         if (self.simple_chain) |*chain| return self.findChain(chain, input, search_start);
         if (self.simple_anchored) |anchored_run| return self.findAnchoredRun(anchored_run, input, search_start);
         var from = search_start;
@@ -702,6 +723,33 @@ pub const Workspace = struct {
         self.slots[0] = start;
         self.slots[1] = offset;
         return .{ .start = start, .end = offset, .slots = self.slots };
+    }
+
+    /// Try the dominant alternation branch at `search_start`. Returns null
+    /// when an earlier branch could start here or this branch does not match;
+    /// the general engine then decides.
+    fn findFastBranch(self: *Workspace, branch: *const FastBranch, input: []const u8, search_start: usize) ?Match {
+        if (search_start >= input.len) return null;
+        if (branch.prior.first.allowsByte(input[search_start])) return null;
+        // Greedy optional prefix first: one prefix rune followed by a run.
+        if (branch.prefix) |*prefix| {
+            if (prefix.runeAt(input, search_start)) |prefix_len| {
+                const next = search_start + prefix_len;
+                if (next < input.len and branch.run.runeAt(input, next) != null) {
+                    const end = branch.run.runEnd(input, next);
+                    self.slots[0] = search_start;
+                    self.slots[1] = end;
+                    return .{ .start = search_start, .end = end, .slots = self.slots };
+                }
+            }
+        }
+        if (branch.run.runeAt(input, search_start) != null) {
+            const end = branch.run.runEnd(input, search_start);
+            self.slots[0] = search_start;
+            self.slots[1] = end;
+            return .{ .start = search_start, .end = end, .slots = self.slots };
+        }
+        return null;
     }
 
     /// `set+` for a non-ASCII set: walk the UTF-8 automaton one byte per
@@ -1921,8 +1969,59 @@ const Utf8Run = struct {
         return .{ .table = table };
     }
 
-    fn deinit(self: *Utf8Run, allocator: std.mem.Allocator) void {
+    fn deinit(self: *const Utf8Run, allocator: std.mem.Allocator) void {
         allocator.free(self.table);
+    }
+
+    /// Length of the rune at `offset` when it is a member, else null.
+    fn runeAt(self: *const Utf8Run, input: []const u8, offset: usize) ?usize {
+        var state: u16 = 0;
+        var index = offset;
+        while (index < input.len) {
+            const next = self.table[@as(usize, state) * 256 + input[index]];
+            if (next == utf8_set.accept) return index - offset + 1;
+            if (next == utf8_set.dead) return null;
+            state = next;
+            index += 1;
+        }
+        return null;
+    }
+
+    /// End of the maximal member run starting at `offset`.
+    fn runEnd(self: *const Utf8Run, input: []const u8, offset: usize) usize {
+        var end = offset;
+        var rune_begin = offset;
+        var state: u16 = 0;
+        while (end < input.len) {
+            const next = self.table[@as(usize, state) * 256 + input[end]];
+            if (next == utf8_set.accept) {
+                state = 0;
+                end += 1;
+                rune_begin = end;
+            } else if (next == utf8_set.dead) {
+                end = rune_begin;
+                break;
+            } else {
+                state = next;
+                end += 1;
+            }
+        }
+        if (state != 0) end = rune_begin;
+        return end;
+    }
+};
+
+/// A dominant alternation branch (`set? setB+`) with its UTF-8 automata.
+/// When the byte at the search start cannot begin an earlier branch, this
+/// branch alone decides the match, so a dedicated run scan replaces the DFA.
+const FastBranch = struct {
+    prior: prefilter.FirstFilter,
+    prefix: ?Utf8Run,
+    run: Utf8Run,
+
+    fn deinit(self: *FastBranch, allocator: std.mem.Allocator) void {
+        if (self.prefix) |*prefix| prefix.deinit(allocator);
+        self.run.deinit(allocator);
         self.* = undefined;
     }
 };

@@ -178,8 +178,8 @@ Measured on an Apple Silicon macOS host. "Before" is the initial commit state;
 | Full match, class pattern (reused workspace) | ~171 ns | ~8 ns | ~10 ns | ~14 ns |
 | Full match, xDS-like (reused) | ~233 ns | ~15–17 ns | ~11 ns | ~11 ns |
 | Full match, Unicode (reused) | ~64 ns | ~12 ns | ~8 ns | ~13 ns |
-| Qwen tokenizer search, 22 KiB | ~842 µs | ~66 µs (~350 MiB/s) | ~59 µs* (~400 MiB/s) | ~195 µs |
-| CJK tokenizer search, 191 KiB | — | ~200–230 µs (~850–980 MiB/s) | ~200–216 µs* (864–933 MiB/s) | — |
+| Qwen tokenizer search, 22 KiB | ~842 µs | ~47 µs (~508 MiB/s) | ~59 µs* (~400 MiB/s) | ~195 µs |
+| CJK tokenizer search, 191 KiB | — | ~164 µs (~1.1 GiB/s) | ~200–216 µs* (864–933 MiB/s) | — |
 | Han class scan, 191 KiB | — | ~125 µs (1.5 GiB/s) | ~157–169 µs (1104 MiB/s) | — |
 | Full match, Han class, 191 KiB | — | ~190–205 µs (~830 MiB/s) | ~213 µs | — |
 | Full match, ASCII class, 216 KiB | — | ~52 µs (~4.0 GiB/s) | ~54 µs | — |
@@ -226,9 +226,9 @@ search-DFA transition tables, adding a capture-free `find` fast path,
 replacing the Unicode hash map with a direct-mapped cache plus a fast UTF-8
 decoder, adding a shared-prefix multi-literal prefilter, and determinizing
 lookahead-free programs over UTF-8 bytes, full-pattern
-Qwen search is ~68–74 µs (~330–353 MiB/s), CJK tokenizer search is ~200–230 µs
-(~850–980 MiB/s), Han class scans are ~125 µs (1.5 GiB/s, ahead of the
-same-host Rust reference), greedy `\C+` scans collapse to a single full-span match (~8 ns), large
+Qwen search is ~47 µs (~508 MiB/s), CJK tokenizer search is ~164 µs
+(~1.1 GiB/s) — both ahead of the same-host Rust reference — Han class scans
+are ~125 µs (1.5 GiB/s, also ahead), greedy `\C+` scans collapse to a single full-span match (~8 ns), large
 Unicode full matches scan at ~800 MiB/s, and extended full matches reuse a
 persistent backtracking workspace (~17 ns for a backreference pattern), and
 shared-prefix no-match scans are ~1.55 µs (15.5 GiB/s). A plain ASCII `set+`
@@ -284,11 +284,12 @@ Where the remaining time goes:
   search that dominated `\p{Han}+`. A dedicated `set+` fast path expands
   the same automaton into 256-entry transition rows, and a per-state front
   cache keeps the hot rune transitions in L1, so the Han class scan runs
-  ahead of the same-host Rust reference. Programs with single-rune
-  lookaheads (for example Qwen's `(?!\S)`) still use the rune-level
-  construction; the tokenizer scans are within ~1.2x of the same-host Rust
-  reference, and closing that needs either lookahead-aware byte gating or
-  per-branch dedicated scanners.
+  ahead of the same-host Rust reference. Tokenizer alternations get a
+  dominant-branch scan (`fast_branch.zig`): when the byte at the search
+  start cannot begin an earlier branch, the `set? setB+` branch alone
+  decides the match and a dedicated UTF-8 run scan replaces the DFA. The
+  Qwen and CJK tokenizer searches now run ahead of the same-host Rust
+  reference (~508 MiB/s vs ~400 MiB/s and ~1.1 GiB/s vs ~900 MiB/s).
   Capture programs take DFA bounds and replay only the
   matched slice, which removes the failed-start scans that dominated patterns
   like `(\w+)@(\w+)`. Interpreter fallbacks with a multi-byte required
@@ -469,7 +470,7 @@ For the workloads in `tools/bench/main.zig`, on an idle host:
   (achieved: ~8–17 ns).
 - Full match, reused workspace: **≤ 20 ns** for ASCII class patterns
   (achieved: ~8 ns).
-- Qwen tokenizer search: **≥ 200 MiB/s** (achieved: ~330 MiB/s).
+- Qwen tokenizer search: **≥ 200 MiB/s** (achieved: ~508 MiB/s).
 - `replaceAll` `a+`: **≥ 400 MiB/s** (achieved: ~450–480 MiB/s).
 - Compile xDS-like pattern: **≤ 2 µs** (achieved: ~1.5 µs with
   `std.heap.smp_allocator`; ~3.1–3.9 µs with `page_allocator`).
