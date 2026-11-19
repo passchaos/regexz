@@ -65,9 +65,15 @@ pub fn sameSet(a: model.Set, b: model.Set) bool {
 /// before it (and a valid run and tail after it, when present).
 pub const Chain = struct {
     set_a: model.Set,
+    /// Mandatory members before the separator and whether the run is
+    /// unbounded (`set+` / `set{2,}`) or fixed (`set{3}`).
+    min_a: u8 = 1,
+    star_a: bool = true,
     /// The trailing run after the separator; null when the pattern ends at
     /// the separator (e.g. `\w+@`).
     set_b: ?model.Set = null,
+    min_b: u8 = 1,
+    star_b: bool = true,
     separator: [8]u8 = undefined,
     separator_len: u8 = 0,
     tail: [8]u8 = undefined,
@@ -127,10 +133,16 @@ pub fn chain(program: Program) ?Chain {
         pc = ins[pc].save.next;
         if (pc >= ins.len) return null;
     }
-    const run_a = runBody(ins, pc) orelse return null;
+    const run_a = runPrefix(ins, pc) orelse return null;
+    // Fixed-width runs are checked byte-wise at search time, which is only
+    // exact for ASCII-only sets.
+    if (!run_a.star and !run_a.set.ascii_only) return null;
     result.set_a = run_a.set;
-    visited += 2;
-    pc = ins[run_a.star].star.next;
+    result.min_a = run_a.min;
+    result.star_a = run_a.star;
+    visited += run_a.min;
+    if (run_a.star) visited += 1;
+    pc = run_a.after;
     if (pc >= ins.len) return null;
     if (std.meta.activeTag(ins[pc]) == .save and ins[pc].save.slot != 1) {
         if (result.slot_a == 0 or ins[pc].save.slot != result.slot_a + 1) return null;
@@ -151,10 +163,14 @@ pub fn chain(program: Program) ?Chain {
         pc = ins[pc].save.next;
         if (pc >= ins.len) return null;
     }
-    if (runBody(ins, pc)) |run_b| {
+    if (runPrefix(ins, pc)) |run_b| {
+        if (!run_b.star and !run_b.set.ascii_only) return null;
         result.set_b = run_b.set;
-        visited += 2;
-        pc = ins[run_b.star].star.next;
+        result.min_b = run_b.min;
+        result.star_b = run_b.star;
+        visited += run_b.min;
+        if (run_b.star) visited += 1;
+        pc = run_b.after;
         if (pc >= ins.len) return null;
         if (std.meta.activeTag(ins[pc]) == .save and ins[pc].save.slot != 1) {
             if (result.slot_b == 0 or ins[pc].save.slot != result.slot_b + 1) return null;
@@ -213,26 +229,51 @@ fn firstRune(bytes: []const u8) ?u21 {
     return std.unicode.utf8Decode(bytes[0..length]) catch null;
 }
 
-const RunBody = struct { set: model.Set, star: usize };
+/// A leading set run: `min` mandatory members, optionally followed by an
+/// unbounded star over the same set.
+const Run = struct { set: model.Set, min: u8, star: bool, after: usize };
 
-fn runBody(ins: []const model.Instruction, pc: usize) ?RunBody {
-    if (pc >= ins.len) return null;
-    const first = ins[pc];
-    const star_pc = switch (first) {
-        .consume => |consume| consume.next,
-        .literal_byte => |literal| literal.next,
-        .literal_rune => |literal| literal.next,
+fn runPrefix(ins: []const model.Instruction, pc_in: usize) ?Run {
+    if (pc_in >= ins.len) return null;
+    const first = ins[pc_in];
+    // A single-rune set compiles to a literal; it is only a run when the
+    // following star loops over that same rune.
+    if (std.meta.activeTag(first) == .literal_byte or std.meta.activeTag(first) == .literal_rune) {
+        const star_pc = literalNext(first);
+        if (star_pc >= ins.len or std.meta.activeTag(ins[star_pc]) != .star) return null;
+        const star = ins[star_pc].star;
+        const value: u21 = switch (first) {
+            .literal_byte => |literal| literal.value,
+            .literal_rune => |literal| literal.value,
+            else => unreachable,
+        };
+        if (!singleRuneSet(star.set, value)) return null;
+        return .{ .set = star.set, .min = 1, .star = true, .after = star.next };
+    }
+    const set = switch (first) {
+        .consume => |consume| consume.set,
         else => return null,
     };
-    if (star_pc >= ins.len or std.meta.activeTag(ins[star_pc]) != .star) return null;
-    const star = ins[star_pc].star;
-    switch (first) {
-        .consume => |consume| if (!sameSet(consume.set, star.set)) return null,
-        .literal_byte => |literal| if (!singleRuneSet(star.set, literal.value)) return null,
-        .literal_rune => |literal| if (!singleRuneSet(star.set, literal.value)) return null,
-        else => unreachable,
+    var count: usize = 0;
+    var pc = pc_in;
+    while (pc < ins.len and count < 255) {
+        const instruction = ins[pc];
+        switch (instruction) {
+            .consume => |consume| {
+                if (!sameSet(consume.set, set)) return null;
+                count += 1;
+                pc = consume.next;
+            },
+            else => break,
+        }
     }
-    return .{ .set = star.set, .star = star_pc };
+    if (count == 0) return null;
+    if (pc < ins.len and std.meta.activeTag(ins[pc]) == .star) {
+        const star = ins[pc].star;
+        if (!sameSet(star.set, set)) return null;
+        return .{ .set = set, .min = @intCast(count), .star = true, .after = star.next };
+    }
+    return .{ .set = set, .min = @intCast(count), .star = false, .after = pc };
 }
 
 fn singleRuneSet(set: model.Set, rune: u21) bool {

@@ -309,8 +309,9 @@ Where the remaining time goes:
    18 KiB sample against ~29 µs for the same-host Rust reference (2.6x
    faster), and the no-match form `(\p{L}+)@(\p{L}+)` is ~2.2 µs against
    ~2.0 µs. The shape detector (`shapes.zig`) recognizes
-   `setA+ separator setB+ tail`, requires the separator to end the first run
-   and the tail to end the second, and reports the capture slots directly.
+   `setA{min,} separator setB{min,} tail` (fixed counts such as
+   `\d{3}-\d{4}` included), requires the separator to end the first run and
+   the tail to end the second, and reports the capture slots directly.
    The first-byte prefilter also matches contiguous ASCII ranges with vector
    compares (up to four runs), so class scans like `[A-Z]+` skip 16 bytes at
    a time: the no-match scan dropped from ~88 µs to ~4 µs, and `\d{3}-\d{4}`

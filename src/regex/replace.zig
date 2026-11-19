@@ -654,41 +654,58 @@ pub const Workspace = struct {
         var scan = search_start;
         while (true) {
             const separator_at = indexOfLiteral(input, scan, chain.separator[0..chain.separator_len]) orelse return null;
-            if (separator_at > search_start) {
-                const start = chainRunStart(input, chain.set_a, separator_at, search_start);
-                if (start < separator_at) {
-                    const run_from = separator_at + chain.separator_len;
-                    var matched = false;
-                    var match_end: usize = 0;
-                    var run_end: usize = run_from;
-                    if (chain.set_b) |set_b| {
-                        const end = chainRunEnd(input, set_b, run_from);
-                        if (end > run_from and tailMatches(input, end, chain.tail[0..chain.tail_len])) {
-                            matched = true;
-                            run_end = end;
-                            match_end = end + chain.tail_len;
-                        }
-                    } else if (tailMatches(input, run_from, chain.tail[0..chain.tail_len])) {
-                        matched = true;
-                        match_end = run_from + chain.tail_len;
-                    }
-                    if (matched) {
-                        self.slots[0] = start;
-                        self.slots[1] = match_end;
-                        if (chain.slot_a != 0) {
-                            self.slots[chain.slot_a] = start;
-                            self.slots[chain.slot_a + 1] = separator_at;
-                        }
-                        if (chain.slot_b != 0) {
-                            self.slots[chain.slot_b] = run_from;
-                            self.slots[chain.slot_b + 1] = run_end;
-                        }
-                        return .{ .start = start, .end = match_end, .slots = self.slots };
-                    }
-                }
-            }
+            if (self.chainMatch(chain, input, separator_at, search_start)) |match| return match;
             scan = separator_at + 1;
         }
+    }
+
+    /// Try the match determined by one separator occurrence: the run before
+    /// it (unbounded, or a fixed count for shapes like `\d{3}-\d{4}`), the
+    /// run after it, and the literal tail.
+    fn chainMatch(self: *Workspace, chain: *const shapes.Chain, input: []const u8, separator_at: usize, search_start: usize) ?Match {
+        var start: usize = undefined;
+        if (chain.star_a) {
+            start = chainRunStart(input, chain.set_a, separator_at, search_start);
+            if (separator_at - start < chain.min_a) return null;
+        } else {
+            if (separator_at < chain.min_a) return null;
+            start = separator_at - chain.min_a;
+            if (start < search_start) return null;
+            for (input[start..separator_at]) |byte| {
+                if (!chain.set_a.matches(byte)) return null;
+            }
+        }
+        const run_from = separator_at + chain.separator_len;
+        var match_end: usize = 0;
+        var run_end: usize = run_from;
+        if (chain.set_b) |set_b| {
+            if (chain.star_b) {
+                run_end = chainRunEnd(input, set_b, run_from);
+                if (run_end - run_from < chain.min_b) return null;
+            } else {
+                run_end = run_from + chain.min_b;
+                if (run_end > input.len) return null;
+                for (input[run_from..run_end]) |byte| {
+                    if (!set_b.matches(byte)) return null;
+                }
+            }
+            if (!tailMatches(input, run_end, chain.tail[0..chain.tail_len])) return null;
+            match_end = run_end + chain.tail_len;
+        } else {
+            if (!tailMatches(input, run_from, chain.tail[0..chain.tail_len])) return null;
+            match_end = run_from + chain.tail_len;
+        }
+        self.slots[0] = start;
+        self.slots[1] = match_end;
+        if (chain.slot_a != 0) {
+            self.slots[chain.slot_a] = start;
+            self.slots[chain.slot_a + 1] = separator_at;
+        }
+        if (chain.slot_b != 0) {
+            self.slots[chain.slot_b] = run_from;
+            self.slots[chain.slot_b + 1] = run_end;
+        }
+        return .{ .start = start, .end = match_end, .slots = self.slots };
     }
 
     /// Capture-free fast path: no slot trail, no per-instruction capture
