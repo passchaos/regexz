@@ -183,7 +183,7 @@ Measured on an Apple Silicon macOS host. "Before" is the initial commit state;
 | Han class scan, 191 KiB | — | ~125 µs (1.5 GiB/s) | ~157–169 µs (1104 MiB/s) | — |
 | Full match, Han class, 191 KiB | — | ~190–205 µs (~830 MiB/s) | ~213 µs | — |
 | Full match, ASCII class, 216 KiB | — | ~52 µs (~4.0 GiB/s) | ~54 µs | — |
-| Full match, ASCII loop, 216 KiB | — | ~310 µs (~675 MiB/s) | ~273 µs | — |
+| Full match, ASCII loop, 216 KiB | — | ~79 µs (~2.6 GiB/s) | ~273 µs | — |
 | Full match, backref `(a)\1` (reuse) | ~5.5 µs | ~17 ns | — | — |
 | Full match, atomic `(?>a+)a` (reuse) | ~5.2 µs | ~23 ns | — | — |
 | `StreamScanner` `[a-z]+`, 216 KiB in 4 KiB chunks | ~31 ms | ~0.32 ms (650 MiB/s) | — | — |
