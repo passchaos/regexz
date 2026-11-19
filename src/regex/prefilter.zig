@@ -1,12 +1,14 @@
 //! SIMD first-byte prefilter for selective start sets.
 //!
-//! Small ASCII first-byte sets (the common multi-literal alternation case) are
-//! scanned 16 bytes at a time with vector compares. Larger or non-ASCII sets
-//! fall back to the byte-at-a-time bitmap loop.
+//! ASCII first-byte sets are scanned 16 bytes at a time: small sets compare
+//! against up to eight byte splats, and sets that form at most four contiguous
+//! ranges (classes like `[A-Z]` or `\w`) compare against the range bounds.
+//! Everything else falls back to the byte-at-a-time bitmap loop.
 const std = @import("std");
 const model = @import("model.zig");
 
 const max_simd_bytes = 8;
+const max_simd_ranges = 4;
 const Vec = @Vector(16, u8);
 
 /// First offset at or after `start` holding `byte`, scanned 16 bytes at a
@@ -33,9 +35,16 @@ pub fn indexOfByte(input: []const u8, start: usize, byte: u8) ?usize {
 pub const FirstFilter = struct {
     first: model.FirstSet,
     bytes: [max_simd_bytes]u8 = undefined,
+    byte_splats: [max_simd_bytes]Vec = undefined,
     count: u8 = 0,
-    /// The set has more ASCII bytes than the vector path can compare.
+    /// The set has more ASCII bytes than the byte-splat path can compare.
     too_many: bool = false,
+    /// Contiguous ASCII runs of the set (at most `max_simd_ranges`); zero
+    /// when the set needs more runs than the range path supports.
+    ranges: [max_simd_ranges][2]u8 = undefined,
+    range_lo: [max_simd_ranges]Vec = undefined,
+    range_hi: [max_simd_ranges]Vec = undefined,
+    range_count: u8 = 0,
 
     pub fn init(first: model.FirstSet) FirstFilter {
         var result = FirstFilter{ .first = first };
@@ -49,6 +58,33 @@ pub const FirstFilter = struct {
             result.bytes[result.count] = @intCast(byte);
             result.count += 1;
         }
+        // Contiguous runs: classes like `[A-Z]` or `\w` are far cheaper to
+        // match as ranges than as byte splats.
+        var run_start: usize = 0;
+        var in_run = false;
+        byte = 0;
+        while (byte <= 128) : (byte += 1) {
+            const member = byte < 128 and first.allowsByte(@intCast(byte));
+            if (member and !in_run) {
+                run_start = byte;
+                in_run = true;
+            } else if (!member and in_run) {
+                if (result.range_count == max_simd_ranges) {
+                    result.range_count = 0;
+                    break;
+                }
+                result.ranges[result.range_count] = .{ @intCast(run_start), @intCast(byte - 1) };
+                result.range_count += 1;
+                in_run = false;
+            }
+        }
+        var index: usize = 0;
+        while (index < result.count) : (index += 1) result.byte_splats[index] = @splat(result.bytes[index]);
+        index = 0;
+        while (index < result.range_count) : (index += 1) {
+            result.range_lo[index] = @splat(result.ranges[index][0]);
+            result.range_hi[index] = @splat(result.ranges[index][1]);
+        }
         return result;
     }
 
@@ -57,6 +93,7 @@ pub const FirstFilter = struct {
     pub fn indexOf(self: *const FirstFilter, input: []const u8, start: usize) ?usize {
         if (start >= input.len) return null;
         if (self.first.empty) return start;
+        if (self.range_count != 0) return self.indexOfRanges(input, start);
         if (self.too_many) return byteLoop(input, start, self.first);
         const count: usize = self.count;
         if (count == 0) {
@@ -67,17 +104,36 @@ pub const FirstFilter = struct {
             }
             return null;
         }
-        var splats: [max_simd_bytes]Vec = undefined;
-        var index: usize = 0;
-        while (index < count) : (index += 1) splats[index] = @splat(self.bytes[index]);
         const nonascii: Vec = @splat(@as(u8, 0x80));
         var offset = start;
         while (offset + 16 <= input.len) : (offset += 16) {
             const raw: [16]u8 = input[offset..][0..16].*;
             const chunk: Vec = @bitCast(raw);
-            var mask = chunk == splats[0];
-            index = 1;
-            while (index < count) : (index += 1) mask = mask | (chunk == splats[index]);
+            var mask = chunk == self.byte_splats[0];
+            var index: usize = 1;
+            while (index < count) : (index += 1) mask = mask | (chunk == self.byte_splats[index]);
+            if (self.first.nonascii) mask = mask | (chunk >= nonascii);
+            if (@reduce(.Or, mask)) {
+                var i: usize = 0;
+                while (i < 16) : (i += 1) {
+                    if (self.first.allowsByte(raw[i])) return offset + i;
+                }
+            }
+        }
+        return byteLoop(input, offset, self.first);
+    }
+
+    fn indexOfRanges(self: *const FirstFilter, input: []const u8, start: usize) ?usize {
+        const nonascii: Vec = @splat(@as(u8, 0x80));
+        var offset = start;
+        while (offset + 16 <= input.len) : (offset += 16) {
+            const raw: [16]u8 = input[offset..][0..16].*;
+            const chunk: Vec = @bitCast(raw);
+            var mask = (chunk >= self.range_lo[0]) & (chunk <= self.range_hi[0]);
+            var index: usize = 1;
+            while (index < self.range_count) : (index += 1) {
+                mask = mask | ((chunk >= self.range_lo[index]) & (chunk <= self.range_hi[index]));
+            }
             if (self.first.nonascii) mask = mask | (chunk >= nonascii);
             if (@reduce(.Or, mask)) {
                 var i: usize = 0;

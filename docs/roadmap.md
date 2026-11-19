@@ -220,8 +220,8 @@ Unicode full matches scan at ~800 MiB/s, and extended full matches reuse a
 persistent backtracking workspace (~17 ns for a backreference pattern), and
 shared-prefix no-match scans are ~1.55 µs (15.5 GiB/s). A plain ASCII `set+`
 search (`[a-z]+`, `\w+`, `\d+`, including single-rune sets like `a+`) now
-scans runs directly instead of entering the DFA: ~21 µs on the 216 KiB Qwen
-sample (1.1 GiB/s, 1.3× the DFA path and faster than the same-host Rust
+scans runs directly instead of entering the DFA: ~18 µs on the 216 KiB Qwen
+sample (1.3 GiB/s, 1.5× the DFA path and faster than the same-host Rust
 reference at ~36 µs). The same shape full-matches through a 256-byte table:
 ASCII class full matches run at ~4.0 GiB/s (~52 µs on 216 KiB, above the
 same-host Rust reference at ~3.9 GiB/s) and short validation inputs pay ~7 ns
@@ -311,6 +311,10 @@ Where the remaining time goes:
    ~2.0 µs. The shape detector (`shapes.zig`) recognizes
    `setA+ separator setB+ tail`, requires the separator to end the first run
    and the tail to end the second, and reports the capture slots directly.
+   The first-byte prefilter also matches contiguous ASCII ranges with vector
+   compares (up to four runs), so class scans like `[A-Z]+` skip 16 bytes at
+   a time: the no-match scan dropped from ~88 µs to ~4 µs, and `\d{3}-\d{4}`
+   from ~19 µs to ~10 µs.
    `extractCaptures` also tries a deterministic replay for straight-line
    programs of saves, literals, and forced greedy runs, which took the email
    benchmark from ~68 µs to ~42 µs before the chain path; shapes that need
