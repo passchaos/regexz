@@ -304,7 +304,7 @@ no data tables at runtime. Both return a capture-aware `Match` with
 backtracker restores capture slots on every failed path. The matcher uses continuation-passing
 backtracking, so alternation and greedy/lazy repetition explore every path
 in leftmost-first order. Supported syntax: literals and escapes
-(`\n \r \t \\ \d \D \w \W \s \S`), classes (`[a-z0-9_]`, `[^...]`),
+(`\n \r \t \\ \d \D \w \W \s \S \b \B`), classes (`[a-z0-9_]`, `[^...]`),
 `.`, repetition (`* + ? {n} {n,} {n,m}` and lazy forms), alternation,
 non-capturing groups, anchors (`^ $ \A \z`), and the inline flags `(?i)`,
 `(?s)`, `(?m)`.

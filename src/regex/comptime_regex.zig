@@ -76,6 +76,7 @@ const Ast = union(enum) {
     alternate: struct { left: *const Ast, right: *const Ast },
     repeat: struct { child: *const Ast, min: u32, max: ?u32, lazy: bool },
     capture: struct { index: u16, child: *const Ast },
+    word_boundary: struct { negative: bool },
     anchor_start: struct { multiline: bool },
     anchor_end: struct { multiline: bool, strict: bool },
 };
@@ -342,6 +343,8 @@ const Parser = struct {
             'n' => return Ast{ .literal = .{ .value = '\n', .caseless = false } },
             'r' => return Ast{ .literal = .{ .value = '\r', .caseless = false } },
             't' => return Ast{ .literal = .{ .value = '\t', .caseless = false } },
+            'b' => return Ast{ .word_boundary = .{ .negative = false } },
+            'B' => return Ast{ .word_boundary = .{ .negative = true } },
             'A' => return Ast{ .anchor_start = .{ .multiline = false } },
             'z' => return Ast{ .anchor_end = .{ .multiline = false, .strict = true } },
             'd' => return classAst(.{ .first = '0', .last = '9' }, false),
@@ -530,7 +533,7 @@ fn computeFirst(comptime node: Ast) First {
             break :blk .{ .ascii = child.ascii, .nonascii = child.nonascii, .empty = true };
         },
         .capture => |capture| computeFirst(capture.child.*),
-        .anchor_start, .anchor_end => .{ .empty = true },
+        .anchor_start, .anchor_end, .word_boundary => .{ .empty = true },
     };
 }
 
@@ -737,6 +740,13 @@ fn matchNode(comptime node: Ast, input: []const u8, pos: usize, cont: anytype, s
             const capture_cont = CaptureCont{ .cont = cont, .start = pos, .index = capture.index - 1 };
             return capture_cont.match(input, pos, slots);
         },
+        .word_boundary => |boundary| {
+            const before = if (pos == 0) null else previousRune(input, pos);
+            const after = decodeRune(input, pos);
+            const at_boundary = isWordRune(before) != isWordRune(after);
+            if (at_boundary == boundary.negative) return null;
+            return cont.match(input, pos, slots);
+        },
         .anchor_start => |anchor| {
             if (anchor.multiline) {
                 if (!(pos == 0 or input[pos - 1] == '\n')) return null;
@@ -765,6 +775,26 @@ fn decodeRune(input: []const u8, pos: usize) ?Decoded {
     if (pos + len > input.len) return null;
     const value = std.unicode.utf8Decode(input[pos..][0..len]) catch return null;
     return .{ .value = value, .len = len };
+}
+
+/// ASCII word membership (`\w` in the default, non-UCP mode).
+fn isWordRune(rune: ?u21) bool {
+    const value = rune orelse return false;
+    return value == '_' or
+        (value >= 'a' and value <= 'z') or
+        (value >= 'A' and value <= 'Z') or
+        (value >= '0' and value <= '9');
+}
+
+/// The rune ending immediately before `pos`, or null on invalid UTF-8.
+fn previousRune(input: []const u8, pos: usize) ?u21 {
+    if (pos == 0) return null;
+    var start = pos - 1;
+    var steps: usize = 0;
+    while (start != 0 and steps < 3 and (input[start] & 0xC0) == 0x80) : (steps += 1) start -= 1;
+    const len = std.unicode.utf8ByteSequenceLength(input[start]) catch return null;
+    if (start + len != pos) return null;
+    return std.unicode.utf8Decode(input[start..pos]) catch null;
 }
 
 fn asciiLower(rune: u21) u21 {
@@ -1029,4 +1059,31 @@ test "comptime regex named captures" {
     try std.testing.expectEqual(@as(usize, 5), a.named("kind").?.end);
     try std.testing.expectEqual(@as(usize, 6), a.named("num").?.start);
     try std.testing.expectEqual(@as(usize, 8), a.named("num").?.end);
+}
+
+test "comptime regex word boundaries" {
+    const word = Regex("\\bfoo\\b");
+    try std.testing.expect(word.match("foo") != null);
+    try std.testing.expect(word.match("xfoo") == null);
+    try std.testing.expect(word.match("foox") == null);
+    try std.testing.expect(word.search("a foo b") != null);
+    const found = word.search("a foo b").?;
+    try std.testing.expectEqual(@as(usize, 2), found.start);
+    try std.testing.expectEqual(@as(usize, 5), found.end);
+
+    // Digits and underscore are word characters.
+    const num = Regex("\\b42\\b");
+    try std.testing.expect(num.match("42") != null);
+    try std.testing.expect(num.match("x42") == null);
+    const under = Regex("\\b_x\\b");
+    try std.testing.expect(under.match("_x") != null);
+
+    // \B is the negation.
+    const inner = Regex("\\Boo\\B");
+    try std.testing.expect(inner.search("foo") != null);
+    try std.testing.expect(inner.search(" foo") == null);
+
+    // A non-ASCII neighbour is a non-word character, so the boundary holds.
+    const mixed = Regex("\\bfoo\\b");
+    try std.testing.expect(mixed.search("caf\u{00e9} foo") != null);
 }
