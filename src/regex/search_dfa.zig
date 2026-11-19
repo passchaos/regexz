@@ -151,6 +151,10 @@ pub const Workspace = struct {
     first: model.FirstSet,
     use_prefix: bool,
     skip_start: bool,
+    /// The program's only unbounded loops are lazy, so tied accepts must
+    /// keep the earliest end (leftmost-first lazy semantics). Greedy loops
+    /// need the latest end, so mixed programs keep the default.
+    lazy_first: bool,
     /// The body begins with an unbounded loop (`.*`, `.*?`, `\w*`, ...).
     prefix_loop: bool,
 
@@ -201,14 +205,28 @@ pub const Workspace = struct {
                 return null;
             }
         }
-        // Lazy unbounded loops need an accept-only exit; otherwise a later
-        // successful exit would be chosen over the first one.
+        // Lazy unbounded loops need an accept-only exit unless the whole
+        // program is lazy: with no greedy loop, tied accepts keep the
+        // earliest end, which is exactly lazy leftmost-first semantics.
+        var lazy_loops: usize = 0;
+        var greedy_loops: usize = 0;
+        for (program.instructions, 0..) |instruction, index| {
+            switch (instruction) {
+                .star => greedy_loops += 1,
+                .split => |split| if (!split.alternation and loop_split[index]) {
+                    if (body_left[index]) greedy_loops += 1 else lazy_loops += 1;
+                },
+                else => {},
+            }
+        }
+        const lazy_first = lazy_loops != 0 and greedy_loops == 0;
         for (program.instructions, 0..) |instruction, index| {
             const split = switch (instruction) {
                 .split => |value| value,
                 else => continue,
             };
             if (split.alternation or !loop_split[index] or body_left[index]) continue;
+            if (lazy_first) continue;
             if (!try zeroWidthExitSafe(allocator, program, split.left)) {
                 allocator.free(bits);
                 allocator.free(body_mask);
@@ -307,6 +325,7 @@ pub const Workspace = struct {
             .first = program.first,
             .use_prefix = use_prefix,
             .skip_start = skip_start,
+            .lazy_first = lazy_first,
             .prefix_loop = isPrefixLoop(program),
         };
     }
@@ -870,12 +889,12 @@ pub const Workspace = struct {
         return accept;
     }
 
-    fn recordMatch(best_end: *?usize, best_priority: *u64, offset: usize, accept: u64) void {
+    fn recordMatch(best_end: *?usize, best_priority: *u64, offset: usize, accept: u64, first_wins: bool) void {
         if (accept == no_priority) return;
         if (best_end.* == null or accept < best_priority.*) {
             best_end.* = offset;
             best_priority.* = accept;
-        } else if (accept == best_priority.*) {
+        } else if (accept == best_priority.* and !first_wins) {
             best_end.* = offset;
         }
     }
@@ -905,15 +924,16 @@ pub const Workspace = struct {
             const next = (cached & state_mask) - 1;
             if (cached & accept_bit != 0) {
                 if (uniform) {
-                    // All accepts tie, so the last accepting offset wins.
+                    // All accepts tie: greedy keeps the last offset, lazy the
+                    // first.
                     if (best_priority == no_priority) best_priority = self.uniform_accept;
-                    best_end = offset;
+                    if (!self.lazy_first or best_end == std.math.maxInt(usize)) best_end = offset;
                 } else {
                     const accept = self.state_accept.items[next];
                     if (accept < best_priority) {
                         best_end = offset;
                         best_priority = accept;
-                    } else if (accept == best_priority) {
+                    } else if (accept == best_priority and !self.lazy_first) {
                         best_end = offset;
                     }
                 }
@@ -935,7 +955,7 @@ pub const Workspace = struct {
         while (true) {
             if (offset >= input.len) {
                 const accept = try self.prepareEof(state);
-                recordMatch(&best_end, &best_priority, offset, accept);
+                recordMatch(&best_end, &best_priority, offset, accept, self.lazy_first);
                 break;
             }
             const byte = input[offset];
@@ -958,7 +978,7 @@ pub const Workspace = struct {
                 const prepared = try self.compute(state, byte);
                 self.ascii_table.items[index] = if (prepared.next == dead_state) dead_state else prepared.next + 1;
                 self.accept_table.items[index] = prepared.accept;
-                recordMatch(&best_end, &best_priority, offset, prepared.accept);
+                recordMatch(&best_end, &best_priority, offset, prepared.accept, self.lazy_first);
                 if (prepared.next == dead_state) break;
                 state = prepared.next;
                 offset += 1;
@@ -969,7 +989,7 @@ pub const Workspace = struct {
                 // Invalid or truncated UTF-8 cannot continue a rune-based
                 // path; the position may still accept an empty match.
                 const accept = try self.prepareEof(state);
-                recordMatch(&best_end, &best_priority, offset, accept);
+                recordMatch(&best_end, &best_priority, offset, accept, self.lazy_first);
                 break;
             }
             var bytes: u32 = 0;
@@ -986,7 +1006,7 @@ pub const Workspace = struct {
             } else {
                 const rune = runeAt(input, offset) orelse {
                     const accept = try self.prepareEof(state);
-                    recordMatch(&best_end, &best_priority, offset, accept);
+                    recordMatch(&best_end, &best_priority, offset, accept, self.lazy_first);
                     break;
                 };
                 prepared = try self.compute(state, rune.value);
@@ -997,7 +1017,7 @@ pub const Workspace = struct {
                     .pad = 0,
                 };
             }
-            recordMatch(&best_end, &best_priority, offset, prepared.accept);
+            recordMatch(&best_end, &best_priority, offset, prepared.accept, self.lazy_first);
             if (prepared.next == dead_state) break;
             state = prepared.next;
             offset += length;

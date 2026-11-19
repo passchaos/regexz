@@ -405,6 +405,36 @@ test "split first-set skipping preserves leftmost-first search" {
     try expectFindSpans(allocator, "(?i:k|s|σ|ß)+", "KSσςx", &.{.{ 0, 6 }}, .{});
 }
 
+test "lazy loops use first-accept ties on the DFA" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    // The earliest accept wins: a later "end" must not extend the match.
+    try expectFindSpans(allocator, ".*?end", "end x end", &.{ .{ 0, 3 }, .{ 3, 9 } }, .{});
+    try expectFindSpans(allocator, ".*?end", "no match here", &.{}, .{});
+    try expectFindSpans(allocator, "a.*?b", "aXbYb", &.{.{ 0, 3 }}, .{});
+    try expectFindSpans(allocator, "a*?b", "aab b", &.{ .{ 0, 3 }, .{ 4, 5 } }, .{});
+    try expectFindSpans(allocator, "(?s).*?c", "abc", &.{.{ 0, 3 }}, .{});
+
+    // The lazy shapes now run on the search DFA.
+    var value = try regex.Regex.init(allocator, ".*?end", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(allocator, value.program, .{});
+    defer workspace.deinit();
+    _ = try workspace.find("abc end x", 0);
+    try std.testing.expect(!workspace.search_dfa_ineligible);
+
+    // A greedy unbounded loop keeps the default last-accept ties and sends
+    // the lazy loop back to the interpreter.
+    var mixed = try regex.Regex.init(allocator, "a*?b*", .{});
+    defer mixed.deinit();
+    var mixed_workspace = try regex.ReplaceWorkspace.init(allocator, mixed.program, .{});
+    defer mixed_workspace.deinit();
+    _ = try mixed_workspace.find("aab", 0);
+    try std.testing.expect(mixed_workspace.search_dfa_ineligible);
+}
+
 test "prefix loops skip failed start runs" {
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
