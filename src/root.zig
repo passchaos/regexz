@@ -249,12 +249,12 @@ pub const Regex = struct {
             return workspace.fullMatch(input);
         }
         const workspace = try self.ensureWorkspace();
-        return workspace.matches(self.program, input);
+        return workspace.matchesBorrowed(&self.program, input);
     }
     /// Reuse a caller-owned workspace. This is the allocation-free hot path
     /// for repeated matching of linear programs.
     pub fn matchesWithWorkspace(self: *const Regex, workspace: *Workspace, input: []const u8) bool {
-        return workspace.matches(self.program, input);
+        return workspace.matchesBorrowed(&self.program, input);
     }
     /// Full-match partiality: whether the input matches, is a proper prefix
     /// of some match, or cannot be extended to a match. Extended programs
@@ -382,6 +382,7 @@ test {
     _ = @import("regex/utf8_set.zig");
     _ = @import("regex/budget_tests.zig");
     _ = @import("regex/engine_tests.zig");
+    _ = @import("regex/borrowed_program_tests.zig");
     _ = @import("regex/capture_run_tests.zig");
     _ = @import("regex/prefilter_tests.zig");
     _ = @import("regex/extended_tests.zig");

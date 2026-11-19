@@ -230,7 +230,7 @@ try std.testing.expect(try value.isMatch(allocator, "xxaaabyy"));
 
 var workspace = try regexz.Workspace.init(allocator, value.program);
 defer workspace.deinit();
-try std.testing.expect(workspace.matches(value.program, "ab"));
+try std.testing.expect(workspace.matchesBorrowed(&value.program, "ab"));
 
 // Allocation-free hot path for repeated matching.
 try std.testing.expect(value.matchesWithWorkspace(&workspace, "ab"));
@@ -310,15 +310,22 @@ in leftmost-first order. Supported syntax: literals and escapes
 non-capturing groups, anchors (`^ $ \A \z`), and the inline flags `(?i)`,
 `(?s)`, `(?m)`.
 
-On the same host the generated matcher is ~3x faster than the runtime engine
-for short literal and class matches (0.2 ns vs 0.6 ns, 3.3 ns vs 8.4 ns) and
-~1.7x slower for multi-run searches, which the runtime engine accelerates
-with its chain fast path. For large patterns use the runtime engine; the full
+`zig build bench-comptime -Doptimize=ReleaseFast` compares generated matchers
+against warmed runtime workspaces with heap-backed subjects and a pointer/length
+optimization barrier on every iteration. Same-host medians are about 0.5 ns
+versus 1.7 ns for a literal and 3.5 ns versus 4.9 ns for an alternation/class
+pattern. Constant-input timings from earlier versions were not valid evidence
+for runtime matching. For large patterns use the runtime engine; the full
 parser needs `std.mem.Allocator`, whose byte-allocation wrapper calls
 `@memset(undefined)`, which the comptime evaluator rejects. The compile-time
 path therefore follows the ctregex.zig construction style (comptime locals
 plus `&const_local` for the tree) and keeps the whole pipeline
 allocation-free.
+
+For repeated runtime matching, `Workspace.matchesBorrowed(&program, input)`
+avoids copying the immutable `Program` at a non-inlined call boundary. The
+value-taking `Workspace.matches` entry remains available; `Regex.matches`
+and `Regex.matchesWithWorkspace` use the borrowed entry internally.
 
 ## Build and test
 
@@ -332,6 +339,8 @@ zig build bench -Doptimize=ReleaseFast
 zig build bench-replace -Doptimize=ReleaseFast # scoped timings and output allocation counts
 zig build bench-capture -Doptimize=ReleaseFast # capture search and first-find allocations
 zig build bench-prefilter -Doptimize=ReleaseFast # shared-prefix filters and Regex API searches
+zig build bench-comptime -Doptimize=ReleaseFast # generated/runtime matching with runtime inputs
+zig build bench-startup -Doptimize=ReleaseFast # compile, workspace init, cold and warm matching
 python3 tools/bench/check.py         # compare against tools/bench/baseline.json (--update to refresh)
 python3 tools/fuzz/run.py            # fuzz full match, find spans, and captures against V8
 python3 tools/fuzz/extended.py       # fuzz lookaround/backref/capture semantics against V8

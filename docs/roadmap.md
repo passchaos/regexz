@@ -175,7 +175,7 @@ Measured on an Apple Silicon macOS host. "Before" is the initial commit state;
 | Case | Before | After | Rust `regex` 1.13 | Node 26 |
 | --- | ---: | ---: | ---: | ---: |
 | Full match, 13-byte literal | ~3.6 µs | ~1.6 ns | ~10 ns | ~10 ns |
-| Full match, class pattern (one-shot) | ~3.7 µs | ~9 ns | ~10 ns | ~14 ns |
+| Full match, class pattern (warmed Regex API) | ~3.7 µs | ~9 ns | ~10 ns | ~14 ns |
 | Full match, class pattern (reused workspace) | ~171 ns | ~8 ns | ~10 ns | ~14 ns |
 | Full match, xDS-like (reused) | ~233 ns | ~15–17 ns | ~11 ns | ~11 ns |
 | Full match, Unicode (reused) | ~64 ns | ~12 ns | ~8 ns | ~13 ns |
@@ -487,7 +487,7 @@ on the tokenizer and xDS workloads.
 
 For the workloads in `tools/bench/main.zig`, on an idle host:
 
-- Full match, short literal/class/xDS patterns: **≤ 40 ns** one-shot
+- Full match, short literal/class/xDS patterns: **≤ 40 ns** warmed Regex API
   (achieved: ~8–17 ns).
 - Full match, reused workspace: **≤ 20 ns** for ASCII class patterns
   (achieved: ~8 ns).

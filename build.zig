@@ -118,4 +118,19 @@ pub fn build(b: *std.Build) void {
     const run_prefilter_search = b.addRunArtifact(prefilter_search_exe);
     run_prefilter_search.step.dependOn(&run_prefilter_bench.step);
     prefilter_bench_step.dependOn(&run_prefilter_search.step);
+
+    addRegexBench(b, regexz_mod, target, optimize, "comptime", "Compare generated and runtime matchers with runtime input barriers");
+    addRegexBench(b, regexz_mod, target, optimize, "startup", "Measure compilation, workspace construction and cold versus warm matching");
+}
+
+fn addRegexBench(b: *std.Build, regexz_mod: *std.Build.Module, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, name: []const u8, description: []const u8) void {
+    const module = b.createModule(.{
+        .root_source_file = b.path(b.fmt("tools/bench/{s}.zig", .{name})),
+        .target = target,
+        .optimize = optimize,
+    });
+    module.addImport("regexz", regexz_mod);
+    const executable = b.addExecutable(.{ .name = b.fmt("regexz-{s}-bench", .{name}), .root_module = module });
+    const run = b.addRunArtifact(executable);
+    b.step(b.fmt("bench-{s}", .{name}), description).dependOn(&run.step);
 }

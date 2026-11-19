@@ -76,11 +76,10 @@ cannot contaminate the comparison protocol.
 
 ## Next candidates
 
-The compile-time matcher benchmarks also pass constant subjects and apply
-`doNotOptimizeAway` only to the result. The optimizer can fold the match before
-that barrier. Feed subjects through a runtime input barrier, inspect the
-generated code, and refresh those comparisons before relying on their
-sub-nanosecond timings.
+The compile-time comparison now uses heap-backed runtime subjects and input
+barriers; generated code was inspected to confirm input loads and comparisons.
+`bench-startup` separates compilation, workspace construction, cold matching
+and warmed matching. See [benchmark calibration](benchmarks/calibration.md).
 
 | Priority | Owning code | Evidence and next measurement |
 | --- | --- | --- |

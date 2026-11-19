@@ -187,7 +187,7 @@ pub const Workspace = struct {
         stack[count.*] = @intCast(index);
         count.* += 1;
     }
-    fn add(self: *Workspace, program: Program, index: usize, input: []const u8, offset: usize, context: Position, list: []u32, count: *usize, stack: []u32, seen: []u32) budget_mod.Error!void {
+    fn add(self: *Workspace, program: *const Program, index: usize, input: []const u8, offset: usize, context: Position, list: []u32, count: *usize, stack: []u32, seen: []u32) budget_mod.Error!void {
         var pending: usize = 0;
         self.push(seen, stack, &pending, index);
         while (pending != 0) {
@@ -258,7 +258,7 @@ pub const Workspace = struct {
         stack[count.*] = @intCast(index);
         count.* += 1;
     }
-    fn dfaClosure(self: *Workspace, program: Program, index: usize, list: []u32, count: *usize) void {
+    fn dfaClosure(self: *Workspace, program: *const Program, index: usize, list: []u32, count: *usize) void {
         const n = program.instructions.len;
         const stack = self.storage[n * 5 ..][0..n];
         var pending: usize = 0;
@@ -297,7 +297,7 @@ pub const Workspace = struct {
             dfa.epoch = 1;
         }
     }
-    fn dfaGetState(self: *Workspace, program: Program, list: []u32) std.mem.Allocator.Error!u32 {
+    fn dfaGetState(self: *Workspace, program: *const Program, list: []u32) std.mem.Allocator.Error!u32 {
         const dfa = &self.dfa.?;
         std.mem.sort(u32, list, {}, struct {
             fn less(_: void, a: u32, b: u32) bool {
@@ -331,7 +331,7 @@ pub const Workspace = struct {
         try dfa.index.put(dfa.allocator, std.mem.sliceAsBytes(owned), id);
         return id;
     }
-    fn dfaStartState(self: *Workspace, program: Program) std.mem.Allocator.Error!u32 {
+    fn dfaStartState(self: *Workspace, program: *const Program) std.mem.Allocator.Error!u32 {
         const dfa = &self.dfa.?;
         if (dfa.start_state) |id| return id;
         self.dfaNextEpoch();
@@ -342,7 +342,7 @@ pub const Workspace = struct {
         dfa.start_state = id;
         return id;
     }
-    fn dfaTransition(self: *Workspace, comptime shift: u5, program: Program, state_id: u32, rune: u21) std.mem.Allocator.Error!u32 {
+    fn dfaTransition(self: *Workspace, comptime shift: u5, program: *const Program, state_id: u32, rune: u21) std.mem.Allocator.Error!u32 {
         const dfa = &self.dfa.?;
         const stride: u32 = @as(u32, 1) << shift;
         if (rune < 128) {
@@ -385,7 +385,7 @@ pub const Workspace = struct {
         }
         return next;
     }
-    fn executeDfa(self: *Workspace, program: Program, input: []const u8) std.mem.Allocator.Error!bool {
+    fn executeDfa(self: *Workspace, program: *const Program, input: []const u8) std.mem.Allocator.Error!bool {
         const dfa = &self.dfa.?;
         // Table entries are row offsets, so the hot loop's next address is one
         // add away from the loaded value.
@@ -430,7 +430,7 @@ pub const Workspace = struct {
         }
         return dfa.states.items[row >> dfa.row_shift].accept;
     }
-    fn tryDfa(self: *Workspace, program: Program, input: []const u8) ?bool {
+    fn tryDfa(self: *Workspace, program: *const Program, input: []const u8) ?bool {
         if (self.dfa == null) {
             var ascii_only = true;
             for (program.instructions) |instruction| switch (instruction) {
@@ -457,10 +457,15 @@ pub const Workspace = struct {
         };
     }
     pub fn matches(self: *Workspace, program: Program, input: []const u8) bool {
+        return self.matchesBorrowed(&program, input);
+    }
+    /// Match with an immutable program reference, avoiding the value API's
+    /// whole-Program copy when the compiler does not inline the call.
+    pub fn matchesBorrowed(self: *Workspace, program: *const Program, input: []const u8) bool {
         if (!self.matchesUnchecked(program, input)) return false;
         return !(input.len == 0 and (program.notempty or program.notempty_atstart));
     }
-    fn matchesUnchecked(self: *Workspace, program: Program, input: []const u8) bool {
+    fn matchesUnchecked(self: *Workspace, program: *const Program, input: []const u8) bool {
         self.stats = .{ .input_bytes = input.len };
         if (program.literal) |literal| return std.mem.eql(u8, literal, input);
         if (self.simple_set) {
@@ -512,13 +517,13 @@ pub const Workspace = struct {
     }
 
     pub fn matchesWithBudget(self: *Workspace, program: Program, input: []const u8, budget: budget_mod.Budget) budget_mod.Error!bool {
-        if (!try self.execute(program, input, budget)) return false;
+        if (!try self.execute(&program, input, budget)) return false;
         return !(input.len == 0 and (program.notempty or program.notempty_atstart));
     }
     /// Force the Thompson NFA path, bypassing the lazy DFA. Useful for
     /// differential tests and for callers that want deterministic work.
     pub fn matchesNfa(self: *Workspace, program: Program, input: []const u8) bool {
-        if (!(self.execute(program, input, null) catch unreachable)) return false;
+        if (!(self.execute(&program, input, null) catch unreachable)) return false;
         return !(input.len == 0 and (program.notempty or program.notempty_atstart));
     }
     /// Full-match partiality: `full` when the input matches, `partial` when
@@ -529,11 +534,11 @@ pub const Workspace = struct {
             for (input) |byte| if (!table[byte]) return .none;
             return if (input.len == 0) .partial else .full;
         }
-        const full = self.execute(program, input, null) catch unreachable;
+        const full = self.execute(&program, input, null) catch unreachable;
         if (full) return .full;
         return if (self.partial) .partial else .none;
     }
-    fn execute(self: *Workspace, program: Program, input: []const u8, budget: ?budget_mod.Budget) budget_mod.Error!bool {
+    fn execute(self: *Workspace, program: *const Program, input: []const u8, budget: ?budget_mod.Budget) budget_mod.Error!bool {
         const n = program.instructions.len;
         std.debug.assert(self.storage.len >= n * 6 and self.seen.len >= n * 5);
         self.stats = .{ .input_bytes = input.len };

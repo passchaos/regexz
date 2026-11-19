@@ -1,10 +1,12 @@
 //! Reproducible microbenchmarks for regexz.
 //!
 //! Run with `zig build bench -Doptimize=ReleaseFast`. Numbers are wall-clock
-//! medians from one process and are meant for relative comparisons between
-//! changes, not as cross-machine claims.
+//! batch averages for the runtime cases and five-batch medians for the
+//! generated matcher comparisons. Use tools/bench/check.py for process medians.
+//! Results compare changes on one host, not absolute cross-machine speed.
 const std = @import("std");
 const regexz = @import("regexz");
+const comptime_bench = @import("comptime.zig");
 
 const gpa = std.heap.page_allocator;
 
@@ -24,9 +26,9 @@ fn benchMatches(io: std.Io, out: *std.Io.Writer, name: []const u8, pattern: []co
     if (reuse) {
         var workspace = try regexz.Workspace.init(gpa, value.program);
         defer workspace.deinit();
-        for (0..1000) |_| std.mem.doNotOptimizeAway(workspace.matches(value.program, input));
+        for (0..1000) |_| std.mem.doNotOptimizeAway(workspace.matchesBorrowed(&value.program, input));
         const start = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds;
-        for (0..iterations) |_| std.mem.doNotOptimizeAway(workspace.matches(value.program, input));
+        for (0..iterations) |_| std.mem.doNotOptimizeAway(workspace.matchesBorrowed(&value.program, input));
         try report(out, name, iterations, input.len, elapsed(io, .{ .nanoseconds = start }));
     } else {
         for (0..1000) |_| std.mem.doNotOptimizeAway(try value.matches(gpa, input));
@@ -116,7 +118,7 @@ fn benchReplace(io: std.Io, out: *std.Io.Writer, name: []const u8, pattern: []co
     const start = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds;
     for (0..iterations) |_| {
         const output = try workspace.replaceAll(input, substitution);
-        std.mem.doNotOptimizeAway(output.len);
+        std.mem.doNotOptimizeAway(output);
         gpa.free(output);
     }
     try report(out, name, iterations, input.len, elapsed(io, .{ .nanoseconds = start }));
@@ -158,29 +160,16 @@ pub fn main() !void {
         try report(out, "compile xDS-like (smp allocator)", iterations, pattern.len, elapsed(io, .{ .nanoseconds = start }));
     }
 
-    try benchMatches(io, out, "fullmatch literal (alloc)", "hello, world!", literal_input, 200000, false);
+    try benchMatches(io, out, "fullmatch literal (warm Regex API)", "hello, world!", literal_input, 200000, false);
     try benchMatches(io, out, "fullmatch literal (reuse)", "hello, world!", literal_input, 200000, true);
-    try benchMatches(io, out, "fullmatch class (alloc)", "[A-Za-z0-9._-]+", token_input, 200000, false);
+    try benchMatches(io, out, "fullmatch class (warm Regex API)", "[A-Za-z0-9._-]+", token_input, 200000, false);
     try benchMatches(io, out, "fullmatch class (reuse)", "[A-Za-z0-9._-]+", token_input, 200000, true);
-    try benchMatches(io, out, "fullmatch xDS-like (alloc)", "/(?:demo|test)\\.[A-Z][A-Za-z]+/(Get|List)", path_input, 200000, false);
+    try benchMatches(io, out, "fullmatch xDS-like (warm Regex API)", "/(?:demo|test)\\.[A-Z][A-Za-z]+/(Get|List)", path_input, 200000, false);
     try benchMatches(io, out, "fullmatch xDS-like (reuse)", "/(?:demo|test)\\.[A-Z][A-Za-z]+/(Get|List)", path_input, 200000, true);
     try benchMatches(io, out, "fullmatch unicode (reuse)", "\\p{Greek}+\\p{Nd}", unicode_input, 200000, true);
     try benchMatches(io, out, "fullmatch (?i) literal (reuse)", "(?i)hello", ci_input, 200000, true);
 
-    {
-        // Compile-time engine: the pattern is parsed and turned into matcher
-        // code during compilation, so there is no workspace or program.
-        const ct = regexz.comptime_regex;
-        const literal_ct = ct.Regex("hello, world!");
-        const class_ct = ct.Regex("(?:foo|bar)[0-9]+");
-        const iterations = 200000;
-        var start = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds;
-        for (0..iterations) |_| std.mem.doNotOptimizeAway(literal_ct.match("hello, world!") != null);
-        try report(out, "comptime fullmatch literal", iterations, literal_input.len, elapsed(io, .{ .nanoseconds = start }));
-        start = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds;
-        for (0..iterations) |_| std.mem.doNotOptimizeAway(class_ct.match("foo42") != null);
-        try report(out, "comptime fullmatch class", iterations, 5, elapsed(io, .{ .nanoseconds = start }));
-    }
+    try comptime_bench.run(io, out);
     try benchMatches(io, out, "fullmatch backref (Regex)", "(a)\\1", "aa", 200000, false);
     try benchMatches(io, out, "fullmatch atomic (Regex)", "(?>a+)a", "aa", 200000, false);
 
