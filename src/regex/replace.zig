@@ -102,6 +102,8 @@ pub const Workspace = struct {
     /// binary search over rune ranges; the per-byte chain scans run several
     /// lookups per input byte, so cache the answers once per workspace.
     chain_tables: ?ChainTables = null,
+    /// Byte membership for the `set+` search path.
+    simple_set_table: [256]bool = .{false} ** 256,
     /// Expanded UTF-8 automaton for a non-ASCII `set+` program (`\p{Han}+`):
     /// one 256-entry transition row per state.
     utf8_run: ?utf8_run_mod.Utf8Run = null,
@@ -169,6 +171,15 @@ pub const Workspace = struct {
             .best_slots = best_slots,
             .pike_eligible = pike.eligible(program),
             .simple_set = if (set_run) |set| (if (set.ascii_only) set else null) else null,
+            .simple_set_table = blk: {
+                var table: [256]bool = .{false} ** 256;
+                if (set_run) |set| {
+                    if (set.ascii_only) {
+                        for (0..256) |byte| table[byte] = set.matches(@intCast(byte));
+                    }
+                }
+                break :blk table;
+            },
             .simple_chain = simple_chain,
             .simple_anchored = if (limits.longest) null else detectAnchoredRun(program),
             .chain_tables = if (simple_chain) |chain| ChainTables.init(chain) else null,
@@ -709,18 +720,20 @@ pub const Workspace = struct {
     /// first-byte filter, then extend the run. The shape is deterministic, so
     /// no DFA state or backtracking stack is involved.
     fn findSetRun(self: *Workspace, set: model.Set, input: []const u8, search_start: usize) ?Match {
+        _ = set;
+        const table = &self.simple_set_table;
         var offset = search_start;
         // Match-dense input spends its time in short gaps, where a scalar scan
         // beats the vector filter's setup; long gaps switch to the SIMD scan.
         const scalar_limit = @min(input.len, offset + 32);
-        while (offset < scalar_limit and !set.matches(input[offset])) offset += 1;
+        while (offset < scalar_limit and !table[input[offset]]) offset += 1;
         if (offset >= scalar_limit) {
             if (offset >= input.len) return null;
             offset = self.first_filter.indexOf(input, offset) orelse return null;
         }
         const start = offset;
         offset += 1;
-        while (offset < input.len and set.matches(input[offset])) offset += 1;
+        while (offset < input.len and table[input[offset]]) offset += 1;
         self.slots[0] = start;
         self.slots[1] = offset;
         return .{ .start = start, .end = offset, .slots = self.slots };

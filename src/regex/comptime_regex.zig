@@ -546,7 +546,11 @@ pub fn Regex(comptime pattern: []const u8) type {
     };
     const ast = parsed.ast;
     const capture_count = parsed.captures;
-    const names = parsed.names[0..capture_count];
+    // Copy the names out of the parse result so the slice below points at a
+    // plain `const` array, not at memory the evaluator traces back to the
+    // parser's comptime var.
+    const capture_names = parsed.names;
+    const names = capture_names[0..capture_count];
     return struct {
         pub const source = pattern;
         pub const capture_total = capture_count;

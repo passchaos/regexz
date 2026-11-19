@@ -760,3 +760,24 @@ test "dominant alternation branch scan" {
     try std.testing.expectEqual(@as(usize, 0), xy.start);
     try std.testing.expectEqual(@as(usize, 2), xy.end);
 }
+
+test "prefix loop requires a full-coverage loop set" {
+    // `(b)*` cannot skip `a`, so a fresh start at offset 1 can match even
+    // though the scan from offset 0 died later.
+    var value = try regex.Regex.init(gpa, "(b)*(a)(?:ab)", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    const found = (try workspace.find("aaab", 0)).?;
+    try std.testing.expectEqual(@as(usize, 1), found.start);
+    try std.testing.expectEqual(@as(usize, 4), found.end);
+
+    // `.*` (dot excludes the newline) still finds the match after it.
+    var dot = try regex.Regex.init(gpa, ".*foo", .{});
+    defer dot.deinit();
+    var dot_workspace = try regex.ReplaceWorkspace.init(gpa, dot.program, .{});
+    defer dot_workspace.deinit();
+    const dot_found = (try dot_workspace.find("x\nfoo", 0)).?;
+    try std.testing.expectEqual(@as(usize, 2), dot_found.start);
+    try std.testing.expectEqual(@as(usize, 5), dot_found.end);
+}

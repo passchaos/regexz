@@ -1101,35 +1101,61 @@ fn isPrefixLoop(program: Program) bool {
     const ins = program.instructions;
     if (program.body >= ins.len) return false;
     switch (ins[program.body]) {
-        .star => return true,
-        .split => |split| return singleRuneLoop(ins, split.left, program.body) or singleRuneLoop(ins, split.right, program.body),
+        .star => |star| return coversAllBytes(star.set),
+        .split => |split| {
+            if (singleRuneLoopSet(ins, split.left, program.body)) |set| {
+                if (coversAllBytes(set)) return true;
+            }
+            if (singleRuneLoopSet(ins, split.right, program.body)) |set| {
+                if (coversAllBytes(set)) return true;
+            }
+            return false;
+        },
         else => return false,
     }
 }
 
-/// Whether the path from `start` back to `target` consumes exactly one rune.
-fn singleRuneLoop(ins: []const model.Instruction, start: usize, target: usize) bool {
+/// The extent jump is only sound when the loop consumes every byte: the loop
+/// thread then stays alive across the failed scan's span, so the scan already
+/// tried a start at every position inside it. A loop like `(b)*` cannot skip
+/// an `a`, so a fresh start there can still match even though the scan from
+/// the earlier start died.
+fn coversAllBytes(set: model.Set) bool {
+    var byte: u32 = 0;
+    while (byte < 256) : (byte += 1) {
+        if (!set.matches(@intCast(byte))) return false;
+    }
+    return true;
+}
+
+/// The set consumed by the path from `start` back to `target`, or null when
+/// the path is not exactly one rune consumption.
+fn singleRuneLoopSet(ins: []const model.Instruction, start: usize, target: usize) ?model.Set {
     var pc = start;
     var steps: usize = 0;
-    var consumes: usize = 0;
+    var set: ?model.Set = null;
     while (steps < 8) : (steps += 1) {
-        if (pc == target) return consumes == 1;
-        if (pc >= ins.len) return false;
+        if (pc == target) return if (set != null) set else null;
+        if (pc >= ins.len) return null;
         const next = switch (ins[pc]) {
             .consume => |value| value.next,
             .literal_byte => |value| value.next,
             .literal_rune => |value| value.next,
             .save => |value| value.next,
             .reset_captures => |value| value.next,
-            else => return false,
+            else => return null,
         };
         switch (ins[pc]) {
-            .consume, .literal_byte, .literal_rune => consumes += 1,
+            .consume => |value| {
+                if (set != null) return null;
+                set = value.set;
+            },
+            .literal_byte, .literal_rune => return null,
             else => {},
         }
         pc = next;
     }
-    return false;
+    return null;
 }
 
 fn runeAt(input: []const u8, offset: usize) ?struct { value: u21, len: usize } {
