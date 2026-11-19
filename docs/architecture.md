@@ -71,6 +71,7 @@ anything it cannot prove.
 | --- | --- |
 | `execute.zig` | Boolean full match: Thompson NFA, lazy full-match DFA, `set+` / `(?:setA+ setB)+` byte-table fast paths, partial matching. |
 | `rune_cache.zig` | Full-match Unicode DFA transition cache: short-input construction starts at 4 KiB and promotes to 64 KiB after collisions; long-input construction starts at full capacity. Failed optional promotion retains exact small-cache lookups. |
+| `search_cache.zig` | Rune-search Unicode caches: workspaces borrow shared empty front rows until a non-ASCII cache miss; a cold initializer atomically replaces them with owned front rows and a 96 KiB global cache. ASCII searches retain no owned Unicode cache storage. |
 | `search_dfa.zig` | Leftmost-first search DFA with priority-annotated accepts. Two constructions: rune-level (lookaheads, tokenizers) and byte-level (UTF-8 automata for non-ASCII sets, `\C`). Includes the per-state rune-transition front cache. |
 | `pike.zig` | Capture-aware Pike VM; the linear-time fallback when the backtracking budget is exhausted. |
 | `capture_run.zig` | Recognizes `set+` programs with fixed capture saves when the workspace is initialized. ASCII scans use byte tables; Unicode scans use materialized rune sets and retain literal prefixes. Both write slots without DFA construction or capture trails and retain strict replay budgets. |

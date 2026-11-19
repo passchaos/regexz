@@ -25,6 +25,7 @@ const model = @import("model.zig");
 const Program = @import("compile.zig").Program;
 const prefilter = @import("prefilter.zig");
 const utf8_set = @import("utf8_set.zig");
+const search_cache = @import("search_cache.zig");
 
 pub const Match = struct { start: usize, end: usize };
 const Error = std.mem.Allocator.Error || error{RegexLimitExceeded};
@@ -39,7 +40,7 @@ const unprepared_byte: u16 = 0xFFFF;
 const dead_state_byte: u16 = 0xFFFE;
 const accept_bit: u16 = 0x8000;
 const state_mask: u16 = 0x7FFF;
-const rune_max_states: usize = 64;
+const rune_max_states = search_cache.max_states;
 /// Byte determinization expands every rune into its UTF-8 length, so more
 /// states are needed for the same program.
 const byte_max_states: usize = 250;
@@ -70,22 +71,11 @@ inline fn entryState(entry: Entry) u16 {
 const Prepared = struct { next: u32, accept: u64 };
 
 /// Direct-mapped cache for non-ASCII (state, rune) transitions.
-const unicode_cache_size: usize = 4096;
 /// Per-state front cache slots. The front cache keeps the hot (state, rune)
 /// transitions of a state in L1; misses fall through to the global cache.
-const state_cache_slots: usize = 32;
-const UnicodeEntry = extern struct {
-    key: u64 = std.math.maxInt(u64),
-    accept: u64 = no_priority,
-    next: u32 = 0,
-    pad: u32 = 0,
-};
-
-inline fn unicodeSlot(key: u64) usize {
-    // Folding the high bits down keeps the state and the rune bytes in the
-    // slot without a multiply, which is on the per-rune dependency chain.
-    return @intCast((key ^ (key >> 12) ^ (key >> 24)) & (unicode_cache_size - 1));
-}
+const state_cache_slots = search_cache.front_slots;
+const UnicodeEntry = search_cache.Entry;
+const unicodeSlot = search_cache.slot;
 
 /// UTF-8 length by lead byte (0 = invalid lead). Continuation-byte validity
 /// is checked on cache misses by `runeAt`.
@@ -136,9 +126,9 @@ pub const Workspace = struct {
     byte_table: std.ArrayList(u16) = .empty,
     state_accept: std.ArrayList(u64) = .empty,
     index: std.StringHashMapUnmanaged(u32) = .empty,
-    unicode_cache: []UnicodeEntry,
+    unicode_cache: []UnicodeEntry = &.{},
     /// Front cache: `state_cache_slots` entries per state, kept in L1.
-    state_cache: std.ArrayList(UnicodeEntry) = .empty,
+    state_cache: std.ArrayList(UnicodeEntry) = search_cache.emptyFront(),
     automata: []?utf8_set.Automaton,
     arena: std.heap.ArenaAllocator,
     start_state: ?u32 = null,
@@ -287,9 +277,6 @@ pub const Workspace = struct {
         const best_priority = try allocator.alloc(u64, @intCast(total));
         errdefer allocator.free(best_priority);
         @memset(best_priority, no_priority);
-        const unicode_cache = try allocator.alloc(UnicodeEntry, if (mode == .rune) unicode_cache_size else 0);
-        errdefer allocator.free(unicode_cache);
-        @memset(unicode_cache, .{});
         const best_epoch = try allocator.alloc(u32, @intCast(total));
         errdefer allocator.free(best_epoch);
         @memset(best_epoch, 0);
@@ -321,7 +308,6 @@ pub const Workspace = struct {
             .work = work,
             .terminals = terminals,
             .next_entries = next_entries,
-            .unicode_cache = unicode_cache,
             .automata = automata,
             .arena = arena,
             .max_states = if (mode == .byte) byte_max_states else rune_max_states,
@@ -352,8 +338,7 @@ pub const Workspace = struct {
         self.byte_table.deinit(self.allocator);
         self.state_accept.deinit(self.allocator);
         self.index.deinit(self.allocator);
-        self.allocator.free(self.unicode_cache);
-        self.state_cache.deinit(self.allocator);
+        search_cache.deinit(self.allocator, self.unicode_cache, &self.state_cache);
         for (self.automata) |*automaton| {
             if (automaton.*) |*value| value.deinit(self.allocator);
         }
@@ -761,7 +746,7 @@ pub const Workspace = struct {
             .rune => {
                 try self.ascii_table.appendNTimes(self.allocator, 0, 128);
                 try self.accept_table.appendNTimes(self.allocator, no_priority, 128);
-                try self.state_cache.appendNTimes(self.allocator, .{}, state_cache_slots);
+                if (self.unicode_cache.len != 0) try self.state_cache.appendNTimes(self.allocator, .{}, state_cache_slots);
             },
             .byte => {
                 try self.byte_table.appendNTimes(self.allocator, unprepared_byte, 256);
@@ -1022,6 +1007,9 @@ pub const Workspace = struct {
             if (front.key == key) {
                 prepared = .{ .next = front.next, .accept = front.accept };
             } else {
+                if (self.unicode_cache.len == 0) {
+                    try search_cache.init(self.allocator, &self.unicode_cache, &self.state_cache, self.states.items.len);
+                }
                 const entry = &self.unicode_cache[unicodeSlot(key)];
                 if (entry.key == key) {
                     prepared = .{ .next = entry.next, .accept = entry.accept };
@@ -1039,8 +1027,8 @@ pub const Workspace = struct {
                         .pad = 0,
                     };
                 }
-                // `compute` may create new states and grow the front cache,
-                // so re-index instead of reusing the pointer taken above.
+                // Initialization replaces borrowed rows, and compute may
+                // grow owned rows. Re-index after both operations.
                 self.state_cache.items[front_index] = .{
                     .key = key,
                     .accept = prepared.accept,
