@@ -351,9 +351,9 @@ busy Apple Silicon host (absolute numbers vary with load):
 | Reused workspace, `(?i)` literal | ~72 ns | ~7 ns |
 | Full match, backref `(a)\1` (reuse) | ~5.5 µs | ~17 ns |
 | Full match, atomic `(?>a+)a` (reuse) | ~5.2 µs | ~23 ns |
-| `StreamScanner` `[a-z]+` (216 KiB, 4 KiB chunks) | ~31 ms | ~0.32 ms (650 MiB/s) |
-| `StreamScanner` `[a-z]*` (216 KiB, 4 KiB chunks) | ~3.5 ms | ~0.51 ms (416 MiB/s) |
-| `StreamScanner` `[a-z]+ [a-z]+` (216 KiB, 4 KiB chunks) | — | ~0.42 ms (505 MiB/s) |
+| `StreamScanner` `[a-z]+` (216 KiB, 4 KiB chunks) | ~31 ms | ~0.16 ms (1.3 GiB/s) |
+| `StreamScanner` `[a-z]*` (216 KiB, 4 KiB chunks) | ~3.5 ms | ~0.18 ms (1.1 GiB/s) |
+| `StreamScanner` `[a-z]+ [a-z]+` (216 KiB, 4 KiB chunks) | — | ~0.28 ms (757 MiB/s) |
 | `StreamScanner` `\w+@` (18 KiB, 4 KiB chunks) | ~2.9 ms | ~0.032 ms (517 MiB/s) |
 | `StreamScanner` Han chain (191 KiB, 4 KiB chunks) | — | ~0.41 ms (456 MiB/s) |
 | `find` ASCII run `[a-z]+` (216 KiB) | ~27.6 µs | ~39 µs (615 MiB/s) |

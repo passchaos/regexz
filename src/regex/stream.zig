@@ -93,6 +93,13 @@ pub const Scanner = struct {
     /// A `set*` program scans runs and reports the empty matches between
     /// them; `star_start` holds the start of the run being accumulated.
     simple_star: ?model.Set = null,
+    /// ASCII membership table for the simple set paths.
+    simple_table: [256]bool = .{false} ** 256,
+    simple_ascii: bool = false,
+    /// ASCII membership tables for the chain path.
+    chain_a_table: [256]bool = .{false} ** 256,
+    chain_b_table: [256]bool = .{false} ** 256,
+    chain_ascii: bool = false,
     star_start: ?usize = null,
     /// A `set+ literal set+` program (with the literal outside the first set)
     /// scans deterministically.
@@ -143,6 +150,29 @@ pub const Scanner = struct {
             },
             else => {},
         };
+        const simple_set = if (limits.longest) null else shapes.setRun(program);
+        const simple_star = if (limits.longest) null else shapes.setStar(program);
+        var table: [256]bool = .{false} ** 256;
+        var simple_set_ascii = false;
+        if (simple_set orelse simple_star) |set| {
+            if (set.ascii_only) {
+                simple_set_ascii = true;
+                for (0..256) |byte| table[byte] = set.matches(@intCast(byte));
+            }
+        }
+        const simple_chain = if (limits.longest) null else detectStreamChain(program);
+        var chain_a_table: [256]bool = .{false} ** 256;
+        var chain_b_table: [256]bool = .{false} ** 256;
+        var chain_ascii = false;
+        if (simple_chain) |chain| {
+            if (chain.set_a.ascii_only and (chain.set_b == null or chain.set_b.?.ascii_only)) {
+                chain_ascii = true;
+                for (0..256) |byte| chain_a_table[byte] = chain.set_a.matches(@intCast(byte));
+                if (chain.set_b) |set_b| {
+                    for (0..256) |byte| chain_b_table[byte] = set_b.matches(@intCast(byte));
+                }
+            }
+        }
         return .{
             .allocator = allocator,
             .program = program,
@@ -157,9 +187,14 @@ pub const Scanner = struct {
             .scratch = scratch,
             .best_slots = best_slots,
             .capture_free = program.capture_count == 0,
-            .simple_set = if (limits.longest) null else shapes.setRun(program),
-            .simple_star = if (limits.longest) null else shapes.setStar(program),
-            .simple_chain = if (limits.longest) null else detectStreamChain(program),
+            .simple_set = simple_set,
+            .simple_star = simple_star,
+            .simple_table = table,
+            .simple_ascii = simple_set_ascii,
+            .simple_chain = simple_chain,
+            .chain_a_table = chain_a_table,
+            .chain_b_table = chain_b_table,
+            .chain_ascii = chain_ascii,
             .seen = seen,
         };
     }
@@ -474,6 +509,51 @@ pub const Scanner = struct {
         while (true) {
             if (self.scan >= self.buffer.items.len) break;
             const abs = self.buffer_base + self.scan;
+            if (self.chain_ascii and self.buffer.items[self.scan] < 0x80) {
+                const byte = self.buffer.items[self.scan];
+                switch (self.chain_phase) {
+                    .idle => {
+                        if (self.chain_a_table[byte]) {
+                            self.chain_phase = .run_a;
+                            self.chain_start = abs;
+                        }
+                        self.scan += 1;
+                    },
+                    .run_a => {
+                        if (self.chain_a_table[byte]) {
+                            self.scan += 1;
+                        } else switch (self.chainLiteralAt(self.scan)) {
+                            .match => |length| {
+                                const separator_at = abs;
+                                self.scan += length;
+                                if (chain.set_b == null) {
+                                    if (separator_at - self.chain_start >= chain.min_a) {
+                                        self.emitSimple(context, emit, self.chain_start, self.buffer_base + self.scan);
+                                    }
+                                    self.chain_phase = .idle;
+                                } else {
+                                    self.chain_phase = .run_b;
+                                    self.chain_b_start = self.buffer_base + self.scan;
+                                }
+                            },
+                            .incomplete => {
+                                if (!at_eof) break;
+                                self.chain_phase = .idle;
+                            },
+                            .no => self.chain_phase = .idle,
+                        }
+                    },
+                    .run_b => {
+                        if (self.chain_b_table[byte]) {
+                            self.scan += 1;
+                        } else {
+                            self.emitChain(context, emit);
+                            self.chain_phase = .idle;
+                        }
+                    },
+                }
+                continue;
+            }
             const status = self.runeStatus(abs);
             switch (self.chain_phase) {
                 .idle => switch (status) {
@@ -564,6 +644,23 @@ pub const Scanner = struct {
         const set = self.simple_set.?;
         while (true) {
             if (self.scan >= self.buffer.items.len) break;
+            const byte = self.buffer.items[self.scan];
+            if (self.simple_ascii and byte < 0x80) {
+                const member = self.simple_table[byte];
+                if (self.simple_pending_start == null) {
+                    if (member) self.simple_pending_start = self.buffer_base + self.scan;
+                    self.scan += 1;
+                    continue;
+                }
+                if (member) {
+                    self.scan += 1;
+                    continue;
+                }
+                self.emitSimple(context, emit, self.simple_pending_start.?, self.buffer_base + self.scan);
+                self.simple_pending_start = null;
+                self.scan += 1;
+                continue;
+            }
             const status = self.runeStatus(self.buffer_base + self.scan);
             if (self.simple_pending_start == null) {
                 switch (status) {
@@ -621,6 +718,25 @@ pub const Scanner = struct {
         while (true) {
             if (self.scan >= self.buffer.items.len) break;
             const abs = self.buffer_base + self.scan;
+            if (self.simple_ascii and self.buffer.items[self.scan] < 0x80) {
+                const member = self.simple_table[self.buffer.items[self.scan]];
+                if (self.star_start) |start| {
+                    if (member) {
+                        self.scan += 1;
+                        continue;
+                    }
+                    self.emitSimple(context, emit, start, abs);
+                    self.star_start = null;
+                }
+                if (member) {
+                    self.star_start = abs;
+                    self.scan += 1;
+                    continue;
+                }
+                self.emitStarEmpty(context, emit, abs);
+                self.scan += 1;
+                continue;
+            }
             const rune: ?Rune = switch (self.runeStatus(abs)) {
                 .valid => |value| value,
                 .invalid => null,
