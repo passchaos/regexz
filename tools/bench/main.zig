@@ -235,6 +235,21 @@ pub fn main() !void {
     for (0..1500) |_| try url_text.appendSlice(gpa, "see https://example.com/a/b?c=1 and http://x.y ");
     try benchFind(io, out, "find URL", "https?://[^\\s]+", url_text.items, 200, .{});
 
+    var kv_text: std.ArrayList(u8) = .empty;
+    defer kv_text.deinit(gpa);
+    for (0..2000) |_| try kv_text.appendSlice(gpa, "server.port: 8080\nlog.level: debug\n");
+    try benchFind(io, out, "find key-value key", "(?m)^[^:\\n]+:", kv_text.items, 200, .{});
+
+    var num_text: std.ArrayList(u8) = .empty;
+    defer num_text.deinit(gpa);
+    for (0..2000) |_| try num_text.appendSlice(gpa, "x=-12.5 y=3 z=0.25 ");
+    try benchFind(io, out, "find JSON number", "-?\\d+(?:\\.\\d+)?", num_text.items, 200, .{});
+
+    var trail_text: std.ArrayList(u8) = .empty;
+    defer trail_text.deinit(gpa);
+    for (0..2000) |_| try trail_text.appendSlice(gpa, "value   \nkey  \n");
+    try benchFind(io, out, "find trailing spaces", "\\s*$", trail_text.items, 200, .{});
+
     var word_text: std.ArrayList(u8) = .empty;
     defer word_text.deinit(gpa);
     for (0..3000) |_| try word_text.appendSlice(gpa, "alpha beta gamma delta epsilon ");

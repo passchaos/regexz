@@ -888,3 +888,68 @@ test "word run fast path matches whole words" {
     try std.testing.expectEqual(@as(usize, 6), mid.start);
     try std.testing.expectEqual(@as(usize, 11), mid.end);
 }
+
+test "line-delimited and trailing-space fast paths" {
+    var value = try regex.Regex.init(gpa, "(?m)^[^:\n]+:", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.line_delimited != null);
+
+    const input = "server.port: 8080\nlog.level: debug\nnokey line\nx: y";
+    const first = (try workspace.find(input, 0)).?;
+    try std.testing.expectEqual(@as(usize, 0), first.start);
+    try std.testing.expectEqual(@as(usize, 12), first.end);
+    const second = (try workspace.find(input, first.end)).?;
+    try std.testing.expectEqual(@as(usize, 18), second.start);
+    try std.testing.expectEqual(@as(usize, 28), second.end);
+    // The line without a delimiter is skipped.
+    const third = (try workspace.find(input, second.end)).?;
+    try std.testing.expectEqual(@as(usize, 46), third.start);
+    try std.testing.expectEqual(@as(usize, 48), third.end);
+    try std.testing.expect((try workspace.find(input, third.end)) == null);
+    // A mid-line search resumes at the next line start.
+    const mid = (try workspace.find(input, 3)).?;
+    try std.testing.expectEqual(@as(usize, 18), mid.start);
+
+    var trailing = try regex.Regex.init(gpa, "\\s*$", .{});
+    defer trailing.deinit();
+    var trailing_workspace = try regex.ReplaceWorkspace.init(gpa, trailing.program, .{});
+    defer trailing_workspace.deinit();
+    try std.testing.expect(trailing_workspace.trailing_space);
+    const space = (try trailing_workspace.find("value   \nkey  \n", 0)).?;
+    try std.testing.expectEqual(@as(usize, 12), space.start);
+    try std.testing.expectEqual(@as(usize, 15), space.end);
+    const empty = (try trailing_workspace.find("abc", 0)).?;
+    try std.testing.expectEqual(@as(usize, 3), empty.start);
+    try std.testing.expectEqual(@as(usize, 3), empty.end);
+    const mid_space = (try trailing_workspace.find("value   \nkey  \n", 13)).?;
+    try std.testing.expectEqual(@as(usize, 13), mid_space.start);
+    try std.testing.expectEqual(@as(usize, 15), mid_space.end);
+}
+
+test "front cache survives lazy DFA state growth" {
+    // Regression: `compute` can create states and grow the per-state front
+    // cache; the fill must re-index instead of reusing the earlier pointer.
+    // page_allocator returns the memory to the OS on growth, so a stale
+    // pointer write faults instead of silently corrupting.
+    const pga = std.heap.page_allocator;
+    var value = try regex.Regex.init(pga, "(?i) {1,2}|\\p{Script=Greek}{0,2}\u{0394}{0,2}b{0,2}|[ab]{0,2}\\p{L}+[\\r\\n]*\\s", .{ .unicode_perl_classes = true, .dollar_endonly = true });
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(pga, value.program, .{ .unicode_perl_classes = true });
+    defer workspace.deinit();
+    const inputs = [_][]const u8{ "\u{0394}\u{03c3}", "2020", "abc", "\u{4f60}", "a1 b2", "" };
+    for (inputs) |input| {
+        var offset: usize = 0;
+        var spans: usize = 0;
+        while (offset <= input.len and spans < 32) : (spans += 1) {
+            const m = (try workspace.find(input, offset)) orelse break;
+            if (m.end > m.start) {
+                offset = m.end;
+            } else {
+                if (m.start == input.len) break;
+                offset = m.start + 1;
+            }
+        }
+    }
+}

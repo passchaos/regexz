@@ -1039,7 +1039,9 @@ pub const Workspace = struct {
                         .pad = 0,
                     };
                 }
-                front.* = .{
+                // `compute` may create new states and grow the front cache,
+                // so re-index instead of reusing the pointer taken above.
+                self.state_cache.items[front_index] = .{
                     .key = key,
                     .accept = prepared.accept,
                     .next = prepared.next,

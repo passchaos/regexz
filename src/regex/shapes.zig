@@ -580,3 +580,71 @@ pub fn wordRun(program: Program) ?model.Set {
     if (!member.set.ascii_only or member.set.ranges.len == 0) return null;
     return member.set;
 }
+
+/// `\s*$`: a trailing whitespace run at the end of the text (or before the
+/// final newline). The star set must be ASCII whitespace.
+pub fn trailingSpaceRun(program: Program) ?model.Set {
+    if (program.capture_count != 0 or program.extended) return null;
+    const ins = program.instructions;
+    if (ins.len != 7) return null;
+    if (std.meta.activeTag(ins[0]) != .accept or std.meta.activeTag(ins[1]) != .sub_accept or
+        std.meta.activeTag(ins[2]) != .ret) return null;
+    if (std.meta.activeTag(ins[3]) != .save or std.meta.activeTag(ins[4]) != .assertion or
+        std.meta.activeTag(ins[5]) != .star or std.meta.activeTag(ins[6]) != .save) return null;
+    if (program.start != 6 or program.body != 5) return null;
+    const save1 = ins[3].save;
+    if (save1.slot != 1 or save1.next != program.accept) return null;
+    const end_assertion = ins[4].assertion;
+    if (end_assertion.kind != .end_text_or_newline and end_assertion.kind != .end_text) return null;
+    if (end_assertion.next != 3) return null;
+    const star = ins[5].star;
+    if (star.next != 4) return null;
+    const save0 = ins[6].save;
+    if (save0.slot != 0 or save0.next != 5) return null;
+    if (star.set.ranges.len == 0 or !star.set.ascii_only) return null;
+    return star.set;
+}
+
+/// `(?m)^[^d\n]+d` (`(?m)^[^:\n]+:`): a key from the line start to the
+/// first delimiter. The run set must be every rune except `d` and `\n`.
+pub const LineDelimited = struct { delimiter: u8 };
+
+pub fn lineDelimitedRun(program: Program) ?LineDelimited {
+    if (program.capture_count != 0 or program.extended) return null;
+    const ins = program.instructions;
+    if (ins.len != 9) return null;
+    if (std.meta.activeTag(ins[0]) != .accept or std.meta.activeTag(ins[1]) != .sub_accept or
+        std.meta.activeTag(ins[2]) != .ret) return null;
+    if (std.meta.activeTag(ins[3]) != .save or std.meta.activeTag(ins[4]) != .literal_byte or
+        std.meta.activeTag(ins[5]) != .star or std.meta.activeTag(ins[6]) != .consume or
+        std.meta.activeTag(ins[7]) != .assertion or std.meta.activeTag(ins[8]) != .save) return null;
+    if (program.start != 8 or program.body != 7) return null;
+    const save1 = ins[3].save;
+    if (save1.slot != 1 or save1.next != program.accept) return null;
+    const delimiter = ins[4].literal_byte;
+    if (delimiter.next != 3) return null;
+    const star = ins[5].star;
+    if (star.next != 4) return null;
+    const member = ins[6].consume;
+    if (member.next != 5) return null;
+    const start_line = ins[7].assertion;
+    if (start_line.kind != .start_line or start_line.next != 6) return null;
+    const save0 = ins[8].save;
+    if (save0.slot != 0 or save0.next != 7) return null;
+    if (!sameSet(member.set, star.set)) return null;
+    if (!isAllExceptTwo(star.set, delimiter.value, '\n')) return null;
+    return .{ .delimiter = delimiter.value };
+}
+
+/// Whether `set` matches every rune except `a` and `b` (both ASCII).
+fn isAllExceptTwo(set: model.Set, a: u8, b: u8) bool {
+    var byte: u32 = 0;
+    while (byte < 128) : (byte += 1) {
+        const expected = byte != a and byte != b;
+        if (set.matches(@intCast(byte)) != expected) return false;
+    }
+    for (set.ranges) |range| {
+        if (range.first <= 0x80 and range.last >= 0x10FFFF) return true;
+    }
+    return false;
+}

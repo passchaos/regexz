@@ -34,6 +34,8 @@ pub const FastKind = enum {
     line,
     delimited,
     word,
+    trailing_space,
+    line_delimited,
 };
 pub const Error = model.Error;
 
@@ -129,6 +131,11 @@ pub const Workspace = struct {
     /// `\b\w+\b`: match the next whole word.
     word_run: bool = false,
     word_run_table: [256]bool = .{false} ** 256,
+    /// `\s*$`: match the trailing whitespace run.
+    trailing_space: bool = false,
+    trailing_space_table: [256]bool = .{false} ** 256,
+    /// `(?m)^[^d\n]+d`: match a key from the line start to the delimiter.
+    line_delimited: ?shapes.LineDelimited = null,
     /// The single deterministic fast path selected at init. The shapes are
     /// mutually exclusive, so `find` dispatches with one switch instead of a
     /// chain of optional checks on every call.
@@ -185,6 +192,12 @@ pub const Workspace = struct {
         const simple_anchored = if (limits.longest) null else detectAnchoredRun(program);
         const line_run = shapes.lineRun(program);
         const delimited_run = shapes.delimitedRun(program);
+        const trailing_space_set = shapes.trailingSpaceRun(program);
+        const line_delimited = shapes.lineDelimitedRun(program);
+        var trailing_table: [256]bool = .{false} ** 256;
+        if (trailing_space_set) |set| {
+            for (0..256) |byte| trailing_table[byte] = set.matches(@intCast(byte));
+        }
         const fast_kind: FastKind = if (simple_set != null)
             .set_run
         else if (utf8_run != null)
@@ -199,6 +212,10 @@ pub const Workspace = struct {
             .delimited
         else if (word_run_set != null)
             .word
+        else if (trailing_space_set != null)
+            .trailing_space
+        else if (line_delimited != null)
+            .line_delimited
         else
             .none;
         const fast_branch: ?FastBranch = if (program.fast_branch) |plan| blk: {
@@ -235,6 +252,9 @@ pub const Workspace = struct {
             .line_run = line_run,
             .delimited_run = delimited_run,
             .word_run = word_run_set != null,
+            .trailing_space = trailing_space_set != null,
+            .trailing_space_table = trailing_table,
+            .line_delimited = line_delimited,
             .fast_kind = fast_kind,
             .word_run_table = word_table,
             .utf8_run = utf8_run,
@@ -301,6 +321,8 @@ pub const Workspace = struct {
             .line => return self.findLineRun(input, search_start),
             .delimited => return self.findDelimitedRun(self.delimited_run.?, input, search_start),
             .word => return self.findWordRun(input, search_start),
+            .trailing_space => return self.findTrailingSpaceRun(input, search_start),
+            .line_delimited => return self.findLineDelimitedRun(self.line_delimited.?, input, search_start),
         }
         // Every match must start at a start-literal occurrence, so the first
         // occurrence bounds the leftmost match start and the DFA can skip
@@ -647,6 +669,8 @@ pub const Workspace = struct {
             .line => return self.findLineRun(input, search_start),
             .delimited => return self.findDelimitedRun(self.delimited_run.?, input, search_start),
             .word => return self.findWordRun(input, search_start),
+            .trailing_space => return self.findTrailingSpaceRun(input, search_start),
+            .line_delimited => return self.findLineDelimitedRun(self.line_delimited.?, input, search_start),
         }
         var from = search_start;
         if (self.pair_filter) |filter| {
@@ -859,6 +883,39 @@ pub const Workspace = struct {
             self.slots[0] = start;
             self.slots[1] = offset;
             return .{ .start = start, .end = offset, .slots = self.slots };
+        }
+        return null;
+    }
+
+    /// `\s*$`: the match is the trailing whitespace run, so scan back from
+    /// the end to the first non-space byte.
+    fn findTrailingSpaceRun(self: *Workspace, input: []const u8, search_start: usize) ?Match {
+        if (search_start > input.len) return null;
+        var start = input.len;
+        while (start > search_start and self.trailing_space_table[input[start - 1]]) start -= 1;
+        self.slots[0] = start;
+        self.slots[1] = input.len;
+        return .{ .start = start, .end = input.len, .slots = self.slots };
+    }
+
+    /// `(?m)^[^d\n]+d`: scan each line from its start to the first delimiter.
+    fn findLineDelimitedRun(self: *Workspace, delimited: shapes.LineDelimited, input: []const u8, search_start: usize) ?Match {
+        var start = search_start;
+        if (start > 0 and input[start - 1] != '\n') {
+            start = nextLineStart(input, start) orelse return null;
+        }
+        while (start <= input.len) {
+            var offset = start;
+            while (offset < input.len and input[offset] != delimited.delimiter and input[offset] != '\n') {
+                offset += 1;
+            }
+            if (offset > start and offset < input.len and input[offset] == delimited.delimiter) {
+                self.slots[0] = start;
+                self.slots[1] = offset + 1;
+                return .{ .start = start, .end = offset + 1, .slots = self.slots };
+            }
+            if (offset >= input.len) return null;
+            start = nextLineStart(input, offset) orelse return null;
         }
         return null;
     }
