@@ -299,8 +299,9 @@ if (comptime ct.Regex("abc[0-9]+").match("abc42")) |span| {
 returns a type whose `match` (full match) and `search` (leftmost-first)
 methods are generated code: no `Program`, no `Workspace`, no allocation, and
 no data tables at runtime. Both return a capture-aware `Match` with
-`start`/`end` and `group(index)` spans (1-based, `group(0)` is the whole
-match); the CPS backtracker restores capture slots on every failed path. The matcher uses continuation-passing
+`start`/`end`, `group(index)` (1-based, `group(0)` is the whole match), and
+`named("name")` for `(?P<name>...)` / `(?<name>...)` groups; the CPS
+backtracker restores capture slots on every failed path. The matcher uses continuation-passing
 backtracking, so alternation and greedy/lazy repetition explore every path
 in leftmost-first order. Supported syntax: literals and escapes
 (`\n \r \t \\ \d \D \w \W \s \S`), classes (`[a-z0-9_]`, `[^...]`),

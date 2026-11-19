@@ -62,6 +62,7 @@ const SetSpec = struct {
 };
 
 const max_repeat = 1024;
+const max_captures = 32;
 
 const Ast = union(enum) {
     empty,
@@ -86,6 +87,7 @@ const Parser = struct {
     dotall: bool = false,
     multiline: bool = false,
     capture_count: u16 = 0,
+    names: [max_captures]?[]const u8 = .{null} ** max_captures,
 
     fn peek(self: *const Parser) ?u8 {
         if (self.pos >= self.pattern.len) return null;
@@ -264,32 +266,43 @@ const Parser = struct {
     fn parseGroup(self: *Parser) ?Ast {
         _ = self.consume();
         var capturing = true;
+        var name: ?[]const u8 = null;
         if (self.peek() == '?') {
             _ = self.consume();
             const flag = self.peek() orelse @compileError("comptime regex: unterminated group");
-            switch (flag) {
-                'i' => {
-                    _ = self.consume();
-                    self.caseless = true;
-                },
-                's' => {
-                    _ = self.consume();
-                    self.dotall = true;
-                },
-                'm' => {
-                    _ = self.consume();
-                    self.multiline = true;
-                },
-                ':' => {
-                    _ = self.consume();
-                    capturing = false;
-                },
-                else => @compileError("comptime regex: unsupported group prefix"),
-            }
-            if (flag == 'i' or flag == 's' or flag == 'm') {
-                if (self.peek() != ')') @compileError("comptime regex: flag group must be empty");
+            if (flag == 'P' or flag == '<') {
+                // Named capture: `(?P<name>...)` or `(?<name>...)`.
                 _ = self.consume();
-                return Ast.empty;
+                if (flag == 'P') {
+                    if (self.peek() != '<') @compileError("comptime regex: expected '<' after '(?P'");
+                    _ = self.consume();
+                }
+                name = self.parseCaptureName();
+            } else {
+                switch (flag) {
+                    'i' => {
+                        _ = self.consume();
+                        self.caseless = true;
+                    },
+                    's' => {
+                        _ = self.consume();
+                        self.dotall = true;
+                    },
+                    'm' => {
+                        _ = self.consume();
+                        self.multiline = true;
+                    },
+                    ':' => {
+                        _ = self.consume();
+                        capturing = false;
+                    },
+                    else => @compileError("comptime regex: unsupported group prefix"),
+                }
+                if (flag == 'i' or flag == 's' or flag == 'm') {
+                    if (self.peek() != ')') @compileError("comptime regex: flag group must be empty");
+                    _ = self.consume();
+                    return Ast.empty;
+                }
             }
         }
         const inner = self.parseAlternation() orelse @compileError("comptime regex: empty group");
@@ -297,8 +310,28 @@ const Parser = struct {
         _ = self.consume();
         if (!capturing) return inner;
         self.capture_count += 1;
+        if (name) |capture_name| {
+            if (self.capture_count > max_captures) @compileError("comptime regex: too many capture groups");
+            self.names[self.capture_count - 1] = capture_name;
+        }
         const node = Ast{ .capture = .{ .index = self.capture_count, .child = &inner } };
         return node;
+    }
+
+    fn parseCaptureName(self: *Parser) []const u8 {
+        const start = self.pos;
+        while (self.peek()) |byte| {
+            if (byte == '>') break;
+            if (!std.ascii.isAlphanumeric(byte) and byte != '_') {
+                @compileError("comptime regex: invalid capture name");
+            }
+            _ = self.consume();
+        }
+        if (self.peek() != '>') @compileError("comptime regex: unterminated capture name");
+        const name = self.pattern[start..self.pos];
+        _ = self.consume();
+        if (name.len == 0) @compileError("comptime regex: empty capture name");
+        return name;
     }
 
     fn parseEscape(self: *Parser) ?Ast {
@@ -509,10 +542,11 @@ pub fn Regex(comptime pattern: []const u8) type {
         const root = parser.parseAlternation() orelse
             @compileError("comptime regex: invalid pattern '" ++ pattern ++ "'");
         if (parser.pos != pattern.len) @compileError("comptime regex: unexpected input at end of pattern");
-        break :compile .{ .ast = root, .captures = parser.capture_count };
+        break :compile .{ .ast = root, .captures = parser.capture_count, .names = parser.names };
     };
     const ast = parsed.ast;
     const capture_count = parsed.captures;
+    const names = parsed.names[0..capture_count];
     return struct {
         pub const source = pattern;
         pub const capture_total = capture_count;
@@ -532,6 +566,17 @@ pub fn Regex(comptime pattern: []const u8) type {
                 if (index == 0) return self.span();
                 if (index > capture_count) return null;
                 return self.captures[index - 1];
+            }
+
+            /// Span of the named capture group `name`; a compile error when
+            /// the pattern has no such group.
+            pub fn named(self: Match, comptime name: []const u8) ?Span {
+                inline for (names, 0..) |maybe_name, index| {
+                    if (maybe_name) |stored| {
+                        if (comptime std.mem.eql(u8, name, stored)) return self.group(index + 1);
+                    }
+                }
+                @compileError("comptime regex: no capture named '" ++ name ++ "'");
             }
         };
 
@@ -957,4 +1002,27 @@ test "comptime regex capture group access" {
     try std.testing.expectEqual(@as(usize, 9), m.group(2).?.end);
     try std.testing.expect(m.group(3) == null);
     try std.testing.expectEqual(m.span().start, m.group(0).?.start);
+}
+
+test "comptime regex named captures" {
+    const re = Regex("(?P<user>\\w+)@(?<host>\\w+)");
+    try std.testing.expectEqual(@as(usize, 2), re.capture_total);
+    const m = re.search("mail user@host now").?;
+    try std.testing.expectEqual(@as(usize, 5), m.start);
+    try std.testing.expectEqual(@as(usize, 15), m.end);
+    try std.testing.expectEqual(@as(usize, 5), m.named("user").?.start);
+    try std.testing.expectEqual(@as(usize, 9), m.named("user").?.end);
+    try std.testing.expectEqual(@as(usize, 10), m.named("host").?.start);
+    try std.testing.expectEqual(@as(usize, 14), m.named("host").?.end);
+    // Positional access agrees with named access.
+    try std.testing.expectEqual(m.group(1).?.start, m.named("user").?.start);
+    try std.testing.expectEqual(m.group(2).?.start, m.named("host").?.start);
+
+    // A named group inside alternation still backtracks correctly.
+    const alt = Regex("(?P<kind>foo|bar)-(?P<num>[0-9]+)");
+    const a = alt.search("x bar-42 y").?;
+    try std.testing.expectEqual(@as(usize, 2), a.named("kind").?.start);
+    try std.testing.expectEqual(@as(usize, 5), a.named("kind").?.end);
+    try std.testing.expectEqual(@as(usize, 6), a.named("num").?.start);
+    try std.testing.expectEqual(@as(usize, 8), a.named("num").?.end);
 }
