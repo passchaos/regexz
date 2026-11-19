@@ -71,6 +71,9 @@ const Prepared = struct { next: u32, accept: u64 };
 
 /// Direct-mapped cache for non-ASCII (state, rune) transitions.
 const unicode_cache_size: usize = 4096;
+/// Per-state front cache slots. The front cache keeps the hot (state, rune)
+/// transitions of a state in L1; misses fall through to the global cache.
+const state_cache_slots: usize = 32;
 const UnicodeEntry = extern struct {
     key: u64 = std.math.maxInt(u64),
     accept: u64 = no_priority,
@@ -134,6 +137,8 @@ pub const Workspace = struct {
     state_accept: std.ArrayList(u64) = .empty,
     index: std.StringHashMapUnmanaged(u32) = .empty,
     unicode_cache: []UnicodeEntry,
+    /// Front cache: `state_cache_slots` entries per state, kept in L1.
+    state_cache: std.ArrayList(UnicodeEntry) = .empty,
     automata: []?utf8_set.Automaton,
     arena: std.heap.ArenaAllocator,
     start_state: ?u32 = null,
@@ -348,6 +353,7 @@ pub const Workspace = struct {
         self.state_accept.deinit(self.allocator);
         self.index.deinit(self.allocator);
         self.allocator.free(self.unicode_cache);
+        self.state_cache.deinit(self.allocator);
         for (self.automata) |*automaton| {
             if (automaton.*) |*value| value.deinit(self.allocator);
         }
@@ -747,6 +753,7 @@ pub const Workspace = struct {
             .rune => {
                 try self.ascii_table.appendNTimes(self.allocator, 0, 128);
                 try self.accept_table.appendNTimes(self.allocator, no_priority, 128);
+                try self.state_cache.appendNTimes(self.allocator, .{}, state_cache_slots);
             },
             .byte => {
                 try self.byte_table.appendNTimes(self.allocator, unprepared_byte, 256);
@@ -999,18 +1006,31 @@ pub const Workspace = struct {
                 for (0..length) |index| bytes |= @as(u32, input[offset + index]) << @intCast(8 * index);
             }
             const key = (@as(u64, bytes) << 8) | state;
-            const entry = &self.unicode_cache[unicodeSlot(key)];
+            const front_index = @as(usize, state) * state_cache_slots +
+                (unicodeSlot(key) & (state_cache_slots - 1));
+            const front = &self.state_cache.items[front_index];
             var prepared: Prepared = undefined;
-            if (entry.key == key) {
-                prepared = .{ .next = entry.next, .accept = entry.accept };
+            if (front.key == key) {
+                prepared = .{ .next = front.next, .accept = front.accept };
             } else {
-                const rune = runeAt(input, offset) orelse {
-                    const accept = try self.prepareEof(state);
-                    recordMatch(&best_end, &best_priority, offset, accept, self.lazy_first);
-                    break;
-                };
-                prepared = try self.compute(state, rune.value);
-                entry.* = .{
+                const entry = &self.unicode_cache[unicodeSlot(key)];
+                if (entry.key == key) {
+                    prepared = .{ .next = entry.next, .accept = entry.accept };
+                } else {
+                    const rune = runeAt(input, offset) orelse {
+                        const accept = try self.prepareEof(state);
+                        recordMatch(&best_end, &best_priority, offset, accept, self.lazy_first);
+                        break;
+                    };
+                    prepared = try self.compute(state, rune.value);
+                    entry.* = .{
+                        .key = key,
+                        .accept = prepared.accept,
+                        .next = prepared.next,
+                        .pad = 0,
+                    };
+                }
+                front.* = .{
                     .key = key,
                     .accept = prepared.accept,
                     .next = prepared.next,
