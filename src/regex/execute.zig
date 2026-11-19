@@ -70,6 +70,7 @@ const Dfa = struct {
     /// and decode non-ASCII runes.
     ascii_table: std.ArrayList(u32) = .empty,
     unicode_cache: []UnicodeEntry,
+    /// Borrowed workspace views; cached states copy their keys into arena.
     scratch: []u32,
     seen: []u32,
     epoch: u32 = 0,
@@ -78,13 +79,13 @@ const Dfa = struct {
     row_shift: u5 = 7,
     /// Fits in the existing tail padding, preserving the workspace layout.
     unicode_collisions: u8 = 0,
-    fn init(allocator: std.mem.Allocator, instruction_count: usize, ascii_only: bool, long_input: bool) std.mem.Allocator.Error!Dfa {
+    /// NFA evaluation overwrites the shared visits. Clear them lazily before
+    /// the next DFA closure; cached transitions need no visit storage.
+    seen_invalid: bool = false,
+    fn init(allocator: std.mem.Allocator, scratch: []u32, seen: []u32, ascii_only: bool, long_input: bool) std.mem.Allocator.Error!Dfa {
+        std.debug.assert(scratch.len == seen.len);
         var arena = std.heap.ArenaAllocator.init(allocator);
         errdefer arena.deinit();
-        const buffers = try allocator.alloc(u32, instruction_count * 2);
-        errdefer allocator.free(buffers);
-        const scratch = buffers[0..instruction_count];
-        const seen = buffers[instruction_count..];
         @memset(seen, 0);
         const unicode_cache: []UnicodeEntry = if (ascii_only) &.{} else try allocator.alloc(UnicodeEntry, if (long_input) rune_cache.maximum_size else rune_cache.initial_size);
         errdefer allocator.free(unicode_cache);
@@ -104,7 +105,6 @@ const Dfa = struct {
         self.index.deinit(self.allocator);
         self.ascii_table.deinit(self.allocator);
         self.allocator.free(self.unicode_cache);
-        self.allocator.free(self.scratch.ptr[0 .. self.scratch.len + self.seen.len]);
         self.arena.deinit();
         self.* = undefined;
     }
@@ -293,9 +293,10 @@ pub const Workspace = struct {
     fn dfaNextEpoch(self: *Workspace) void {
         const dfa = &self.dfa.?;
         dfa.epoch +%= 1;
-        if (dfa.epoch == 0) {
+        if (dfa.epoch == 0 or dfa.seen_invalid) {
             @memset(dfa.seen, 0);
-            dfa.epoch = 1;
+            if (dfa.epoch == 0) dfa.epoch = 1;
+            dfa.seen_invalid = false;
         }
     }
     fn dfaGetState(self: *Workspace, program: *const Program, list: []u32) std.mem.Allocator.Error!u32 {
@@ -443,7 +444,8 @@ pub const Workspace = struct {
                 .byte => ascii_only = false,
                 else => {},
             };
-            self.dfa = Dfa.init(self.allocator, program.instructions.len, ascii_only, input.len >= dfa_min_input) catch {
+            const n = program.instructions.len;
+            self.dfa = Dfa.init(self.allocator, self.storage[n..][0..n], self.seen[0..n], ascii_only, input.len >= dfa_min_input) catch {
                 self.dfa_failed = true;
                 return null;
             };
@@ -569,6 +571,7 @@ pub const Workspace = struct {
             return false;
         }
         std.debug.assert(self.storage.len >= n * 6 and self.seen.len >= n * 5);
+        if (self.dfa) |*dfa| dfa.seen_invalid = true;
         @memset(self.seen, 0);
         var counts = [_]usize{0} ** 5;
         const stack = self.storage[n * 5 ..][0..n];

@@ -69,7 +69,7 @@ anything it cannot prove.
 
 | File | Responsibility |
 | --- | --- |
-| `execute.zig` | Boolean full match: Thompson NFA, lazy full-match DFA, `set+` / `(?:setA+ setB)+` byte-table fast paths, partial matching. |
+| `execute.zig` | Boolean full match: Thompson NFA, lazy full-match DFA, `set+` / `(?:setA+ setB)+` byte-table fast paths, partial matching. DFA canonical keys and visits borrow the existing NFA workspace buffers; NFA writes invalidate visits for the next uncached closure. |
 | `rune_cache.zig` | Full-match Unicode DFA transition cache: short-input construction starts at 4 KiB and promotes to 64 KiB after collisions; long-input construction starts at full capacity. Failed optional promotion retains exact small-cache lookups. |
 | `search_cache.zig` | Rune-search Unicode caches: workspaces borrow shared empty front rows until a non-ASCII cache miss; a cold initializer atomically replaces them with owned front rows and a 96 KiB global cache. ASCII searches retain no owned Unicode cache storage. |
 | `search_graph.zig` | One temporary DFS allocation for search-DFA priority assignment and eligibility analysis. Byte visit epochs preserve walk order and reuse storage; the buffer is released before execution tables are built. |
