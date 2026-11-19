@@ -76,6 +76,9 @@ pub const Chain = struct {
     star_b: bool = true,
     separator: [8]u8 = undefined,
     separator_len: u8 = 0,
+    /// When set, the separator is a run of this set instead of a literal
+    /// sequence (e.g. the `\s+` in `\w+\s+\w+`).
+    separator_set: ?model.Set = null,
     tail: [8]u8 = undefined,
     tail_len: u8 = 0,
     /// Capture slots for the two runs; 0 when the program has no captures.
@@ -150,6 +153,65 @@ pub fn chain(program: Program) ?Chain {
         pc = ins[pc].save.next;
         if (pc >= ins.len) return null;
     } else if (result.slot_a != 0) return null;
+    // A set run separator (`\s+` between two runs) takes precedence over the
+    // literal path.
+    if (runPrefix(ins, pc)) |sep_run| {
+        // Byte-wise run tracking keeps the scan one pass; non-ASCII runs
+        // stay on the general engine.
+        if (!sep_run.star or sep_run.min != 1 or !sep_run.set.ascii_only) return null;
+        if (!result.set_a.ascii_only) return null;
+        result.separator_set = sep_run.set;
+        visited += sep_run.min + 1;
+        pc = sep_run.after;
+        if (pc >= ins.len) return null;
+        if (std.meta.activeTag(ins[pc]) == .save and ins[pc].save.slot != 1) {
+            result.slot_b = ins[pc].save.slot;
+            visited += 1;
+            pc = ins[pc].save.next;
+            if (pc >= ins.len) return null;
+        }
+        if (runPrefix(ins, pc)) |run_b| {
+            if (!run_b.set.ascii_only) return null;
+            result.set_b = run_b.set;
+            result.min_b = run_b.min;
+            result.star_b = run_b.star;
+            visited += run_b.min;
+            if (run_b.star) visited += 1;
+            pc = run_b.after;
+        } else return null;
+        if (std.meta.activeTag(ins[pc]) == .save and ins[pc].save.slot != 1) {
+            if (result.slot_b == 0 or ins[pc].save.slot != result.slot_b + 1) return null;
+            visited += 1;
+            pc = ins[pc].save.next;
+            if (pc >= ins.len) return null;
+        } else if (result.slot_b != 0) return null;
+        while (isLiteral(ins[pc])) {
+            if (!appendLiteral(&result.tail, &result.tail_len, ins[pc])) return null;
+            visited += 1;
+            pc = literalNext(ins[pc]);
+            if (pc >= ins.len or visited > ins.len) return null;
+        }
+        const tail_finish = ins[pc];
+        if (std.meta.activeTag(tail_finish) != .save) return null;
+        if (tail_finish.save.slot != 1 or tail_finish.save.next != program.accept) return null;
+        visited += 1;
+        if (visited != ins.len) return null;
+        if (result.slot_a != 0) {
+            if (result.slot_b != result.slot_a + 2 or program.capture_count != 2) return null;
+        } else if (result.slot_b != 0 or program.capture_count != 0) return null;
+        if (result.set_a.ranges.len == 0 or result.separator_set.?.ranges.len == 0) return null;
+        if (result.set_b) |set_b| {
+            if (set_b.ranges.len == 0) return null;
+        }
+        // The separator run must be delimited by both runs.
+        if (result.separator_set.?.ranges.len != 0) {
+            if (setsOverlap(result.set_a, result.separator_set.?)) return null;
+            if (result.set_b) |set_b| {
+                if (setsOverlap(set_b, result.separator_set.?)) return null;
+            }
+        }
+        return result;
+    }
     while (isLiteral(ins[pc])) {
         if (!appendLiteral(&result.separator, &result.separator_len, ins[pc])) return null;
         visited += 1;
@@ -274,6 +336,24 @@ fn runPrefix(ins: []const model.Instruction, pc_in: usize) ?Run {
         return .{ .set = set, .min = @intCast(count), .star = true, .after = star.next };
     }
     return .{ .set = set, .min = @intCast(count), .star = false, .after = pc };
+}
+
+/// Whether two sets share any rune.
+fn setsOverlap(a: model.Set, b: model.Set) bool {
+    var left: usize = 0;
+    var right: usize = 0;
+    while (left < a.ranges.len and right < b.ranges.len) {
+        const x = a.ranges[left];
+        const y = b.ranges[right];
+        if (x.last < y.first) {
+            left += 1;
+        } else if (y.last < x.first) {
+            right += 1;
+        } else {
+            return true;
+        }
+    }
+    return false;
 }
 
 fn singleRuneSet(set: model.Set, rune: u21) bool {

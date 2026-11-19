@@ -315,8 +315,10 @@ Where the remaining time goes:
    faster), and the no-match form `(\p{L}+)@(\p{L}+)` is ~2.2 µs against
    ~2.0 µs. The shape detector (`shapes.zig`) recognizes
    `setA{min,} separator setB{min,} tail` (fixed counts such as
-   `\d{3}-\d{4}` included), requires the separator to end the first run and
-   the tail to end the second, and reports the capture slots directly.
+   `\d{3}-\d{4}` and set-run separators such as `\w+\s+\w+` included),
+   requires the separator to end the first run and the tail to end the
+   second, and reports the capture slots directly; `\w+\s+\w+` dropped from
+   ~67 µs to ~35 µs.
    The first-byte prefilter also matches contiguous ASCII ranges with vector
    compares (up to four runs), so class scans like `[A-Z]+` skip 16 bytes at
    a time: the no-match scan dropped from ~88 µs to ~4 µs, and `\d{3}-\d{4}`

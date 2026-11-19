@@ -723,6 +723,10 @@ test "chain search finds matches from the separator" {
         .{ .pattern = "\\d+-", .input = "12-345-6", .spans = &.{ .{ 0, 3 }, .{ 3, 7 } }, .groups = &.{"12-"} },
         .{ .pattern = "\\w+ 12345", .input = "a 12345 b 12345", .spans = &.{ .{ 0, 7 }, .{ 8, 15 } }, .groups = &.{"a 12345"} },
         .{ .pattern = "\\w+::", .input = "ab::cd::", .spans = &.{ .{ 0, 4 }, .{ 4, 8 } }, .groups = &.{"ab::"} },
+        // Set-run separators (`\w+\s+\w+`).
+        .{ .pattern = "\\w+\\s+\\w+", .input = "hello world foo", .spans = &.{.{ 0, 11 }}, .groups = &.{"hello world"} },
+        .{ .pattern = "(\\w+)\\s+(\\w+)", .input = "hello world", .spans = &.{.{ 0, 11 }}, .groups = &.{ "hello world", "hello", "world" } },
+        .{ .pattern = "\\d+\\s+\\d+", .input = "12  34 x", .spans = &.{.{ 0, 6 }}, .groups = &.{"12  34"} },
         // Fixed-count runs around the separator (`\d{3}-\d{4}` family).
         .{ .pattern = "\\d{3}-\\d{4}", .input = "555-1234 123-4567", .spans = &.{ .{ 0, 8 }, .{ 9, 17 } }, .groups = &.{"555-1234"} },
         .{ .pattern = "(\\d{3})-(\\d{4})", .input = "call 555-1234", .spans = &.{.{ 5, 13 }}, .groups = &.{ "555-1234", "555", "1234" } },

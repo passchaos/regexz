@@ -666,18 +666,52 @@ pub const Workspace = struct {
     /// occurrence determines the match: the first non-`setA` rune before it
     /// is the start, and the first non-`setB` rune after it is the end.
     fn findChain(self: *Workspace, chain: *const shapes.Chain, input: []const u8, search_start: usize) ?Match {
+        if (chain.separator_set) |set_s| return self.findChainSet(chain, set_s, input, search_start);
         var scan = search_start;
         while (true) {
             const separator_at = indexOfLiteral(input, scan, chain.separator[0..chain.separator_len]) orelse return null;
-            if (self.chainMatch(chain, input, separator_at, search_start)) |match| return match;
+            if (self.chainMatch(chain, input, separator_at, separator_at + chain.separator_len, search_start)) |match| return match;
             scan = separator_at + 1;
         }
+    }
+
+    /// Chain with a set-run separator (`\w+\s+\w+`): each separator run is
+    /// tried in order, and the whole run is skipped when it fails. The scan
+    /// also tracks the preceding `setA` run so the match start is known
+    /// without a backward pass.
+    fn findChainSet(self: *Workspace, chain: *const shapes.Chain, set_s: model.Set, input: []const u8, search_start: usize) ?Match {
+        var scan = search_start;
+        while (scan < input.len) {
+            var run_start: ?usize = null;
+            var pos = scan;
+            while (pos < input.len and !set_s.matches(input[pos])) {
+                if (chain.set_a.matches(input[pos])) {
+                    if (run_start == null) run_start = pos;
+                } else run_start = null;
+                pos += 1;
+            }
+            if (pos >= input.len) return null;
+            const separator_at = pos;
+            while (pos < input.len and set_s.matches(input[pos])) pos += 1;
+            const separator_end = pos;
+            if (chain.star_a) {
+                if (run_start) |start| {
+                    if (separator_at - start >= chain.min_a) {
+                        if (self.chainMatchFrom(chain, input, start, separator_at, separator_end)) |match| return match;
+                    }
+                }
+            } else if (self.chainMatch(chain, input, separator_at, separator_end, search_start)) |match| {
+                return match;
+            }
+            scan = separator_end;
+        }
+        return null;
     }
 
     /// Try the match determined by one separator occurrence: the run before
     /// it (unbounded, or a fixed count for shapes like `\d{3}-\d{4}`), the
     /// run after it, and the literal tail.
-    fn chainMatch(self: *Workspace, chain: *const shapes.Chain, input: []const u8, separator_at: usize, search_start: usize) ?Match {
+    fn chainMatch(self: *Workspace, chain: *const shapes.Chain, input: []const u8, separator_at: usize, separator_end: usize, search_start: usize) ?Match {
         var start: usize = undefined;
         if (chain.star_a) {
             start = chainRunStart(input, chain.set_a, separator_at, search_start);
@@ -690,7 +724,11 @@ pub const Workspace = struct {
                 if (!chain.set_a.matches(byte)) return null;
             }
         }
-        const run_from = separator_at + chain.separator_len;
+        return self.chainMatchFrom(chain, input, start, separator_at, separator_end);
+    }
+
+    fn chainMatchFrom(self: *Workspace, chain: *const shapes.Chain, input: []const u8, start: usize, separator_at: usize, separator_end: usize) ?Match {
+        const run_from = separator_end;
         var match_end: usize = 0;
         var run_end: usize = run_from;
         if (chain.set_b) |set_b| {
