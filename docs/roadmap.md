@@ -358,7 +358,9 @@ Where the remaining time goes:
    inputs (`[A-Za-z0-9._-]+`, xDS-like) improved by ~8-10%. Applying the same
    row-offset encoding to the byte-mode *search* DFA was evaluated and
    reverted: the Han scan measured the same within noise and the table would
-   double in size. Two rune-DFA accept-path experiments were also reverted:
+   double in size. ASCII byte classes for the rune-mode tables were also
+   tried and reverted: the smaller rows did not pay for the extra class load
+   and runtime row shift (Qwen ~8% slower, CJK ~20% slower). Two rune-DFA accept-path experiments were also reverted:
    a separate accept-flag table (no win, one extra load) and branchless
    accept recording with conditional moves (Qwen regressed ~7%, so the
    predictable accept branch is cheaper than per-byte cmovs). The Qwen scan
