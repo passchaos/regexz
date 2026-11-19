@@ -86,7 +86,7 @@ sub-nanosecond timings.
 | --- | --- | --- |
 | 1 | `execute.zig`, `search_dfa.zig`, `tools/bench/main.zig` | Main matching benchmarks warm the workspace first. Add separate compile-plus-first-match and repeated-match cases before deciding whether eager DFA construction or smaller workspace initialization pays off. |
 | 2 | `prefilter.zig`: `PairSet.indexOfAny` | Dense literal start sets still probe the pair bitmap byte by byte. Measure a SIMD multi-literal filter on both misses and frequent prefix collisions; preserve exact literal verification and earliest-match ordering. |
-| 3 | `replace.zig`: `replayLinear` | Capture replay checks instruction shape and set membership on each replay. A precomputed deterministic capture plan could reduce repeated analysis, but needs capture-boundary and repetition differential coverage. |
+| 3 | `capture_run.zig`, `replace.zig`: `replayLinear` | Fixed ASCII `set+` capture saves now scan directly; see [capture-run measurements](benchmarks/capture-run.md). General straight-line replay and Unicode capture runs remain candidates for precomputed plans. |
 | 4 | `replace.zig` | The file combines the API, search dispatch, deterministic scanners, capture replay, and interpreter in roughly 2,000 lines. Extract a cohesive scanner module when changing those paths; keep budget and capture state ownership explicit. |
 
 The first three candidates need fresh measurements before implementation.

@@ -58,6 +58,17 @@ def generate(case_count: int, seed: int) -> list[dict]:
     inputs += ["a", "b", "ab", "aab", "abc", "a1", "  ", "\n", "\u732b", "\u0394\u03c3", "AaBb"]
     cases = []
     seen = set()
+    # Keep capture-of-run shapes represented: quantifying the existing `(a)`
+    # atom generates `(a)+`, whose capture changes on every iteration.
+    capture_runs = [
+        "(a+)", "([ab]+)", "(\\w+)", "((\\d+))", "()(\\w+)()",
+        "(?<run>[a-c]+)", "()([a-c]+)", "([a-c]+)()",
+    ]
+    seeds = [(pattern, flags) for pattern in capture_runs for flags in ["", "i", "u"]]
+    seeds += [(pattern, "u") for pattern in ["(a*)", "(a+?)", "(a)+", "(\\p{L}+)"]]
+    for pattern, flags in seeds[:case_count]:
+        seen.add((pattern, flags))
+        cases.append({"pattern": pattern, "flags": flags, "inputs": inputs})
     while len(cases) < case_count:
         pattern = random_pattern()
         flags = random.choice(FLAGS)
@@ -255,13 +266,20 @@ def main() -> int:
             ["node", str(reference_path), str(cases_path)],
             capture_output=True, text=True, check=True,
         )
-        zig = subprocess.run(
+        executable_path = temp_path / "fuzz_cases"
+        compiled = subprocess.run(
             [
-                "zig", "run", "-OReleaseFast", "--dep", "regexz",
+                "zig", "build-exe", "-OReleaseFast", "--dep", "regexz",
                 f"-Mroot={zig_path}", f"-Mregexz={ROOT / 'src/root.zig'}",
+                f"-femit-bin={executable_path}",
             ],
             capture_output=True, text=True,
         )
+        if compiled.returncode != 0:
+            sys.stderr.write(compiled.stderr)
+            return 1
+        # Compare program records without compiler/wrapper diagnostics.
+        zig = subprocess.run([str(executable_path)], capture_output=True, text=True)
         if zig.returncode != 0:
             sys.stderr.write(zig.stderr)
             return 1

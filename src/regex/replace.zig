@@ -16,6 +16,7 @@ const utf8_set = @import("utf8_set.zig");
 const utf8_run_mod = @import("utf8_run.zig");
 const prefilter = @import("prefilter.zig");
 const shapes = @import("shapes.zig");
+const capture_run_mod = @import("capture_run.zig");
 const subst = @import("substitution.zig");
 const newline = @import("newline.zig");
 const required_literals = @import("required_literals.zig");
@@ -37,6 +38,7 @@ pub const FastKind = enum {
     trailing_space,
     line_delimited,
     number,
+    capture_run,
 };
 pub const Error = model.Error;
 
@@ -103,6 +105,8 @@ pub const Workspace = struct {
     /// A `set+` program over an ASCII-only set scans runs directly instead of
     /// entering the DFA.
     simple_set: ?model.Set = null,
+    /// ASCII set runs whose capture saves have fixed start/end positions.
+    capture_run: ?capture_run_mod.Plan = null,
     /// A `set+ separator set+ tail` program is found by scanning for the
     /// separator instead of running the DFA over the whole input.
     simple_chain: ?shapes.Chain = null,
@@ -187,6 +191,7 @@ pub const Workspace = struct {
         errdefer if (pair_filter) |filter| allocator.destroy(filter);
         const simple_chain = if (limits.longest) null else shapes.chain(program);
         const set_run = if (limits.longest) null else shapes.setRun(program);
+        const capture_run = if (limits.longest) null else capture_run_mod.Plan.init(program);
         const utf8_run: ?utf8_run_mod.Utf8Run = if (set_run) |set|
             (if (set.ascii_only) null else try utf8_run_mod.Utf8Run.init(allocator, set))
         else
@@ -209,6 +214,8 @@ pub const Workspace = struct {
         }
         const fast_kind: FastKind = if (simple_set != null)
             .set_run
+        else if (capture_run != null)
+            .capture_run
         else if (utf8_run != null)
             .utf8_run
         else if (simple_chain != null)
@@ -248,9 +255,10 @@ pub const Workspace = struct {
             .best_slots = best_slots,
             .pike_eligible = pike.eligible(program),
             .simple_set = simple_set,
+            .capture_run = capture_run,
             .simple_set_table = blk: {
                 var table: [256]bool = .{false} ** 256;
-                if (set_run) |set| {
+                if (set_run orelse (if (capture_run) |plan| plan.set else null)) |set| {
                     if (set.ascii_only) {
                         for (0..256) |byte| table[byte] = set.matches(@intCast(byte));
                     }
@@ -276,7 +284,10 @@ pub const Workspace = struct {
             .prefix_set = detectPrefixSet(program),
             .start_anchored = startsAtTextStart(program),
             .line_start_only = startsAtLineStart(program),
-            .first_filter = prefilter.FirstFilter.init(program.first),
+            .first_filter = prefilter.FirstFilter.init(if (capture_run) |plan|
+                .{ .ascii = plan.set.ascii, .nonascii = false, .empty = false }
+            else
+                program.first),
             .pair_filter = pair_filter,
             .fold_filter = if (program.caseless_literal) |literal| prefilter.FoldFilter.init(literal) else null,
         };
@@ -336,6 +347,7 @@ pub const Workspace = struct {
             .trailing_space => return self.findTrailingSpaceRun(input, search_start),
             .line_delimited => return self.findLineDelimitedRun(self.line_delimited.?, input, search_start),
             .number => return self.findNumberRun(input, search_start),
+            .capture_run => return self.findCaptureRun(input, search_start),
         }
         // Every match must start at a start-literal occurrence, so the first
         // occurrence bounds the leftmost match start and the DFA can skip
@@ -703,6 +715,7 @@ pub const Workspace = struct {
             .trailing_space => return self.findTrailingSpaceRun(input, search_start),
             .line_delimited => return self.findLineDelimitedRun(self.line_delimited.?, input, search_start),
             .number => return self.findNumberRun(input, search_start),
+            .capture_run => return self.findCaptureRun(input, search_start),
         }
         var from = search_start;
         if (self.pair_filter) |filter| {
@@ -838,6 +851,20 @@ pub const Workspace = struct {
             if (pos > start) return pos;
         }
         return start + runeLenAt(input, start);
+    }
+
+    fn findCaptureRun(self: *Workspace, input: []const u8, search_start: usize) Error!?Match {
+        const span = (try self.capture_run.?.find(
+            &self.simple_set_table,
+            &self.first_filter,
+            input,
+            search_start,
+            self.slots,
+            &self.steps,
+            self.limits.max_execution_steps,
+            self.limits.linear_fallback,
+        )) orelse return null;
+        return .{ .start = span.start, .end = span.end, .slots = self.slots };
     }
 
     /// `set+` over an ASCII-only set: skip to the next member with the SIMD

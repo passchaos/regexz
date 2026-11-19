@@ -71,4 +71,18 @@ pub fn build(b: *std.Build) void {
     const run_replace_bench = b.addRunArtifact(replace_bench_exe);
     const replace_bench_step = b.step("bench-replace", "Run scoped replacement benchmarks and count output allocations");
     replace_bench_step.dependOn(&run_replace_bench.step);
+
+    const capture_bench_mod = b.createModule(.{
+        .root_source_file = b.path("tools/bench/capture.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    capture_bench_mod.addImport("regexz", regexz_mod);
+    const capture_bench_exe = b.addExecutable(.{
+        .name = "regexz-capture-bench",
+        .root_module = capture_bench_mod,
+    });
+    const run_capture_bench = b.addRunArtifact(capture_bench_exe);
+    const capture_bench_step = b.step("bench-capture", "Run scoped capture-search benchmarks and count first-find allocations");
+    capture_bench_step.dependOn(&run_capture_bench.step);
 }
