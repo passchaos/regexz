@@ -7,6 +7,7 @@
 //! Capture-free programs can retry on the linear Pike-style search in
 //! `pike.zig` when the budget is exhausted and `Limits.linear_fallback` is on.
 const std = @import("std");
+const byte_table = @import("byte_table.zig");
 const model = @import("model.zig");
 const Program = @import("compile.zig").Program;
 const pike = @import("pike.zig");
@@ -186,7 +187,7 @@ pub const Workspace = struct {
         const word_run_set = shapes.wordRun(program);
         var word_table: [256]bool = .{false} ** 256;
         if (word_run_set) |set| {
-            for (0..256) |byte| word_table[byte] = set.matches(@intCast(byte));
+            word_table = byte_table.init(256, set);
         }
         errdefer if (pair_filter) |filter| allocator.destroy(filter);
         const simple_chain = if (limits.longest) null else shapes.chain(program);
@@ -206,11 +207,11 @@ pub const Workspace = struct {
         const number_run_set = shapes.numberRun(program);
         var number_table: [256]bool = .{false} ** 256;
         if (number_run_set) |set| {
-            for (0..256) |byte| number_table[byte] = set.matches(@intCast(byte));
+            number_table = byte_table.init(256, set);
         }
         var trailing_table: [256]bool = .{false} ** 256;
         if (trailing_space_set) |set| {
-            for (0..256) |byte| trailing_table[byte] = set.matches(@intCast(byte));
+            trailing_table = byte_table.init(256, set);
         }
         const fast_kind: FastKind = if (simple_set != null)
             .set_run
@@ -260,7 +261,7 @@ pub const Workspace = struct {
                 var table: [256]bool = .{false} ** 256;
                 if (set_run orelse (if (capture_run) |plan| plan.set else null)) |set| {
                     if (set.ascii_only) {
-                        for (0..256) |byte| table[byte] = set.matches(@intCast(byte));
+                        table = byte_table.init(256, set);
                     }
                 }
                 break :blk table;
@@ -1917,7 +1918,7 @@ const ChainTables = struct {
 };
 
 fn fillSetBytes(table: *[256]bool, set: model.Set) void {
-    for (0..256) |byte| table[byte] = set.matches(@intCast(byte));
+    table.* = byte_table.init(256, set);
 }
 
 fn allSetBytes(table: *const [256]bool, bytes: []const u8) bool {

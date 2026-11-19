@@ -56,6 +56,8 @@ pub fn main() !void {
     const cases = [_]struct { name: []const u8, pattern: []const u8, input: []const u8 }{
         .{ .name = "literal", .pattern = "hello, world!", .input = "hello, world!" },
         .{ .name = "ASCII class", .pattern = "[A-Za-z0-9._-]+", .input = "User.Name_42" },
+        .{ .name = "fragmented class", .pattern = "[acegikmoqsuwy]+", .input = "acegikmo" },
+        .{ .name = "ASCII loop", .pattern = "(?:[a-z0-9]+[ \n])+", .input = "word 123\n" },
         .{ .name = "alternation", .pattern = "(?:foo|bar)+", .input = "foobarfoo" },
         .{ .name = "xDS path", .pattern = "/(?:demo|test)\\.[A-Z][A-Za-z]+/(Get|List)", .input = "/demo.Service/Get" },
         .{ .name = "Unicode run", .pattern = "\\p{Han}+", .input = "你好世界" },

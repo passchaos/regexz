@@ -83,7 +83,7 @@ and warmed matching. See [benchmark calibration](benchmarks/calibration.md).
 
 | Priority | Owning code | Evidence and next measurement |
 | --- | --- | --- |
-| 1 | `execute.zig`, `search_dfa.zig`, `tools/bench/startup.zig` | Startup measurements now separate construction from matching. [Unicode initialization](benchmarks/unicode-init.md) is down from about 48 us to 13 us; evaluate precomputed/persisted small DFAs and the remaining workspace table setup cost next. |
+| 1 | `execute.zig`, `search_dfa.zig`, `tools/bench/startup.zig` | Startup measurements now separate construction from matching. [Unicode initialization](benchmarks/unicode-init.md) is down from about 48 us to 13 us; [shared byte-table construction](benchmarks/byte-table.md) reduces ASCII class setup from about 151 ns to 62 ns. Evaluate persisted small DFAs and remaining compile-time set materialization next. |
 | 2 | `prefilter.zig`: `PairSet.indexOfAny` | Dense literal start sets still probe the pair bitmap byte by byte. Measure a SIMD multi-literal filter on both misses and frequent prefix collisions; preserve exact literal verification and earliest-match ordering. |
 | 3 | `capture_run.zig`, `replace.zig`: `replayLinear` | Fixed ASCII `set+` capture saves now scan directly; see [capture-run measurements](benchmarks/capture-run.md). General straight-line replay and Unicode capture runs remain candidates for precomputed plans. |
 | 4 | `replace.zig` | The file combines the API, search dispatch, deterministic scanners, capture replay, and interpreter in roughly 2,000 lines. Extract a cohesive scanner module when changing those paths; keep budget and capture state ownership explicit. |

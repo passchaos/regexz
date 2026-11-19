@@ -384,6 +384,7 @@ test {
     _ = @import("regex/budget_tests.zig");
     _ = @import("regex/engine_tests.zig");
     _ = @import("regex/borrowed_program_tests.zig");
+    _ = @import("regex/byte_table_tests.zig");
     _ = @import("regex/capture_run_tests.zig");
     _ = @import("regex/prefilter_tests.zig");
     _ = @import("regex/extended_tests.zig");

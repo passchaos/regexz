@@ -12,6 +12,7 @@
 //! discarded as soon as no match is pending. Memory is therefore bounded by
 //! the longest pending match, not by the stream length.
 const std = @import("std");
+const byte_table = @import("byte_table.zig");
 const model = @import("model.zig");
 const Program = @import("compile.zig").Program;
 const prefilter = @import("prefilter.zig");
@@ -157,7 +158,7 @@ pub const Scanner = struct {
         if (simple_set orelse simple_star) |set| {
             if (set.ascii_only) {
                 simple_set_ascii = true;
-                for (0..256) |byte| table[byte] = set.matches(@intCast(byte));
+                table = byte_table.init(256, set);
             }
         }
         const simple_chain = if (limits.longest) null else detectStreamChain(program);
@@ -167,9 +168,9 @@ pub const Scanner = struct {
         if (simple_chain) |chain| {
             if (chain.set_a.ascii_only and (chain.set_b == null or chain.set_b.?.ascii_only)) {
                 chain_ascii = true;
-                for (0..256) |byte| chain_a_table[byte] = chain.set_a.matches(@intCast(byte));
+                chain_a_table = byte_table.init(256, chain.set_a);
                 if (chain.set_b) |set_b| {
-                    for (0..256) |byte| chain_b_table[byte] = set_b.matches(@intCast(byte));
+                    chain_b_table = byte_table.init(256, set_b);
                 }
             }
         }

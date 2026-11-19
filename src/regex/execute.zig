@@ -2,6 +2,7 @@
 //! Programs without assertions, lookahead, or `\C` also use a bounded lazy
 //! DFA cache for repeated full-match evaluation.
 const std = @import("std");
+const byte_table = @import("byte_table.zig");
 const model = @import("model.zig");
 const Program = @import("compile.zig").Program;
 const budget_mod = @import("budget.zig");
@@ -157,13 +158,13 @@ pub const Workspace = struct {
         if (shapes.setRun(program)) |set| {
             if (set.ascii_only) {
                 workspace.simple_set = true;
-                for (0..128) |byte| workspace.simple_table[byte] = set.matches(@intCast(byte));
+                workspace.simple_table = byte_table.init(256, set);
             }
         }
         if (shapes.setLoop(program)) |loop| {
             workspace.simple_loop = true;
-            for (0..128) |byte| workspace.loop_a[byte] = loop.a.matches(@intCast(byte));
-            for (0..128) |byte| workspace.loop_b[byte] = loop.b.matches(@intCast(byte));
+            workspace.loop_a = byte_table.init(256, loop.a);
+            workspace.loop_b = byte_table.init(256, loop.b);
         }
         if (shapes.setRun(program)) |set| {
             if (!set.ascii_only) {
