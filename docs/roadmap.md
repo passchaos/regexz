@@ -478,14 +478,3 @@ Backreferences, general lookaround, recursion, atomic groups, and possessive
 quantifiers are non-goals for the linear engine because they break the
 linear-time guarantee. They are supported only in the extended backtracking
 mode, which is explicitly bounded and fail-closed.
-reak the
-linear-time guarantee. They are supported only in the extended backtracking
-mode, which is explicitly bounded and fail-closed.
-xtended backtracking
-mode, which is explicitly bounded and fail-closed.
-reak the
-linear-time guarantee. They are supported only in the extended backtracking
-mode, which is explicitly bounded and fail-closed.
-
--closed.
-
