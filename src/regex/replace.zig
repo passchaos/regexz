@@ -111,6 +111,8 @@ pub const Workspace = struct {
     fast_branch: ?FastBranch = null,
     /// `(?m)^.*$`: match one line at a time with a newline scan.
     line_run: bool = false,
+    /// `"[^"]*"`: match the next delimiter pair.
+    delimited_run: ?u8 = null,
     /// The first set covers most of the alphabet, so the start prefilter
     /// barely skips. Programs with a nullable prefix (like `.*foo`) then
     /// restart the DFA at almost every position, and one required-literal
@@ -186,6 +188,7 @@ pub const Workspace = struct {
             .simple_anchored = if (limits.longest) null else detectAnchoredRun(program),
             .chain_tables = if (simple_chain) |chain| ChainTables.init(chain) else null,
             .line_run = shapes.lineRun(program),
+            .delimited_run = shapes.delimitedRun(program),
             .utf8_run = utf8_run,
             .fast_branch = fast_branch,
             .weak_first = @as(usize, @popCount(program.first.ascii[0])) + @popCount(program.first.ascii[1]) >= 48,
@@ -245,6 +248,7 @@ pub const Workspace = struct {
         if (self.simple_chain) |*chain| return self.findChain(chain, input, search_start);
         if (self.simple_anchored) |anchored_run| return self.findAnchoredRun(anchored_run, input, search_start);
         if (self.line_run) return self.findLineRun(input, search_start);
+        if (self.delimited_run) |delimiter| return self.findDelimitedRun(delimiter, input, search_start);
         // Every match must start at a start-literal occurrence, so the first
         // occurrence bounds the leftmost match start and the DFA can skip
         // the prefix before it.
@@ -585,6 +589,7 @@ pub const Workspace = struct {
         if (self.simple_chain) |*chain| return self.findChain(chain, input, search_start);
         if (self.simple_anchored) |anchored_run| return self.findAnchoredRun(anchored_run, input, search_start);
         if (self.line_run) return self.findLineRun(input, search_start);
+        if (self.delimited_run) |delimiter| return self.findDelimitedRun(delimiter, input, search_start);
         var from = search_start;
         if (self.pair_filter) |filter| {
             from = filter.indexOfAny(input, search_start) orelse return null;
@@ -759,6 +764,15 @@ pub const Workspace = struct {
         self.slots[0] = start;
         self.slots[1] = end;
         return .{ .start = start, .end = end, .slots = self.slots };
+    }
+
+    /// `"[^"]*"`: the match is the next delimiter pair.
+    fn findDelimitedRun(self: *Workspace, delimiter: u8, input: []const u8, search_start: usize) ?Match {
+        const open = std.mem.indexOfScalarPos(u8, input, search_start, delimiter) orelse return null;
+        const close = std.mem.indexOfScalarPos(u8, input, open + 1, delimiter) orelse return null;
+        self.slots[0] = open;
+        self.slots[1] = close + 1;
+        return .{ .start = open, .end = close + 1, .slots = self.slots };
     }
 
     fn findFastBranch(self: *Workspace, branch: *const FastBranch, input: []const u8, search_start: usize) ?Match {

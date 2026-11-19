@@ -821,3 +821,35 @@ test "line run fast path matches line by line" {
     try std.testing.expectEqual(@as(usize, 4), mid.start);
     try std.testing.expectEqual(@as(usize, 7), mid.end);
 }
+
+test "delimited run fast path" {
+    var value = try regex.Regex.init(gpa, "\"[^\"]*\"", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.delimited_run != null);
+
+    const cases = [_]struct { input: []const u8, spans: []const [2]usize }{
+        .{ .input = "", .spans = &.{} },
+        .{ .input = "\"a\"", .spans = &.{.{ 0, 3 }} },
+        .{ .input = "x \"a\" y \"bc\"", .spans = &.{ .{ 2, 5 }, .{ 8, 12 } } },
+        .{ .input = "\"\"", .spans = &.{.{ 0, 2 }} },
+        .{ .input = "\"unclosed", .spans = &.{} },
+        .{ .input = "\u{4f60}\"x\"", .spans = &.{.{ 3, 6 }} },
+    };
+    for (cases) |case| {
+        var offset: usize = 0;
+        var index: usize = 0;
+        while (offset <= case.input.len and index < case.spans.len) : (index += 1) {
+            const m = (try workspace.find(case.input, offset)) orelse break;
+            try std.testing.expectEqual(case.spans[index][0], m.start);
+            try std.testing.expectEqual(case.spans[index][1], m.end);
+            offset = m.end;
+        }
+        try std.testing.expectEqual(case.spans.len, index);
+        // No further match past the last recorded span.
+        if (index == case.spans.len and offset <= case.input.len) {
+            try std.testing.expect((try workspace.find(case.input, offset)) == null);
+        }
+    }
+}

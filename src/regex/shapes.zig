@@ -495,3 +495,44 @@ fn isDotExceptNewline(set: model.Set) bool {
     }
     return false;
 }
+
+/// `save0 -> lit d -> star(set) -> lit d -> save1 -> accept` where `set` is
+/// every rune except the delimiter `d` (`"[^"]*"`). The match is the next
+/// pair of delimiters.
+pub fn delimitedRun(program: Program) ?u8 {
+    if (program.capture_count != 0 or program.extended) return null;
+    const ins = program.instructions;
+    if (ins.len != 8) return null;
+    if (std.meta.activeTag(ins[0]) != .accept or std.meta.activeTag(ins[1]) != .sub_accept or
+        std.meta.activeTag(ins[2]) != .ret) return null;
+    if (std.meta.activeTag(ins[3]) != .save or std.meta.activeTag(ins[4]) != .literal_byte or
+        std.meta.activeTag(ins[5]) != .star or std.meta.activeTag(ins[6]) != .literal_byte or
+        std.meta.activeTag(ins[7]) != .save) return null;
+    if (program.start != 7 or program.body != 6) return null;
+    const save1 = ins[3].save;
+    if (save1.slot != 1 or save1.next != program.accept) return null;
+    const close = ins[4].literal_byte;
+    if (close.next != 3) return null;
+    const star = ins[5].star;
+    if (star.next != 4) return null;
+    const open = ins[6].literal_byte;
+    if (open.next != 5) return null;
+    const save0 = ins[7].save;
+    if (save0.slot != 0 or save0.next != 6) return null;
+    if (open.value != close.value) return null;
+    if (!isAllExcept(star.set, open.value)) return null;
+    return open.value;
+}
+
+/// Whether `set` matches every rune except `excluded` (which is ASCII).
+fn isAllExcept(set: model.Set, excluded: u8) bool {
+    var byte: u32 = 0;
+    while (byte < 128) : (byte += 1) {
+        const expected = byte != excluded;
+        if (set.matches(@intCast(byte)) != expected) return false;
+    }
+    for (set.ranges) |range| {
+        if (range.first <= 0x80 and range.last >= 0x10FFFF) return true;
+    }
+    return false;
+}
