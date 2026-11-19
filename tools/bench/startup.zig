@@ -2,7 +2,7 @@
 const std = @import("std");
 const regexz = @import("regexz");
 const gpa = std.heap.smp_allocator;
-const Mode = enum { compile_first, init, cold, warm };
+const Mode = enum { compile_first, init, cold, dfa_cold, warm };
 
 fn bench(io: std.Io, out: *std.Io.Writer, name: []const u8, pattern: []const u8, input: []const u8, mode: Mode) !void {
     var value = try regexz.Regex.init(gpa, pattern, .{});
@@ -23,10 +23,12 @@ fn bench(io: std.Io, out: *std.Io.Writer, name: []const u8, pattern: []const u8,
                     defer fresh.deinit();
                     std.mem.doNotOptimizeAway(try fresh.matches(gpa, subject));
                 },
-                .init, .cold => {
+                .init, .cold, .dfa_cold => {
                     var workspace = try regexz.Workspace.init(gpa, value.program);
                     defer workspace.deinit();
-                    if (mode == .cold) {
+                    if (mode == .dfa_cold) {
+                        for (0..3) |_| std.mem.doNotOptimizeAway(workspace.matchesBorrowed(&value.program, subject));
+                    } else if (mode == .cold) {
                         std.mem.doNotOptimizeAway(workspace.matchesBorrowed(&value.program, subject));
                     } else {
                         std.mem.doNotOptimizeAway(&workspace);
@@ -41,9 +43,13 @@ fn bench(io: std.Io, out: *std.Io.Writer, name: []const u8, pattern: []const u8,
     var counter = std.testing.FailingAllocator.init(gpa, .{});
     var workspace = try regexz.Workspace.init(counter.allocator(), value.program);
     defer workspace.deinit();
-    try out.print("{s:<20} {s:<13} {d:>12.1} ns/iter init_allocations={d} scratch_bytes={d}\n", .{
-        name,                @tagName(mode),                                              @as(f64, @floatFromInt(samples[2])) / @as(f64, @floatFromInt(iterations)),
-        counter.allocations, (workspace.storage.len + workspace.seen.len) * @sizeOf(u32),
+    const init_allocations = counter.allocations;
+    const init_bytes = counter.allocated_bytes;
+    for (0..3) |_| std.mem.doNotOptimizeAway(workspace.matchesBorrowed(&value.program, input));
+    try out.print("{s:<20} {s:<13} {d:>12.1} ns/iter init_allocations={d} scratch_bytes={d} dfa_allocations={d} dfa_requested_bytes={d}\n", .{
+        name,                                 @tagName(mode),                                              @as(f64, @floatFromInt(samples[2])) / @as(f64, @floatFromInt(iterations)),
+        init_allocations,                     (workspace.storage.len + workspace.seen.len) * @sizeOf(u32), counter.allocations - init_allocations,
+        counter.allocated_bytes - init_bytes,
     });
 }
 
@@ -61,9 +67,10 @@ pub fn main() !void {
         .{ .name = "alternation", .pattern = "(?:foo|bar)+", .input = "foobarfoo" },
         .{ .name = "xDS path", .pattern = "/(?:demo|test)\\.[A-Z][A-Za-z]+/(Get|List)", .input = "/demo.Service/Get" },
         .{ .name = "Unicode run", .pattern = "\\p{Han}+", .input = "你好世界" },
+        .{ .name = "mixed Unicode", .pattern = "(?:\\p{Greek}|[0-9])+", .input = "Δ1σ2Δ" },
     };
     for (cases) |case| {
-        for ([_]Mode{ .compile_first, .init, .cold, .warm }) |mode| {
+        for ([_]Mode{ .compile_first, .init, .cold, .dfa_cold, .warm }) |mode| {
             try bench(io, &stdout.interface, case.name, case.pattern, case.input, mode);
         }
     }

@@ -386,6 +386,7 @@ test {
     _ = @import("regex/borrowed_program_tests.zig");
     _ = @import("regex/byte_table_tests.zig");
     _ = @import("regex/range_mask_tests.zig");
+    _ = @import("regex/dfa_allocation_tests.zig");
     _ = @import("regex/capture_run_tests.zig");
     _ = @import("regex/prefilter_tests.zig");
     _ = @import("regex/extended_tests.zig");

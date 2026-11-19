@@ -85,11 +85,12 @@ const Dfa = struct {
     fn init(allocator: std.mem.Allocator, instruction_count: usize, ascii_only: bool) std.mem.Allocator.Error!Dfa {
         var arena = std.heap.ArenaAllocator.init(allocator);
         errdefer arena.deinit();
-        const scratch = try allocator.alloc(u32, instruction_count);
-        errdefer allocator.free(scratch);
-        const seen = try allocator.alloc(u32, instruction_count);
+        const buffers = try allocator.alloc(u32, instruction_count * 2);
+        errdefer allocator.free(buffers);
+        const scratch = buffers[0..instruction_count];
+        const seen = buffers[instruction_count..];
         @memset(seen, 0);
-        const unicode_cache = try allocator.alloc(UnicodeEntry, unicode_cache_size);
+        const unicode_cache: []UnicodeEntry = if (ascii_only) &.{} else try allocator.alloc(UnicodeEntry, unicode_cache_size);
         errdefer allocator.free(unicode_cache);
         @memset(unicode_cache, .{});
         return .{
@@ -107,8 +108,7 @@ const Dfa = struct {
         self.index.deinit(self.allocator);
         self.ascii_table.deinit(self.allocator);
         self.allocator.free(self.unicode_cache);
-        self.allocator.free(self.scratch);
-        self.allocator.free(self.seen);
+        self.allocator.free(self.scratch.ptr[0 .. self.scratch.len + self.seen.len]);
         self.arena.deinit();
         self.* = undefined;
     }
