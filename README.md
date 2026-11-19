@@ -359,13 +359,13 @@ busy Apple Silicon host (absolute numbers vary with load):
 | Qwen tokenizer `find` (22 KiB) | ~842 µs | ~47 µs (508 MiB/s) |
 | CJK tokenizer `find` (191 KiB) | — | ~164 µs (~1.1 GiB/s) |
 | `\p{Han}+` class scan (191 KiB) | ~635 µs | ~125 µs (1.5 GiB/s) |
-| Full match, Han class (191 KiB) | — | ~204 µs (~800 MiB/s) |
+| Full match, Han loop `(?:\p{Han}+\n)+` (191 KiB) | — | ~54 µs (~3.4 GiB/s) |
 | Full match, ASCII class (216 KiB) | — | ~52 µs (~4.0 GiB/s) |
 | Full match, ASCII loop (216 KiB) | — | ~74 µs (~2.8 GiB/s) |
 | `replaceAll` `a+` (32 KiB) | ~265 µs | ~69 µs |
 | `find` literal after a 4 KiB prefix | — | ~85 ns |
 | `find` xDS-like after a 4 KiB prefix | — | ~215 ns |
-| `find` multi-literal after a 4 KiB prefix | ~2.0 µs | ~1.4 µs |
+| `find` multi-literal after a 4 KiB prefix | ~2.0 µs | ~0.28 µs (14 GiB/s) |
 | `find` capture email tokens (18 KiB) | ~161 µs | ~11 µs |
 | `find` capture no-match scan (23 KiB) | ~617 µs | ~2.2 µs |
 | `find` loop-exit no-match (23 KiB) | ~120 µs | ~4.7 µs |

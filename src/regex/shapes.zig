@@ -423,3 +423,36 @@ pub fn setLoop(program: Program) ?SetLoop {
     }
     return .{ .a = a.set, .b = b.set };
 }
+
+/// `(?:set+ sep)+` over a non-ASCII set with a single literal separator
+/// byte (`(?:\p{Han}+\n)+`). Each iteration is a non-empty run of `set`
+/// followed by one separator; the separator must not be a member.
+pub const Utf8Loop = struct { run: model.Set, separator: u8 };
+
+pub fn utf8Loop(program: Program) ?Utf8Loop {
+    if (program.capture_count != 0 or program.extended) return null;
+    const ins = program.instructions;
+    if (ins.len != 9) return null;
+    if (std.meta.activeTag(ins[0]) != .accept or std.meta.activeTag(ins[1]) != .sub_accept or
+        std.meta.activeTag(ins[2]) != .ret) return null;
+    if (std.meta.activeTag(ins[3]) != .save or std.meta.activeTag(ins[4]) != .split or
+        std.meta.activeTag(ins[5]) != .literal_byte or std.meta.activeTag(ins[6]) != .star or
+        std.meta.activeTag(ins[7]) != .consume or std.meta.activeTag(ins[8]) != .save) return null;
+    if (program.start != 8 or program.body != 7) return null;
+    const save1 = ins[3].save;
+    if (save1.slot != 1 or save1.next != program.accept) return null;
+    const split = ins[4].split;
+    if (split.alternation or split.left != 7 or split.right != 3) return null;
+    const separator = ins[5].literal_byte;
+    if (separator.next != 4) return null;
+    const star = ins[6].star;
+    if (star.next != 5) return null;
+    const a = ins[7].consume;
+    if (a.next != 6) return null;
+    const save0 = ins[8].save;
+    if (save0.slot != 0 or save0.next != 7) return null;
+    if (!sameSet(a.set, star.set)) return null;
+    if (a.set.ranges.len == 0 or a.set.ascii_only) return null;
+    if (a.set.matches(separator.value)) return null;
+    return .{ .run = a.set, .separator = separator.value };
+}

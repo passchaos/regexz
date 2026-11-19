@@ -61,22 +61,47 @@ pub fn indexOfPair(input: []const u8, start: usize, a: u8, b: u8) ?usize {
 pub const PairSet = struct {
     literals: []const []const u8,
     bits: [8192]u8 = .{0} ** 8192,
+    /// First-byte SIMD prefilter, enabled only for sparse first-byte sets:
+    /// when the set covers many bytes the vector scan would hit on most
+    /// chunks and lose to the byte-at-a-time pair probe.
+    first: FirstFilter = undefined,
+    use_first: bool = false,
 
     /// Returns null unless every literal is at least two bytes (a shorter
     /// literal could occur without a pair hit).
     pub fn init(literals: []const []const u8) ?PairSet {
         if (literals.len == 0) return null;
         var set = PairSet{ .literals = literals };
+        var first = model.FirstSet{ .nonascii = false };
+        var ascii_count: usize = 0;
+        var nonascii = false;
         for (literals) |literal| {
             if (literal.len < 2) return null;
             const pair = (@as(u16, literal[0]) << 8) | literal[1];
             set.bits[pair >> 3] |= @as(u8, 1) << @intCast(pair & 7);
+            const byte = literal[0];
+            if (byte < 0x80) {
+                const word = &first.ascii[byte >> 6];
+                const bit = @as(u64, 1) << @intCast(byte & 63);
+                if (word.* & bit == 0) {
+                    word.* |= bit;
+                    ascii_count += 1;
+                }
+            } else {
+                nonascii = true;
+            }
+        }
+        // Sparse sets skip most chunks; dense sets keep the plain byte loop.
+        if (!nonascii and ascii_count <= max_simd_bytes) {
+            set.first = FirstFilter.init(first);
+            set.use_first = true;
         }
         return set;
     }
 
     /// First offset at or after `start` where a literal occurs, or null.
     pub fn indexOfAny(self: *const PairSet, input: []const u8, start: usize) ?usize {
+        if (self.use_first) return self.indexOfAnySparse(input, start);
         var offset = start;
         while (offset + 1 < input.len) : (offset += 1) {
             const first = input[offset];
@@ -86,6 +111,28 @@ pub const PairSet = struct {
                 if (literal[0] != first or literal[1] != input[offset + 1]) continue;
                 if (literal.len <= input.len - offset and std.mem.eql(u8, input[offset..][0..literal.len], literal)) return offset;
             }
+        }
+        return null;
+    }
+
+    /// Sparse first-byte variant: the SIMD filter jumps between candidate
+    /// bytes, so the pair table is read only at plausible starts.
+    fn indexOfAnySparse(self: *const PairSet, input: []const u8, start: usize) ?usize {
+        var offset = start;
+        while (offset + 1 < input.len) {
+            offset = self.first.indexOf(input, offset) orelse return null;
+            if (offset + 1 >= input.len) return null;
+            const first = input[offset];
+            const pair = (@as(u16, first) << 8) | input[offset + 1];
+            if (self.bits[pair >> 3] & (@as(u8, 1) << @intCast(pair & 7)) == 0) {
+                offset += 1;
+                continue;
+            }
+            for (self.literals) |literal| {
+                if (literal[0] != first or literal[1] != input[offset + 1]) continue;
+                if (literal.len <= input.len - offset and std.mem.eql(u8, input[offset..][0..literal.len], literal)) return offset;
+            }
+            offset += 1;
         }
         return null;
     }

@@ -182,7 +182,7 @@ Measured on an Apple Silicon macOS host. "Before" is the initial commit state;
 | Qwen tokenizer search, 22 KiB | ~842 µs | ~47 µs (~508 MiB/s) | ~59 µs* (~400 MiB/s) | ~195 µs |
 | CJK tokenizer search, 191 KiB | — | ~164 µs (~1.1 GiB/s) | ~200–216 µs* (864–933 MiB/s) | — |
 | Han class scan, 191 KiB | — | ~125 µs (1.5 GiB/s) | ~157–169 µs (1104 MiB/s) | — |
-| Full match, Han class, 191 KiB | — | ~190–205 µs (~830 MiB/s) | ~213 µs | — |
+| Full match, Han loop `(?:\p{Han}+\n)+`, 191 KiB | — | ~54 µs (~3.4 GiB/s) | ~213 µs | — |
 | Full match, ASCII class, 216 KiB | — | ~52 µs (~4.0 GiB/s) | ~54 µs | — |
 | Full match, ASCII loop, 216 KiB | — | ~79 µs (~2.6 GiB/s) | ~273 µs | — |
 | Full match, backref `(a)\1` (reuse) | ~5.5 µs | ~17 ns | — | — |
@@ -194,7 +194,7 @@ Measured on an Apple Silicon macOS host. "Before" is the initial commit state;
 | Byte escape scan `\C+`, 23 KiB | — | ~8 ns/pass (one full-span match) | not supported | — |
 | Shared-prefix alternation no-match, 23 KiB | — | ~1.55 µs (15.5 GiB/s) | ~2.1 µs (11.4 GiB/s) | — |
 | `find` selective pattern (`\p{N}`) | — | ~36 ns/piece | — | — |
-| `find` multi-literal after a 4 KiB prefix | ~2.0 µs | ~0.22 µs | — | — |
+| `find` multi-literal after a 4 KiB prefix | ~2.0 µs | ~0.28 µs (14 GiB/s) | — | — |
 | `find` capture email tokens, 18 KiB | ~161 µs | ~10.5 µs (~1.6 GiB/s) | ~29 µs | — |
 | `find` capture no-match scan, 23 KiB | ~617 µs | ~2.2 µs | ~2.0 µs | — |
 | `find` `.*foo` no-match, 23 KiB | ~3.1 ms | ~0.8 µs | ~31 µs | — |

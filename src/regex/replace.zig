@@ -13,6 +13,7 @@ const pike = @import("pike.zig");
 const backtrack = @import("backtrack.zig");
 const search_dfa = @import("search_dfa.zig");
 const utf8_set = @import("utf8_set.zig");
+const utf8_run_mod = @import("utf8_run.zig");
 const prefilter = @import("prefilter.zig");
 const shapes = @import("shapes.zig");
 const subst = @import("substitution.zig");
@@ -103,7 +104,7 @@ pub const Workspace = struct {
     chain_tables: ?ChainTables = null,
     /// Expanded UTF-8 automaton for a non-ASCII `set+` program (`\p{Han}+`):
     /// one 256-entry transition row per state.
-    utf8_run: ?Utf8Run = null,
+    utf8_run: ?utf8_run_mod.Utf8Run = null,
     /// Dedicated scan for a dominant alternation branch (tokenizer shape).
     fast_branch: ?FastBranch = null,
     /// The first set covers most of the alphabet, so the start prefilter
@@ -144,15 +145,15 @@ pub const Workspace = struct {
         errdefer if (pair_filter) |filter| allocator.destroy(filter);
         const simple_chain = if (limits.longest) null else shapes.chain(program);
         const set_run = if (limits.longest) null else shapes.setRun(program);
-        const utf8_run: ?Utf8Run = if (set_run) |set|
-            (if (set.ascii_only) null else try Utf8Run.init(allocator, set))
+        const utf8_run: ?utf8_run_mod.Utf8Run = if (set_run) |set|
+            (if (set.ascii_only) null else try utf8_run_mod.Utf8Run.init(allocator, set))
         else
             null;
         errdefer if (utf8_run) |*value| value.deinit(allocator);
         const fast_branch: ?FastBranch = if (program.fast_branch) |plan| blk: {
-            var run_table = try Utf8Run.init(allocator, plan.run);
+            var run_table = try utf8_run_mod.Utf8Run.init(allocator, plan.run);
             errdefer run_table.deinit(allocator);
-            const prefix: ?Utf8Run = if (plan.prefix) |set| try Utf8Run.init(allocator, set) else null;
+            const prefix: ?utf8_run_mod.Utf8Run = if (plan.prefix) |set| try utf8_run_mod.Utf8Run.init(allocator, set) else null;
             break :blk .{
                 .prior = prefilter.FirstFilter.init(plan.prior_first),
                 .prefix = prefix,
@@ -755,7 +756,7 @@ pub const Workspace = struct {
     /// `set+` for a non-ASCII set: walk the UTF-8 automaton one byte per
     /// transition. The first-byte filter skips spans that cannot start a
     /// member rune; `accept` marks a complete in-set rune.
-    fn findSetRunUtf8(self: *Workspace, utf8: *const Utf8Run, input: []const u8, search_start: usize) ?Match {
+    fn findSetRunUtf8(self: *Workspace, utf8: *const utf8_run_mod.Utf8Run, input: []const u8, search_start: usize) ?Match {
         const table = utf8.table;
         var offset = search_start;
         var state: u16 = 0;
@@ -1608,74 +1609,13 @@ fn runeLenAt(input: []const u8, offset: usize) usize {
 /// Start of the maximal `set` run ending at `separator_at`, clamped to
 /// `floor`. Bytes outside an ASCII-only set never match, so the backward
 /// scan is byte-wise in that case.
-/// Expanded UTF-8 automaton for a non-ASCII `set+` program. Each state owns a
-/// 256-entry transition row, so the run scan is one table load per byte.
-const Utf8Run = struct {
-    table: []u16,
-
-    fn init(allocator: std.mem.Allocator, set: model.Set) std.mem.Allocator.Error!Utf8Run {
-        var automaton = try utf8_set.build(allocator, set.ranges);
-        defer automaton.deinit(allocator);
-        const states = automaton.stateCount();
-        const table = try allocator.alloc(u16, states * 256);
-        errdefer allocator.free(table);
-        for (0..states) |state| {
-            for (0..256) |byte| {
-                table[state * 256 + byte] = automaton.advance(@intCast(state), @intCast(byte));
-            }
-        }
-        return .{ .table = table };
-    }
-
-    fn deinit(self: *const Utf8Run, allocator: std.mem.Allocator) void {
-        allocator.free(self.table);
-    }
-
-    /// Length of the rune at `offset` when it is a member, else null.
-    fn runeAt(self: *const Utf8Run, input: []const u8, offset: usize) ?usize {
-        var state: u16 = 0;
-        var index = offset;
-        while (index < input.len) {
-            const next = self.table[@as(usize, state) * 256 + input[index]];
-            if (next == utf8_set.accept) return index - offset + 1;
-            if (next == utf8_set.dead) return null;
-            state = next;
-            index += 1;
-        }
-        return null;
-    }
-
-    /// End of the maximal member run starting at `offset`.
-    fn runEnd(self: *const Utf8Run, input: []const u8, offset: usize) usize {
-        var end = offset;
-        var rune_begin = offset;
-        var state: u16 = 0;
-        while (end < input.len) {
-            const next = self.table[@as(usize, state) * 256 + input[end]];
-            if (next == utf8_set.accept) {
-                state = 0;
-                end += 1;
-                rune_begin = end;
-            } else if (next == utf8_set.dead) {
-                end = rune_begin;
-                break;
-            } else {
-                state = next;
-                end += 1;
-            }
-        }
-        if (state != 0) end = rune_begin;
-        return end;
-    }
-};
-
 /// A dominant alternation branch (`set? setB+`) with its UTF-8 automata.
 /// When the byte at the search start cannot begin an earlier branch, this
 /// branch alone decides the match, so a dedicated run scan replaces the DFA.
 const FastBranch = struct {
     prior: prefilter.FirstFilter,
-    prefix: ?Utf8Run,
-    run: Utf8Run,
+    prefix: ?utf8_run_mod.Utf8Run,
+    run: utf8_run_mod.Utf8Run,
 
     fn deinit(self: *FastBranch, allocator: std.mem.Allocator) void {
         if (self.prefix) |*prefix| prefix.deinit(allocator);

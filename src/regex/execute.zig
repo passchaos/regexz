@@ -7,6 +7,7 @@ const Program = @import("compile.zig").Program;
 const budget_mod = @import("budget.zig");
 const newline = @import("newline.zig");
 const shapes = @import("shapes.zig");
+const utf8_run_mod = @import("utf8_run.zig");
 pub const Stats = struct { input_bytes: usize = 0, states_visited: usize = 0 };
 pub const PartialResult = model.PartialResult;
 const Position = struct {
@@ -134,6 +135,14 @@ pub const Workspace = struct {
     simple_loop: bool = false,
     loop_a: [256]bool = .{false} ** 256,
     loop_b: [256]bool = .{false} ** 256,
+    /// Non-ASCII `set+` (`\p{Han}+`): one expanded UTF-8 automaton decides a
+    /// full match with one table load per byte instead of the DFA.
+    utf8_run: ?utf8_run_mod.Utf8Run = null,
+    /// Non-ASCII `(?:set+ sep)+` (`(?:\p{Han}+\n)+`): runs of `set`
+    /// separated by one literal byte.
+    utf8_loop: ?Utf8Loop = null,
+
+    const Utf8Loop = struct { run: utf8_run_mod.Utf8Run, separator: u8 };
     pub fn init(allocator: std.mem.Allocator, program: Program) std.mem.Allocator.Error!Workspace {
         const storage = try allocator.alloc(u32, program.instructions.len * 6);
         errdefer allocator.free(storage);
@@ -151,9 +160,22 @@ pub const Workspace = struct {
             for (0..128) |byte| workspace.loop_a[byte] = loop.a.matches(@intCast(byte));
             for (0..128) |byte| workspace.loop_b[byte] = loop.b.matches(@intCast(byte));
         }
+        if (shapes.setRun(program)) |set| {
+            if (!set.ascii_only) {
+                workspace.utf8_run = try utf8_run_mod.Utf8Run.init(allocator, set);
+            }
+        }
+        if (shapes.utf8Loop(program)) |loop| {
+            workspace.utf8_loop = .{
+                .run = try utf8_run_mod.Utf8Run.init(allocator, loop.run),
+                .separator = loop.separator,
+            };
+        }
         return workspace;
     }
     pub fn deinit(self: *Workspace) void {
+        if (self.utf8_run) |*run| run.deinit(self.allocator);
+        if (self.utf8_loop) |*loop| loop.run.deinit(self.allocator);
         if (self.dfa) |*dfa| dfa.deinit();
         self.allocator.free(self.storage);
         self.allocator.free(self.seen);
@@ -450,6 +472,11 @@ pub const Workspace = struct {
             return true;
         }
         if (self.simple_loop) return self.matchesSetLoop(input);
+        if (self.utf8_run) |*run| {
+            if (input.len == 0) return false;
+            return run.runEnd(input, 0) == input.len;
+        }
+        if (self.utf8_loop) |*loop| return self.matchesUtf8Loop(loop, input);
         if (program.dfa_eligible and !self.dfa_failed) {
             const use_dfa = input.len >= dfa_min_input or self.dfa_calls >= dfa_warmup_calls;
             if (use_dfa) {
@@ -468,6 +495,19 @@ pub const Workspace = struct {
             if (offset >= input.len or !self.loop_b[input[offset]]) return false;
             offset += 1;
             if (offset >= input.len) return true;
+        }
+    }
+
+    fn matchesUtf8Loop(self: *Workspace, loop: *const Utf8Loop, input: []const u8) bool {
+        _ = self;
+        if (input.len == 0) return false;
+        var offset: usize = 0;
+        while (true) {
+            const run_end = loop.run.runEnd(input, offset);
+            if (run_end == offset) return false;
+            if (run_end >= input.len or input[run_end] != loop.separator) return false;
+            offset = run_end + 1;
+            if (offset == input.len) return true;
         }
     }
 
