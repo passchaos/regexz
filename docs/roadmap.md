@@ -316,7 +316,13 @@ Where the remaining time goes:
 1. ~~**Callouts `(?C...)`, `(*THEN)`, and mark retrieval**~~: done. Numeric
    and string callouts, `(*THEN)`, and `(*MARK:name)` via `Match.mark`.
 2. ~~**True streaming scanner**~~: done. `StreamScanner` persists NFA state
-   across chunks for non-extended, rune-based programs.
+   across chunks for non-extended, rune-based programs. The simple set and
+   chain paths now use 256-byte membership tables for ASCII sets ([a-z]+
+   1.3 GiB/s, [a-z]* 1.1 GiB/s, chain 757 MiB/s). A UTF-8-automaton chain
+   scan for non-ASCII runs (Han chain) was implemented and reverted: the
+   per-rune automaton probe measured ~2.2x slower than decode + range
+   search because the separator punctuation forces a full-rune skip that
+   the automaton cannot reuse.
 3. ~~**`\C` in DFA/Pike**~~: done. Programs with `\C` force the DFA byte
    construction, where the escape is an any-byte transition; the Pike VM
    steps one byte for `\C`, so capture programs keep the linear path.

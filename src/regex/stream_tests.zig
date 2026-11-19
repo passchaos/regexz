@@ -295,3 +295,45 @@ test "streaming scanner skips invalid bytes after empty matches" {
         }
     }
 }
+
+test "stream scanner agrees with find across shapes and chunk sizes" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const patterns = [_][]const u8{
+        "\\p{Han}+",
+        "\\p{Han}+\u{ff0c}\\p{Han}+",
+        "[a-z]+",
+        "[a-z]*",
+        "[a-z]+ [a-z]+",
+        "\\w+@\\w+",
+        "\\d+",
+        "a+?",
+        "(?m)^\\w+",
+        "[^\\s]+",
+        "(\\w+)@(\\w+)",
+        "a*b",
+    };
+    const inputs = [_][]const u8{
+        "",
+        "hello world 123",
+        "\u{4f60}\u{597d}\u{ff0c}\u{4e16}\u{754c}\n\u{4f60}\u{597d}\u{ff0c}x",
+        "a,b c\u{4f60}\u{597d}\u{ff0c}\u{4e16}\u{754c}",
+        "  \t\n  ",
+        "abc\u{00e9}def",
+        "user@host other@site",
+        "aaab ab aab",
+        "x",
+    };
+    for (patterns) |pattern| {
+        for (inputs) |input| {
+            for ([_]usize{ 1, 2, 3, 5, 16, 4096 }) |chunk| {
+                expectScannerMatches(allocator, pattern, input, chunk, .{}) catch |err| {
+                    std.debug.print("stream mismatch: pattern={s} input={s} chunk={d}\n", .{ pattern, input, chunk });
+                    return err;
+                };
+            }
+        }
+    }
+}
