@@ -228,7 +228,10 @@ same-host Rust reference at ~3.9 GiB/s) and short validation inputs pay ~7 ns
 instead of a DFA call. Streaming runs stay deterministic: `[a-z]+` streams
 at ~650 MiB/s, `[a-z]+ [a-z]+` at ~585 MiB/s, and the `set*` scan (which must
 also report the empty matches between runs) at ~416 MiB/s, 6.9× faster than
-the generic thread list. The `RegexSet` DFA flattens its per-state ASCII
+the generic thread list. The streaming chain now shares the search-side
+detector, so `set+ literal` shapes without a trailing run and multi-byte
+separators stream directly: `\w+@` went from ~54 MiB/s to ~517 MiB/s and
+`\w+ 12345` from ~53 MiB/s to ~532 MiB/s. The `RegexSet` DFA flattens its per-state ASCII
 rows and accept masks into power-of-two-stride tables, taking the 9-pattern
 no-match scan from ~63 µs to ~40 µs; up to 32 patterns also pack the
 accept mask into the 64-bit transition entry, removing a dependent load.

@@ -312,6 +312,7 @@ busy Apple Silicon host (absolute numbers vary with load):
 | `StreamScanner` `[a-z]+` (216 KiB, 4 KiB chunks) | ~31 ms | ~0.32 ms (650 MiB/s) |
 | `StreamScanner` `[a-z]*` (216 KiB, 4 KiB chunks) | ~3.5 ms | ~0.51 ms (416 MiB/s) |
 | `StreamScanner` `[a-z]+ [a-z]+` (216 KiB, 4 KiB chunks) | — | ~0.36 ms (585 MiB/s) |
+| `StreamScanner` `\w+@` (18 KiB, 4 KiB chunks) | ~2.9 ms | ~0.032 ms (517 MiB/s) |
 | `StreamScanner` Han chain (191 KiB, 4 KiB chunks) | — | ~0.41 ms (456 MiB/s) |
 | `find` ASCII run `[a-z]+` (216 KiB) | ~27.6 µs | ~18 µs (1.3 GiB/s) |
 | Qwen tokenizer `find` (22 KiB) | ~842 µs | ~68 µs (350 MiB/s) |

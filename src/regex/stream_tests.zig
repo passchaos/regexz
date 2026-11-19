@@ -216,6 +216,12 @@ test "streaming chain fast path handles chunk boundaries" {
         .{ .pattern = "[a-z]+ [a-z]+", .input = "  lead and trail  " },
         .{ .pattern = "\\p{Han}+\u{ff0c}\\p{Han}+", .input = "\u{4f60}\u{597d}\u{ff0c}\u{4e16}\u{754c}\u{ff0c}abc" },
         .{ .pattern = "\\p{L}+\u{00e9}\\p{L}+", .input = "caf\u{00e9}bar x" },
+        // Chains without a trailing run, and multi-byte separators.
+        .{ .pattern = "\\w+@", .input = "ab@cd@ e@f" },
+        .{ .pattern = "\\w+ 12345", .input = "a 12345 b 12345 c" },
+        .{ .pattern = "\\d+-", .input = "12-345-6 x" },
+        .{ .pattern = "\\w+::", .input = "ab::cd:: e" },
+        .{ .pattern = "\\p{Han}+\u{ff0c}", .input = "\u{4f60}\u{597d}\u{ff0c}\u{4e16}\u{754c}" },
     };
     for (cases) |case| {
         for ([_]usize{ 1, 2, 3, 4, 5, 8 }) |chunk| {

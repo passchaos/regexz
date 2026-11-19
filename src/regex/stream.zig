@@ -30,7 +30,6 @@ pub const StreamMatch = struct {
 pub const EmitFn = *const fn (context: ?*anyopaque, match: StreamMatch) void;
 
 const Thread = struct { pc: u32, start: usize, slots: []usize };
-const SimpleChain = struct { set_a: model.Set, literal: [4]u8, literal_len: u8, set_b: model.Set };
 const ChainPhase = enum { idle, run_a, run_b };
 const ResetEntry = struct { slot: u16, old: usize };
 const Rune = struct { value: u21, len: usize };
@@ -97,7 +96,7 @@ pub const Scanner = struct {
     star_start: ?usize = null,
     /// A `set+ literal set+` program (with the literal outside the first set)
     /// scans deterministically.
-    simple_chain: ?SimpleChain = null,
+    simple_chain: ?shapes.Chain = null,
     chain_phase: ChainPhase = .idle,
     chain_start: usize = 0,
     chain_b_start: usize = 0,
@@ -160,7 +159,7 @@ pub const Scanner = struct {
             .capture_free = program.capture_count == 0,
             .simple_set = if (limits.longest) null else shapes.setRun(program),
             .simple_star = if (limits.longest) null else shapes.setStar(program),
-            .simple_chain = if (limits.longest) null else detectSimpleChain(program),
+            .simple_chain = if (limits.longest) null else detectStreamChain(program),
             .seen = seen,
         };
     }
@@ -430,77 +429,44 @@ pub const Scanner = struct {
         }
     }
 
-    fn sameSet(a: model.Set, b: model.Set) bool {
-        if (a.ranges.len != b.ranges.len) return false;
-        for (a.ranges, b.ranges) |left, right| {
-            if (left.first != right.first or left.last != right.last) return false;
-        }
-        return true;
-    }
-
     /// Recognize the compiled shape of `setA+ literal setB+` with a one-byte
     /// literal outside `setA`, which makes the match deterministic.
-    fn detectSimpleChain(program: Program) ?SimpleChain {
-        if (program.capture_count != 0 or program.extended) return null;
-        const ins = program.instructions;
-        if (ins.len != 10) return null;
-        if (std.meta.activeTag(ins[0]) != .accept or std.meta.activeTag(ins[1]) != .sub_accept or
-            std.meta.activeTag(ins[2]) != .ret or std.meta.activeTag(ins[3]) != .save or
-            std.meta.activeTag(ins[4]) != .star or std.meta.activeTag(ins[5]) != .consume or
-            std.meta.activeTag(ins[7]) != .star or std.meta.activeTag(ins[8]) != .consume or
-            std.meta.activeTag(ins[9]) != .save) return null;
-        if (program.start != 9 or program.body != 8) return null;
-        const save1 = ins[3].save;
-        if (save1.slot != 1 or save1.next != program.accept) return null;
-        const star_b = ins[4].star;
-        const consume_b = ins[5].consume;
-        if (star_b.next != 3 or star_b.backtrack or consume_b.next != 4) return null;
-        var literal_value: u21 = undefined;
-        var literal: [4]u8 = undefined;
-        var literal_len: u8 = 0;
-        switch (ins[6]) {
-            .literal_byte => |value| {
-                if (value.next != 5) return null;
-                literal_value = value.value;
-                literal[0] = value.value;
-                literal_len = 1;
-            },
-            .literal_rune => |value| {
-                if (value.next != 5) return null;
-                literal_value = value.value;
-                literal_len = std.unicode.utf8Encode(value.value, &literal) catch return null;
-            },
-            else => return null,
+    /// The shared chain detector, restricted to the shapes the streaming
+    /// scanner emits directly: unbounded runs (a fixed count would need
+    /// exact-position emission) and an optional trailing run.
+    fn detectStreamChain(program: Program) ?shapes.Chain {
+        // The direct scan reports only the whole match, so capture shapes
+        // stay on the NFA, which tracks group slots.
+        if (program.capture_count != 0) return null;
+        const chain = shapes.chain(program) orelse return null;
+        if (!chain.star_a) return null;
+        if (chain.set_b) |_| {
+            if (!chain.star_b) return null;
         }
-        const star_a = ins[7].star;
-        const consume_a = ins[8].consume;
-        // The first star backtracks in general, but the literal is outside its
-        // set, so no position inside the run can match it.
-        if (star_a.next != 6 or consume_a.next != 7) return null;
-        const save0 = ins[9].save;
-        if (save0.slot != 0 or save0.next != 8) return null;
-        if (!sameSet(star_a.set, consume_a.set) or !sameSet(star_b.set, consume_b.set)) return null;
-        if (star_a.set.matches(literal_value)) return null;
-        return .{ .set_a = star_a.set, .literal = literal, .literal_len = literal_len, .set_b = star_b.set };
+        return chain;
     }
 
     const LiteralMatch = union(enum) { match: u8, incomplete, no };
 
     fn chainLiteralAt(self: *Scanner, rel: usize) LiteralMatch {
         const chain = self.simple_chain.?;
-        const literal = chain.literal[0..chain.literal_len];
+        const literal = chain.separator[0..chain.separator_len];
         const available = self.buffer.items.len - rel;
         if (available < literal.len) {
             if (std.mem.eql(u8, self.buffer.items[rel..], literal[0..available])) return .incomplete;
             return .no;
         }
-        if (std.mem.eql(u8, self.buffer.items[rel..][0..literal.len], literal)) return .{ .match = chain.literal_len };
+        if (std.mem.eql(u8, self.buffer.items[rel..][0..literal.len], literal)) return .{ .match = chain.separator_len };
         return .no;
     }
 
     fn emitChain(self: *Scanner, context: ?*anyopaque, emit: EmitFn) void {
+        const chain = self.simple_chain.?;
         const end = self.buffer_base + self.scan;
-        if (end > self.chain_b_start) self.emitSimple(context, emit, self.chain_start, end);
+        if (end - self.chain_b_start < chain.min_b) return;
+        const separator_at = self.chain_b_start - chain.separator_len;
+        if (separator_at - self.chain_start < chain.min_a) return;
+        self.emitSimple(context, emit, self.chain_start, end);
     }
 
     fn processChain(self: *Scanner, context: ?*anyopaque, emit: EmitFn, at_eof: bool) model.Error!void {
@@ -530,9 +496,19 @@ pub const Scanner = struct {
                             self.scan += rune.len;
                         } else switch (self.chainLiteralAt(self.scan)) {
                             .match => |length| {
+                                const separator_at = self.buffer_base + self.scan;
                                 self.scan += length;
-                                self.chain_phase = .run_b;
-                                self.chain_b_start = self.buffer_base + self.scan;
+                                if (chain.set_b == null) {
+                                    // No trailing run: the match ends with the
+                                    // separator and cannot extend.
+                                    if (separator_at - self.chain_start >= chain.min_a) {
+                                        self.emitSimple(context, emit, self.chain_start, self.buffer_base + self.scan);
+                                    }
+                                    self.chain_phase = .idle;
+                                } else {
+                                    self.chain_phase = .run_b;
+                                    self.chain_b_start = self.buffer_base + self.scan;
+                                }
                             },
                             .incomplete => {
                                 if (!at_eof) break;
@@ -552,7 +528,7 @@ pub const Scanner = struct {
                 },
                 .run_b => switch (status) {
                     .valid => |rune| {
-                        if (chain.set_b.matches(rune.value)) {
+                        if (chain.set_b.?.matches(rune.value)) {
                             self.scan += rune.len;
                         } else {
                             self.emitChain(context, emit);
