@@ -178,28 +178,39 @@ Measured on an Apple Silicon macOS host. "Before" is the initial commit state;
 | Full match, class pattern (reused workspace) | ~171 ns | ~8 ns | ~10 ns | ~14 ns |
 | Full match, xDS-like (reused) | ~233 ns | ~15–17 ns | ~11 ns | ~11 ns |
 | Full match, Unicode (reused) | ~64 ns | ~12 ns | ~8 ns | ~13 ns |
-| Qwen tokenizer search, 22 KiB | ~842 µs | ~68 µs (353 MiB/s) | ~56 µs* (427 MiB/s) | ~195 µs |
-| CJK tokenizer search, 191 KiB | — | ~200–230 µs (~850–980 MiB/s) | ~216 µs* (864 MiB/s) | — |
-| Han class scan, 191 KiB | — | ~173–200 µs (940–1080 MiB/s) | ~169 µs (1104 MiB/s) | — |
-| Full match, Han class, 191 KiB | — | ~204 µs (~800 MiB/s) | — | — |
-| Full match, ASCII class, 216 KiB | — | ~78 µs (~2.7 GiB/s) | — | — |
-| Full match, ASCII loop, 216 KiB | — | ~376 µs (~555 MiB/s) | — | — |
+| Qwen tokenizer search, 22 KiB | ~842 µs | ~66 µs (~350 MiB/s) | ~59 µs* (~400 MiB/s) | ~195 µs |
+| CJK tokenizer search, 191 KiB | — | ~200–230 µs (~850–980 MiB/s) | ~200–216 µs* (864–933 MiB/s) | — |
+| Han class scan, 191 KiB | — | ~173–220 µs (940–1080 MiB/s) | ~157–169 µs (1104 MiB/s) | — |
+| Full match, Han class, 191 KiB | — | ~190–205 µs (~830 MiB/s) | ~213 µs | — |
+| Full match, ASCII class, 216 KiB | — | ~52 µs (~4.0 GiB/s) | ~54 µs | — |
+| Full match, ASCII loop, 216 KiB | — | ~310 µs (~675 MiB/s) | ~273 µs | — |
 | Full match, backref `(a)\1` (reuse) | ~5.5 µs | ~17 ns | — | — |
 | Full match, atomic `(?>a+)a` (reuse) | ~5.2 µs | ~23 ns | — | — |
 | `StreamScanner` `[a-z]+`, 216 KiB in 4 KiB chunks | ~31 ms | ~0.32 ms (650 MiB/s) | — | — |
 | `StreamScanner` `[a-z]+ [a-z]+`, 216 KiB in 4 KiB chunks | — | ~0.36 ms (585 MiB/s) | — | — |
-| `StreamScanner` Han chain `\p{Han}+，\p{Han}+`, 191 KiB in 4 KiB chunks | — | ~0.41 ms (456 MiB/s) | — | — |
+| `StreamScanner` Han chain `\p{Han}+，\p{Han}+`, 191 KiB in 4 KiB chunks | — | ~0.39 ms (478 MiB/s) | — | — |
+| `StreamScanner` `\w+@`, 18 KiB in 4 KiB chunks | ~2.9 ms | ~0.032 ms (517 MiB/s) | — | — |
 | Byte escape scan `\C+`, 23 KiB | — | ~8 ns/pass (one full-span match) | not supported | — |
 | Shared-prefix alternation no-match, 23 KiB | — | ~1.55 µs (15.5 GiB/s) | ~2.1 µs (11.4 GiB/s) | — |
 | `find` selective pattern (`\p{N}`) | — | ~36 ns/piece | — | — |
 | `find` multi-literal after a 4 KiB prefix | ~2.0 µs | ~0.22 µs | — | — |
-| `find` capture email tokens, 18 KiB | ~161 µs | ~68 µs | — | — |
-| `find` capture no-match scan, 23 KiB | ~617 µs | ~66 µs | — | — |
+| `find` capture email tokens, 18 KiB | ~161 µs | ~10.5 µs (~1.6 GiB/s) | ~29 µs | — |
+| `find` capture no-match scan, 23 KiB | ~617 µs | ~2.2 µs | ~2.0 µs | — |
+| `find` `.*foo` no-match, 23 KiB | ~3.1 ms | ~0.8 µs | ~31 µs | — |
+| `find` `[A-Z]+` no-match, 216 KiB | ~88 µs | ~4 µs | ~53 µs | — |
+| `find` `\d{3}-\d{4}` no-match, 23 KiB | ~19 µs | ~2.0 µs | ~1.9 µs | — |
+| `find` `(?m)^\w+`, 23 KiB | ~161 µs | ~7.3 µs | ~8.1 µs | — |
+| `find` `(?m)\w+$` no-match, 23 KiB | ~490 µs | ~30 µs | ~31 µs | — |
+| `find` `\w+\s+\w+`, 23 KiB | ~128 µs | ~35 µs | ~20 µs | — |
+| `find` large alternation (24 literals) no-match, 23 KiB | ~48 µs | ~48 µs | ~11 µs | — |
+| `find` `(?i)STRASSE` no-match, 23 KiB | ~15 µs | ~15 µs | ~2 µs | — |
 | `find` loop-exit no-match, 23 KiB | ~120 µs | ~4.7 µs | ~31.8 µs | — |
 | `find` suffix no-match, 23 KiB | ~238 µs | ~14 µs | ~155 µs | — |
 | `find` extended no-match, 23 KiB | ~275 µs | ~2.5 µs | — | — |
-| `RegexSet`, 9 no-match patterns, 23 KiB | ~1.7 ms | ~40 µs | ~104 µs | — |
-| `replaceAll` `a+`, 32 KiB | ~265 µs | ~64 µs (480 MiB/s) | ~91 µs | ~47 µs |
+| `RegexSet`, 9 no-match patterns, 23 KiB | ~1.7 ms | ~40 µs | ~38 µs | — |
+| `replaceAll` `a+`, 32 KiB | ~265 µs | ~64 µs (480 MiB/s) | ~96 µs | ~47 µs |
+| `replaceAll` capture email `$2 <$1>`, 18 KiB | — | ~39 µs (~430 MiB/s) | ~84 µs (~200 MiB/s) | — |
+| `replaceAll` word capture `[$1]`, 23 KiB | — | ~209 µs (~115 MiB/s) | ~723 µs (~33 MiB/s) | — |
 | Compile xDS-like pattern | ~2.9 µs | ~3.1–3.9 µs | ~10.8 µs | ~61 ns† |
 | Compile xDS-like (smp allocator) | — | ~1.5 µs | — | — |
 
@@ -253,6 +264,13 @@ against `tools/bench/baseline.json`.
 
 Where the remaining time goes:
 
+- **Multi-literal prefilters**: a 24-literal alternation with distinct first
+  bytes still scans candidate positions with the DFA (~48 µs on the 23 KiB
+  sample) while the same-host Rust reference finds that no literal occurs in
+  one pass (~11 µs). Case-folded literals (`(?i)STRASSE`, ~15 µs vs ~2 µs)
+  have the same shape of problem: the start filter is only the folded first
+  byte. Both need a SIMD multi-substring prefilter (Teddy-style) or an
+  Aho-Corasick automaton; that is the next large prefilter step.
 - **One-shot boolean match** now reuses a persistent workspace/DFA, but the
   lazy DFA still starts cold for each new `Regex`. Precomputing a DFA for
   small programs would remove the first-call construction cost.
