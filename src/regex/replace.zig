@@ -21,7 +21,6 @@ const required_literals = @import("required_literals.zig");
 const unicode = @import("unicode.zig");
 const unset = std.math.maxInt(usize);
 const AnchoredRun = struct { kind: model.Assertion, set: model.Set };
-const max_tracked_captures: usize = 9;
 pub const Error = model.Error;
 
 const Choice = struct { pc: usize, pos: usize, trail_len: usize, limit: usize = unset, byte_loop: bool = false };

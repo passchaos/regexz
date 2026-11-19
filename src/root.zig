@@ -95,9 +95,6 @@ pub const Matches = struct {
         self.* = undefined;
     }
 };
-/// Small programs are matched from a stack-backed workspace so the common
-/// one-shot `Regex.matches` path performs no heap allocation.
-const stack_workspace_bytes = 8192;
 /// Parse and compile into caller-owned storage. There is no `Program.deinit`:
 /// the returned program borrows its set ranges and literal bytes from `gpa`,
 /// so `gpa` must be an arena (or otherwise outlive the program and be released

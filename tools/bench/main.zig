@@ -166,6 +166,21 @@ pub fn main() !void {
     try benchMatches(io, out, "fullmatch xDS-like (reuse)", "/(?:demo|test)\\.[A-Z][A-Za-z]+/(Get|List)", path_input, 200000, true);
     try benchMatches(io, out, "fullmatch unicode (reuse)", "\\p{Greek}+\\p{Nd}", unicode_input, 200000, true);
     try benchMatches(io, out, "fullmatch (?i) literal (reuse)", "(?i)hello", ci_input, 200000, true);
+
+    {
+        // Compile-time engine: the pattern is parsed and turned into matcher
+        // code during compilation, so there is no workspace or program.
+        const ct = regexz.comptime_regex;
+        const literal_ct = ct.Regex("hello, world!");
+        const class_ct = ct.Regex("(?:foo|bar)[0-9]+");
+        const iterations = 200000;
+        var start = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds;
+        for (0..iterations) |_| std.mem.doNotOptimizeAway(literal_ct.match("hello, world!") != null);
+        try report(out, "comptime fullmatch literal", iterations, literal_input.len, elapsed(io, .{ .nanoseconds = start }));
+        start = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds;
+        for (0..iterations) |_| std.mem.doNotOptimizeAway(class_ct.match("foo42") != null);
+        try report(out, "comptime fullmatch class", iterations, 5, elapsed(io, .{ .nanoseconds = start }));
+    }
     try benchMatches(io, out, "fullmatch backref (Regex)", "(a)\\1", "aa", 200000, false);
     try benchMatches(io, out, "fullmatch atomic (Regex)", "(?>a+)a", "aa", 200000, false);
 
