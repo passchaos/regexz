@@ -225,6 +225,21 @@ pub fn main() !void {
     for (0..400) |_| try json_text.appendSlice(gpa, "{\"name\": \"value\", \"id\": 12345} ");
     try benchFind(io, out, "find JSON string literal", "\"[^\"]*\"", json_text.items, 200, .{});
 
+    var html_text: std.ArrayList(u8) = .empty;
+    defer html_text.deinit(gpa);
+    for (0..2000) |_| try html_text.appendSlice(gpa, "<div class=\"x\"><span>text</span></div> ");
+    try benchFind(io, out, "find HTML tag", "<[^>]+>", html_text.items, 200, .{});
+
+    var url_text: std.ArrayList(u8) = .empty;
+    defer url_text.deinit(gpa);
+    for (0..1500) |_| try url_text.appendSlice(gpa, "see https://example.com/a/b?c=1 and http://x.y ");
+    try benchFind(io, out, "find URL", "https?://[^\\s]+", url_text.items, 200, .{});
+
+    var word_text: std.ArrayList(u8) = .empty;
+    defer word_text.deinit(gpa);
+    for (0..3000) |_| try word_text.appendSlice(gpa, "alpha beta gamma delta epsilon ");
+    try benchFind(io, out, "find word boundary", "\\b\\w+\\b", word_text.items, 200, .{});
+
     var number_text: std.ArrayList(u8) = .empty;
     defer number_text.deinit(gpa);
     for (0..2000) |_| try number_text.appendSlice(gpa, "id=12345 n=6789 x=42 ");

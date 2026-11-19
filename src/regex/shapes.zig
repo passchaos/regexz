@@ -496,32 +496,47 @@ fn isDotExceptNewline(set: model.Set) bool {
     return false;
 }
 
-/// `save0 -> lit d -> star(set) -> lit d -> save1 -> accept` where `set` is
-/// every rune except the delimiter `d` (`"[^"]*"`). The match is the next
-/// pair of delimiters.
-pub fn delimitedRun(program: Program) ?u8 {
+/// `o [^c]* c` or `o [^c]+ c` (`"[^"]*"`, `<[^>]+>`). The match is the next
+/// delimiter pair; `non_empty` requires at least one inner rune.
+pub const Delimited = struct { open: u8, close: u8, non_empty: bool };
+
+pub fn delimitedRun(program: Program) ?Delimited {
     if (program.capture_count != 0 or program.extended) return null;
     const ins = program.instructions;
-    if (ins.len != 8) return null;
+    // `*` form: save0 -> d -> star(set) -> d -> save1 -> accept (8).
+    // `+` form: save0 -> d -> consume(set) -> star(set) -> d -> save1 -> accept (9).
+    if (ins.len != 8 and ins.len != 9) return null;
+    const plus = ins.len == 9;
     if (std.meta.activeTag(ins[0]) != .accept or std.meta.activeTag(ins[1]) != .sub_accept or
         std.meta.activeTag(ins[2]) != .ret) return null;
-    if (std.meta.activeTag(ins[3]) != .save or std.meta.activeTag(ins[4]) != .literal_byte or
-        std.meta.activeTag(ins[5]) != .star or std.meta.activeTag(ins[6]) != .literal_byte or
-        std.meta.activeTag(ins[7]) != .save) return null;
-    if (program.start != 7 or program.body != 6) return null;
+    if (std.meta.activeTag(ins[3]) != .save) return null;
+    const close_index: usize = 4;
+    if (std.meta.activeTag(ins[close_index]) != .literal_byte) return null;
+    const star_index: usize = 5;
+    if (std.meta.activeTag(ins[star_index]) != .star) return null;
+    const open_index: usize = if (plus) 7 else 6;
+    if (std.meta.activeTag(ins[open_index]) != .literal_byte) return null;
+    if (std.meta.activeTag(ins[open_index + 1]) != .save) return null;
+    if (program.start != open_index + 1 or program.body != open_index) return null;
     const save1 = ins[3].save;
     if (save1.slot != 1 or save1.next != program.accept) return null;
-    const close = ins[4].literal_byte;
+    const close = ins[close_index].literal_byte;
     if (close.next != 3) return null;
-    const star = ins[5].star;
-    if (star.next != 4) return null;
-    const open = ins[6].literal_byte;
-    if (open.next != 5) return null;
-    const save0 = ins[7].save;
-    if (save0.slot != 0 or save0.next != 6) return null;
-    if (open.value != close.value) return null;
-    if (!isAllExcept(star.set, open.value)) return null;
-    return open.value;
+    const star = ins[star_index].star;
+    if (star.next != close_index) return null;
+    if (plus) {
+        if (std.meta.activeTag(ins[6]) != .consume) return null;
+        const member = ins[6].consume;
+        if (member.next != star_index) return null;
+        if (!sameSet(member.set, star.set)) return null;
+    }
+    const open = ins[open_index].literal_byte;
+    const open_next: usize = if (plus) 6 else star_index;
+    if (open.next != open_next) return null;
+    const save0 = ins[open_index + 1].save;
+    if (save0.slot != 0 or save0.next != open_index) return null;
+    if (!isAllExcept(star.set, close.value)) return null;
+    return .{ .open = open.value, .close = close.value, .non_empty = plus };
 }
 
 /// Whether `set` matches every rune except `excluded` (which is ASCII).
@@ -535,4 +550,33 @@ fn isAllExcept(set: model.Set, excluded: u8) bool {
         if (range.first <= 0x80 and range.last >= 0x10FFFF) return true;
     }
     return false;
+}
+
+/// `\b\w+\b`: a whole-word match. Both boundaries are ASCII word
+/// boundaries, and the run set is ASCII-only.
+pub fn wordRun(program: Program) ?model.Set {
+    if (program.capture_count != 0 or program.extended) return null;
+    const ins = program.instructions;
+    if (ins.len != 9) return null;
+    if (std.meta.activeTag(ins[0]) != .accept or std.meta.activeTag(ins[1]) != .sub_accept or
+        std.meta.activeTag(ins[2]) != .ret) return null;
+    if (std.meta.activeTag(ins[3]) != .save or std.meta.activeTag(ins[4]) != .assertion or
+        std.meta.activeTag(ins[5]) != .star or std.meta.activeTag(ins[6]) != .consume or
+        std.meta.activeTag(ins[7]) != .assertion or std.meta.activeTag(ins[8]) != .save) return null;
+    if (program.start != 8 or program.body != 7) return null;
+    const save1 = ins[3].save;
+    if (save1.slot != 1 or save1.next != program.accept) return null;
+    const end_boundary = ins[4].assertion;
+    if (end_boundary.kind != .word_boundary or end_boundary.next != 3) return null;
+    const star = ins[5].star;
+    if (star.next != 4) return null;
+    const member = ins[6].consume;
+    if (member.next != 5) return null;
+    const start_boundary = ins[7].assertion;
+    if (start_boundary.kind != .word_boundary or start_boundary.next != 6) return null;
+    const save0 = ins[8].save;
+    if (save0.slot != 0 or save0.next != 7) return null;
+    if (!sameSet(member.set, star.set)) return null;
+    if (!member.set.ascii_only or member.set.ranges.len == 0) return null;
+    return member.set;
 }

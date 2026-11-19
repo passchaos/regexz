@@ -22,6 +22,19 @@ const required_literals = @import("required_literals.zig");
 const unicode = @import("unicode.zig");
 const unset = std.math.maxInt(usize);
 const AnchoredRun = struct { kind: model.Assertion, set: model.Set };
+
+/// The single deterministic fast path selected at init (the shapes are
+/// mutually exclusive).
+pub const FastKind = enum {
+    none,
+    set_run,
+    utf8_run,
+    chain,
+    anchored,
+    line,
+    delimited,
+    word,
+};
 pub const Error = model.Error;
 
 const Choice = struct { pc: usize, pos: usize, trail_len: usize, limit: usize = unset, byte_loop: bool = false };
@@ -111,8 +124,15 @@ pub const Workspace = struct {
     fast_branch: ?FastBranch = null,
     /// `(?m)^.*$`: match one line at a time with a newline scan.
     line_run: bool = false,
-    /// `"[^"]*"`: match the next delimiter pair.
-    delimited_run: ?u8 = null,
+    /// `"[^"]*"` / `<[^>]+>`: match the next delimiter pair.
+    delimited_run: ?shapes.Delimited = null,
+    /// `\b\w+\b`: match the next whole word.
+    word_run: bool = false,
+    word_run_table: [256]bool = .{false} ** 256,
+    /// The single deterministic fast path selected at init. The shapes are
+    /// mutually exclusive, so `find` dispatches with one switch instead of a
+    /// chain of optional checks on every call.
+    fast_kind: FastKind = .none,
     /// The first set covers most of the alphabet, so the start prefilter
     /// barely skips. Programs with a nullable prefix (like `.*foo`) then
     /// restart the DFA at almost every position, and one required-literal
@@ -148,6 +168,11 @@ pub const Workspace = struct {
         @memset(best_slots, unset);
         errdefer allocator.free(best_slots);
         const pair_filter = try buildPairFilter(allocator, program);
+        const word_run_set = shapes.wordRun(program);
+        var word_table: [256]bool = .{false} ** 256;
+        if (word_run_set) |set| {
+            for (0..256) |byte| word_table[byte] = set.matches(@intCast(byte));
+        }
         errdefer if (pair_filter) |filter| allocator.destroy(filter);
         const simple_chain = if (limits.longest) null else shapes.chain(program);
         const set_run = if (limits.longest) null else shapes.setRun(program);
@@ -156,6 +181,26 @@ pub const Workspace = struct {
         else
             null;
         errdefer if (utf8_run) |*value| value.deinit(allocator);
+        const simple_set: ?model.Set = if (set_run) |set| (if (set.ascii_only) set else null) else null;
+        const simple_anchored = if (limits.longest) null else detectAnchoredRun(program);
+        const line_run = shapes.lineRun(program);
+        const delimited_run = shapes.delimitedRun(program);
+        const fast_kind: FastKind = if (simple_set != null)
+            .set_run
+        else if (utf8_run != null)
+            .utf8_run
+        else if (simple_chain != null)
+            .chain
+        else if (simple_anchored != null)
+            .anchored
+        else if (line_run)
+            .line
+        else if (delimited_run != null)
+            .delimited
+        else if (word_run_set != null)
+            .word
+        else
+            .none;
         const fast_branch: ?FastBranch = if (program.fast_branch) |plan| blk: {
             var run_table = try utf8_run_mod.Utf8Run.init(allocator, plan.run);
             errdefer run_table.deinit(allocator);
@@ -174,7 +219,7 @@ pub const Workspace = struct {
             .slots = slots,
             .best_slots = best_slots,
             .pike_eligible = pike.eligible(program),
-            .simple_set = if (set_run) |set| (if (set.ascii_only) set else null) else null,
+            .simple_set = simple_set,
             .simple_set_table = blk: {
                 var table: [256]bool = .{false} ** 256;
                 if (set_run) |set| {
@@ -185,10 +230,13 @@ pub const Workspace = struct {
                 break :blk table;
             },
             .simple_chain = simple_chain,
-            .simple_anchored = if (limits.longest) null else detectAnchoredRun(program),
+            .simple_anchored = simple_anchored,
             .chain_tables = if (simple_chain) |chain| ChainTables.init(chain) else null,
-            .line_run = shapes.lineRun(program),
-            .delimited_run = shapes.delimitedRun(program),
+            .line_run = line_run,
+            .delimited_run = delimited_run,
+            .word_run = word_run_set != null,
+            .fast_kind = fast_kind,
+            .word_run_table = word_table,
             .utf8_run = utf8_run,
             .fast_branch = fast_branch,
             .weak_first = @as(usize, @popCount(program.first.ascii[0])) + @popCount(program.first.ascii[1]) >= 48,
@@ -240,15 +288,20 @@ pub const Workspace = struct {
     ) Error!?Match {
         self.steps = 0;
         if (self.start_anchored and search_start != 0) return null;
-        if (self.simple_set) |set| return self.findSetRun(set, input, search_start);
-        if (self.utf8_run) |*utf8| return self.findSetRunUtf8(utf8, input, search_start);
-        if (self.fast_branch) |*branch| {
-            if (self.findFastBranch(branch, input, search_start)) |match| return match;
+        switch (self.fast_kind) {
+            .none => {
+                if (self.fast_branch) |*branch| {
+                    if (self.findFastBranch(branch, input, search_start)) |match| return match;
+                }
+            },
+            .set_run => return self.findSetRun(self.simple_set.?, input, search_start),
+            .utf8_run => return self.findSetRunUtf8(&self.utf8_run.?, input, search_start),
+            .chain => return self.findChain(&self.simple_chain.?, input, search_start),
+            .anchored => return self.findAnchoredRun(self.simple_anchored.?, input, search_start),
+            .line => return self.findLineRun(input, search_start),
+            .delimited => return self.findDelimitedRun(self.delimited_run.?, input, search_start),
+            .word => return self.findWordRun(input, search_start),
         }
-        if (self.simple_chain) |*chain| return self.findChain(chain, input, search_start);
-        if (self.simple_anchored) |anchored_run| return self.findAnchoredRun(anchored_run, input, search_start);
-        if (self.line_run) return self.findLineRun(input, search_start);
-        if (self.delimited_run) |delimiter| return self.findDelimitedRun(delimiter, input, search_start);
         // Every match must start at a start-literal occurrence, so the first
         // occurrence bounds the leftmost match start and the DFA can skip
         // the prefix before it.
@@ -581,15 +634,20 @@ pub const Workspace = struct {
     ) Error!?Match {
         if (search_start > input.len) return null;
         if (self.start_anchored and search_start != 0) return null;
-        if (self.simple_set) |set| return self.findSetRun(set, input, search_start);
-        if (self.utf8_run) |*utf8| return self.findSetRunUtf8(utf8, input, search_start);
-        if (self.fast_branch) |*branch| {
-            if (self.findFastBranch(branch, input, search_start)) |match| return match;
+        switch (self.fast_kind) {
+            .none => {
+                if (self.fast_branch) |*branch| {
+                    if (self.findFastBranch(branch, input, search_start)) |match| return match;
+                }
+            },
+            .set_run => return self.findSetRun(self.simple_set.?, input, search_start),
+            .utf8_run => return self.findSetRunUtf8(&self.utf8_run.?, input, search_start),
+            .chain => return self.findChain(&self.simple_chain.?, input, search_start),
+            .anchored => return self.findAnchoredRun(self.simple_anchored.?, input, search_start),
+            .line => return self.findLineRun(input, search_start),
+            .delimited => return self.findDelimitedRun(self.delimited_run.?, input, search_start),
+            .word => return self.findWordRun(input, search_start),
         }
-        if (self.simple_chain) |*chain| return self.findChain(chain, input, search_start);
-        if (self.simple_anchored) |anchored_run| return self.findAnchoredRun(anchored_run, input, search_start);
-        if (self.line_run) return self.findLineRun(input, search_start);
-        if (self.delimited_run) |delimiter| return self.findDelimitedRun(delimiter, input, search_start);
         var from = search_start;
         if (self.pair_filter) |filter| {
             from = filter.indexOfAny(input, search_start) orelse return null;
@@ -766,13 +824,43 @@ pub const Workspace = struct {
         return .{ .start = start, .end = end, .slots = self.slots };
     }
 
-    /// `"[^"]*"`: the match is the next delimiter pair.
-    fn findDelimitedRun(self: *Workspace, delimiter: u8, input: []const u8, search_start: usize) ?Match {
-        const open = std.mem.indexOfScalarPos(u8, input, search_start, delimiter) orelse return null;
-        const close = std.mem.indexOfScalarPos(u8, input, open + 1, delimiter) orelse return null;
-        self.slots[0] = open;
-        self.slots[1] = close + 1;
-        return .{ .start = open, .end = close + 1, .slots = self.slots };
+    /// `"[^"]*"` / `<[^>]+>`: the match is the next delimiter pair.
+    fn findDelimitedRun(self: *Workspace, delimited: shapes.Delimited, input: []const u8, search_start: usize) ?Match {
+        var search = search_start;
+        while (true) {
+            const open = std.mem.indexOfScalarPos(u8, input, search, delimited.open) orelse return null;
+            const close = std.mem.indexOfScalarPos(u8, input, open + 1, delimited.close) orelse return null;
+            if (!delimited.non_empty or close > open + 1) {
+                self.slots[0] = open;
+                self.slots[1] = close + 1;
+                return .{ .start = open, .end = close + 1, .slots = self.slots };
+            }
+            // Empty inner run: the `+` form does not match, retry after open.
+            search = open + 1;
+        }
+    }
+
+    /// `\b\w+\b`: the match is the next whole word. The trailing boundary
+    /// holds automatically once the run ends; only the leading one needs a
+    /// check, and a run entered from the middle is skipped whole.
+    fn findWordRun(self: *Workspace, input: []const u8, search_start: usize) ?Match {
+        const table = &self.word_run_table;
+        var offset = search_start;
+        while (offset < input.len) {
+            while (offset < input.len and !table[input[offset]]) offset += 1;
+            if (offset >= input.len) return null;
+            if (offset > 0 and table[input[offset - 1]]) {
+                // Started inside a word: no boundary here, skip the run.
+                while (offset < input.len and table[input[offset]]) offset += 1;
+                continue;
+            }
+            const start = offset;
+            while (offset < input.len and table[input[offset]]) offset += 1;
+            self.slots[0] = start;
+            self.slots[1] = offset;
+            return .{ .start = start, .end = offset, .slots = self.slots };
+        }
+        return null;
     }
 
     fn findFastBranch(self: *Workspace, branch: *const FastBranch, input: []const u8, search_start: usize) ?Match {

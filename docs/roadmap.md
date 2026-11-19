@@ -202,9 +202,11 @@ Measured on an Apple Silicon macOS host. "Before" is the initial commit state;
 | `find` `\d{3}-\d{4}` no-match, 23 KiB | ~19 µs | ~2.0 µs | ~1.9 µs | — |
 | `find` `(?m)^\w+`, 23 KiB | ~161 µs | ~7.3 µs | ~8.1 µs | — |
 | `find` `(?m)\w+$` no-match, 23 KiB | ~490 µs | ~30 µs | ~31 µs | — |
-| `find` `(?m)^.*$` line scan, 216 KiB | — | ~39 µs (5.3 GiB/s) | ~123 µs | — |
+| `find` `(?m)^.*$` line scan, 216 KiB | — | ~32 µs (6.6 GiB/s) | ~123 µs | — |
 | `find` `"[^"]*"` JSON strings, 16 KiB | — | ~17 µs (~680 MiB/s) | ~17 µs | — |
 | `find` `\d+` digit runs, 54 KiB | — | ~28 µs (1.5 GiB/s) | ~58 µs | — |
+| `find` `\b\w+\b` words, 180 KiB | — | ~65 µs (1.4 GiB/s) | ~129 µs | — |
+| `find` `<[^>]+>` HTML tags, 94 KiB | — | ~118 µs (~630 MiB/s) | — | — |
 | `find` `\w+\s+\w+`, 23 KiB | ~128 µs | ~20 µs (1.2 GiB/s) | ~27 µs | — |
 | `find` large alternation (24 literals) no-match, 23 KiB | ~48 µs | ~7.4 µs (3.0 GiB/s) | ~11 µs | — |
 | `find` `(?i)STRASSE` no-match, 23 KiB | ~15 µs | ~1.4 µs (16.2 GiB/s) | ~2.3 µs | — |

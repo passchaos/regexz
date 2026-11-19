@@ -853,3 +853,38 @@ test "delimited run fast path" {
         }
     }
 }
+
+test "word run fast path matches whole words" {
+    var value = try regex.Regex.init(gpa, "\\b\\w+\\b", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.word_run);
+
+    const cases = [_]struct { input: []const u8, spans: []const [2]usize }{
+        .{ .input = "", .spans = &.{} },
+        .{ .input = "hello", .spans = &.{.{ 0, 5 }} },
+        .{ .input = "hello world", .spans = &.{ .{ 0, 5 }, .{ 6, 11 } } },
+        .{ .input = "a-b", .spans = &.{ .{ 0, 1 }, .{ 2, 3 } } },
+        .{ .input = "_x_ 123", .spans = &.{ .{ 0, 3 }, .{ 4, 7 } } },
+        .{ .input = "  spaced  ", .spans = &.{ .{ 2, 8 } } },
+        .{ .input = "caf\u{00e9}", .spans = &.{.{ 0, 3 }} },
+        .{ .input = "x", .spans = &.{.{ 0, 1 }} },
+    };
+    for (cases) |case| {
+        var offset: usize = 0;
+        var index: usize = 0;
+        while (offset <= case.input.len and index < case.spans.len) : (index += 1) {
+            const m = (try workspace.find(case.input, offset)) orelse break;
+            try std.testing.expectEqual(case.spans[index][0], m.start);
+            try std.testing.expectEqual(case.spans[index][1], m.end);
+            offset = m.end;
+        }
+        try std.testing.expectEqual(case.spans.len, index);
+    }
+
+    // A search starting inside a word skips that word.
+    const mid = (try workspace.find("hello world", 2)).?;
+    try std.testing.expectEqual(@as(usize, 6), mid.start);
+    try std.testing.expectEqual(@as(usize, 11), mid.end);
+}
