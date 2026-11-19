@@ -6,6 +6,7 @@
 //! Everything else falls back to the byte-at-a-time bitmap loop.
 const std = @import("std");
 const model = @import("model.zig");
+const nibble_filter = @import("nibble_filter.zig");
 
 const max_simd_bytes = 8;
 const max_simd_ranges = 4;
@@ -66,6 +67,7 @@ pub const PairSet = struct {
     /// chunks and lose to the byte-at-a-time pair probe.
     first: FirstFilter = undefined,
     use_first: bool = false,
+    candidates: ?nibble_filter.Filter = null,
 
     /// Returns null unless every literal is at least two bytes (a shorter
     /// literal could occur without a pair hit).
@@ -96,23 +98,53 @@ pub const PairSet = struct {
             set.first = FirstFilter.init(first);
             set.use_first = true;
         }
+        if (nibble_filter.supported and !set.use_first) set.candidates = nibble_filter.Filter.init(literals);
         return set;
     }
 
     /// First offset at or after `start` where a literal occurs, or null.
     pub fn indexOfAny(self: *const PairSet, input: []const u8, start: usize) ?usize {
+        if (start >= input.len or input.len - start < 2) return null;
         if (self.use_first) return self.indexOfAnySparse(input, start);
+        if (self.candidates) |*filter| return self.indexOfAnyVector(filter, input, start);
+        return self.indexOfAnyScalar(input, start);
+    }
+
+    fn indexOfAnyScalar(self: *const PairSet, input: []const u8, start: usize) ?usize {
         var offset = start;
-        while (offset + 1 < input.len) : (offset += 1) {
-            const first = input[offset];
-            const pair = (@as(u16, first) << 8) | input[offset + 1];
-            if (self.bits[pair >> 3] & (@as(u8, 1) << @intCast(pair & 7)) == 0) continue;
-            for (self.literals) |literal| {
-                if (literal[0] != first or literal[1] != input[offset + 1]) continue;
-                if (literal.len <= input.len - offset and std.mem.eql(u8, input[offset..][0..literal.len], literal)) return offset;
-            }
+        while (offset < input.len - 1) : (offset += 1) {
+            if (self.matchesAt(input, offset)) return offset;
         }
         return null;
+    }
+
+    fn matchesAt(self: *const PairSet, input: []const u8, offset: usize) bool {
+        const first = input[offset];
+        const pair = (@as(u16, first) << 8) | input[offset + 1];
+        if (self.bits[pair >> 3] & (@as(u8, 1) << @intCast(pair & 7)) == 0) return false;
+        for (self.literals) |literal| {
+            if (literal[0] != first or literal[1] != input[offset + 1]) continue;
+            if (literal.len <= input.len - offset and std.mem.eql(u8, input[offset..][0..literal.len], literal)) return true;
+        }
+        return false;
+    }
+
+    fn indexOfAnyVector(self: *const PairSet, filter: *const nibble_filter.Filter, input: []const u8, start: usize) ?usize {
+        var offset = start;
+        while (offset + 17 <= input.len) : (offset += 16) {
+            var mask = filter.candidates(input[offset..][0..16].*, input[offset + 1 ..][0..16].*);
+            if (@reduce(.And, mask)) {
+                // Every position needs an exact probe. Avoid repeated SIMD
+                // setup on collision-dense input and keep the scalar tail.
+                return self.indexOfAnyScalar(input, offset);
+            } else {
+                while (std.simd.firstTrue(mask)) |index| {
+                    if (self.matchesAt(input, offset + index)) return offset + index;
+                    mask = mask & (std.simd.iota(u8, 16) != @as(Vec, @splat(index)));
+                }
+            }
+        }
+        return self.indexOfAnyScalar(input, offset);
     }
 
     /// Sparse first-byte variant: the SIMD filter jumps between candidate

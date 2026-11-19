@@ -1,0 +1,250 @@
+{
+  "baseline": "59d656d",
+  "platform": "macOS aarch64 NEON",
+  "units": "ns/search",
+  "method": "three interleaved executions, each the median of five batches of 2000 searches",
+  "executables": {
+    "before": [
+      "/tmp/regexz-nibble-baseline.hmWYtC/.zig-cache/o/30783e64674ee3c10aebadfdeeea2fe0/regexz-prefilter-bench",
+      "/tmp/regexz-nibble-baseline.hmWYtC/.zig-cache/o/a1725f5d4da53f99b86f1bdb6f25f3f9/regexz-prefilter-search-bench"
+    ],
+    "after": [
+      "/Users/bytedance/project-z/regexz/.zig-cache/o/5306b45a36eaeb7a01b799ddb7d1d13e/regexz-prefilter-bench",
+      "/Users/bytedance/project-z/regexz/.zig-cache/o/bbe652f8578595e47c42b9772b4697fe/regexz-prefilter-search-bench"
+    ]
+  },
+  "rounds": [
+    {
+      "order": [
+        "before",
+        "after"
+      ],
+      "runs": {
+        "before": {
+          "ns_per_search": {
+            "three pairs absent": 602.9,
+            "three pairs collisions": 25061.3,
+            "late complete literal": 25213.5,
+            "sixteen pairs absent": 846.9,
+            "dense candidates control": 119093.5,
+            "short literal hit": 3.8,
+            "wide pairs absent": 9974.4,
+            "wide pairs collisions": 11230.5,
+            "wide pairs late literal": 10937.7,
+            "wide dense control": 50091.5,
+            "wide short control": 8.5,
+            "regex prefix collisions": 28349.1,
+            "regex late literal": 27764.9,
+            "wide alternatives control": 11579.3,
+            "case-folded control": 2085.4,
+            "capture run control": 8.1
+          },
+          "stdout": "three pairs absent                  602.9 ns/search\nthree pairs collisions            25061.3 ns/search\nlate complete literal             25213.5 ns/search\nsixteen pairs absent                846.9 ns/search\ndense candidates control         119093.5 ns/search\nshort literal hit                     3.8 ns/search\nwide pairs absent                  9974.4 ns/search\nwide pairs collisions             11230.5 ns/search\nwide pairs late literal           10937.7 ns/search\nwide dense control                50091.5 ns/search\nwide short control                    8.5 ns/search\nregex prefix collisions           28349.1 ns/search\nregex late literal                27764.9 ns/search\nwide alternatives control         11579.3 ns/search\ncase-folded control                2085.4 ns/search\ncapture run control                   8.1 ns/search\n"
+        },
+        "after": {
+          "ns_per_search": {
+            "three pairs absent": 611.6,
+            "three pairs collisions": 26602.4,
+            "late complete literal": 27288.0,
+            "sixteen pairs absent": 719.2,
+            "dense candidates control": 122345.5,
+            "short literal hit": 4.5,
+            "wide pairs absent": 2402.2,
+            "wide pairs collisions": 5346.4,
+            "wide pairs late literal": 5338.5,
+            "wide dense control": 52885.6,
+            "wide short control": 9.7,
+            "regex prefix collisions": 28538.4,
+            "regex late literal": 29102.0,
+            "wide alternatives control": 5814.8,
+            "case-folded control": 2041.1,
+            "capture run control": 8.1
+          },
+          "stdout": "three pairs absent                  611.6 ns/search\nthree pairs collisions            26602.4 ns/search\nlate complete literal             27288.0 ns/search\nsixteen pairs absent                719.2 ns/search\ndense candidates control         122345.5 ns/search\nshort literal hit                     4.5 ns/search\nwide pairs absent                  2402.2 ns/search\nwide pairs collisions              5346.4 ns/search\nwide pairs late literal            5338.5 ns/search\nwide dense control                52885.6 ns/search\nwide short control                    9.7 ns/search\nregex prefix collisions           28538.4 ns/search\nregex late literal                29102.0 ns/search\nwide alternatives control          5814.8 ns/search\ncase-folded control                2041.1 ns/search\ncapture run control                   8.1 ns/search\n"
+        }
+      }
+    },
+    {
+      "order": [
+        "after",
+        "before"
+      ],
+      "runs": {
+        "after": {
+          "ns_per_search": {
+            "three pairs absent": 615.4,
+            "three pairs collisions": 26240.3,
+            "late complete literal": 26659.5,
+            "sixteen pairs absent": 608.5,
+            "dense candidates control": 122622.1,
+            "short literal hit": 4.1,
+            "wide pairs absent": 2402.3,
+            "wide pairs collisions": 5412.2,
+            "wide pairs late literal": 5479.9,
+            "wide dense control": 52242.6,
+            "wide short control": 9.2,
+            "regex prefix collisions": 27538.0,
+            "regex late literal": 27087.3,
+            "wide alternatives control": 5548.2,
+            "case-folded control": 2005.8,
+            "capture run control": 8.5
+          },
+          "stdout": "three pairs absent                  615.4 ns/search\nthree pairs collisions            26240.3 ns/search\nlate complete literal             26659.5 ns/search\nsixteen pairs absent                608.5 ns/search\ndense candidates control         122622.1 ns/search\nshort literal hit                     4.1 ns/search\nwide pairs absent                  2402.3 ns/search\nwide pairs collisions              5412.2 ns/search\nwide pairs late literal            5479.9 ns/search\nwide dense control                52242.6 ns/search\nwide short control                    9.2 ns/search\nregex prefix collisions           27538.0 ns/search\nregex late literal                27087.3 ns/search\nwide alternatives control          5548.2 ns/search\ncase-folded control                2005.8 ns/search\ncapture run control                   8.5 ns/search\n"
+        },
+        "before": {
+          "ns_per_search": {
+            "three pairs absent": 604.9,
+            "three pairs collisions": 26009.8,
+            "late complete literal": 25607.3,
+            "sixteen pairs absent": 655.3,
+            "dense candidates control": 130665.0,
+            "short literal hit": 4.3,
+            "wide pairs absent": 10433.2,
+            "wide pairs collisions": 10458.9,
+            "wide pairs late literal": 11334.4,
+            "wide dense control": 51244.7,
+            "wide short control": 8.9,
+            "regex prefix collisions": 28698.7,
+            "regex late literal": 28410.5,
+            "wide alternatives control": 11653.7,
+            "case-folded control": 1993.6,
+            "capture run control": 8.6
+          },
+          "stdout": "three pairs absent                  604.9 ns/search\nthree pairs collisions            26009.8 ns/search\nlate complete literal             25607.3 ns/search\nsixteen pairs absent                655.3 ns/search\ndense candidates control         130665.0 ns/search\nshort literal hit                     4.3 ns/search\nwide pairs absent                 10433.2 ns/search\nwide pairs collisions             10458.9 ns/search\nwide pairs late literal           11334.4 ns/search\nwide dense control                51244.7 ns/search\nwide short control                    8.9 ns/search\nregex prefix collisions           28698.7 ns/search\nregex late literal                28410.5 ns/search\nwide alternatives control         11653.7 ns/search\ncase-folded control                1993.6 ns/search\ncapture run control                   8.6 ns/search\n"
+        }
+      }
+    },
+    {
+      "order": [
+        "before",
+        "after"
+      ],
+      "runs": {
+        "before": {
+          "ns_per_search": {
+            "three pairs absent": 610.1,
+            "three pairs collisions": 26686.6,
+            "late complete literal": 26673.0,
+            "sixteen pairs absent": 634.1,
+            "dense candidates control": 123144.1,
+            "short literal hit": 4.3,
+            "wide pairs absent": 11011.3,
+            "wide pairs collisions": 12280.5,
+            "wide pairs late literal": 11301.4,
+            "wide dense control": 52204.2,
+            "wide short control": 9.1,
+            "regex prefix collisions": 27617.0,
+            "regex late literal": 29501.0,
+            "wide alternatives control": 12002.1,
+            "case-folded control": 1936.9,
+            "capture run control": 8.3
+          },
+          "stdout": "three pairs absent                  610.1 ns/search\nthree pairs collisions            26686.6 ns/search\nlate complete literal             26673.0 ns/search\nsixteen pairs absent                634.1 ns/search\ndense candidates control         123144.1 ns/search\nshort literal hit                     4.3 ns/search\nwide pairs absent                 11011.3 ns/search\nwide pairs collisions             12280.5 ns/search\nwide pairs late literal           11301.4 ns/search\nwide dense control                52204.2 ns/search\nwide short control                    9.1 ns/search\nregex prefix collisions           27617.0 ns/search\nregex late literal                29501.0 ns/search\nwide alternatives control         12002.1 ns/search\ncase-folded control                1936.9 ns/search\ncapture run control                   8.3 ns/search\n"
+        },
+        "after": {
+          "ns_per_search": {
+            "three pairs absent": 630.6,
+            "three pairs collisions": 25867.2,
+            "late complete literal": 25435.3,
+            "sixteen pairs absent": 611.5,
+            "dense candidates control": 122320.6,
+            "short literal hit": 4.0,
+            "wide pairs absent": 2294.5,
+            "wide pairs collisions": 5159.5,
+            "wide pairs late literal": 5159.1,
+            "wide dense control": 52968.0,
+            "wide short control": 9.5,
+            "regex prefix collisions": 28248.2,
+            "regex late literal": 27145.9,
+            "wide alternatives control": 6390.3,
+            "case-folded control": 2006.1,
+            "capture run control": 8.3
+          },
+          "stdout": "three pairs absent                  630.6 ns/search\nthree pairs collisions            25867.2 ns/search\nlate complete literal             25435.3 ns/search\nsixteen pairs absent                611.5 ns/search\ndense candidates control         122320.6 ns/search\nshort literal hit                     4.0 ns/search\nwide pairs absent                  2294.5 ns/search\nwide pairs collisions              5159.5 ns/search\nwide pairs late literal            5159.1 ns/search\nwide dense control                52968.0 ns/search\nwide short control                    9.5 ns/search\nregex prefix collisions           28248.2 ns/search\nregex late literal                27145.9 ns/search\nwide alternatives control          6390.3 ns/search\ncase-folded control                2006.1 ns/search\ncapture run control                   8.3 ns/search\n"
+        }
+      }
+    }
+  ],
+  "medians": {
+    "three pairs absent": {
+      "before": 604.9,
+      "after": 615.4,
+      "speedup": 0.9829379265518362
+    },
+    "three pairs collisions": {
+      "before": 26009.8,
+      "after": 26240.3,
+      "speedup": 0.9912158016486092
+    },
+    "late complete literal": {
+      "before": 25607.3,
+      "after": 26659.5,
+      "speedup": 0.9605318929462293
+    },
+    "sixteen pairs absent": {
+      "before": 655.3,
+      "after": 611.5,
+      "speedup": 1.0716271463614062
+    },
+    "dense candidates control": {
+      "before": 123144.1,
+      "after": 122345.5,
+      "speedup": 1.0065274162106495
+    },
+    "short literal hit": {
+      "before": 4.3,
+      "after": 4.1,
+      "speedup": 1.048780487804878
+    },
+    "wide pairs absent": {
+      "before": 10433.2,
+      "after": 2402.2,
+      "speedup": 4.343185413371077
+    },
+    "wide pairs collisions": {
+      "before": 11230.5,
+      "after": 5346.4,
+      "speedup": 2.1005723477480176
+    },
+    "wide pairs late literal": {
+      "before": 11301.4,
+      "after": 5338.5,
+      "speedup": 2.1169616933595576
+    },
+    "wide dense control": {
+      "before": 51244.7,
+      "after": 52885.6,
+      "speedup": 0.9689726504001089
+    },
+    "wide short control": {
+      "before": 8.9,
+      "after": 9.5,
+      "speedup": 0.9368421052631579
+    },
+    "regex prefix collisions": {
+      "before": 28349.1,
+      "after": 28248.2,
+      "speedup": 1.0035719090065915
+    },
+    "regex late literal": {
+      "before": 28410.5,
+      "after": 27145.9,
+      "speedup": 1.046585303858041
+    },
+    "wide alternatives control": {
+      "before": 11653.7,
+      "after": 5814.8,
+      "speedup": 2.004144596546743
+    },
+    "case-folded control": {
+      "before": 1993.6,
+      "after": 2006.1,
+      "speedup": 0.9937690045361647
+    },
+    "capture run control": {
+      "before": 8.3,
+      "after": 8.3,
+      "speedup": 1.0
+    }
+  }
+}
