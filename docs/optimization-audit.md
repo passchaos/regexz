@@ -465,3 +465,17 @@ every byte; the star path emits its empty matches inside the non-member loop.
 `stream [a-z]+` improves 1.31x (183.8 -> 140.3 us) and `stream [a-z]*` 1.40x
 (223.9 -> 160.1 us), with the other 65 cases at a 1.00x median. See
 [tight ASCII run loops](benchmarks/stream-ascii-runs.md).
+
+Non-ASCII fast-branch starts now call `runEnd` directly instead of validating
+the first rune with `runeAt` and then scanning it again; ASCII keeps the
+cheap gate so failed optional-prefix attempts stay out of the run scan. The
+CJK tokenizer improves 1.10x (178.2 -> 161.4 us) and the no-lookahead variant
+1.03x, with Qwen neutral and the control median at 0.98x. See
+[direct non-ASCII run starts](benchmarks/nonascii-run-start.md).
+
+A BMP membership bitmap for the UTF-8 run scan was screened and reverted:
+decode plus bit test measured 1.6x slower than the byte automaton (178 ->
+286 us on the CJK tokenizer), because the three dependent table loads
+pipeline better than the branchy decoder. A prefix lead-byte filter in the
+fast branch was also reverted (5% slower), as were a 3-byte rune fast path
+and short-separator `mem.eql` replacement in the stream chain (both neutral).

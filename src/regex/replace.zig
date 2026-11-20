@@ -1626,19 +1626,28 @@ pub const Workspace = struct {
         if (branch.prefix) |*prefix| {
             if (prefix.runeAt(self.allocator, input, search_start)) |prefix_len| {
                 const next = search_start + prefix_len;
-                if (next < input.len and branch.run.runeAt(self.allocator, input, next) != null) {
+                // A non-ASCII rune is validated by `runEnd` itself, which
+                // saves re-walking it; ASCII keeps the cheaper table gate so
+                // failed prefix attempts do not enter the run scan.
+                if (next < input.len and
+                    (input[next] >= 0x80 or branch.run.runeAt(self.allocator, input, next) != null))
+                {
                     const end = branch.run.runEnd(self.allocator, input, next);
-                    self.slots[0] = search_start;
-                    self.slots[1] = end;
-                    return .{ .start = search_start, .end = end, .slots = self.slots };
+                    if (end > next) {
+                        self.slots[0] = search_start;
+                        self.slots[1] = end;
+                        return .{ .start = search_start, .end = end, .slots = self.slots };
+                    }
                 }
             }
         }
-        if (branch.run.runeAt(self.allocator, input, search_start) != null) {
+        if (input[search_start] >= 0x80 or branch.run.runeAt(self.allocator, input, search_start) != null) {
             const end = branch.run.runEnd(self.allocator, input, search_start);
-            self.slots[0] = search_start;
-            self.slots[1] = end;
-            return .{ .start = search_start, .end = end, .slots = self.slots };
+            if (end > search_start) {
+                self.slots[0] = search_start;
+                self.slots[1] = end;
+                return .{ .start = search_start, .end = end, .slots = self.slots };
+            }
         }
         // The dominant branch failed and every earlier branch is ruled out;
         // try the following branches that have a direct scan.
