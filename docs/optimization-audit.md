@@ -776,3 +776,14 @@ covering camelCase (`[a-z]+[A-Z][a-z]+`, 4.0x, 1.37x ahead). Overlapping
 adjacent runs, ambiguous optionals and non-ASCII sets fall back. The
 comparison now covers 52 cases and all are faster, with the semver scan the
 thinnest at 1.01x. See [literal fast paths](benchmarks/literal-fast-paths.md).
+
+Three refinements followed the expanded comparison. The bounded sequence now
+accepts a trailing optional `separator set{min,max}` group, covering CIDR
+forms (`\d{1,3}(?:\.\d{1,3}){3}(?:/\d{1,2})?`, 1.6x, 1.86x ahead). A new
+bounded loop shape covers a bounded run followed by a greedy repetition of a
+bounded `separator run` group (`\d{1,3}(?:,\d{3})+`, 2.9x, 2.98x ahead). The
+unbounded chain skips the whole first run after a failed start, since every
+start inside it shares the same run end and remaining input (semver, 1.1x,
+1.15x ahead). All 52 comparison cases are faster, with the semver scan the
+thinnest at 1.15x. See
+[literal fast paths](benchmarks/literal-fast-paths.md).

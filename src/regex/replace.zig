@@ -15,6 +15,7 @@ const UnboundedElement = @import("compile.zig").UnboundedElement;
 const PrefixRunShape = @import("compile.zig").PrefixRunShape;
 const ChainLoopShape = @import("compile.zig").ChainLoopShape;
 const OptionalTailShape = @import("compile.zig").OptionalTailShape;
+const BoundedLoopShape = @import("compile.zig").BoundedLoopShape;
 const pike = @import("pike.zig");
 const backtrack = @import("backtrack.zig");
 const search_dfa = @import("search_dfa.zig");
@@ -64,6 +65,7 @@ pub const FastKind = enum {
     prefix_run,
     chain_loop,
     optional_tail,
+    bounded_loop,
 };
 pub const Error = model.Error;
 
@@ -223,6 +225,8 @@ pub const Workspace = struct {
     chain_loop: ?ChainLoopState = null,
     /// A run, an optional `separator run` group, then a literal byte.
     optional_tail: ?OptionalTailState = null,
+    /// A bounded run followed by a greedy repetition of a bounded group.
+    bounded_loop: ?BoundedLoopState = null,
     /// Byte membership tables for the chain fast path. `Set.matches` is a
     /// binary search over rune ranges; the per-byte chain scans run several
     /// lookups per input byte, so cache the answers once per workspace.
@@ -389,6 +393,19 @@ pub const Workspace = struct {
             break :blk state;
         };
         errdefer if (unbounded_sequence) |state| allocator.destroy(state);
+        const bounded_loop: ?BoundedLoopState = if (limits.longest) null else blk: {
+            const shape = program.bounded_loop orelse break :blk null;
+            break :blk .{
+                .table_a = byte_table.init(256, shape.set_a),
+                .table_b = byte_table.init(256, shape.set_b),
+                .min_a = shape.min_a,
+                .max_a = shape.max_a,
+                .min_b = shape.min_b,
+                .max_b = shape.max_b,
+                .separator = shape.separator,
+                .min_groups = shape.min_groups,
+            };
+        };
         const optional_tail: ?OptionalTailState = if (limits.longest) null else blk: {
             const shape = program.optional_tail orelse break :blk null;
             break :blk .{
@@ -471,6 +488,8 @@ pub const Workspace = struct {
             .chain_loop
         else if (optional_tail != null)
             .optional_tail
+        else if (bounded_loop != null)
+            .bounded_loop
         else if (literal_run != null)
             .literal_run
         else if (simple_anchored != null)
@@ -588,6 +607,7 @@ pub const Workspace = struct {
             .prefix_run = prefix_run,
             .chain_loop = chain_loop,
             .optional_tail = optional_tail,
+            .bounded_loop = bounded_loop,
         };
     }
 
@@ -688,6 +708,7 @@ pub const Workspace = struct {
             .prefix_run => return self.findPrefixRun(&self.prefix_run.?, input, search_start),
             .chain_loop => return self.findChainLoop(&self.chain_loop.?, input, search_start),
             .optional_tail => return self.findOptionalTail(&self.optional_tail.?, input, search_start),
+            .bounded_loop => return self.findBoundedLoop(&self.bounded_loop.?, input, search_start),
         }
         // Every match must start at a start-literal occurrence, so the first
         // occurrence bounds the leftmost match start and the DFA can skip
@@ -1278,6 +1299,7 @@ pub const Workspace = struct {
             .prefix_run => return self.findPrefixRun(&self.prefix_run.?, input, search_start),
             .chain_loop => return self.findChainLoop(&self.chain_loop.?, input, search_start),
             .optional_tail => return self.findOptionalTail(&self.optional_tail.?, input, search_start),
+            .bounded_loop => return self.findBoundedLoop(&self.bounded_loop.?, input, search_start),
         }
         var from = search_start;
         if (self.pair_filter) |filter| {
@@ -2008,6 +2030,18 @@ pub const Workspace = struct {
         var index: usize = 0;
         while (index < state.len) : (index += 1) {
             const element = state.elements[index];
+            if (element.kind == .optional_group) {
+                // Trailing group: present when the separator and its bounded
+                // run match, otherwise absent.
+                if (pos < input.len and input[pos] == element.separator) {
+                    const table = &state.tables[element.set];
+                    var count: usize = 0;
+                    const limit = @min(@as(usize, element.max), input.len - pos - 1);
+                    while (count < limit and table[input[pos + 1 + count]]) count += 1;
+                    if (count >= element.min) pos += 1 + count;
+                }
+                continue;
+            }
             const table = &state.tables[element.set];
             var count: usize = 0;
             const limit = @min(@as(usize, element.max), input.len - pos);
@@ -2023,6 +2057,16 @@ pub const Workspace = struct {
         budget.* -= 1;
         if (index == state.len) return pos;
         const element = state.elements[index];
+        if (element.kind == .optional_group) {
+            if (pos < input.len and input[pos] == element.separator) {
+                const table = &state.tables[element.set];
+                var count: usize = 0;
+                const limit = @min(@as(usize, element.max), input.len - pos - 1);
+                while (count < limit and table[input[pos + 1 + count]]) count += 1;
+                if (count >= element.min) return pos + 1 + count;
+            }
+            return pos;
+        }
         const table = &state.tables[element.set];
         var count: usize = 0;
         const limit = @min(@as(usize, element.max), input.len - pos);
@@ -2084,6 +2128,15 @@ pub const Workspace = struct {
                 self.slots[0] = start;
                 self.slots[1] = pos;
                 return .{ .start = start, .end = pos, .slots = self.slots };
+            }
+            // A failed start inside the first run shares the same run end and
+            // the same remaining input, so the whole run can be skipped.
+            const first = state.elements[0];
+            if (first.kind == .run and first.len != 0) {
+                const table = &state.tables[first.value];
+                var end = start + 1;
+                while (end < input.len and table[input[end]]) end += 1;
+                start = end;
             }
         }
         return null;
@@ -2208,6 +2261,47 @@ pub const Workspace = struct {
                 return .{ .start = start, .end = end + 1, .slots = self.slots };
             }
             start = end + 1;
+        }
+        return null;
+    }
+
+    /// A bounded run then a greedy repetition of a bounded `separator run`
+    /// group. The first run's width is tried greedily and shortened when the
+    /// group repetition cannot start.
+    fn findBoundedLoop(self: *Workspace, state: *const BoundedLoopState, input: []const u8, search_start: usize) ?Match {
+        const first = &state.table_a;
+        const rest = &state.table_b;
+        var start = search_start;
+        while (start < input.len) {
+            if (!first[input[start]]) {
+                start += 1;
+                continue;
+            }
+            var count_a: usize = 0;
+            while (count_a < state.max_a and start + count_a < input.len and first[input[start + count_a]]) count_a += 1;
+            if (count_a < state.min_a) {
+                start += 1;
+                continue;
+            }
+            var a = count_a;
+            while (a >= state.min_a) : (a -= 1) {
+                var cursor = start + a;
+                var groups: usize = 0;
+                while (cursor < input.len and input[cursor] == state.separator) {
+                    const run_start = cursor + 1;
+                    var count_b: usize = 0;
+                    while (count_b < state.max_b and run_start + count_b < input.len and rest[input[run_start + count_b]]) count_b += 1;
+                    if (count_b < state.min_b) break;
+                    cursor = run_start + count_b;
+                    groups += 1;
+                }
+                if (groups >= state.min_groups) {
+                    self.slots[0] = start;
+                    self.slots[1] = cursor;
+                    return .{ .start = start, .end = cursor, .slots = self.slots };
+                }
+            }
+            start += 1;
         }
         return null;
     }
@@ -3481,7 +3575,8 @@ fn detectLineStartRun(program: Program) ?LineStartRun {
 const BoundedSequenceState = struct {
     const max_elements = 32;
     const max_sets = 8;
-    const Element = struct { set: u8, min: u8, max: u8 };
+    const Kind = enum(u8) { run, optional_group };
+    const Element = struct { kind: Kind = .run, set: u8, min: u8, max: u8, separator: u8 = 0 };
 
     elements: [max_elements]Element = undefined,
     len: u8 = 0,
@@ -3502,7 +3597,13 @@ const BoundedSequenceState = struct {
                 self.tables[self.set_count] = byte_table.init(256, element.set);
                 self.set_count += 1;
             }
-            self.elements[self.len] = .{ .set = set_index, .min = element.min, .max = element.max };
+            self.elements[self.len] = .{
+                .kind = if (element.kind == .optional_group) .optional_group else .run,
+                .set = set_index,
+                .min = element.min,
+                .max = element.max,
+                .separator = element.separator,
+            };
             self.len += 1;
         }
         return true;
@@ -3632,6 +3733,17 @@ const UnboundedSequenceState = struct {
         for (&result, b) |*slot, byte| slot.* = slot.* or byte;
         return result;
     }
+};
+
+const BoundedLoopState = struct {
+    table_a: [256]bool = undefined,
+    table_b: [256]bool = undefined,
+    min_a: u8 = 1,
+    max_a: u8 = 1,
+    min_b: u8 = 1,
+    max_b: u8 = 1,
+    separator: u8 = 0,
+    min_groups: u8 = 1,
 };
 
 const OptionalTailState = struct {

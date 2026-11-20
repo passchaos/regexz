@@ -11,7 +11,13 @@ const start_literals_mod = @import("start_literals.zig");
 const fast_branch_mod = @import("fast_branch.zig");
 const zero_width_mod = @import("zero_width.zig");
 
-pub const BoundedElement = struct { set: model.Set, min: u8, max: u8 };
+pub const BoundedElement = struct {
+    kind: enum { run, optional_group } = .run,
+    set: model.Set,
+    min: u8,
+    max: u8,
+    separator: u8 = 0,
+};
 
 pub const UnboundedElement = union(enum) {
     run: struct { set: model.Set, min: u8 },
@@ -29,6 +35,17 @@ pub const OptionalTailShape = struct {
     set_b: model.Set,
     separator: u8,
     literal: u8,
+};
+
+pub const BoundedLoopShape = struct {
+    set_a: model.Set,
+    min_a: u8,
+    max_a: u8,
+    set_b: model.Set,
+    min_b: u8,
+    max_b: u8,
+    separator: u8,
+    min_groups: u8,
 };
 
 pub const ChainLoopShape = struct {
@@ -80,6 +97,9 @@ pub const Program = struct {
     /// A run followed by an optional `separator run` group and a literal
     /// (`\d+(?:\.\d+)?%`). Not serialized.
     optional_tail: ?OptionalTailShape = null,
+    /// A bounded run followed by a greedy repetition of a bounded
+    /// `separator run` group (`\d{1,3}(?:,\d{3})+`). Not serialized.
+    bounded_loop: ?BoundedLoopShape = null,
     /// `x? set+` where `x` is a member of the set, which matches exactly the
     /// same spans as `set+`. Not serialized.
     optional_run: ?model.Set = null,
@@ -636,6 +656,43 @@ const LiteralSetBuilder = struct {
 /// sequence expand; variable repeats are only accepted when the child is a
 /// single set. At least one element must be variable width, otherwise the
 /// instruction-based fixed-sequence path handles the program.
+/// `(?: separator set{min,max} )?` as a bounded element.
+fn optionalGroup(node: *const model.Node) ?BoundedElement {
+    var child = node;
+    while (child.* == .group) child = child.group;
+    if (child.* != .pair) return null;
+    var separator = child.pair.left;
+    while (separator.* == .group) separator = separator.group;
+    if (separator.* != .set or separator.set.ranges.len != 1 or
+        separator.set.ranges[0].first != separator.set.ranges[0].last or separator.set.ranges[0].first >= 0x80)
+    {
+        return null;
+    }
+    var run_node = child.pair.right;
+    while (run_node.* == .group) run_node = run_node.group;
+    if (run_node.* != .repeat) return null;
+    const run = run_node.repeat;
+    if (run.lazy or run.possessive or run.maximum == null or run.minimum == 0 or
+        run.minimum > run.maximum.? or run.maximum.? > 8)
+    {
+        return null;
+    }
+    var set_node = run.child;
+    while (set_node.* == .group) set_node = set_node.group;
+    if (set_node.* != .set) return null;
+    const set = set_node.set;
+    if (!set.ascii_only or set.ranges.len == 0) return null;
+    const byte: u8 = @intCast(separator.set.ranges[0].first);
+    if (set.matches(byte)) return null;
+    return .{
+        .kind = .optional_group,
+        .set = set,
+        .min = @intCast(run.minimum),
+        .max = @intCast(run.maximum.?),
+        .separator = byte,
+    };
+}
+
 const BoundedSequenceBuilder = struct {
     const max_elements = 32;
     const max_element_width = 8;
@@ -651,6 +708,18 @@ const BoundedSequenceBuilder = struct {
             .set => |set| set,
             else => null,
         };
+    }
+
+    fn optionalLast(self: *BoundedSequenceBuilder) bool {
+        for (self.elements.items, 0..) |element, index| {
+            if (element.kind != .optional_group) continue;
+            if (index + 1 != self.elements.items.len) return false;
+            if (index != 0) {
+                const previous = self.elements.items[index - 1];
+                if (previous.kind == .run and previous.set.matches(element.separator)) return false;
+            }
+        }
+        return true;
     }
 
     fn addSet(self: *BoundedSequenceBuilder, set: model.Set, min: usize, max: usize) model.Error!bool {
@@ -677,6 +746,13 @@ const BoundedSequenceBuilder = struct {
                     if (repeat.minimum == 0 or repeat.minimum > maximum or maximum > max_element_width) break :blk false;
                     if (maximum > repeat.minimum) self.saw_variable = true;
                     break :blk self.addSet(set, repeat.minimum, maximum);
+                }
+                if (repeat.minimum == 0 and repeat.maximum != null and repeat.maximum.? == 1) {
+                    const element = optionalGroup(repeat.child) orelse break :blk false;
+                    if (self.elements.items.len == max_elements) break :blk false;
+                    try self.elements.append(self.allocator, element);
+                    self.saw_variable = true;
+                    break :blk true;
                 }
                 if (repeat.maximum == null or repeat.minimum != repeat.maximum.? or repeat.minimum > max_expand) break :blk false;
                 for (0..repeat.minimum) |_| {
@@ -719,6 +795,68 @@ fn detectOptionalRun(root: *const model.Node) ?model.Set {
     const set = run_node.set;
     if (!set.matches(byte)) return null;
     return set;
+}
+
+/// A bounded run followed by a greedy repetition of a bounded
+/// `separator run` group, for example `\d{1,3}(?:,\d{3})+`.
+fn detectBoundedLoop(root: *const model.Node) ?BoundedLoopShape {
+    var node = root;
+    while (node.* == .group) node = node.group;
+    if (node.* != .pair) return null;
+    var left = node.pair.left;
+    while (left.* == .group) left = left.group;
+    if (left.* != .repeat) return null;
+    const run_a = left.repeat;
+    if (run_a.lazy or run_a.possessive or run_a.maximum == null or run_a.minimum == 0 or
+        run_a.minimum > run_a.maximum.? or run_a.maximum.? > 8)
+    {
+        return null;
+    }
+    var run_a_node = run_a.child;
+    while (run_a_node.* == .group) run_a_node = run_a_node.group;
+    if (run_a_node.* != .set) return null;
+    const set_a = run_a_node.set;
+    var right = node.pair.right;
+    while (right.* == .group) right = right.group;
+    if (right.* != .repeat) return null;
+    const group_repeat = right.repeat;
+    if (group_repeat.lazy or group_repeat.possessive or group_repeat.maximum != null or group_repeat.minimum == 0) return null;
+    var child = group_repeat.child;
+    while (child.* == .group) child = child.group;
+    if (child.* != .pair) return null;
+    var separator_node = child.pair.left;
+    while (separator_node.* == .group) separator_node = separator_node.group;
+    if (separator_node.* != .set or separator_node.set.ranges.len != 1 or
+        separator_node.set.ranges[0].first != separator_node.set.ranges[0].last or separator_node.set.ranges[0].first >= 0x80)
+    {
+        return null;
+    }
+    var run_b_node = child.pair.right;
+    while (run_b_node.* == .group) run_b_node = run_b_node.group;
+    if (run_b_node.* != .repeat) return null;
+    const run_b = run_b_node.repeat;
+    if (run_b.lazy or run_b.possessive or run_b.maximum == null or run_b.minimum == 0 or
+        run_b.minimum > run_b.maximum.? or run_b.maximum.? > 8)
+    {
+        return null;
+    }
+    var run_b_set_node = run_b.child;
+    while (run_b_set_node.* == .group) run_b_set_node = run_b_set_node.group;
+    if (run_b_set_node.* != .set) return null;
+    const set_b = run_b_set_node.set;
+    if (!set_a.ascii_only or set_a.ranges.len == 0 or !set_b.ascii_only or set_b.ranges.len == 0) return null;
+    const separator: u8 = @intCast(separator_node.set.ranges[0].first);
+    if (set_a.matches(separator) or set_b.matches(separator)) return null;
+    return .{
+        .set_a = set_a,
+        .min_a = @intCast(run_a.minimum),
+        .max_a = @intCast(run_a.maximum.?),
+        .set_b = set_b,
+        .min_b = @intCast(run_b.minimum),
+        .max_b = @intCast(run_b.maximum.?),
+        .separator = separator,
+        .min_groups = @intCast(group_repeat.minimum),
+    };
 }
 
 /// A run, an optional `separator run` group, then a literal byte, for
@@ -1389,6 +1527,8 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         literal_set == null and !limits.auto_callout) detectChainLoop(parsed.root) else null;
     const optional_tail: ?OptionalTailShape = if (literal == null and caseless_literal == null and
         literal_set == null and !limits.auto_callout) detectOptionalTail(parsed.root) else null;
+    const bounded_loop: ?BoundedLoopShape = if (literal == null and caseless_literal == null and
+        literal_set == null and !limits.auto_callout) detectBoundedLoop(parsed.root) else null;
     const optional_run: ?model.Set = if (literal == null and caseless_literal == null and
         literal_set == null and !limits.auto_callout) detectOptionalRun(parsed.root) else null;
     var unbounded_builder = UnboundedSequenceBuilder{ .allocator = allocator, .literal_bytes = unbounded_storage };
@@ -1403,7 +1543,8 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
     defer bounded_builder.elements.deinit(allocator);
     const bounded_sequence: ?[]const BoundedElement = if (literal == null and caseless_literal == null and
         literal_set == null and !limits.auto_callout and try bounded_builder.add(parsed.root) and
-        bounded_builder.saw_variable and bounded_builder.elements.items.len >= 2)
+        bounded_builder.saw_variable and bounded_builder.optionalLast() and
+        bounded_builder.elements.items.len >= 2)
         try bounded_builder.elements.toOwnedSlice(allocator)
     else
         null;
@@ -1447,6 +1588,7 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         .prefix_run = prefix_run,
         .chain_loop = chain_loop,
         .optional_tail = optional_tail,
+        .bounded_loop = bounded_loop,
         .optional_run = optional_run,
         .dfa_eligible = dfa_eligible,
         .extended = extended,

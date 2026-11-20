@@ -942,6 +942,32 @@ fn expectFastSpans(pattern: []const u8, input: []const u8, spans: []const [2]usi
     try std.testing.expectEqual(spans.len, index);
 }
 
+test "bounded sequence handles a trailing optional group" {
+    var value = try regex.Regex.init(gpa, "\\d{1,3}(?:\\.\\d{1,3}){3}(?:/\\d{1,2})?", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind == .bounded_sequence);
+
+    try expectFastSpans("\\d{1,3}(?:\\.\\d{1,3}){3}(?:/\\d{1,2})?", "192.168.1.1/24 x 10.0.0.1", &.{ .{ 0, 14 }, .{ 17, 25 } });
+    try expectFastSpans("\\d{1,3}(?:\\.\\d{1,3}){3}(?:/\\d{1,2})?", "1.2.3.4/", &.{.{ 0, 7 }});
+    try expectFastSpans("\\d{1,3}(?:\\.\\d{1,3}){3}(?:/\\d{1,2})?", "1.2.3.4/2", &.{.{ 0, 9 }});
+    try expectFastSpans("\\d{1,3}(?:\\.\\d{1,3}){3}(?:/\\d{1,2})?", "1.2.3.4/123", &.{.{ 0, 10 }});
+}
+
+test "bounded loop fast path repeats bounded groups" {
+    var value = try regex.Regex.init(gpa, "\\d{1,3}(?:,\\d{3})+", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind == .bounded_loop);
+
+    try expectFastSpans("\\d{1,3}(?:,\\d{3})+", "1,234 12,345,678 999,000", &.{ .{ 0, 5 }, .{ 6, 16 }, .{ 17, 24 } });
+    try expectFastSpans("\\d{1,3}(?:,\\d{3})+", "1234", &.{});
+    try expectFastSpans("\\d{1,3}(?:,\\d{3})+", "1,23", &.{});
+    try expectFastSpans("\\d{1,3}(?:,\\d{3})+", "1,234,56", &.{.{ 0, 5 }});
+}
+
 test "optional prefix run matches the plain run spans" {
     var value = try regex.Regex.init(gpa, "v?\\w+", .{});
     defer value.deinit();

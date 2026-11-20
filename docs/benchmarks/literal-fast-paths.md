@@ -193,3 +193,19 @@ Three more sequence shapes were added to the unbounded chain walker:
 
 Overlapping adjacent runs, ambiguous optionals and non-ASCII sets still fall
 back to the general engine.
+
+## Bounded groups and failure skips
+
+The bounded sequence accepts a trailing optional `separator set{min,max}`
+group: the group is tried greedily and skipped when its separator or run does
+not match. This covers CIDR forms (`\d{1,3}(?:\.\d{1,3}){3}(?:/\d{1,2})?`),
+which improve 1.6x and are 1.86x ahead.
+
+A new bounded loop shape covers a bounded run followed by a greedy repetition
+of a bounded `separator run` group (`\d{1,3}(?:,\d{3})+`): the first run's
+width is tried greedily and shortened when the group cannot start. Thousands
+separators improve 2.9x and are 2.98x ahead.
+
+The unbounded chain skips the whole first run after a failed start, since
+every start inside the run shares the same run end and remaining input. The
+semver case improves 1.1x and is 1.15x ahead.
