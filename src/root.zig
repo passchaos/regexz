@@ -314,7 +314,7 @@ fn clearPooledWorkspace(id: u64) void {
 
 const CompileBlock = struct { allocator: std.mem.Allocator, bytes: []u8 };
 const max_pooled_blocks: usize = 8;
-const max_pooled_bytes: usize = 512 * 1024;
+const max_pooled_bytes: usize = 768 * 1024;
 var block_mutex: std.atomic.Mutex = .unlocked;
 var block_pool: [max_pooled_blocks]?CompileBlock = .{null} ** max_pooled_blocks;
 var pooled_block_bytes: usize = 0;
@@ -328,7 +328,7 @@ fn blockUnlock() void {
 }
 
 fn blockPoolable(gpa: std.mem.Allocator) bool {
-    return gpa.vtable == std.heap.page_allocator.vtable;
+    return gpa.vtable == std.heap.page_allocator.vtable or gpa.vtable == std.heap.smp_allocator.vtable;
 }
 
 fn takeCompileBlock(gpa: std.mem.Allocator, size: usize) ?[]u8 {

@@ -552,3 +552,12 @@ without another normalize. Compile Qwen improves 1.13x on the page allocator
 (39.0 -> 34.6 us) and 1.29x on smp (52.9 -> 41.2 us), with the 65 control
 cases at a 1.02x median. See
 [per-compile Unicode property cache](benchmarks/property-cache.md).
+
+The compile-block pool now serves the smp allocator and its cap rises to
+768 KiB. The earlier decision to keep smp on direct allocate/free was
+retested after the Unicode property cache made compile faster: the 256 KiB
+block allocation became a visible share, and the 512 KiB cap also prevented
+the Qwen smp block from staying pooled once the xDS and long-literal blocks
+were present. Compile Qwen (smp) improves 1.31x (44.1 -> 33.5 us) with the
+page path and other compile controls at 0.98-0.99x. Tracking allocators stay
+excluded. See [SMP compile-block pooling](benchmarks/smp-compile-pool.md).
