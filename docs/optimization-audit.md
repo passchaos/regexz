@@ -499,3 +499,12 @@ with the assume-capacity variants, since the output cannot exceed the
 reserved `input.len`. Replacing `the` with `X` on the 216 KiB word text
 improves 1.08x (75.3 -> 69.5 us). See
 [literal replacement appends](benchmarks/literal-replace-appends.md).
+
+Prepared UTF-8 run tables are now shared through a bounded process cache
+(8 slots, 4 MB, entries up to 256 KiB) for process-lifetime allocators; the
+stream Han chain improves 1.08x (163.5 -> 151.1 us) because scanners are
+created per stream and the Han table costs about 15.5 us to build. Tracking
+allocators bypass the cache so leak checks still see every allocation.
+Caching the multi-megabyte Qwen workspace tables was screened and rejected:
+it slowed the CJK tokenizer by about 10%. See
+[bounded UTF-8 run cache](benchmarks/utf8-run-cache.md).
