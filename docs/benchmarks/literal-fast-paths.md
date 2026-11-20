@@ -105,3 +105,18 @@ The anchored line case improves 3.5x internally (8,154.0 -> 2,241.9 ns) and
 moves from 1.09x to 4.23x ahead of Rust. End-line variants
 (`(?m)^\w+$`), non-ASCII sets and other newline modes stay on the general
 engine.
+
+## Bounded set runs
+
+`\d{1,3}(?:\.\d{1,3}){3}` is a concatenation of bounded set runs. The
+compiler now records that shape (`bounded_sequence`) when the whole pattern
+is a sequence of ASCII sets with bounded repetitions, at least one of which
+is variable width; fixed repeats of a sequence expand, lazy/possessive
+repeats, captures, unbounded runs and non-ASCII sets fall back. The workspace
+deduplicates the set tables and first tries a flat greedy walk, which decides
+every unambiguous candidate; only candidates where a shorter run could
+succeed enter the backtracking matcher (bounded by a small step budget).
+
+The IPv4 case improves 1.78x internally (119,776.9 -> 67,156.9 ns) and moves
+from 1.16x to 2.12x ahead of Rust. Fixed-width programs such as
+`\d{4}-\d{2}-\d{2}` keep the instruction-based `fixed_sequence` path.

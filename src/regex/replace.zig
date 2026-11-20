@@ -10,6 +10,7 @@ const std = @import("std");
 const byte_table = @import("byte_table.zig");
 const model = @import("model.zig");
 const Program = @import("compile.zig").Program;
+const BoundedElement = @import("compile.zig").BoundedElement;
 const pike = @import("pike.zig");
 const backtrack = @import("backtrack.zig");
 const search_dfa = @import("search_dfa.zig");
@@ -53,6 +54,7 @@ pub const FastKind = enum {
     run_then_literal,
     fixed_sequence,
     line_start_run,
+    bounded_sequence,
 };
 pub const Error = model.Error;
 
@@ -197,6 +199,8 @@ pub const Workspace = struct {
     fixed_sequence: ?*FixedSequence = null,
     /// `(?m)^set+` in LF newline mode.
     line_start_run: ?LineStartRun = null,
+    /// Bounded set-run concatenation with at least one variable-width run.
+    bounded_sequence: ?*BoundedSequenceState = null,
     /// Byte membership tables for the chain fast path. `Set.matches` is a
     /// binary search over rune ranges; the per-byte chain scans run several
     /// lookups per input byte, so cache the answers once per workspace.
@@ -334,6 +338,18 @@ pub const Workspace = struct {
             program.zero_width;
         const run_then_literal: ?RunThenLiteral = if (limits.longest) null else detectRunThenLiteral(program);
         const line_start_run: ?LineStartRun = if (limits.longest) null else detectLineStartRun(program);
+        const bounded_sequence: ?*BoundedSequenceState = if (limits.longest) null else blk: {
+            const elements = program.bounded_sequence orelse break :blk null;
+            const state = try allocator.create(BoundedSequenceState);
+            errdefer allocator.destroy(state);
+            state.* = .{};
+            if (!state.build(elements)) {
+                allocator.destroy(state);
+                break :blk null;
+            }
+            break :blk state;
+        };
+        errdefer if (bounded_sequence) |state| allocator.destroy(state);
         const fixed_sequence: ?*FixedSequence = if (limits.longest) null else blk: {
             const shape = detectFixedSequence(program) orelse break :blk null;
             const state = try allocator.create(FixedSequence);
@@ -364,6 +380,8 @@ pub const Workspace = struct {
             .fixed_sequence
         else if (line_start_run != null)
             .line_start_run
+        else if (bounded_sequence != null)
+            .bounded_sequence
         else if (literal_run != null)
             .literal_run
         else if (simple_anchored != null)
@@ -473,6 +491,7 @@ pub const Workspace = struct {
             .run_then_literal = run_then_literal,
             .fixed_sequence = fixed_sequence,
             .line_start_run = line_start_run,
+            .bounded_sequence = bounded_sequence,
         };
     }
 
@@ -481,6 +500,7 @@ pub const Workspace = struct {
         if (self.run_chain) |state| self.allocator.destroy(state);
         if (self.literal_run) |state| state.deinit(self.allocator);
         if (self.fixed_sequence) |state| self.allocator.destroy(state);
+        if (self.bounded_sequence) |state| self.allocator.destroy(state);
         if (self.utf8_run) |*value| value.deinit(self.allocator);
         if (self.fast_branch) |*value| value.deinit(self.allocator);
         if (self.pike_workspace) |*workspace| workspace.deinit();
@@ -558,6 +578,7 @@ pub const Workspace = struct {
             .run_then_literal => return self.findRunThenLiteral(&self.run_then_literal.?, input, search_start),
             .fixed_sequence => return self.findFixedSequence(self.fixed_sequence.?, input, search_start),
             .line_start_run => return self.findLineStartRun(&self.line_start_run.?, input, search_start),
+            .bounded_sequence => return self.findBoundedSequence(self.bounded_sequence.?, input, search_start),
         }
         // Every match must start at a start-literal occurrence, so the first
         // occurrence bounds the leftmost match start and the DFA can skip
@@ -1139,6 +1160,7 @@ pub const Workspace = struct {
             .run_then_literal => return self.findRunThenLiteral(&self.run_then_literal.?, input, search_start),
             .fixed_sequence => return self.findFixedSequence(self.fixed_sequence.?, input, search_start),
             .line_start_run => return self.findLineStartRun(&self.line_start_run.?, input, search_start),
+            .bounded_sequence => return self.findBoundedSequence(self.bounded_sequence.?, input, search_start),
         }
         var from = search_start;
         if (self.pair_filter) |filter| {
@@ -1832,6 +1854,65 @@ pub const Workspace = struct {
             }
             line = std.mem.indexOfScalarPos(u8, input, line, '\n') orelse return null;
             line += 1;
+        }
+        return null;
+    }
+
+    /// Bounded set-run concatenation. Candidates are scanned on the first
+    /// element; the matcher consumes each run greedily and backtracks down
+    /// to its minimum, matching the engine's greedy order. A small step
+    /// budget bails to the general engine on pathological shapes.
+    fn findBoundedSequence(self: *Workspace, state: *const BoundedSequenceState, input: []const u8, search_start: usize) ?Match {
+        if (search_start >= input.len) return null;
+        const first = state.elements[0];
+        const table = &state.tables[first.set];
+        var start = search_start;
+        while (start < input.len) : (start += 1) {
+            if (!table[input[start]]) continue;
+            // The greedy walk decides the common case without recursion;
+            // only ambiguous candidates need the backtracking matcher.
+            if (matchBoundedGreedy(state, input, start)) |end| {
+                self.slots[0] = start;
+                self.slots[1] = end;
+                return .{ .start = start, .end = end, .slots = self.slots };
+            }
+            var budget: usize = 64;
+            if (matchBounded(state, input, start, 0, &budget)) |end| {
+                self.slots[0] = start;
+                self.slots[1] = end;
+                return .{ .start = start, .end = end, .slots = self.slots };
+            }
+        }
+        return null;
+    }
+
+    fn matchBoundedGreedy(state: *const BoundedSequenceState, input: []const u8, start: usize) ?usize {
+        var pos = start;
+        var index: usize = 0;
+        while (index < state.len) : (index += 1) {
+            const element = state.elements[index];
+            const table = &state.tables[element.set];
+            var count: usize = 0;
+            const limit = @min(@as(usize, element.max), input.len - pos);
+            while (count < limit and table[input[pos + count]]) count += 1;
+            if (count < element.min) return null;
+            pos += count;
+        }
+        return pos;
+    }
+
+    fn matchBounded(state: *const BoundedSequenceState, input: []const u8, pos: usize, index: usize, budget: *usize) ?usize {
+        if (budget.* == 0) return null;
+        budget.* -= 1;
+        if (index == state.len) return pos;
+        const element = state.elements[index];
+        const table = &state.tables[element.set];
+        var count: usize = 0;
+        const limit = @min(@as(usize, element.max), input.len - pos);
+        while (count < limit and table[input[pos + count]]) count += 1;
+        if (count < element.min) return null;
+        while (count >= element.min) : (count -= 1) {
+            if (matchBounded(state, input, pos + count, index + 1, budget)) |end| return end;
         }
         return null;
     }
@@ -3090,6 +3171,37 @@ fn detectLineStartRun(program: Program) ?LineStartRun {
     if (!shapes.sameSet(set, star.star.set)) return null;
     return .{ .set = set, .table = byte_table.init(256, set) };
 }
+
+const BoundedSequenceState = struct {
+    const max_elements = 32;
+    const max_sets = 8;
+    const Element = struct { set: u8, min: u8, max: u8 };
+
+    elements: [max_elements]Element = undefined,
+    len: u8 = 0,
+    tables: [max_sets][256]bool = undefined,
+    set_count: u8 = 0,
+
+    fn build(self: *BoundedSequenceState, source: []const BoundedElement) bool {
+        if (source.len > self.elements.len) return false;
+        var sets: [max_sets]model.Set = undefined;
+        for (source) |element| {
+            var set_index: u8 = 0;
+            while (set_index < self.set_count) : (set_index += 1) {
+                if (shapes.sameSet(sets[set_index], element.set)) break;
+            }
+            if (set_index == self.set_count) {
+                if (self.set_count == sets.len) return false;
+                sets[self.set_count] = element.set;
+                self.tables[self.set_count] = byte_table.init(256, element.set);
+                self.set_count += 1;
+            }
+            self.elements[self.len] = .{ .set = set_index, .min = element.min, .max = element.max };
+            self.len += 1;
+        }
+        return true;
+    }
+};
 
 const FastBranch = struct {
     prior: prefilter.FirstFilter,

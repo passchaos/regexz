@@ -711,3 +711,15 @@ of Rust. End-line variants, non-ASCII sets and other newline modes stay on
 the general engine. All 30 comparison cases remain faster, with variable
 width IPv4 and the five-word alternation the thinnest at 1.16x. See
 [literal fast paths](benchmarks/literal-fast-paths.md).
+
+Bounded set-run concatenations (`\d{1,3}(?:\.\d{1,3}){3}`) now have a
+compile-time shape and a direct matcher. The compiler records the element
+sequence when the whole pattern is a concatenation of ASCII sets with bounded
+repetitions and at least one variable-width run; fixed repeats of a sequence
+expand, while lazy/possessive repeats, captures, unbounded runs and non-ASCII
+sets keep their existing paths. The matcher first tries a flat greedy walk,
+which decides unambiguous candidates, and falls back to a step-bounded
+backtracking matcher when a shorter run could succeed. IPv4 improves 1.78x
+internally (119.8 -> 67.2 us) and moves from 1.16x to 2.12x ahead of Rust.
+All 30 comparison cases remain faster, with the five-word alternation the
+thinnest at 1.18x. See [literal fast paths](benchmarks/literal-fast-paths.md).

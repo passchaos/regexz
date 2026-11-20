@@ -926,6 +926,57 @@ test "literal-run detection rejects an optional literal that overlaps the run" {
     }
 }
 
+test "bounded sequence fast path backtracks greedy runs" {
+    var value = try regex.Regex.init(gpa, "\\d{1,3}(?:\\.\\d{1,3}){3}", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind == .bounded_sequence);
+
+    const cases = [_]struct { input: []const u8, from: usize, spans: []const [2]usize }{
+        .{ .input = "192.168.1.1 x 10.0.0.255", .from = 0, .spans = &.{ .{ 0, 11 }, .{ 14, 24 } } },
+        .{ .input = "192.168.1.1 x 10.0.0.255", .from = 12, .spans = &.{.{ 14, 24 }} },
+        .{ .input = "1.2.3.4", .from = 0, .spans = &.{.{ 0, 7 }} },
+        .{ .input = "1234.5.6.7", .from = 0, .spans = &.{.{ 1, 10 }} },
+        .{ .input = "999.999.999.999", .from = 0, .spans = &.{.{ 0, 15 }} },
+        .{ .input = "1.2.3", .from = 0, .spans = &.{} },
+        .{ .input = "1.2.3.4.5", .from = 0, .spans = &.{.{ 0, 7 }} },
+    };
+    for (cases) |case| {
+        var offset = case.from;
+        var index: usize = 0;
+        while (offset <= case.input.len and index < case.spans.len) : (index += 1) {
+            const m = (try workspace.find(case.input, offset)) orelse break;
+            try std.testing.expectEqual(case.spans[index][0], m.start);
+            try std.testing.expectEqual(case.spans[index][1], m.end);
+            offset = m.end;
+        }
+        try std.testing.expectEqual(case.spans.len, index);
+    }
+
+    // Greedy max fails, the backtracking matcher must shorten the first run.
+    var backtrack = try regex.Regex.init(gpa, "\\d{1,3}\\d{2}", .{});
+    defer backtrack.deinit();
+    var backtrack_workspace = try regex.ReplaceWorkspace.init(gpa, backtrack.program, .{});
+    defer backtrack_workspace.deinit();
+    try std.testing.expect(backtrack_workspace.fast_kind == .bounded_sequence);
+    const found = (try backtrack_workspace.find("1234", 0)).?;
+    try std.testing.expectEqual(@as(usize, 0), found.start);
+    try std.testing.expectEqual(@as(usize, 4), found.end);
+
+    // Fixed widths and unbounded runs keep their existing paths.
+    var fixed = try regex.Regex.init(gpa, "\\d{4}-\\d{2}-\\d{2}", .{});
+    defer fixed.deinit();
+    var fixed_workspace = try regex.ReplaceWorkspace.init(gpa, fixed.program, .{});
+    defer fixed_workspace.deinit();
+    try std.testing.expect(fixed_workspace.fast_kind == .fixed_sequence);
+    var unbounded = try regex.Regex.init(gpa, "\\d+", .{});
+    defer unbounded.deinit();
+    var unbounded_workspace = try regex.ReplaceWorkspace.init(gpa, unbounded.program, .{});
+    defer unbounded_workspace.deinit();
+    try std.testing.expect(unbounded_workspace.fast_kind != .bounded_sequence);
+}
+
 test "line-start run fast path matches only at line starts" {
     var value = try regex.Regex.init(gpa, "(?m)^\\w+", .{});
     defer value.deinit();

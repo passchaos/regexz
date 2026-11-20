@@ -11,6 +11,8 @@ const start_literals_mod = @import("start_literals.zig");
 const fast_branch_mod = @import("fast_branch.zig");
 const zero_width_mod = @import("zero_width.zig");
 
+pub const BoundedElement = struct { set: model.Set, min: u8, max: u8 };
+
 pub const Program = struct {
     instructions: []const model.Instruction,
     start: usize,
@@ -36,6 +38,10 @@ pub const Program = struct {
     /// order. The match is the first alternative that matches at the
     /// leftmost candidate. Not serialized.
     literal_set: ?[]const []const u8 = null,
+    /// Whole-pattern concatenation of bounded ASCII set runs
+    /// (`\d{1,3}(?:\.\d{1,3}){3}`), at least one of which is variable
+    /// width. Not serialized.
+    bounded_sequence: ?[]const BoundedElement = null,
     /// A dominant alternation branch (`set? setB+`) that decides the match
     /// when no earlier branch can start at the current byte. Not serialized.
     fast_branch: ?fast_branch_mod.Plan = null,
@@ -585,6 +591,63 @@ const LiteralSetBuilder = struct {
     }
 };
 
+/// Whole-pattern concatenation of bounded set runs. Fixed repeats of a
+/// sequence expand; variable repeats are only accepted when the child is a
+/// single set. At least one element must be variable width, otherwise the
+/// instruction-based fixed-sequence path handles the program.
+const BoundedSequenceBuilder = struct {
+    const max_elements = 32;
+    const max_element_width = 8;
+    const max_expand = 8;
+
+    allocator: std.mem.Allocator,
+    elements: std.ArrayList(BoundedElement) = .empty,
+    saw_variable: bool = false,
+
+    fn setOf(value: *const model.Node) ?model.Set {
+        return switch (value.*) {
+            .group => |child| setOf(child),
+            .set => |set| set,
+            else => null,
+        };
+    }
+
+    fn addSet(self: *BoundedSequenceBuilder, set: model.Set, min: usize, max: usize) model.Error!bool {
+        if (!set.ascii_only or set.ranges.len == 0) return false;
+        if (self.elements.items.len == max_elements) return false;
+        try self.elements.append(self.allocator, .{
+            .set = set,
+            .min = @intCast(min),
+            .max = @intCast(max),
+        });
+        return true;
+    }
+
+    fn add(self: *BoundedSequenceBuilder, value: *const model.Node) model.Error!bool {
+        return switch (value.*) {
+            .empty, .flag_change => true,
+            .group => |child| self.add(child),
+            .pair => |pair| (try self.add(pair.left)) and (try self.add(pair.right)),
+            .set => |set| self.addSet(set, 1, 1),
+            .repeat => |repeat| blk: {
+                if (repeat.lazy or repeat.possessive) break :blk false;
+                if (setOf(repeat.child)) |set| {
+                    const maximum = repeat.maximum orelse break :blk false;
+                    if (repeat.minimum == 0 or repeat.minimum > maximum or maximum > max_element_width) break :blk false;
+                    if (maximum > repeat.minimum) self.saw_variable = true;
+                    break :blk self.addSet(set, repeat.minimum, maximum);
+                }
+                if (repeat.maximum == null or repeat.minimum != repeat.maximum.? or repeat.minimum > max_expand) break :blk false;
+                for (0..repeat.minimum) |_| {
+                    if (!try self.add(repeat.child)) break :blk false;
+                }
+                break :blk true;
+            },
+            else => false,
+        };
+    }
+};
+
 const PrefixBuilder = struct {
     allocator: std.mem.Allocator,
     bytes: std.ArrayList(u8) = .empty,
@@ -882,6 +945,14 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         try literal_set_builder.literals.toOwnedSlice(allocator)
     else
         null;
+    var bounded_builder = BoundedSequenceBuilder{ .allocator = allocator };
+    defer bounded_builder.elements.deinit(allocator);
+    const bounded_sequence: ?[]const BoundedElement = if (literal == null and caseless_literal == null and
+        literal_set == null and !limits.auto_callout and try bounded_builder.add(parsed.root) and
+        bounded_builder.saw_variable and bounded_builder.elements.items.len >= 2)
+        try bounded_builder.elements.toOwnedSlice(allocator)
+    else
+        null;
     var dfa_eligible = true;
     var needs_ucp_word = false;
     for (instructions) |instruction| switch (instruction) {
@@ -917,6 +988,7 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         .literal_prefix = literal_prefix,
         .caseless_literal = caseless_literal,
         .literal_set = literal_set,
+        .bounded_sequence = bounded_sequence,
         .dfa_eligible = dfa_eligible,
         .extended = extended,
         .newline = parsed.newline,
