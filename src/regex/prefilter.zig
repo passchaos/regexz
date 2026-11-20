@@ -15,6 +15,13 @@ const max_simd_bytes = 8;
 const max_simd_ranges = utf8_prefix.max_ranges;
 const Vec = @Vector(16, u8);
 
+/// Bit-packed lane mask: bit N is set when lane N matched. Iterating set bits
+/// with `@ctz` avoids `std.simd.firstTrue`, whose select plus reduce-min
+/// lowering costs a full vector round trip per candidate lane.
+inline fn laneMask(mask: @Vector(16, bool)) u16 {
+    return @bitCast(mask);
+}
+
 /// First offset at or after `start` holding `byte`, scanned 16 bytes at a
 /// time. Returns null when the byte is absent.
 pub fn indexOfByte(input: []const u8, start: usize, byte: u8) ?usize {
@@ -135,16 +142,21 @@ pub const PairSet = struct {
     fn indexOfAnyVector(self: *const PairSet, filter: *const nibble_filter.Filter, input: []const u8, start: usize) ?usize {
         var offset = start;
         while (offset + 17 <= input.len) : (offset += 16) {
-            var mask = filter.candidates(input[offset..][0..16].*, input[offset + 1 ..][0..16].*);
-            if (@reduce(.And, mask)) {
+            const mask = filter.candidates(input[offset..][0..16].*, input[offset + 1 ..][0..16].*);
+            // The absence case is the common one; a reduce avoids packing the
+            // lane mask when no position can start a literal.
+            if (!@reduce(.Or, mask)) continue;
+            const bits = laneMask(mask);
+            if (bits == 0xFFFF) {
                 // Every position needs an exact probe. Avoid repeated SIMD
                 // setup on collision-dense input and keep the scalar tail.
                 return self.indexOfAnyScalar(input, offset);
-            } else {
-                while (std.simd.firstTrue(mask)) |index| {
-                    if (self.matchesAt(input, offset + index)) return offset + index;
-                    mask = mask & (std.simd.iota(u8, 16) != @as(Vec, @splat(index)));
-                }
+            }
+            var pending = bits;
+            while (pending != 0) {
+                const index: usize = @ctz(pending);
+                pending &= pending - 1;
+                if (self.matchesAt(input, offset + index)) return offset + index;
             }
         }
         return self.indexOfAnyScalar(input, offset);
@@ -360,7 +372,8 @@ pub const FirstFilter = struct {
             while (index < self.range_count) : (index += 1) {
                 mask = mask | ((chunk >= self.range_lo[index]) & (chunk <= self.range_hi[index]));
             }
-            if (std.simd.firstTrue(mask)) |lane| return offset + lane;
+            const bits = laneMask(mask);
+            if (bits != 0) return offset + @ctz(bits);
         }
         while (offset < input.len) : (offset += 1) {
             if (self.prefixCandidate(input[offset])) return offset;
@@ -439,7 +452,8 @@ pub const FoldFilter = struct {
             const chunk_b: Vec = @bitCast(raw_b);
             var mask = (foldChunk(chunk_a) == splat_a) & (foldChunk(chunk_b) == splat_b);
             mask = mask | (chunk_a >= nonascii) | (chunk_b >= nonascii);
-            if (std.simd.firstTrue(mask)) |index| return self.candidateStart(offset + index, start);
+            const bits = laneMask(mask);
+            if (bits != 0) return self.candidateStart(offset + @ctz(bits), start);
         }
         while (offset + 1 < input.len) : (offset += 1) {
             if (self.matchesAt(input, offset)) return self.candidateStart(offset, start);
@@ -527,20 +541,22 @@ pub const MultiFilter = struct {
             while (pair_index < count) : (pair_index += 1) {
                 seconds = seconds | (next == second_splats[pair_index]);
             }
-            var mask = first_mask & seconds;
-            if (@reduce(.Or, mask)) {
-                if (@reduce(.And, mask)) {
-                    // Dense collisions already require every literal check;
-                    // a scalar pass avoids extracting the same 16 candidates.
-                    var index: usize = 0;
-                    while (index < 16) : (index += 1) {
-                        if (self.matchesAt(input, offset + index)) return offset + index;
-                    }
-                } else {
-                    while (std.simd.firstTrue(mask)) |index| {
-                        if (self.matchesAt(input, offset + index)) return offset + index;
-                        mask = mask & (std.simd.iota(u8, 16) != @as(Vec, @splat(index)));
-                    }
+            const mask = first_mask & seconds;
+            const bits = laneMask(mask);
+            if (bits == 0) continue;
+            if (bits == 0xFFFF) {
+                // Dense collisions already require every literal check;
+                // a scalar pass avoids extracting the same 16 candidates.
+                var index: usize = 0;
+                while (index < 16) : (index += 1) {
+                    if (self.matchesAt(input, offset + index)) return offset + index;
+                }
+            } else {
+                var pending = bits;
+                while (pending != 0) {
+                    const index: usize = @ctz(pending);
+                    pending &= pending - 1;
+                    if (self.matchesAt(input, offset + index)) return offset + index;
                 }
             }
         }
