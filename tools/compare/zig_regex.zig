@@ -204,6 +204,7 @@ pub fn main() !void {
     const ucp = regexz.Limits{ .unicode_perl_space = true, .max_execution_steps = 16_000_000 };
 
     try benchCompile(io, out, "compile Qwen tokenizer", qwen, 500, ucp);
+    try benchCompile(io, out, "compile xDS-like", "/(?:demo|test)\\.[A-Z][A-Za-z]+/(Get|List)", 20000, .{});
     try benchFind(io, out, "find Qwen tokenizer", qwen, ascii_text.items, 50, ucp);
     try benchFind(io, out, "find CJK tokenizer", qwen, cjk_text.items, 50, ucp);
     try benchFind(io, out, "find HTML tag", "<[^>]+>", html_text.items, 200, .{});

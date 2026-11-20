@@ -115,6 +115,11 @@ fn main() {
     let qwen = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+";
 
     bench_compile("compile Qwen tokenizer", qwen, 500);
+    bench_compile(
+        "compile xDS-like",
+        "/(?:demo|test)\\.[A-Z][A-Za-z]+/(Get|List)",
+        20000,
+    );
     bench_find("find Qwen tokenizer", qwen, &ascii_text, 50);
     bench_find("find CJK tokenizer", qwen, &cjk_text, 50);
     bench_find("find HTML tag", "<[^>]+>", &html_text, 200);

@@ -14,25 +14,26 @@ subjects.
 
 | Case | regexz, ns/iter | Rust, ns/iter | Rust / regexz |
 | --- | ---: | ---: | ---: |
-| compile Qwen tokenizer | 89,418.2 | 640,264.8 | 7.16x |
-| find Qwen tokenizer | 67,065.0 | 90,119.2 | 1.34x |
-| find CJK tokenizer | 240,210.8 | 395,435.0 | 1.65x |
-| find HTML tag | 60,277.5 | 178,094.2 | 2.95x |
-| find URL | 42,538.5 | 131,715.6 | 3.10x |
-| find JSON string literal | 8,299.8 | 23,814.0 | 2.87x |
-| find JSON number | 39,652.1 | 89,107.5 | 2.25x |
-| find word boundary | 78,983.5 | 201,496.7 | 2.55x |
-| fullmatch literal | 2.7 | 10.5 | 3.89x |
-| fullmatch class | 6.9 | 47.7 | 6.91x |
-| fullmatch xDS-like | 19.3 | 51.6 | 2.67x |
-| replaceAll `a+` → `x` | 33,508.8 | 145,517.5 | 4.34x |
-| replaceAll `\A|\z` → `X` | 7,041.3 | 12,018.5 | 1.71x |
-| RegexSet 9 no-match patterns | 12,344.4 | 49,323.1 | 4.00x |
+| compile Qwen tokenizer | 82,927.4 | 622,786.7 | 7.51x |
+| compile xDS-like | 5,933.9 | 28,969.2 | 4.88x |
+| find Qwen tokenizer | 73,728.3 | 91,090.8 | 1.24x |
+| find CJK tokenizer | 239,203.3 | 363,207.5 | 1.52x |
+| find HTML tag | 57,973.3 | 171,825.4 | 2.96x |
+| find URL | 44,673.8 | 130,897.9 | 2.93x |
+| find JSON string literal | 8,683.1 | 23,684.6 | 2.73x |
+| find JSON number | 34,332.9 | 91,699.8 | 2.67x |
+| find word boundary | 86,770.8 | 196,651.0 | 2.27x |
+| fullmatch literal | 2.8 | 11.9 | 4.25x |
+| fullmatch class | 7.4 | 45.9 | 6.20x |
+| fullmatch xDS-like | 17.8 | 52.0 | 2.92x |
+| replaceAll `a+` → `x` | 34,854.2 | 147,621.2 | 4.24x |
+| replaceAll `\A|\z` → `X` | 7,112.9 | 11,981.9 | 1.68x |
+| RegexSet 9 no-match patterns | 12,594.2 | 50,750.0 | 4.03x |
 
-regexz is faster on every measured case: 7.16x on tokenizer compilation,
-1.34–1.65x on tokenizer scans, 2.25–3.10x on search scans, 2.67–6.91x on
-full-match calls, 4.34x on a set-run replacement and 4.00x on the
-nine-pattern set.
+regexz is faster on every measured case: 7.51x on tokenizer compilation,
+4.88x on a small-pattern compile, 1.24–1.52x on tokenizer scans, 2.27–2.96x on
+search scans, 2.92–6.20x on full-match calls, 4.24x on a set-run replacement,
+1.68x on a zero-width replacement and 4.03x on the nine-pattern set.
 
 Caveats: the iteration APIs are the natural ones for each library
 (`Workspace.find` in a loop versus `Regex::find_iter`), full match is

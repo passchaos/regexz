@@ -255,10 +255,10 @@ substitutions with syntax and other patterns keep the general path. See
 
 A reproducible comparison harness now runs the same workloads through regexz
 and Rust's `regex` crate (`tools/compare`). On this host regexz is faster on
-all 14 measured cases: 7.16x on tokenizer compilation, 1.34–1.65x on tokenizer
-scans, 2.25–3.10x on search scans, 2.67–6.91x on full-match calls, 4.34x on a
-set-run replacement, 1.71x on a zero-width replacement and 4.00x on the
-nine-pattern set. See
+all 15 measured cases: 7.51x on tokenizer compilation, 4.88x on a small-pattern
+compile, 1.24–1.52x on tokenizer scans, 2.27–2.96x on search scans, 2.92–6.20x
+on full-match calls, 4.24x on a set-run replacement, 1.68x on a zero-width
+replacement and 4.03x on the nine-pattern set. See
 [comparison with Rust's regex](benchmarks/rust-comparison.md).
 
 Further work on these candidates needs fresh measurements before implementation.
