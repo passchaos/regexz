@@ -177,6 +177,16 @@ pub fn main() !void {
         }
         try report(out, "compile xDS-like (smp allocator)", iterations, pattern.len, elapsed(io, .{ .nanoseconds = start }));
     }
+    {
+        const pattern = "abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz0123456789";
+        const iterations = 20000;
+        const start = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds;
+        for (0..iterations) |_| {
+            var value = try regexz.Regex.init(gpa, pattern, .{});
+            value.deinit();
+        }
+        try report(out, "compile long literal", iterations, pattern.len, elapsed(io, .{ .nanoseconds = start }));
+    }
 
     try benchMatches(io, out, "fullmatch literal (warm Regex API)", "hello, world!", literal_input, 200000, false);
     try benchMatches(io, out, "fullmatch literal (reuse)", "hello, world!", literal_input, 200000, true);

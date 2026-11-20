@@ -1,3 +1,5 @@
+> Superseded by [compile block tiers](compile-block-tiers.md): long patterns now try a 64 KiB block (256 KiB for Unicode-class patterns) before the arena.
+
 # Arena compilation for long patterns
 
 Baseline: `648f767`, macOS ARM64, Zig 0.16.0 ReleaseFast.

@@ -294,8 +294,10 @@ fn clearPooledWorkspace(id: u64) void {
 
 const CompileBlock = struct { allocator: std.mem.Allocator, bytes: []u8 };
 const max_pooled_blocks: usize = 8;
+const max_pooled_bytes: usize = 512 * 1024;
 var block_mutex: std.atomic.Mutex = .unlocked;
 var block_pool: [max_pooled_blocks]?CompileBlock = .{null} ** max_pooled_blocks;
+var pooled_block_bytes: usize = 0;
 
 fn blockLock() void {
     while (!block_mutex.tryLock()) std.Thread.yield() catch {};
@@ -309,13 +311,14 @@ fn blockPoolable(gpa: std.mem.Allocator) bool {
     return gpa.vtable == std.heap.page_allocator.vtable;
 }
 
-fn takeCompileBlock(gpa: std.mem.Allocator) ?[]u8 {
+fn takeCompileBlock(gpa: std.mem.Allocator, size: usize) ?[]u8 {
     if (!blockPoolable(gpa)) return null;
     blockLock();
     for (&block_pool) |*entry| {
         if (entry.*) |value| {
-            if (value.allocator.vtable == gpa.vtable) {
+            if (value.bytes.len == size and value.allocator.vtable == gpa.vtable) {
                 entry.* = null;
+                pooled_block_bytes -= value.bytes.len;
                 blockUnlock();
                 return value.bytes;
             }
@@ -331,11 +334,14 @@ fn returnCompileBlock(gpa: std.mem.Allocator, bytes: []u8) void {
         return;
     }
     blockLock();
-    for (&block_pool) |*entry| {
-        if (entry.* == null) {
-            entry.* = .{ .allocator = gpa, .bytes = bytes };
-            blockUnlock();
-            return;
+    if (pooled_block_bytes + bytes.len <= max_pooled_bytes) {
+        for (&block_pool) |*entry| {
+            if (entry.* == null) {
+                entry.* = .{ .allocator = gpa, .bytes = bytes };
+                pooled_block_bytes += bytes.len;
+                blockUnlock();
+                return;
+            }
         }
     }
     blockUnlock();
@@ -364,18 +370,25 @@ pub const Regex = struct {
         self.mutex.unlock();
     }
     const compile_block_size: usize = 16 * 1024;
+    const medium_block_size: usize = 64 * 1024;
+    const large_block_size: usize = 256 * 1024;
 
     pub fn init(gpa: std.mem.Allocator, pattern: []const u8, limits: Limits) Error!Regex {
         // Small patterns fit in one fixed block, avoiding the arena's multiple
-        // page allocations. Long patterns grow several parse lists and pay
-        // the block's reallocation copies, so they compile in the arena.
-        if (pattern.len > 64) return initArena(gpa, pattern, limits);
-        if (takeCompileBlock(gpa)) |block| return compileInBlock(gpa, block, pattern, limits);
-        if (gpa.alloc(u8, compile_block_size)) |block| {
-            return compileInBlock(gpa, block, pattern, limits);
-        } else |_| {
-            return initArena(gpa, pattern, limits);
+        // page allocations. Long patterns and Unicode-class patterns need
+        // larger blocks; very large patterns compile in an arena.
+        if (pattern.len > 1024) return initArena(gpa, pattern, limits);
+        if (std.mem.indexOf(u8, pattern, "\\p") != null or std.mem.indexOf(u8, pattern, "\\P") != null) {
+            return compileWithBlock(gpa, pattern, limits, large_block_size);
         }
+        if (pattern.len > 64) return compileWithBlock(gpa, pattern, limits, medium_block_size);
+        return compileWithBlock(gpa, pattern, limits, compile_block_size);
+    }
+
+    fn compileWithBlock(gpa: std.mem.Allocator, pattern: []const u8, limits: Limits, size: usize) Error!Regex {
+        if (takeCompileBlock(gpa, size)) |block| return compileInBlock(gpa, block, pattern, limits);
+        const block = gpa.alloc(u8, size) catch return initArena(gpa, pattern, limits);
+        return compileInBlock(gpa, block, pattern, limits);
     }
 
     fn compileInBlock(gpa: std.mem.Allocator, block: []u8, pattern: []const u8, limits: Limits) Error!Regex {

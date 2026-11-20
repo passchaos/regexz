@@ -378,3 +378,11 @@ The xDS-like compile improves 2.07x (5.15 → 2.49 us) by avoiding the
 per-compile mmap/munmap. The SMP allocator bypasses the pool and is unchanged;
 other allocators keep direct allocate/free so leak tracking still works. See
 [reusing the compile block](benchmarks/compile-block-pool.md).
+
+Compilation now selects a block tier: 16 KiB up to 64 bytes, 64 KiB for
+longer patterns without Unicode property references, 256 KiB for patterns
+containing `\p`/`\P`, and the arena above 1024 bytes. The page block pool
+serves all three sizes under a 512 KiB cap. The Qwen tokenizer compile
+improves 1.36x (55.1 → 40.5 us) and a 100-byte literal 1.68x (18.3 → 10.9 us);
+the SMP Qwen path is neutral and xDS keeps its 16 KiB block. See
+[compile block tiers](benchmarks/compile-block-tiers.md).

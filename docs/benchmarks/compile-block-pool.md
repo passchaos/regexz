@@ -1,3 +1,5 @@
+> Superseded by [compile block tiers](compile-block-tiers.md): the pool now serves 16 KiB, 64 KiB and 256 KiB blocks.
+
 # Reusing the compile block
 
 Baseline: `6547622`, macOS ARM64, Zig 0.16.0 ReleaseFast.
