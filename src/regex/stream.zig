@@ -18,6 +18,7 @@ const Program = @import("compile.zig").Program;
 const prefilter = @import("prefilter.zig");
 const shapes = @import("shapes.zig");
 const newline = @import("newline.zig");
+const utf8_run = @import("utf8_run.zig");
 const unset = std.math.maxInt(usize);
 
 pub const StreamMatch = struct {
@@ -101,6 +102,10 @@ pub const Scanner = struct {
     chain_a_table: [256]bool = .{false} ** 256,
     chain_b_table: [256]bool = .{false} ** 256,
     chain_ascii: bool = false,
+    /// UTF-8 automata for the chain's non-ASCII run sets. Built on the first
+    /// non-ASCII scan so ASCII-only streams pay nothing.
+    chain_a_run: ?utf8_run.Utf8Run = null,
+    chain_b_run: ?utf8_run.Utf8Run = null,
     star_start: ?usize = null,
     /// A `set+ literal set+` program (with the literal outside the first set)
     /// scans deterministically.
@@ -210,6 +215,8 @@ pub const Scanner = struct {
         self.allocator.free(self.seen);
         self.reset_trail.deinit(self.allocator);
         self.buffer.deinit(self.allocator);
+        if (self.chain_a_run) |*run| run.deinit(self.allocator);
+        if (self.chain_b_run) |*run| run.deinit(self.allocator);
         self.* = undefined;
     }
 
@@ -505,6 +512,24 @@ pub const Scanner = struct {
         self.emitSimple(context, emit, self.chain_start, end);
     }
 
+    const ChainRun = enum { a, b };
+
+    fn chainRun(self: *Scanner, which: ChainRun) model.Error!*const utf8_run.Utf8Run {
+        const slot = switch (which) {
+            .a => &self.chain_a_run,
+            .b => &self.chain_b_run,
+        };
+        if (slot.* == null) {
+            const chain = self.simple_chain.?;
+            const set = switch (which) {
+                .a => chain.set_a,
+                .b => chain.set_b.?,
+            };
+            slot.* = try utf8_run.Utf8Run.init(self.allocator, set);
+        }
+        return if (slot.*) |*run| run else unreachable;
+    }
+
     fn processChain(self: *Scanner, context: ?*anyopaque, emit: EmitFn, at_eof: bool) model.Error!void {
         const chain = self.simple_chain.?;
         while (true) {
@@ -555,9 +580,8 @@ pub const Scanner = struct {
                 }
                 continue;
             }
-            const status = self.runeStatus(abs);
             switch (self.chain_phase) {
-                .idle => switch (status) {
+                .idle => switch (self.runeStatus(abs)) {
                     .valid => |rune| {
                         if (chain.set_a.matches(rune.value)) {
                             self.chain_phase = .run_a;
@@ -571,61 +595,46 @@ pub const Scanner = struct {
                         self.scan += 1;
                     },
                 },
-                .run_a => switch (status) {
-                    .valid => |rune| {
-                        if (chain.set_a.matches(rune.value)) {
-                            self.scan += rune.len;
-                        } else switch (self.chainLiteralAt(self.scan)) {
-                            .match => |length| {
-                                const separator_at = self.buffer_base + self.scan;
-                                self.scan += length;
-                                if (chain.set_b == null) {
-                                    // No trailing run: the match ends with the
-                                    // separator and cannot extend.
-                                    if (separator_at - self.chain_start >= chain.min_a) {
-                                        self.emitSimple(context, emit, self.chain_start, self.buffer_base + self.scan);
-                                    }
-                                    self.chain_phase = .idle;
-                                } else {
-                                    self.chain_phase = .run_b;
-                                    self.chain_b_start = self.buffer_base + self.scan;
+                .run_a => {
+                    // The UTF-8 automaton consumes the whole member run with
+                    // one table load per byte instead of decoding and
+                    // range-searching every rune.
+                    const run = try self.chainRun(.a);
+                    const found = run.runEndStatus(self.buffer.items, self.scan);
+                    if (found.end > self.scan) self.scan = found.end;
+                    if (found.incomplete and !at_eof) break;
+                    if (self.scan >= self.buffer.items.len) break;
+                    switch (self.chainLiteralAt(self.scan)) {
+                        .match => |length| {
+                            const separator_at = self.buffer_base + self.scan;
+                            self.scan += length;
+                            if (chain.set_b == null) {
+                                // No trailing run: the match ends with the
+                                // separator and cannot extend.
+                                if (separator_at - self.chain_start >= chain.min_a) {
+                                    self.emitSimple(context, emit, self.chain_start, self.buffer_base + self.scan);
                                 }
-                            },
-                            .incomplete => {
-                                if (!at_eof) break;
                                 self.chain_phase = .idle;
-                            },
-                            .no => self.chain_phase = .idle,
-                        }
-                    },
-                    .invalid => {
-                        self.chain_phase = .idle;
-                        self.scan += 1;
-                    },
-                    .incomplete => {
-                        if (!at_eof) break;
-                        self.chain_phase = .idle;
-                    },
-                },
-                .run_b => switch (status) {
-                    .valid => |rune| {
-                        if (chain.set_b.?.matches(rune.value)) {
-                            self.scan += rune.len;
-                        } else {
-                            self.emitChain(context, emit);
+                            } else {
+                                self.chain_phase = .run_b;
+                                self.chain_b_start = self.buffer_base + self.scan;
+                            }
+                        },
+                        .incomplete => {
+                            if (!at_eof) break;
                             self.chain_phase = .idle;
-                        }
-                    },
-                    .invalid => {
-                        self.emitChain(context, emit);
-                        self.chain_phase = .idle;
-                        self.scan += 1;
-                    },
-                    .incomplete => {
-                        if (!at_eof) break;
-                        self.emitChain(context, emit);
-                        self.chain_phase = .idle;
-                    },
+                        },
+                        .no => self.chain_phase = .idle,
+                    }
+                },
+                .run_b => {
+                    const run = try self.chainRun(.b);
+                    const found = run.runEndStatus(self.buffer.items, self.scan);
+                    if (found.end > self.scan) self.scan = found.end;
+                    if (found.incomplete and !at_eof) break;
+                    if (self.scan >= self.buffer.items.len) break;
+                    self.emitChain(context, emit);
+                    self.chain_phase = .idle;
                 },
             }
         }

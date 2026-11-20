@@ -208,6 +208,13 @@ Qwen tokenizer pattern improves 4.85–5.32x, with the compiled sets, runtime
 paths and allocation counts unchanged; see
 [targeted case-fold expansion](benchmarks/case-fold-scan.md).
 
+The streaming chain fast path now consumes non-ASCII runs with a lazily built
+UTF-8 automaton (one table load per byte) instead of decoding and
+range-searching each rune, while a new run-end status preserves partial runes
+across chunk boundaries. The 191 KiB Han chain improves 2.40x; ASCII chains
+and the search controls stay within host noise. See
+[streaming chain runs](benchmarks/stream-chain-runs.md).
+
 Further work on these candidates needs fresh measurements before implementation.
 Current warmed throughput does not establish their cold-start cost or the
 benefit of replacing their fallback paths.

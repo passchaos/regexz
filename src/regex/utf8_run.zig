@@ -33,8 +33,12 @@ pub const Utf8Run = struct {
         return null;
     }
 
-    /// End of the maximal member run starting at `offset`.
-    pub fn runEnd(self: *const Utf8Run, input: []const u8, offset: usize) usize {
+    /// End of the maximal member run starting at `offset`, plus whether the
+    /// scan stopped inside a rune because the input ended. A streaming caller
+    /// keeps that partial rune until the next chunk arrives.
+    pub const RunEnd = struct { end: usize, incomplete: bool };
+
+    pub fn runEndStatus(self: *const Utf8Run, input: []const u8, offset: usize) RunEnd {
         var end = offset;
         var rune_begin = offset;
         var state: u16 = 0;
@@ -45,14 +49,18 @@ pub const Utf8Run = struct {
                 end += 1;
                 rune_begin = end;
             } else if (next == utf8_set.dead) {
-                end = rune_begin;
-                break;
+                return .{ .end = rune_begin, .incomplete = false };
             } else {
                 state = next;
                 end += 1;
             }
         }
-        if (state != 0) end = rune_begin;
-        return end;
+        if (state != 0) return .{ .end = rune_begin, .incomplete = true };
+        return .{ .end = end, .incomplete = false };
+    }
+
+    /// End of the maximal member run starting at `offset`.
+    pub fn runEnd(self: *const Utf8Run, input: []const u8, offset: usize) usize {
+        return self.runEndStatus(input, offset).end;
     }
 };
