@@ -151,6 +151,11 @@ fn main() {
     let camel_text = "fooBar bazQux helloWorld x ".repeat(3000);
     let kv_text = "name = value key=value a  =  b ".repeat(3000);
     let ipport_text = "192.168.1.1:8080 10.0.0.1:443 ".repeat(3000);
+    let sign_text = "x=-12.5 y=+3 z=0.25 ".repeat(2000);
+    let attr_text = "<div id=\"main\" class=\"box\">".repeat(2000);
+    let md_text = "# Title\n## Section\ntext\n### Sub\n".repeat(1500);
+    let prefix_text = "prefix postfix prefixx post ".repeat(3000);
+    let mixed_text = "a bb ccc a bb ccc ".repeat(4000);
 
     let qwen = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+";
 
@@ -263,6 +268,22 @@ fn main() {
         &ipport_text,
         200,
     );
+    bench_find("find (?i) class", "(?i)[a-z]+", &ascii_text, 200);
+    bench_find("find prefix alternation", "(?:pre|post)fix", &prefix_text, 200);
+    bench_find(
+        "find signed number",
+        "[+-]?\\d+(?:\\.\\d+)?",
+        &sign_text,
+        200,
+    );
+    bench_find(
+        "find html attribute",
+        "\\w+=\"[^\"]*\"",
+        &attr_text,
+        200,
+    );
+    bench_find("find markdown heading", "(?m)^#{1,6} .*$", &md_text, 200);
+    bench_find("find mixed alternation", "a|bb|ccc", &mixed_text, 200);
     bench_split("split whitespace (22 KiB)", "\\s+", &ascii_text, 200);
     bench_split("split commas (29 KiB)", ",", &csv_text, 200);
     bench_fullmatch(

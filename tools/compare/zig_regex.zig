@@ -350,6 +350,26 @@ pub fn main() !void {
     defer ipport_text.deinit(gpa);
     for (0..3000) |_| try ipport_text.appendSlice(gpa, "192.168.1.1:8080 10.0.0.1:443 ");
 
+    var sign_text: std.ArrayList(u8) = .empty;
+    defer sign_text.deinit(gpa);
+    for (0..2000) |_| try sign_text.appendSlice(gpa, "x=-12.5 y=+3 z=0.25 ");
+
+    var attr_text: std.ArrayList(u8) = .empty;
+    defer attr_text.deinit(gpa);
+    for (0..2000) |_| try attr_text.appendSlice(gpa, "<div id=\"main\" class=\"box\">");
+
+    var md_text: std.ArrayList(u8) = .empty;
+    defer md_text.deinit(gpa);
+    for (0..1500) |_| try md_text.appendSlice(gpa, "# Title\n## Section\ntext\n### Sub\n");
+
+    var prefix_text: std.ArrayList(u8) = .empty;
+    defer prefix_text.deinit(gpa);
+    for (0..3000) |_| try prefix_text.appendSlice(gpa, "prefix postfix prefixx post ");
+
+    var mixed_text: std.ArrayList(u8) = .empty;
+    defer mixed_text.deinit(gpa);
+    for (0..4000) |_| try mixed_text.appendSlice(gpa, "a bb ccc a bb ccc ");
+
     const qwen = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+";
     const ucp = regexz.Limits{ .unicode_perl_space = true, .max_execution_steps = 16_000_000 };
 
@@ -397,6 +417,12 @@ pub fn main() !void {
     try benchFind(io, out, "find camelCase", "[a-z]+[A-Z][a-z]+", camel_text.items, 200, .{});
     try benchFind(io, out, "find key-value", "\\w+\\s*=\\s*\\w+", kv_text.items, 200, .{});
     try benchFind(io, out, "find IP port", "\\d+\\.\\d+\\.\\d+\\.\\d+:\\d+", ipport_text.items, 200, .{});
+    try benchFind(io, out, "find (?i) class", "(?i)[a-z]+", ascii_text.items, 200, .{});
+    try benchFind(io, out, "find prefix alternation", "(?:pre|post)fix", prefix_text.items, 200, .{});
+    try benchFind(io, out, "find signed number", "[+-]?\\d+(?:\\.\\d+)?", sign_text.items, 200, .{});
+    try benchFind(io, out, "find html attribute", "\\w+=\"[^\"]*\"", attr_text.items, 200, .{});
+    try benchFind(io, out, "find markdown heading", "(?m)^#{1,6} .*$", md_text.items, 200, .{});
+    try benchFind(io, out, "find mixed alternation", "a|bb|ccc", mixed_text.items, 200, .{});
     try benchSplit(io, out, "split whitespace (22 KiB)", "\\s+", ascii_text.items, 200);
     try benchSplit(io, out, "split commas (29 KiB)", ",", csv_text.items, 200);
     try benchMatches(io, out, "fullmatch literal", "hello, world!", "hello, world!", 200000, .{});

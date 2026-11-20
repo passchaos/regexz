@@ -37,6 +37,20 @@ pub const OptionalTailShape = struct {
     literal: u8,
 };
 
+pub const NumberShape = struct {
+    sign: model.Set,
+    digits: model.Set,
+    fraction: bool,
+};
+
+pub const LineHeadingShape = struct {
+    byte: u8,
+    min: u8,
+    max: u8,
+    space: u8,
+    set: model.Set,
+};
+
 pub const BoundedLoopShape = struct {
     set_a: model.Set,
     min_a: u8,
@@ -100,6 +114,12 @@ pub const Program = struct {
     /// A bounded run followed by a greedy repetition of a bounded
     /// `separator run` group (`\d{1,3}(?:,\d{3})+`). Not serialized.
     bounded_loop: ?BoundedLoopShape = null,
+    /// A sign set followed by digits and an optional fraction
+    /// (`[+-]?\d+(?:\.\d+)?`). Not serialized.
+    signed_number: ?NumberShape = null,
+    /// `(?m)^X{min,max} Y.*$` with a literal heading byte and space. Not
+    /// serialized.
+    line_heading: ?LineHeadingShape = null,
     /// `x? set+` where `x` is a member of the set, which matches exactly the
     /// same spans as `set+`. Not serialized.
     optional_run: ?model.Set = null,
@@ -616,41 +636,77 @@ const CaselessLiteralBuilder = struct {
 /// non-empty sequence of singleton sets; groups are transparent, while
 /// captures, assertions, repeats and nested non-literal nodes reject the
 /// shape so the general engine keeps its semantics.
-const LiteralSetBuilder = struct {
-    allocator: std.mem.Allocator,
-    literals: std.ArrayList([]const u8) = .empty,
+/// Expands a whole-pattern literal alternation, distributing literal
+/// prefixes and suffixes over the branches: `(?:pre|post)fix` becomes
+/// `prefix|postfix`. Every leaf must be a singleton set (a literal byte) and
+/// the branch count and bytes are bounded.
+const LiteralExpander = struct {
+    const max_branches = 32;
+    const max_total_bytes = 1024;
 
-    fn sequence(self: *LiteralSetBuilder, value: *const model.Node, out: *std.ArrayList(u8)) model.Error!bool {
-        return switch (value.*) {
-            .empty, .flag_change => true,
-            .group => |child| self.sequence(child, out),
-            .pair => |pair| (try self.sequence(pair.left, out)) and (try self.sequence(pair.right, out)),
-            .set => |set| blk: {
-                if (set.ranges.len != 1 or set.ranges[0].first != set.ranges[0].last) break :blk false;
-                var encoded: [4]u8 = undefined;
-                const len = std.unicode.utf8Encode(set.ranges[0].first, &encoded) catch break :blk false;
-                try out.appendSlice(self.allocator, encoded[0..len]);
-                break :blk true;
-            },
-            else => false,
-        };
+    allocator: std.mem.Allocator,
+    total_bytes: usize = 0,
+
+    fn single(self: *LiteralExpander, bytes: []const u8) model.Error![]const []const u8 {
+        if (self.total_bytes + bytes.len > max_total_bytes) return error.RegexLimitExceeded;
+        self.total_bytes += bytes.len;
+        const list = try self.allocator.alloc([]const u8, 1);
+        list[0] = try self.allocator.dupe(u8, bytes);
+        return list;
     }
 
-    fn collect(self: *LiteralSetBuilder, value: *const model.Node) model.Error!bool {
+    fn expand(self: *LiteralExpander, value: *const model.Node) model.Error!?[]const []const u8 {
         return switch (value.*) {
-            .alternate => |pair| (try self.collect(pair.left)) and (try self.collect(pair.right)),
-            .group => |child| self.collect(child),
-            else => blk: {
-                var bytes: std.ArrayList(u8) = .empty;
-                defer bytes.deinit(self.allocator);
-                if (!try self.sequence(value, &bytes)) break :blk false;
-                if (bytes.items.len == 0) break :blk false;
-                try self.literals.append(self.allocator, try bytes.toOwnedSlice(self.allocator));
-                break :blk true;
+            .empty, .flag_change => try self.single(""),
+            .group => |child| self.expand(child),
+            .set => |set| blk: {
+                if (set.ranges.len != 1 or set.ranges[0].first != set.ranges[0].last) break :blk null;
+                var encoded: [4]u8 = undefined;
+                const len = std.unicode.utf8Encode(set.ranges[0].first, &encoded) catch break :blk null;
+                break :blk try self.single(encoded[0..len]);
             },
+            .alternate => |pair| blk: {
+                const left = try self.expand(pair.left) orelse break :blk null;
+                const right = try self.expand(pair.right) orelse break :blk null;
+                if (left.len + right.len > max_branches) break :blk null;
+                const list = try self.allocator.alloc([]const u8, left.len + right.len);
+                @memcpy(list[0..left.len], left);
+                @memcpy(list[left.len..], right);
+                break :blk list;
+            },
+            .pair => |pair| blk: {
+                const left = try self.expand(pair.left) orelse break :blk null;
+                const right = try self.expand(pair.right) orelse break :blk null;
+                if (left.len * right.len > max_branches) break :blk null;
+                const list = try self.allocator.alloc([]const u8, left.len * right.len);
+                var index: usize = 0;
+                for (left) |prefix| {
+                    for (right) |suffix| {
+                        const bytes = try self.allocator.alloc(u8, prefix.len + suffix.len);
+                        if (self.total_bytes + bytes.len > max_total_bytes) return error.RegexLimitExceeded;
+                        self.total_bytes += bytes.len;
+                        @memcpy(bytes[0..prefix.len], prefix);
+                        @memcpy(bytes[prefix.len..], suffix);
+                        list[index] = bytes;
+                        index += 1;
+                    }
+                }
+                break :blk list;
+            },
+            else => null,
         };
     }
 };
+
+fn expandLiteralSet(allocator: std.mem.Allocator, root: *const model.Node) model.Error!?[]const []const u8 {
+    var expander = LiteralExpander{ .allocator = allocator };
+    const branches = try expander.expand(root) orelse return null;
+    if (branches.len < 2) return null;
+    for (branches) |branch| {
+        if (branch.len == 0) return null;
+    }
+    return branches;
+}
 
 /// Whole-pattern concatenation of bounded set runs. Fixed repeats of a
 /// sequence expand; variable repeats are only accepted when the child is a
@@ -795,6 +851,149 @@ fn detectOptionalRun(root: *const model.Node) ?model.Set {
     const set = run_node.set;
     if (!set.matches(byte)) return null;
     return set;
+}
+
+fn nodeSet(node: *const model.Node) ?model.Set {
+    var current = node;
+    while (current.* == .group) current = current.group;
+    return switch (current.*) {
+        .set => |set| set,
+        else => null,
+    };
+}
+
+fn repeatOf(node: *const model.Node) ?*const model.Node {
+    var current = node;
+    while (current.* == .group) current = current.group;
+    return switch (current.*) {
+        .repeat => current,
+        else => null,
+    };
+}
+
+fn sameRanges(a: model.Set, b: model.Set) bool {
+    if (a.ranges.len != b.ranges.len) return false;
+    for (a.ranges, b.ranges) |left, right| {
+        if (left.first != right.first or left.last != right.last) return false;
+    }
+    return true;
+}
+
+fn flattenN(node: *const model.Node, out: *[3]*const model.Node, count: *usize) bool {
+    var current = node;
+    while (current.* == .group) current = current.group;
+    switch (current.*) {
+        .empty, .flag_change => return true,
+        .pair => |pair| {
+            return flattenN(pair.left, out, count) and flattenN(pair.right, out, count);
+        },
+        else => {},
+    }
+    if (count.* == out.len) return false;
+    out[count.*] = current;
+    count.* += 1;
+    return true;
+}
+
+/// A sign set followed by digits and an optional fraction, for example
+/// `[+-]?\d+(?:\.\d+)?`. The sign set must be disjoint from the digits.
+fn detectSignedNumber(root: *const model.Node) ?NumberShape {
+    var nodes: [3]*const model.Node = undefined;
+    var count: usize = 0;
+    if (!flattenN(root, &nodes, &count) or count < 2) return null;
+    const sign_repeat = (repeatOf(nodes[0]) orelse return null).repeat;
+    if (sign_repeat.lazy or sign_repeat.possessive or sign_repeat.minimum != 0 or
+        sign_repeat.maximum == null or sign_repeat.maximum.? != 1)
+    {
+        return null;
+    }
+    const sign = nodeSet(sign_repeat.child) orelse return null;
+    const digits_repeat = (repeatOf(nodes[1]) orelse return null).repeat;
+    if (digits_repeat.lazy or digits_repeat.possessive or digits_repeat.maximum != null or digits_repeat.minimum == 0) return null;
+    const digits = nodeSet(digits_repeat.child) orelse return null;
+    var fraction = false;
+    if (count == 3) {
+        const group = (repeatOf(nodes[2]) orelse return null).repeat;
+        if (group.lazy or group.possessive or group.minimum != 0 or group.maximum == null or group.maximum.? != 1) return null;
+        var child = group.child;
+        while (child.* == .group) child = child.group;
+        if (child.* != .pair) return null;
+        var dot = child.pair.left;
+        while (dot.* == .group) dot = dot.group;
+        if (dot.* != .set or dot.set.ranges.len != 1 or dot.set.ranges[0].first != dot.set.ranges[0].last or
+            dot.set.ranges[0].first != '.')
+        {
+            return null;
+        }
+        const fraction_repeat = (repeatOf(child.pair.right) orelse return null).repeat;
+        if (fraction_repeat.lazy or fraction_repeat.possessive or fraction_repeat.maximum != null or fraction_repeat.minimum == 0) return null;
+        const fraction_digits = nodeSet(fraction_repeat.child) orelse return null;
+        if (!sameRanges(digits, fraction_digits)) return null;
+        fraction = true;
+    } else if (count > 3) return null;
+    if (!sign.ascii_only or sign.ranges.len == 0) return null;
+    if (!digits.ascii_only or digits.ranges.len == 0) return null;
+    if (setOverlaps(sign, digits)) return null;
+    return .{ .sign = sign, .digits = digits, .fraction = fraction };
+}
+
+fn flattenUpTo(node: *const model.Node, out: []*const model.Node, count: *usize) bool {
+    var current = node;
+    while (current.* == .group) current = current.group;
+    switch (current.*) {
+        .empty, .flag_change => return true,
+        .pair => |pair| {
+            return flattenUpTo(pair.left, out, count) and flattenUpTo(pair.right, out, count);
+        },
+        else => {},
+    }
+    if (count.* == out.len) return false;
+    out[count.*] = current;
+    count.* += 1;
+    return true;
+}
+
+/// `(?m)^X{1,max} Y.*$` with a literal heading byte and space, in LF mode.
+fn detectLineHeading(root: *const model.Node) ?LineHeadingShape {
+    var nodes: [5]*const model.Node = undefined;
+    var count: usize = 0;
+    if (!flattenUpTo(root, &nodes, &count) or count != 5) return null;
+    var first = nodes[0];
+    while (first.* == .group) first = first.group;
+    if (first.* != .assertion or first.assertion != .start_line) return null;
+    const heading_repeat = (repeatOf(nodes[1]) orelse return null).repeat;
+    if (heading_repeat.lazy or heading_repeat.possessive or heading_repeat.maximum == null or
+        heading_repeat.minimum == 0 or heading_repeat.minimum > heading_repeat.maximum.? or
+        heading_repeat.maximum.? > 8)
+    {
+        return null;
+    }
+    const heading_set = nodeSet(heading_repeat.child) orelse return null;
+    if (heading_set.ranges.len != 1 or heading_set.ranges[0].first != heading_set.ranges[0].last or
+        heading_set.ranges[0].first >= 0x80)
+    {
+        return null;
+    }
+    const space_set = nodeSet(nodes[2]) orelse return null;
+    if (space_set.ranges.len != 1 or space_set.ranges[0].first != space_set.ranges[0].last or
+        space_set.ranges[0].first >= 0x80)
+    {
+        return null;
+    }
+    const body_repeat = (repeatOf(nodes[3]) orelse return null).repeat;
+    if (body_repeat.lazy or body_repeat.possessive or body_repeat.maximum != null or body_repeat.minimum != 0) return null;
+    const body_set = nodeSet(body_repeat.child) orelse return null;
+    if (body_set.ranges.len == 0) return null;
+    var last = nodes[4];
+    while (last.* == .group) last = last.group;
+    if (last.* != .assertion or last.assertion != .end_line) return null;
+    return .{
+        .byte = @intCast(heading_set.ranges[0].first),
+        .min = @intCast(heading_repeat.minimum),
+        .max = @intCast(heading_repeat.maximum.?),
+        .space = @intCast(space_set.ranges[0].first),
+        .set = body_set,
+    };
 }
 
 /// A bounded run followed by a greedy repetition of a bounded
@@ -1068,7 +1267,7 @@ const UnboundedSequenceBuilder = struct {
     }
 
     fn appendRun(self: *UnboundedSequenceBuilder, set: model.Set, min: u8) model.Error!bool {
-        if (!set.ascii_only or set.ranges.len == 0) return false;
+        if (set.ranges.len == 0) return false;
         if (self.elements.items.len == max_elements) return false;
         if (self.elements.items.len != 0) {
             const last = self.elements.items[self.elements.items.len - 1];
@@ -1512,14 +1711,8 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         try caseless_builder.bytes.toOwnedSlice(allocator)
     else
         null;
-    var literal_set_builder = LiteralSetBuilder{ .allocator = allocator };
-    defer literal_set_builder.literals.deinit(allocator);
     const literal_set: ?[]const []const u8 = if (literal == null and caseless_literal == null and
-        !limits.auto_callout and try literal_set_builder.collect(parsed.root) and
-        literal_set_builder.literals.items.len >= 2)
-        try literal_set_builder.literals.toOwnedSlice(allocator)
-    else
-        null;
+        !limits.auto_callout) try expandLiteralSet(allocator, parsed.root) else null;
     const unbounded_storage = try allocator.alloc(u8, UnboundedSequenceBuilder.max_literal_bytes);
     const prefix_run: ?PrefixRunShape = if (literal == null and caseless_literal == null and
         literal_set == null and !limits.auto_callout) detectPrefixRun(parsed.root) else null;
@@ -1529,6 +1722,13 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         literal_set == null and !limits.auto_callout) detectOptionalTail(parsed.root) else null;
     const bounded_loop: ?BoundedLoopShape = if (literal == null and caseless_literal == null and
         literal_set == null and !limits.auto_callout) detectBoundedLoop(parsed.root) else null;
+    const signed_number: ?NumberShape = if (literal == null and caseless_literal == null and
+        literal_set == null and !limits.auto_callout) detectSignedNumber(parsed.root) else null;
+    const line_heading: ?LineHeadingShape = if (literal == null and caseless_literal == null and
+        literal_set == null and !limits.auto_callout and parsed.newline == .lf)
+        detectLineHeading(parsed.root)
+    else
+        null;
     const optional_run: ?model.Set = if (literal == null and caseless_literal == null and
         literal_set == null and !limits.auto_callout) detectOptionalRun(parsed.root) else null;
     var unbounded_builder = UnboundedSequenceBuilder{ .allocator = allocator, .literal_bytes = unbounded_storage };
@@ -1589,6 +1789,8 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         .chain_loop = chain_loop,
         .optional_tail = optional_tail,
         .bounded_loop = bounded_loop,
+        .signed_number = signed_number,
+        .line_heading = line_heading,
         .optional_run = optional_run,
         .dfa_eligible = dfa_eligible,
         .extended = extended,

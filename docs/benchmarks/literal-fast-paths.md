@@ -209,3 +209,29 @@ separators improve 2.9x and are 2.98x ahead.
 The unbounded chain skips the whole first run after a failed start, since
 every start inside the run shares the same run end and remaining input. The
 semver case improves 1.1x and is 1.15x ahead.
+
+## Signed numbers, headings, negated runs and alternation products
+
+Five more shapes were added after the expanded comparison found them on the
+search DFA:
+
+- A sign set followed by digits and an optional fraction
+  (`[+-]?\d+(?:\\.\d+)?`) is detected from the AST and scanned directly. The
+  sign is disjoint from the digits, so a failed digit run never retries
+  without the sign. It improves 4.3x and is 1.48x ahead.
+- A markdown heading (`(?m)^#{1,6} .*$`) gets a line-heading scan: the
+  heading run is shortened until the space matches and the body run must
+  reach the line end. It improves 3.8x and is 1.22x ahead.
+- Unbounded chains accept non-ASCII runs through the UTF-8 run scan, so a
+  negated-class chain (`\\w+="[^"]*"`) is walked directly. It improves 2.1x
+  and is 1.98x ahead.
+- The UTF-8 run search skips short ASCII gaps with the state-0 transition row
+  instead of the filter setup, lifting the case-insensitive class scan
+  (`(?i)[a-z]+`) 1.9x to 1.66x ahead.
+- The literal-alternation extractor now distributes literal prefixes and
+  suffixes over branches (`(?:pre|post)fix` becomes `prefix|postfix`), so
+  such patterns use the literal-set filter. It improves 1.24x and is 1.27x
+  ahead.
+
+The comparison now covers 58 cases: regexz is faster on 57; the remaining
+semver scan is a statistical tie (0.97-1.15x across runs on this host).

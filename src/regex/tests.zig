@@ -942,6 +942,58 @@ fn expectFastSpans(pattern: []const u8, input: []const u8, spans: []const [2]usi
     try std.testing.expectEqual(spans.len, index);
 }
 
+test "signed number fast path scans sign and fraction" {
+    var value = try regex.Regex.init(gpa, "[+-]?\\d+(?:\\.\\d+)?", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind == .signed_number);
+
+    try expectFastSpans("[+-]?\\d+(?:\\.\\d+)?", "x=-12.5 y=+3 z=0.25", &.{ .{ 2, 7 }, .{ 10, 12 }, .{ 15, 19 } });
+    try expectFastSpans("[+-]?\\d+(?:\\.\\d+)?", "12.", &.{.{ 0, 2 }});
+    try expectFastSpans("[+-]?\\d+(?:\\.\\d+)?", ".5", &.{.{ 1, 2 }});
+    try expectFastSpans("[+-]?\\d+(?:\\.\\d+)?", "+", &.{});
+
+    var number = try regex.Regex.init(gpa, "-?\\d+(?:\\.\\d+)?", .{});
+    defer number.deinit();
+    var number_workspace = try regex.ReplaceWorkspace.init(gpa, number.program, .{});
+    defer number_workspace.deinit();
+    try std.testing.expect(number_workspace.fast_kind == .number);
+}
+
+test "line heading fast path matches markdown headings" {
+    var value = try regex.Regex.init(gpa, "(?m)^#{1,6} .*$", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind == .line_heading);
+
+    try expectFastSpans("(?m)^#{1,6} .*$", "# Title\n## Section\ntext\n### Sub\n", &.{ .{ 0, 7 }, .{ 8, 18 }, .{ 24, 31 } });
+    try expectFastSpans("(?m)^#{1,6} .*$", "#no space\n# yes\n", &.{.{ 10, 15 }});
+    try expectFastSpans("(?m)^#{1,6} .*$", "####### seven\n", &.{});
+}
+
+test "unbounded chain accepts a negated-class run" {
+    var value = try regex.Regex.init(gpa, "\\w+=\"[^\"]*\"", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind == .unbounded_sequence);
+
+    try expectFastSpans("\\w+=\"[^\"]*\"", "<div id=\"main\" class=\"box\">", &.{ .{ 5, 14 }, .{ 15, 26 } });
+    try expectFastSpans("\\w+=\"[^\"]*\"", "a=\"\" b=\"x y\"", &.{ .{ 0, 4 }, .{ 5, 12 } });
+}
+
+test "literal alternation expands a common suffix" {
+    var value = try regex.Regex.init(gpa, "(?:pre|post)fix", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind == .literal_set);
+
+    try expectFastSpans("(?:pre|post)fix", "prefix postfix prefixx", &.{ .{ 0, 6 }, .{ 7, 14 } });
+}
+
 test "bounded sequence handles a trailing optional group" {
     var value = try regex.Regex.init(gpa, "\\d{1,3}(?:\\.\\d{1,3}){3}(?:/\\d{1,2})?", .{});
     defer value.deinit();
@@ -1330,10 +1382,11 @@ test "literal alternation fast path matches leftmost-first" {
     }
 }
 
-test "literal alternation detection requires a whole-pattern alternation" {
+test "literal alternation detection distributes a literal suffix" {
     var trailing = try regex.Regex.init(gpa, "(?:ab|ac)d", .{});
     defer trailing.deinit();
-    try std.testing.expect(trailing.program.literal_set == null);
+    try std.testing.expect(trailing.program.literal_set != null);
+    try expectFastSpans("(?:ab|ac)d", "xx abd acd ab yy", &.{ .{ 3, 6 }, .{ 7, 10 } });
     var captures = try regex.Regex.init(gpa, "(ab|ac)", .{});
     defer captures.deinit();
     try std.testing.expect(captures.program.literal_set == null);

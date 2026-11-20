@@ -787,3 +787,17 @@ start inside it shares the same run end and remaining input (semver, 1.1x,
 1.15x ahead). All 52 comparison cases are faster, with the semver scan the
 thinnest at 1.15x. See
 [literal fast paths](benchmarks/literal-fast-paths.md).
+
+Five shapes from the expanded comparison now have direct scans. Signed
+numbers (`[+-]?\d+(?:\.\d+)?`) are detected from the AST with a sign set
+disjoint from the digits (4.3x, 1.48x ahead). Markdown headings
+(`(?m)^#{1,6} .*$`) get a line-heading scan that shortens the heading run
+until the space matches and requires the body run to reach the line end
+(3.8x, 1.22x ahead). Unbounded chains accept non-ASCII runs through the UTF-8
+run scan, covering negated-class chains such as `\w+="[^"]*"` (2.1x, 1.98x
+ahead). The UTF-8 run search skips short ASCII gaps with the state-0 row,
+lifting the case-insensitive class scan 1.9x (1.66x ahead). The
+literal-alternation extractor distributes literal prefixes and suffixes over
+branches, so `(?:pre|post)fix` uses the literal-set filter (1.24x, 1.27x
+ahead). The comparison covers 58 cases: 57 are faster and the semver scan is
+a statistical tie. See [literal fast paths](benchmarks/literal-fast-paths.md).

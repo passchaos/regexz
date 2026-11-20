@@ -16,6 +16,8 @@ const PrefixRunShape = @import("compile.zig").PrefixRunShape;
 const ChainLoopShape = @import("compile.zig").ChainLoopShape;
 const OptionalTailShape = @import("compile.zig").OptionalTailShape;
 const BoundedLoopShape = @import("compile.zig").BoundedLoopShape;
+const NumberShape = @import("compile.zig").NumberShape;
+const LineHeadingShape = @import("compile.zig").LineHeadingShape;
 const pike = @import("pike.zig");
 const backtrack = @import("backtrack.zig");
 const search_dfa = @import("search_dfa.zig");
@@ -66,6 +68,8 @@ pub const FastKind = enum {
     chain_loop,
     optional_tail,
     bounded_loop,
+    signed_number,
+    line_heading,
 };
 pub const Error = model.Error;
 
@@ -227,6 +231,10 @@ pub const Workspace = struct {
     optional_tail: ?OptionalTailState = null,
     /// A bounded run followed by a greedy repetition of a bounded group.
     bounded_loop: ?BoundedLoopState = null,
+    /// A sign set followed by digits and an optional fraction.
+    signed_number: ?SignedNumberState = null,
+    /// `(?m)^X{min,max} Y.*$` in LF newline mode.
+    line_heading: ?*LineHeadingState = null,
     /// Byte membership tables for the chain fast path. `Set.matches` is a
     /// binary search over rune ranges; the per-byte chain scans run several
     /// lookups per input byte, so cache the answers once per workspace.
@@ -364,6 +372,24 @@ pub const Workspace = struct {
             program.zero_width;
         const run_then_literal: ?RunThenLiteral = if (limits.longest) null else detectRunThenLiteral(program);
         const line_start_run: ?LineStartRun = if (limits.longest) null else detectLineStartRun(program);
+        const line_heading: ?*LineHeadingState = if (limits.longest) null else blk: {
+            const shape = program.line_heading orelse break :blk null;
+            const state = try allocator.create(LineHeadingState);
+            errdefer allocator.destroy(state);
+            state.* = .{
+                .byte = shape.byte,
+                .min = shape.min,
+                .max = shape.max,
+                .space = shape.space,
+                .run = deferred_utf8.Run.init(shape.set),
+            };
+            state.run.prepare_after = std.math.maxInt(u16);
+            break :blk state;
+        };
+        errdefer if (line_heading) |state| {
+            state.run.deinit(allocator);
+            allocator.destroy(state);
+        };
         const anchored_table: [256]bool = if (simple_anchored) |anchored|
             (if (anchored.set.ascii_only) byte_table.init(256, anchored.set) else .{false} ** 256)
         else
@@ -387,12 +413,24 @@ pub const Workspace = struct {
             errdefer allocator.destroy(state);
             state.* = .{};
             if (!state.build(elements)) {
+                state.deinit(allocator);
                 allocator.destroy(state);
                 break :blk null;
             }
             break :blk state;
         };
-        errdefer if (unbounded_sequence) |state| allocator.destroy(state);
+        errdefer if (unbounded_sequence) |state| {
+            state.deinit(allocator);
+            allocator.destroy(state);
+        };
+        const signed_number: ?SignedNumberState = if (limits.longest) null else blk: {
+            const shape = program.signed_number orelse break :blk null;
+            break :blk .{
+                .table_sign = byte_table.init(256, shape.sign),
+                .table_digits = byte_table.init(256, shape.digits),
+                .fraction = shape.fraction,
+            };
+        };
         const bounded_loop: ?BoundedLoopState = if (limits.longest) null else blk: {
             const shape = program.bounded_loop orelse break :blk null;
             break :blk .{
@@ -476,6 +514,8 @@ pub const Workspace = struct {
             .fixed_sequence
         else if (line_start_run != null)
             .line_start_run
+        else if (line_heading != null)
+            .line_heading
         else if (bounded_sequence != null)
             .bounded_sequence
         else if (unbounded_sequence != null)
@@ -506,6 +546,8 @@ pub const Workspace = struct {
             .line_delimited
         else if (number_run_set != null)
             .number
+        else if (signed_number != null)
+            .signed_number
         else
             .none;
         const fast_branch: ?FastBranch = if (program.fast_branch) |plan| blk: {
@@ -608,6 +650,8 @@ pub const Workspace = struct {
             .chain_loop = chain_loop,
             .optional_tail = optional_tail,
             .bounded_loop = bounded_loop,
+            .signed_number = signed_number,
+            .line_heading = line_heading,
         };
     }
 
@@ -617,8 +661,15 @@ pub const Workspace = struct {
         if (self.literal_run) |state| state.deinit(self.allocator);
         if (self.fixed_sequence) |state| self.allocator.destroy(state);
         if (self.bounded_sequence) |state| self.allocator.destroy(state);
-        if (self.unbounded_sequence) |state| self.allocator.destroy(state);
+        if (self.unbounded_sequence) |state| {
+            state.deinit(self.allocator);
+            self.allocator.destroy(state);
+        }
         if (self.star_literal) |state| {
+            state.run.deinit(self.allocator);
+            self.allocator.destroy(state);
+        }
+        if (self.line_heading) |state| {
             state.run.deinit(self.allocator);
             self.allocator.destroy(state);
         }
@@ -709,6 +760,8 @@ pub const Workspace = struct {
             .chain_loop => return self.findChainLoop(&self.chain_loop.?, input, search_start),
             .optional_tail => return self.findOptionalTail(&self.optional_tail.?, input, search_start),
             .bounded_loop => return self.findBoundedLoop(&self.bounded_loop.?, input, search_start),
+            .signed_number => return self.findSignedNumber(&self.signed_number.?, input, search_start),
+            .line_heading => return self.findLineHeading(self.line_heading.?, input, search_start),
         }
         // Every match must start at a start-literal occurrence, so the first
         // occurrence bounds the leftmost match start and the DFA can skip
@@ -1300,6 +1353,8 @@ pub const Workspace = struct {
             .chain_loop => return self.findChainLoop(&self.chain_loop.?, input, search_start),
             .optional_tail => return self.findOptionalTail(&self.optional_tail.?, input, search_start),
             .bounded_loop => return self.findBoundedLoop(&self.bounded_loop.?, input, search_start),
+            .signed_number => return self.findSignedNumber(&self.signed_number.?, input, search_start),
+            .line_heading => return self.findLineHeading(self.line_heading.?, input, search_start),
         }
         var from = search_start;
         if (self.pair_filter) |filter| {
@@ -2081,7 +2136,7 @@ pub const Workspace = struct {
     /// Unbounded run chain: each run is maximal and the following literal's
     /// first byte is outside the run set, so the flat walk needs no
     /// backtracking.
-    fn findUnboundedSequence(self: *Workspace, state: *const UnboundedSequenceState, input: []const u8, search_start: usize) ?Match {
+    fn findUnboundedSequence(self: *Workspace, state: *UnboundedSequenceState, input: []const u8, search_start: usize) ?Match {
         if (search_start >= input.len) return null;
         var start = search_start;
         while (start < input.len) : (start += 1) {
@@ -2092,9 +2147,14 @@ pub const Workspace = struct {
                 const element = state.elements[index];
                 switch (element.kind) {
                     .run => {
-                        const table = &state.tables[element.value];
                         const begin = pos;
-                        while (pos < input.len and table[input[pos]]) pos += 1;
+                        if (state.set_ascii[element.value]) {
+                            const table = &state.tables[element.value];
+                            while (pos < input.len and table[input[pos]]) pos += 1;
+                        } else {
+                            const runner = &state.runs[element.value].?;
+                            pos = runner.runEnd(self.allocator, input, pos);
+                        }
                         if (pos - begin < element.len) break;
                     },
                     .literal => {
@@ -2302,6 +2362,68 @@ pub const Workspace = struct {
                 }
             }
             start += 1;
+        }
+        return null;
+    }
+
+    /// A sign set followed by a greedy digit run and an optional `.digits`
+    /// fraction. The sign is consumed greedily; it cannot be a digit, so a
+    /// failed digit run never needs the sign-skipped retry.
+    fn findSignedNumber(self: *Workspace, state: *const SignedNumberState, input: []const u8, search_start: usize) ?Match {
+        const sign = &state.table_sign;
+        const digits = &state.table_digits;
+        var start = search_start;
+        while (start < input.len) {
+            var pos = start;
+            if (sign[input[pos]]) pos += 1;
+            const digit_start = pos;
+            while (pos < input.len and digits[input[pos]]) pos += 1;
+            if (pos == digit_start) {
+                start += 1;
+                continue;
+            }
+            if (state.fraction and pos + 1 < input.len and input[pos] == '.' and digits[input[pos + 1]]) {
+                pos += 1;
+                while (pos < input.len and digits[input[pos]]) pos += 1;
+            }
+            self.slots[0] = start;
+            self.slots[1] = pos;
+            return .{ .start = start, .end = pos, .slots = self.slots };
+        }
+        return null;
+    }
+
+    /// `(?m)^X{min,max} Y.*$`: each line start is tried, the heading run is
+    /// shortened until the space matches, and the body run must reach the
+    /// line end.
+    fn findLineHeading(self: *Workspace, state: *LineHeadingState, input: []const u8, search_start: usize) ?Match {
+        var line = search_start;
+        if (line > 0 and input[line - 1] != '\n') {
+            line = std.mem.indexOfScalarPos(u8, input, line, '\n') orelse return null;
+            line += 1;
+        }
+        while (line < input.len) {
+            var count: usize = 0;
+            while (count < state.max and line + count < input.len and input[line + count] == state.byte) count += 1;
+            var body_start: ?usize = null;
+            var heading = count;
+            while (heading >= state.min) : (heading -= 1) {
+                const pos = line + heading;
+                if (pos < input.len and input[pos] == state.space) {
+                    body_start = pos + 1;
+                    break;
+                }
+            }
+            if (body_start) |start_body| {
+                const run_end = state.run.runEnd(self.allocator, input, start_body);
+                if (run_end == input.len or input[run_end] == '\n') {
+                    self.slots[0] = line;
+                    self.slots[1] = run_end;
+                    return .{ .start = line, .end = run_end, .slots = self.slots };
+                }
+            }
+            line = std.mem.indexOfScalarPos(u8, input, line, '\n') orelse return null;
+            line += 1;
         }
         return null;
     }
@@ -3621,12 +3743,21 @@ const UnboundedSequenceState = struct {
     elements: [max_elements]Element = undefined,
     len: u8 = 0,
     tables: [max_sets][256]bool = undefined,
+    runs: [max_sets]?deferred_utf8.Run = .{null} ** max_sets,
+    set_ascii: [max_sets]bool = .{false} ** max_sets,
     set_count: u8 = 0,
     literal_bytes: [max_literal_bytes]u8 = undefined,
     literal_len: u8 = 0,
     alternatives: [16]Alternative = undefined,
     alternative_count: u8 = 0,
     first_table: [256]bool = .{false} ** 256,
+
+    fn deinit(self: *UnboundedSequenceState, allocator: std.mem.Allocator) void {
+        for (&self.runs) |*run| {
+            if (run.*) |*value| value.deinit(allocator);
+            run.* = null;
+        }
+    }
 
     fn build(self: *UnboundedSequenceState, source: []const UnboundedElement) bool {
         if (source.len > self.elements.len) return false;
@@ -3641,7 +3772,13 @@ const UnboundedSequenceState = struct {
                     if (set_index == self.set_count) {
                         if (self.set_count == sets.len) return false;
                         sets[self.set_count] = run.set;
-                        self.tables[self.set_count] = byte_table.init(256, run.set);
+                        if (run.set.ascii_only) {
+                            self.tables[self.set_count] = byte_table.init(256, run.set);
+                            self.set_ascii[self.set_count] = true;
+                        } else {
+                            self.runs[self.set_count] = deferred_utf8.Run.init(run.set);
+                            self.runs[self.set_count].?.prepare_after = std.math.maxInt(u16);
+                        }
                         self.set_count += 1;
                     }
                     self.elements[self.len] = .{ .kind = .run, .value = set_index, .len = run.min };
@@ -3705,6 +3842,7 @@ const UnboundedSequenceState = struct {
             const element = self.elements[index];
             switch (element.kind) {
                 .run => {
+                    if (!self.set_ascii[element.value]) return false;
                     self.first_table = mergeTables(self.first_table, self.tables[element.value]);
                     if (element.len != 0) return true;
                 },
@@ -3733,6 +3871,20 @@ const UnboundedSequenceState = struct {
         for (&result, b) |*slot, byte| slot.* = slot.* or byte;
         return result;
     }
+};
+
+const LineHeadingState = struct {
+    byte: u8 = 0,
+    min: u8 = 1,
+    max: u8 = 1,
+    space: u8 = 0,
+    run: deferred_utf8.Run,
+};
+
+const SignedNumberState = struct {
+    table_sign: [256]bool = undefined,
+    table_digits: [256]bool = undefined,
+    fraction: bool = false,
 };
 
 const BoundedLoopState = struct {

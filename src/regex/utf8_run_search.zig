@@ -27,7 +27,15 @@ pub inline fn findDeferred(
 ) Result {
     std.debug.assert(run.table == null);
     if (from >= input.len) return .{ .span = null };
-    const start = if (ascii[input[from]]) from else first.indexOfRuneCandidates(input, from) orelse return .{ .span = null };
+    // Short ASCII gaps are cheaper to skip with the byte table than with the
+    // filter setup; the filter still handles non-ASCII candidates.
+    var cursor = from;
+    const probe_limit = @min(input.len, from + 16);
+    while (cursor < probe_limit and input[cursor] < 0x80 and !ascii[input[cursor]]) cursor += 1;
+    const start = if (cursor < probe_limit and input[cursor] < 0x80)
+        cursor
+    else
+        first.indexOfRuneCandidates(input, cursor) orelse return .{ .span = null };
     if (ascii[input[start]]) {
         var end = start + 1;
         while (end < input.len and ascii[input[end]]) end += 1;
@@ -88,7 +96,13 @@ pub inline fn findPrepared(run: *const utf8_run.Utf8Run, first: *const prefilter
         // A plain non-ASCII set accepts the current byte; skip the filter
         // call that would return it unchanged.
         if (!(input[offset] >= 0x80 and first.plainNonAscii())) {
-            offset = first.indexOfRuneCandidates(input, offset) orelse return null;
+            // Short ASCII gaps are cheaper to skip with the state-0 row
+            // than with the filter setup.
+            const limit = @min(input.len, offset + 16);
+            while (offset < limit and input[offset] < 0x80 and table[input[offset]] == utf8_set.dead) offset += 1;
+            if (offset >= limit or input[offset] >= 0x80) {
+                offset = first.indexOfRuneCandidates(input, offset) orelse return null;
+            }
         }
         rune_start = offset;
         var prefix_state = table[input[offset]];
@@ -119,6 +133,9 @@ pub inline fn findPrepared(run: *const utf8_run.Utf8Run, first: *const prefilter
     } else return null;
     const start = rune_start;
     var end = offset;
+    // ASCII members scan with independent loads; the automaton takes over at
+    // the first non-ASCII byte.
+    while (end < input.len and input[end] < 0x80 and table[input[end]] == utf8_set.accept) end += 1;
     var rune_begin = end;
     var state: u16 = 0;
     while (end < input.len) {
