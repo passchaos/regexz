@@ -85,7 +85,11 @@ pub inline fn findPrepared(run: *const utf8_run.Utf8Run, first: *const prefilter
     var offset = from;
     var rune_start = from;
     search: while (offset < input.len) {
-        offset = first.indexOfRuneCandidates(input, offset) orelse return null;
+        // A plain non-ASCII set accepts the current byte; skip the filter
+        // call that would return it unchanged.
+        if (!(input[offset] >= 0x80 and first.plainNonAscii())) {
+            offset = first.indexOfRuneCandidates(input, offset) orelse return null;
+        }
         rune_start = offset;
         var prefix_state = table[input[offset]];
         offset += 1;

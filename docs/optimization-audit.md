@@ -528,3 +528,11 @@ so the CJK punctuation token stays on the DFA. Inlining the deferred run
 `runeAt`/`runEnd` wrappers, an input-sized reserve in the general
 `replaceAll` writer, and a short scalar probe in `indexOfLiteral` were all
 neutral (within 1-2%).
+
+Unicode set searches whose first-byte summary is a plain non-ASCII set
+(`\p{Han}+`) now accept a non-ASCII byte directly instead of calling the
+first filter that would return the same offset. A focused `\p{Han}+` harness
+improves 1.06x (125.1 -> 118.2 us per 191 KiB pass) and the full bench's
+`find Han class scan` 1.02x, with the 66 control cases at a 1.01x median.
+Prepared rune prefixes keep the filter call. See
+[skipping the first filter](benchmarks/han-filter-skip.md).

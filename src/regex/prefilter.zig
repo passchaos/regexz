@@ -343,6 +343,12 @@ pub const FirstFilter = struct {
         return self.indexOfPrefixes(input, start);
     }
 
+    /// True when `indexOf` would return `start` for any non-ASCII byte:
+    /// the set has no ASCII members or ranges and no prepared rune prefixes.
+    pub inline fn plainNonAscii(self: *const FirstFilter) bool {
+        return self.count == 0 and self.range_count == 0 and self.first.nonascii and self.prefix_state != .ready;
+    }
+
     /// Return the first offset at or after `start` whose byte can begin a
     /// match, or null when no such byte exists.
     pub fn indexOf(self: *const FirstFilter, input: []const u8, start: usize) ?usize {

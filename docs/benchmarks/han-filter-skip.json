@@ -1,0 +1,3832 @@
+{
+  "baseline": "40f9bf3",
+  "method": "alternating before/after executions; suites run sequentially",
+  "executables": {
+    "bench": {
+      "before": {
+        "path": "/private/tmp/hf_before",
+        "sha256": "ac9787c9e49d76d205b7bc538af81747817c7c04a5c4b4c169e914738c98eeed"
+      },
+      "after": {
+        "path": "/private/tmp/hf_after",
+        "sha256": "2664150172410af166df26253259e0526c699b886e8bdcc654552e1a52a4cbe8"
+      }
+    }
+  },
+  "rounds": [
+    {
+      "order": [
+        "before",
+        "after"
+      ],
+      "runs": {
+        "before": {
+          "bench/compile xDS-like": {
+            "ns": 2461.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile xDS-like (smp allocator)": {
+            "ns": 2527.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile long literal": {
+            "ns": 10671.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch literal (warm Regex API)": {
+            "ns": 2.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch literal (reuse)": {
+            "ns": 2.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch class (warm Regex API)": {
+            "ns": 5.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch class (reuse)": {
+            "ns": 4.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch xDS-like (warm Regex API)": {
+            "ns": 17.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch xDS-like (reuse)": {
+            "ns": 10.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch unicode (reuse)": {
+            "ns": 11.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch (?i) literal (reuse)": {
+            "ns": 5.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/comptime fullmatch literal": {
+            "ns": 0.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/comptime fullmatch class": {
+            "ns": 4.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/runtime input literal control": {
+            "ns": 1.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/runtime input class control": {
+            "ns": 5.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch backref (Regex)": {
+            "ns": 19.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch atomic (Regex)": {
+            "ns": 26.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find Qwen tokenizer": {
+            "ns": 41145.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/findAll Qwen (borrowed workspace)": {
+            "ns": 41227.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/findAll Qwen (owning iterator)": {
+            "ns": 51146.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find capture email tokens": {
+            "ns": 14600.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find ASCII run scan": {
+            "ns": 16005.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find word space word": {
+            "ns": 21187.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find capture no-match": {
+            "ns": 1931.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find loop-exit no-match": {
+            "ns": 3929.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find extended no-match": {
+            "ns": 1978.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find suffix no-match": {
+            "ns": 3790.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find byte escape scan": {
+            "ns": 14.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find shared-prefix no-match": {
+            "ns": 1423.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find CJK tokenizer": {
+            "ns": 167670.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find CJK tokenizer (no lookahead)": {
+            "ns": 177716.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find Han class scan": {
+            "ns": 118882.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch Han class (191 KiB)": {
+            "ns": 58561.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find JSON string literal": {
+            "ns": 11111.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find HTML tag": {
+            "ns": 49017.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find URL": {
+            "ns": 34075.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile Qwen tokenizer (page)": {
+            "ns": 39396.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile Qwen tokenizer (smp)": {
+            "ns": 49736.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/split whitespace (22 KiB)": {
+            "ns": 16592.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/split commas (29 KiB)": {
+            "ns": 15612.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find key-value key": {
+            "ns": 33252.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find JSON number": {
+            "ns": 26670.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find trailing spaces": {
+            "ns": 3.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find word boundary": {
+            "ns": 60377.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find digits": {
+            "ns": 25637.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch ASCII class (216 KiB)": {
+            "ns": 53540.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch ASCII loop (216 KiB)": {
+            "ns": 75694.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find line (?m)^.*$": {
+            "ns": 33506.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream [a-z]+ (216 KiB, 4 KiB chunks)": {
+            "ns": 147812.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream [a-z]* (216 KiB, 4 KiB chunks)": {
+            "ns": 173254.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream [a-z]+ [a-z]+ (216 KiB, 4 KiB chunks)": {
+            "ns": 202595.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream Han chain (191 KiB, 4 KiB chunks)": {
+            "ns": 152260.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/RegexSet 9 no-match patterns": {
+            "ns": 3017.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find xDS-like after 4KB prefix": {
+            "ns": 286.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find literal after 4KB prefix": {
+            "ns": 108.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find multi-literal after 4KB prefix": {
+            "ns": 325.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find large alternation (24 literals) no-match": {
+            "ns": 1647.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find (?i) literal no-match": {
+            "ns": 1599.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAll a+ -> x": {
+            "ns": 21529.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replacen a+ -> x (limit 10000)": {
+            "ns": 22172.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllLen a+ (24 KiB)": {
+            "ns": 10111.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllInto a+ (24 KiB)": {
+            "ns": 18435.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAll , -> ;": {
+            "ns": 3336.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replacen , -> ; (limit 10000)": {
+            "ns": 4159.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllLen , (29 KiB)": {
+            "ns": 1365.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllInto , (29 KiB)": {
+            "ns": 545.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/Workspace.init Qwen program": {
+            "ns": 66.1,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        },
+        "after": {
+          "bench/compile xDS-like": {
+            "ns": 2521.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile xDS-like (smp allocator)": {
+            "ns": 2593.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile long literal": {
+            "ns": 10413.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch literal (warm Regex API)": {
+            "ns": 2.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch literal (reuse)": {
+            "ns": 2.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch class (warm Regex API)": {
+            "ns": 5.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch class (reuse)": {
+            "ns": 4.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch xDS-like (warm Regex API)": {
+            "ns": 17.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch xDS-like (reuse)": {
+            "ns": 8.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch unicode (reuse)": {
+            "ns": 11.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch (?i) literal (reuse)": {
+            "ns": 5.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/comptime fullmatch literal": {
+            "ns": 0.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/comptime fullmatch class": {
+            "ns": 5.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/runtime input literal control": {
+            "ns": 2.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/runtime input class control": {
+            "ns": 5.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch backref (Regex)": {
+            "ns": 18.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch atomic (Regex)": {
+            "ns": 30.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find Qwen tokenizer": {
+            "ns": 40099.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/findAll Qwen (borrowed workspace)": {
+            "ns": 47142.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/findAll Qwen (owning iterator)": {
+            "ns": 44018.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find capture email tokens": {
+            "ns": 15460.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find ASCII run scan": {
+            "ns": 16850.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find word space word": {
+            "ns": 23319.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find capture no-match": {
+            "ns": 2202.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find loop-exit no-match": {
+            "ns": 3712.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find extended no-match": {
+            "ns": 1920.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find suffix no-match": {
+            "ns": 3950.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find byte escape scan": {
+            "ns": 16.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find shared-prefix no-match": {
+            "ns": 1687.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find CJK tokenizer": {
+            "ns": 187755.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find CJK tokenizer (no lookahead)": {
+            "ns": 173197.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find Han class scan": {
+            "ns": 116257.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch Han class (191 KiB)": {
+            "ns": 67841.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find JSON string literal": {
+            "ns": 7621.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find HTML tag": {
+            "ns": 48476.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find URL": {
+            "ns": 34941.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile Qwen tokenizer (page)": {
+            "ns": 43894.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile Qwen tokenizer (smp)": {
+            "ns": 54786.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/split whitespace (22 KiB)": {
+            "ns": 17242.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/split commas (29 KiB)": {
+            "ns": 16672.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find key-value key": {
+            "ns": 41117.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find JSON number": {
+            "ns": 27265.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find trailing spaces": {
+            "ns": 3.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find word boundary": {
+            "ns": 62736.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find digits": {
+            "ns": 25119.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch ASCII class (216 KiB)": {
+            "ns": 51965.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch ASCII loop (216 KiB)": {
+            "ns": 77859.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find line (?m)^.*$": {
+            "ns": 33447.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream [a-z]+ (216 KiB, 4 KiB chunks)": {
+            "ns": 127568.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream [a-z]* (216 KiB, 4 KiB chunks)": {
+            "ns": 136860.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream [a-z]+ [a-z]+ (216 KiB, 4 KiB chunks)": {
+            "ns": 201314.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream Han chain (191 KiB, 4 KiB chunks)": {
+            "ns": 156902.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/RegexSet 9 no-match patterns": {
+            "ns": 3037.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find xDS-like after 4KB prefix": {
+            "ns": 298.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find literal after 4KB prefix": {
+            "ns": 107.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find multi-literal after 4KB prefix": {
+            "ns": 363.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find large alternation (24 literals) no-match": {
+            "ns": 1717.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find (?i) literal no-match": {
+            "ns": 1699.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAll a+ -> x": {
+            "ns": 21504.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replacen a+ -> x (limit 10000)": {
+            "ns": 23430.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllLen a+ (24 KiB)": {
+            "ns": 11047.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllInto a+ (24 KiB)": {
+            "ns": 19349.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAll , -> ;": {
+            "ns": 2909.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replacen , -> ; (limit 10000)": {
+            "ns": 3611.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllLen , (29 KiB)": {
+            "ns": 1103.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllInto , (29 KiB)": {
+            "ns": 672.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/Workspace.init Qwen program": {
+            "ns": 59.9,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        }
+      }
+    },
+    {
+      "order": [
+        "after",
+        "before"
+      ],
+      "runs": {
+        "after": {
+          "bench/compile xDS-like": {
+            "ns": 2695.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile xDS-like (smp allocator)": {
+            "ns": 2504.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile long literal": {
+            "ns": 9995.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch literal (warm Regex API)": {
+            "ns": 2.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch literal (reuse)": {
+            "ns": 1.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch class (warm Regex API)": {
+            "ns": 6.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch class (reuse)": {
+            "ns": 5.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch xDS-like (warm Regex API)": {
+            "ns": 17.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch xDS-like (reuse)": {
+            "ns": 14.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch unicode (reuse)": {
+            "ns": 10.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch (?i) literal (reuse)": {
+            "ns": 5.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/comptime fullmatch literal": {
+            "ns": 0.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/comptime fullmatch class": {
+            "ns": 3.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/runtime input literal control": {
+            "ns": 1.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/runtime input class control": {
+            "ns": 5.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch backref (Regex)": {
+            "ns": 19.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch atomic (Regex)": {
+            "ns": 27.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find Qwen tokenizer": {
+            "ns": 44911.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/findAll Qwen (borrowed workspace)": {
+            "ns": 42572.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/findAll Qwen (owning iterator)": {
+            "ns": 48050.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find capture email tokens": {
+            "ns": 15070.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find ASCII run scan": {
+            "ns": 16594.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find word space word": {
+            "ns": 20407.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find capture no-match": {
+            "ns": 1862.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find loop-exit no-match": {
+            "ns": 4180.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find extended no-match": {
+            "ns": 1964.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find suffix no-match": {
+            "ns": 3991.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find byte escape scan": {
+            "ns": 14.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find shared-prefix no-match": {
+            "ns": 1494.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find CJK tokenizer": {
+            "ns": 178600.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find CJK tokenizer (no lookahead)": {
+            "ns": 173881.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find Han class scan": {
+            "ns": 121523.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch Han class (191 KiB)": {
+            "ns": 58622.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find JSON string literal": {
+            "ns": 7374.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find HTML tag": {
+            "ns": 47457.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find URL": {
+            "ns": 34617.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile Qwen tokenizer (page)": {
+            "ns": 41941.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile Qwen tokenizer (smp)": {
+            "ns": 48284.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/split whitespace (22 KiB)": {
+            "ns": 16806.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/split commas (29 KiB)": {
+            "ns": 16091.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find key-value key": {
+            "ns": 39038.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find JSON number": {
+            "ns": 27781.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find trailing spaces": {
+            "ns": 3.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find word boundary": {
+            "ns": 64715.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find digits": {
+            "ns": 26398.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch ASCII class (216 KiB)": {
+            "ns": 54140.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch ASCII loop (216 KiB)": {
+            "ns": 74865.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find line (?m)^.*$": {
+            "ns": 33345.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream [a-z]+ (216 KiB, 4 KiB chunks)": {
+            "ns": 146643.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream [a-z]* (216 KiB, 4 KiB chunks)": {
+            "ns": 156577.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream [a-z]+ [a-z]+ (216 KiB, 4 KiB chunks)": {
+            "ns": 177427.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream Han chain (191 KiB, 4 KiB chunks)": {
+            "ns": 132110.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/RegexSet 9 no-match patterns": {
+            "ns": 2874.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find xDS-like after 4KB prefix": {
+            "ns": 268.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find literal after 4KB prefix": {
+            "ns": 86.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find multi-literal after 4KB prefix": {
+            "ns": 316.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find large alternation (24 literals) no-match": {
+            "ns": 1668.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find (?i) literal no-match": {
+            "ns": 1672.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAll a+ -> x": {
+            "ns": 22834.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replacen a+ -> x (limit 10000)": {
+            "ns": 23062.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllLen a+ (24 KiB)": {
+            "ns": 10177.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllInto a+ (24 KiB)": {
+            "ns": 18522.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAll , -> ;": {
+            "ns": 2975.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replacen , -> ; (limit 10000)": {
+            "ns": 3697.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllLen , (29 KiB)": {
+            "ns": 1104.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllInto , (29 KiB)": {
+            "ns": 548.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/Workspace.init Qwen program": {
+            "ns": 65.9,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        },
+        "before": {
+          "bench/compile xDS-like": {
+            "ns": 2619.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile xDS-like (smp allocator)": {
+            "ns": 2548.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile long literal": {
+            "ns": 10400.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch literal (warm Regex API)": {
+            "ns": 2.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch literal (reuse)": {
+            "ns": 2.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch class (warm Regex API)": {
+            "ns": 6.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch class (reuse)": {
+            "ns": 4.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch xDS-like (warm Regex API)": {
+            "ns": 17.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch xDS-like (reuse)": {
+            "ns": 12.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch unicode (reuse)": {
+            "ns": 9.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch (?i) literal (reuse)": {
+            "ns": 5.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/comptime fullmatch literal": {
+            "ns": 0.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/comptime fullmatch class": {
+            "ns": 3.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/runtime input literal control": {
+            "ns": 1.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/runtime input class control": {
+            "ns": 5.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch backref (Regex)": {
+            "ns": 24.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch atomic (Regex)": {
+            "ns": 30.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find Qwen tokenizer": {
+            "ns": 43051.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/findAll Qwen (borrowed workspace)": {
+            "ns": 44365.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/findAll Qwen (owning iterator)": {
+            "ns": 44032.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find capture email tokens": {
+            "ns": 13783.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find ASCII run scan": {
+            "ns": 16161.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find word space word": {
+            "ns": 21562.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find capture no-match": {
+            "ns": 1873.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find loop-exit no-match": {
+            "ns": 4256.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find extended no-match": {
+            "ns": 2079.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find suffix no-match": {
+            "ns": 3936.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find byte escape scan": {
+            "ns": 16.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find shared-prefix no-match": {
+            "ns": 1722.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find CJK tokenizer": {
+            "ns": 177433.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find CJK tokenizer (no lookahead)": {
+            "ns": 175254.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find Han class scan": {
+            "ns": 130838.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch Han class (191 KiB)": {
+            "ns": 60655.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find JSON string literal": {
+            "ns": 6951.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find HTML tag": {
+            "ns": 49725.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find URL": {
+            "ns": 37712.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile Qwen tokenizer (page)": {
+            "ns": 43907.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile Qwen tokenizer (smp)": {
+            "ns": 50152.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/split whitespace (22 KiB)": {
+            "ns": 18858.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/split commas (29 KiB)": {
+            "ns": 17080.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find key-value key": {
+            "ns": 34641.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find JSON number": {
+            "ns": 28500.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find trailing spaces": {
+            "ns": 3.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find word boundary": {
+            "ns": 63941.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find digits": {
+            "ns": 27499.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch ASCII class (216 KiB)": {
+            "ns": 55329.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch ASCII loop (216 KiB)": {
+            "ns": 78706.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find line (?m)^.*$": {
+            "ns": 34330.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream [a-z]+ (216 KiB, 4 KiB chunks)": {
+            "ns": 166233.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream [a-z]* (216 KiB, 4 KiB chunks)": {
+            "ns": 180445.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream [a-z]+ [a-z]+ (216 KiB, 4 KiB chunks)": {
+            "ns": 188383.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream Han chain (191 KiB, 4 KiB chunks)": {
+            "ns": 141552.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/RegexSet 9 no-match patterns": {
+            "ns": 1941.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find xDS-like after 4KB prefix": {
+            "ns": 293.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find literal after 4KB prefix": {
+            "ns": 107.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find multi-literal after 4KB prefix": {
+            "ns": 378.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find large alternation (24 literals) no-match": {
+            "ns": 1671.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find (?i) literal no-match": {
+            "ns": 1748.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAll a+ -> x": {
+            "ns": 35965.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replacen a+ -> x (limit 10000)": {
+            "ns": 45271.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllLen a+ (24 KiB)": {
+            "ns": 10519.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllInto a+ (24 KiB)": {
+            "ns": 17698.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAll , -> ;": {
+            "ns": 6615.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replacen , -> ; (limit 10000)": {
+            "ns": 4825.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllLen , (29 KiB)": {
+            "ns": 2159.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllInto , (29 KiB)": {
+            "ns": 495.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/Workspace.init Qwen program": {
+            "ns": 68.9,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        }
+      }
+    },
+    {
+      "order": [
+        "before",
+        "after"
+      ],
+      "runs": {
+        "before": {
+          "bench/compile xDS-like": {
+            "ns": 3107.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile xDS-like (smp allocator)": {
+            "ns": 2956.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile long literal": {
+            "ns": 10689.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch literal (warm Regex API)": {
+            "ns": 1.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch literal (reuse)": {
+            "ns": 1.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch class (warm Regex API)": {
+            "ns": 5.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch class (reuse)": {
+            "ns": 4.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch xDS-like (warm Regex API)": {
+            "ns": 11.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch xDS-like (reuse)": {
+            "ns": 10.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch unicode (reuse)": {
+            "ns": 11.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch (?i) literal (reuse)": {
+            "ns": 5.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/comptime fullmatch literal": {
+            "ns": 0.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/comptime fullmatch class": {
+            "ns": 4.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/runtime input literal control": {
+            "ns": 1.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/runtime input class control": {
+            "ns": 4.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch backref (Regex)": {
+            "ns": 21.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch atomic (Regex)": {
+            "ns": 30.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find Qwen tokenizer": {
+            "ns": 40372.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/findAll Qwen (borrowed workspace)": {
+            "ns": 44197.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/findAll Qwen (owning iterator)": {
+            "ns": 44260.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find capture email tokens": {
+            "ns": 12597.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find ASCII run scan": {
+            "ns": 18774.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find word space word": {
+            "ns": 21688.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find capture no-match": {
+            "ns": 1902.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find loop-exit no-match": {
+            "ns": 4075.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find extended no-match": {
+            "ns": 2110.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find suffix no-match": {
+            "ns": 3982.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find byte escape scan": {
+            "ns": 17.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find shared-prefix no-match": {
+            "ns": 1527.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find CJK tokenizer": {
+            "ns": 172570.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find CJK tokenizer (no lookahead)": {
+            "ns": 187177.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find Han class scan": {
+            "ns": 118380.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch Han class (191 KiB)": {
+            "ns": 67705.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find JSON string literal": {
+            "ns": 7221.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find HTML tag": {
+            "ns": 48188.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find URL": {
+            "ns": 38528.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile Qwen tokenizer (page)": {
+            "ns": 39023.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile Qwen tokenizer (smp)": {
+            "ns": 49315.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/split whitespace (22 KiB)": {
+            "ns": 17539.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/split commas (29 KiB)": {
+            "ns": 15951.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find key-value key": {
+            "ns": 33930.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find JSON number": {
+            "ns": 27162.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find trailing spaces": {
+            "ns": 3.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find word boundary": {
+            "ns": 64736.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find digits": {
+            "ns": 27861.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch ASCII class (216 KiB)": {
+            "ns": 54077.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch ASCII loop (216 KiB)": {
+            "ns": 77659.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find line (?m)^.*$": {
+            "ns": 33931.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream [a-z]+ (216 KiB, 4 KiB chunks)": {
+            "ns": 135066.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream [a-z]* (216 KiB, 4 KiB chunks)": {
+            "ns": 161189.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream [a-z]+ [a-z]+ (216 KiB, 4 KiB chunks)": {
+            "ns": 182779.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream Han chain (191 KiB, 4 KiB chunks)": {
+            "ns": 135906.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/RegexSet 9 no-match patterns": {
+            "ns": 1906.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find xDS-like after 4KB prefix": {
+            "ns": 238.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find literal after 4KB prefix": {
+            "ns": 95.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find multi-literal after 4KB prefix": {
+            "ns": 375.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find large alternation (24 literals) no-match": {
+            "ns": 1735.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find (?i) literal no-match": {
+            "ns": 1610.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAll a+ -> x": {
+            "ns": 22572.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replacen a+ -> x (limit 10000)": {
+            "ns": 22359.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllLen a+ (24 KiB)": {
+            "ns": 10451.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllInto a+ (24 KiB)": {
+            "ns": 18150.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAll , -> ;": {
+            "ns": 2748.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replacen , -> ; (limit 10000)": {
+            "ns": 3300.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllLen , (29 KiB)": {
+            "ns": 1103.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllInto , (29 KiB)": {
+            "ns": 501.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/Workspace.init Qwen program": {
+            "ns": 61.0,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        },
+        "after": {
+          "bench/compile xDS-like": {
+            "ns": 2982.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile xDS-like (smp allocator)": {
+            "ns": 2693.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile long literal": {
+            "ns": 9981.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch literal (warm Regex API)": {
+            "ns": 2.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch literal (reuse)": {
+            "ns": 2.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch class (warm Regex API)": {
+            "ns": 5.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch class (reuse)": {
+            "ns": 4.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch xDS-like (warm Regex API)": {
+            "ns": 15.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch xDS-like (reuse)": {
+            "ns": 14.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch unicode (reuse)": {
+            "ns": 12.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch (?i) literal (reuse)": {
+            "ns": 4.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/comptime fullmatch literal": {
+            "ns": 0.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/comptime fullmatch class": {
+            "ns": 3.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/runtime input literal control": {
+            "ns": 1.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/runtime input class control": {
+            "ns": 5.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch backref (Regex)": {
+            "ns": 23.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch atomic (Regex)": {
+            "ns": 31.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find Qwen tokenizer": {
+            "ns": 45934.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/findAll Qwen (borrowed workspace)": {
+            "ns": 46778.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/findAll Qwen (owning iterator)": {
+            "ns": 45735.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find capture email tokens": {
+            "ns": 15727.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find ASCII run scan": {
+            "ns": 16939.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find word space word": {
+            "ns": 23493.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find capture no-match": {
+            "ns": 2245.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find loop-exit no-match": {
+            "ns": 3864.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find extended no-match": {
+            "ns": 1921.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find suffix no-match": {
+            "ns": 4251.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find byte escape scan": {
+            "ns": 14.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find shared-prefix no-match": {
+            "ns": 1621.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find CJK tokenizer": {
+            "ns": 172505.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find CJK tokenizer (no lookahead)": {
+            "ns": 176494.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find Han class scan": {
+            "ns": 120186.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch Han class (191 KiB)": {
+            "ns": 65733.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find JSON string literal": {
+            "ns": 7237.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find HTML tag": {
+            "ns": 49676.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find URL": {
+            "ns": 38949.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile Qwen tokenizer (page)": {
+            "ns": 38726.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile Qwen tokenizer (smp)": {
+            "ns": 52219.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/split whitespace (22 KiB)": {
+            "ns": 16966.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/split commas (29 KiB)": {
+            "ns": 15719.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find key-value key": {
+            "ns": 34140.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find JSON number": {
+            "ns": 26711.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find trailing spaces": {
+            "ns": 3.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find word boundary": {
+            "ns": 65921.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find digits": {
+            "ns": 26203.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch ASCII class (216 KiB)": {
+            "ns": 52652.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch ASCII loop (216 KiB)": {
+            "ns": 75369.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find line (?m)^.*$": {
+            "ns": 33620.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream [a-z]+ (216 KiB, 4 KiB chunks)": {
+            "ns": 147766.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream [a-z]* (216 KiB, 4 KiB chunks)": {
+            "ns": 143408.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream [a-z]+ [a-z]+ (216 KiB, 4 KiB chunks)": {
+            "ns": 196160.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream Han chain (191 KiB, 4 KiB chunks)": {
+            "ns": 136689.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/RegexSet 9 no-match patterns": {
+            "ns": 1884.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find xDS-like after 4KB prefix": {
+            "ns": 273.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find literal after 4KB prefix": {
+            "ns": 91.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find multi-literal after 4KB prefix": {
+            "ns": 322.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find large alternation (24 literals) no-match": {
+            "ns": 1606.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find (?i) literal no-match": {
+            "ns": 1741.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAll a+ -> x": {
+            "ns": 27530.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replacen a+ -> x (limit 10000)": {
+            "ns": 23071.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllLen a+ (24 KiB)": {
+            "ns": 10694.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllInto a+ (24 KiB)": {
+            "ns": 19852.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAll , -> ;": {
+            "ns": 3614.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replacen , -> ; (limit 10000)": {
+            "ns": 5999.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllLen , (29 KiB)": {
+            "ns": 1428.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllInto , (29 KiB)": {
+            "ns": 733.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/Workspace.init Qwen program": {
+            "ns": 70.4,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        }
+      }
+    },
+    {
+      "order": [
+        "after",
+        "before"
+      ],
+      "runs": {
+        "after": {
+          "bench/compile xDS-like": {
+            "ns": 3048.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile xDS-like (smp allocator)": {
+            "ns": 2546.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile long literal": {
+            "ns": 10058.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch literal (warm Regex API)": {
+            "ns": 2.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch literal (reuse)": {
+            "ns": 1.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch class (warm Regex API)": {
+            "ns": 5.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch class (reuse)": {
+            "ns": 4.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch xDS-like (warm Regex API)": {
+            "ns": 17.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch xDS-like (reuse)": {
+            "ns": 9.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch unicode (reuse)": {
+            "ns": 9.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch (?i) literal (reuse)": {
+            "ns": 5.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/comptime fullmatch literal": {
+            "ns": 0.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/comptime fullmatch class": {
+            "ns": 3.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/runtime input literal control": {
+            "ns": 2.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/runtime input class control": {
+            "ns": 5.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch backref (Regex)": {
+            "ns": 21.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch atomic (Regex)": {
+            "ns": 30.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find Qwen tokenizer": {
+            "ns": 41950.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/findAll Qwen (borrowed workspace)": {
+            "ns": 42258.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/findAll Qwen (owning iterator)": {
+            "ns": 43670.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find capture email tokens": {
+            "ns": 13226.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find ASCII run scan": {
+            "ns": 16680.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find word space word": {
+            "ns": 20731.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find capture no-match": {
+            "ns": 2010.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find loop-exit no-match": {
+            "ns": 4048.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find extended no-match": {
+            "ns": 2008.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find suffix no-match": {
+            "ns": 3864.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find byte escape scan": {
+            "ns": 14.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find shared-prefix no-match": {
+            "ns": 1451.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find CJK tokenizer": {
+            "ns": 158982.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find CJK tokenizer (no lookahead)": {
+            "ns": 165391.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find Han class scan": {
+            "ns": 109590.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch Han class (191 KiB)": {
+            "ns": 66496.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find JSON string literal": {
+            "ns": 7528.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find HTML tag": {
+            "ns": 48061.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find URL": {
+            "ns": 38625.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile Qwen tokenizer (page)": {
+            "ns": 39146.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile Qwen tokenizer (smp)": {
+            "ns": 47788.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/split whitespace (22 KiB)": {
+            "ns": 16863.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/split commas (29 KiB)": {
+            "ns": 15547.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find key-value key": {
+            "ns": 33381.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find JSON number": {
+            "ns": 34003.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find trailing spaces": {
+            "ns": 4.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find word boundary": {
+            "ns": 65392.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find digits": {
+            "ns": 29431.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch ASCII class (216 KiB)": {
+            "ns": 53637.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch ASCII loop (216 KiB)": {
+            "ns": 78261.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find line (?m)^.*$": {
+            "ns": 32532.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream [a-z]+ (216 KiB, 4 KiB chunks)": {
+            "ns": 141033.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream [a-z]* (216 KiB, 4 KiB chunks)": {
+            "ns": 134841.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream [a-z]+ [a-z]+ (216 KiB, 4 KiB chunks)": {
+            "ns": 191729.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream Han chain (191 KiB, 4 KiB chunks)": {
+            "ns": 148864.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/RegexSet 9 no-match patterns": {
+            "ns": 1985.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find xDS-like after 4KB prefix": {
+            "ns": 276.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find literal after 4KB prefix": {
+            "ns": 87.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find multi-literal after 4KB prefix": {
+            "ns": 322.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find large alternation (24 literals) no-match": {
+            "ns": 1593.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find (?i) literal no-match": {
+            "ns": 1530.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAll a+ -> x": {
+            "ns": 23169.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replacen a+ -> x (limit 10000)": {
+            "ns": 22832.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllLen a+ (24 KiB)": {
+            "ns": 10505.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllInto a+ (24 KiB)": {
+            "ns": 18114.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAll , -> ;": {
+            "ns": 3660.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replacen , -> ; (limit 10000)": {
+            "ns": 3602.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllLen , (29 KiB)": {
+            "ns": 1070.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllInto , (29 KiB)": {
+            "ns": 487.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/Workspace.init Qwen program": {
+            "ns": 59.0,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        },
+        "before": {
+          "bench/compile xDS-like": {
+            "ns": 2694.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile xDS-like (smp allocator)": {
+            "ns": 2569.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile long literal": {
+            "ns": 10293.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch literal (warm Regex API)": {
+            "ns": 2.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch literal (reuse)": {
+            "ns": 2.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch class (warm Regex API)": {
+            "ns": 5.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch class (reuse)": {
+            "ns": 4.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch xDS-like (warm Regex API)": {
+            "ns": 9.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch xDS-like (reuse)": {
+            "ns": 8.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch unicode (reuse)": {
+            "ns": 10.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch (?i) literal (reuse)": {
+            "ns": 5.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/comptime fullmatch literal": {
+            "ns": 0.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/comptime fullmatch class": {
+            "ns": 5.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/runtime input literal control": {
+            "ns": 2.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/runtime input class control": {
+            "ns": 5.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch backref (Regex)": {
+            "ns": 18.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch atomic (Regex)": {
+            "ns": 26.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find Qwen tokenizer": {
+            "ns": 44131.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/findAll Qwen (borrowed workspace)": {
+            "ns": 41049.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/findAll Qwen (owning iterator)": {
+            "ns": 41098.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find capture email tokens": {
+            "ns": 12823.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find ASCII run scan": {
+            "ns": 17312.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find word space word": {
+            "ns": 21310.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find capture no-match": {
+            "ns": 2012.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find loop-exit no-match": {
+            "ns": 4142.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find extended no-match": {
+            "ns": 2023.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find suffix no-match": {
+            "ns": 4011.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find byte escape scan": {
+            "ns": 15.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find shared-prefix no-match": {
+            "ns": 1452.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find CJK tokenizer": {
+            "ns": 178265.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find CJK tokenizer (no lookahead)": {
+            "ns": 161578.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find Han class scan": {
+            "ns": 116572.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch Han class (191 KiB)": {
+            "ns": 63524.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find JSON string literal": {
+            "ns": 7335.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find HTML tag": {
+            "ns": 48551.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find URL": {
+            "ns": 33069.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile Qwen tokenizer (page)": {
+            "ns": 40535.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile Qwen tokenizer (smp)": {
+            "ns": 52462.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/split whitespace (22 KiB)": {
+            "ns": 17725.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/split commas (29 KiB)": {
+            "ns": 16865.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find key-value key": {
+            "ns": 38228.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find JSON number": {
+            "ns": 35779.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find trailing spaces": {
+            "ns": 3.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find word boundary": {
+            "ns": 64382.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find digits": {
+            "ns": 26564.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch ASCII class (216 KiB)": {
+            "ns": 52042.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch ASCII loop (216 KiB)": {
+            "ns": 76051.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find line (?m)^.*$": {
+            "ns": 32900.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream [a-z]+ (216 KiB, 4 KiB chunks)": {
+            "ns": 144439.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream [a-z]* (216 KiB, 4 KiB chunks)": {
+            "ns": 180466.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream [a-z]+ [a-z]+ (216 KiB, 4 KiB chunks)": {
+            "ns": 191185.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream Han chain (191 KiB, 4 KiB chunks)": {
+            "ns": 150402.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/RegexSet 9 no-match patterns": {
+            "ns": 3061.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find xDS-like after 4KB prefix": {
+            "ns": 294.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find literal after 4KB prefix": {
+            "ns": 93.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find multi-literal after 4KB prefix": {
+            "ns": 324.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find large alternation (24 literals) no-match": {
+            "ns": 1621.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find (?i) literal no-match": {
+            "ns": 1779.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAll a+ -> x": {
+            "ns": 23335.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replacen a+ -> x (limit 10000)": {
+            "ns": 22349.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllLen a+ (24 KiB)": {
+            "ns": 9934.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllInto a+ (24 KiB)": {
+            "ns": 19879.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAll , -> ;": {
+            "ns": 2733.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replacen , -> ; (limit 10000)": {
+            "ns": 5246.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllLen , (29 KiB)": {
+            "ns": 1395.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllInto , (29 KiB)": {
+            "ns": 530.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/Workspace.init Qwen program": {
+            "ns": 64.2,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        }
+      }
+    },
+    {
+      "order": [
+        "before",
+        "after"
+      ],
+      "runs": {
+        "before": {
+          "bench/compile xDS-like": {
+            "ns": 2624.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile xDS-like (smp allocator)": {
+            "ns": 2655.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile long literal": {
+            "ns": 10136.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch literal (warm Regex API)": {
+            "ns": 1.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch literal (reuse)": {
+            "ns": 1.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch class (warm Regex API)": {
+            "ns": 5.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch class (reuse)": {
+            "ns": 4.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch xDS-like (warm Regex API)": {
+            "ns": 17.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch xDS-like (reuse)": {
+            "ns": 13.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch unicode (reuse)": {
+            "ns": 9.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch (?i) literal (reuse)": {
+            "ns": 5.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/comptime fullmatch literal": {
+            "ns": 0.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/comptime fullmatch class": {
+            "ns": 4.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/runtime input literal control": {
+            "ns": 1.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/runtime input class control": {
+            "ns": 5.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch backref (Regex)": {
+            "ns": 18.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch atomic (Regex)": {
+            "ns": 24.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find Qwen tokenizer": {
+            "ns": 44788.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/findAll Qwen (borrowed workspace)": {
+            "ns": 45060.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/findAll Qwen (owning iterator)": {
+            "ns": 44182.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find capture email tokens": {
+            "ns": 13198.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find ASCII run scan": {
+            "ns": 16165.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find word space word": {
+            "ns": 22622.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find capture no-match": {
+            "ns": 2043.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find loop-exit no-match": {
+            "ns": 4441.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find extended no-match": {
+            "ns": 2091.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find suffix no-match": {
+            "ns": 4104.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find byte escape scan": {
+            "ns": 15.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find shared-prefix no-match": {
+            "ns": 1508.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find CJK tokenizer": {
+            "ns": 170941.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find CJK tokenizer (no lookahead)": {
+            "ns": 172978.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find Han class scan": {
+            "ns": 115536.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch Han class (191 KiB)": {
+            "ns": 60446.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find JSON string literal": {
+            "ns": 7541.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find HTML tag": {
+            "ns": 48826.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find URL": {
+            "ns": 34648.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile Qwen tokenizer (page)": {
+            "ns": 39094.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile Qwen tokenizer (smp)": {
+            "ns": 48803.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/split whitespace (22 KiB)": {
+            "ns": 16920.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/split commas (29 KiB)": {
+            "ns": 17466.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find key-value key": {
+            "ns": 34736.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find JSON number": {
+            "ns": 26621.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find trailing spaces": {
+            "ns": 3.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find word boundary": {
+            "ns": 64522.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find digits": {
+            "ns": 26935.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch ASCII class (216 KiB)": {
+            "ns": 51703.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch ASCII loop (216 KiB)": {
+            "ns": 76585.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find line (?m)^.*$": {
+            "ns": 34203.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream [a-z]+ (216 KiB, 4 KiB chunks)": {
+            "ns": 131308.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream [a-z]* (216 KiB, 4 KiB chunks)": {
+            "ns": 141689.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream [a-z]+ [a-z]+ (216 KiB, 4 KiB chunks)": {
+            "ns": 176466.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream Han chain (191 KiB, 4 KiB chunks)": {
+            "ns": 139410.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/RegexSet 9 no-match patterns": {
+            "ns": 1987.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find xDS-like after 4KB prefix": {
+            "ns": 267.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find literal after 4KB prefix": {
+            "ns": 87.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find multi-literal after 4KB prefix": {
+            "ns": 366.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find large alternation (24 literals) no-match": {
+            "ns": 1644.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find (?i) literal no-match": {
+            "ns": 1620.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAll a+ -> x": {
+            "ns": 22820.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replacen a+ -> x (limit 10000)": {
+            "ns": 21709.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllLen a+ (24 KiB)": {
+            "ns": 10415.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllInto a+ (24 KiB)": {
+            "ns": 17574.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAll , -> ;": {
+            "ns": 3183.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replacen , -> ; (limit 10000)": {
+            "ns": 4237.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllLen , (29 KiB)": {
+            "ns": 1425.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllInto , (29 KiB)": {
+            "ns": 540.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/Workspace.init Qwen program": {
+            "ns": 61.3,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        },
+        "after": {
+          "bench/compile xDS-like": {
+            "ns": 2654.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile xDS-like (smp allocator)": {
+            "ns": 2446.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile long literal": {
+            "ns": 10142.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch literal (warm Regex API)": {
+            "ns": 2.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch literal (reuse)": {
+            "ns": 1.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch class (warm Regex API)": {
+            "ns": 6.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch class (reuse)": {
+            "ns": 4.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch xDS-like (warm Regex API)": {
+            "ns": 10.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch xDS-like (reuse)": {
+            "ns": 9.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch unicode (reuse)": {
+            "ns": 9.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch (?i) literal (reuse)": {
+            "ns": 5.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/comptime fullmatch literal": {
+            "ns": 0.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/comptime fullmatch class": {
+            "ns": 5.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/runtime input literal control": {
+            "ns": 2.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/runtime input class control": {
+            "ns": 5.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch backref (Regex)": {
+            "ns": 17.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch atomic (Regex)": {
+            "ns": 26.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find Qwen tokenizer": {
+            "ns": 46151.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/findAll Qwen (borrowed workspace)": {
+            "ns": 43399.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/findAll Qwen (owning iterator)": {
+            "ns": 48513.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find capture email tokens": {
+            "ns": 15086.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find ASCII run scan": {
+            "ns": 16667.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find word space word": {
+            "ns": 20933.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find capture no-match": {
+            "ns": 2012.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find loop-exit no-match": {
+            "ns": 4341.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find extended no-match": {
+            "ns": 2079.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find suffix no-match": {
+            "ns": 3824.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find byte escape scan": {
+            "ns": 16.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find shared-prefix no-match": {
+            "ns": 1487.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find CJK tokenizer": {
+            "ns": 168200.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find CJK tokenizer (no lookahead)": {
+            "ns": 189471.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find Han class scan": {
+            "ns": 102545.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch Han class (191 KiB)": {
+            "ns": 61740.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find JSON string literal": {
+            "ns": 7385.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find HTML tag": {
+            "ns": 48457.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find URL": {
+            "ns": 34497.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile Qwen tokenizer (page)": {
+            "ns": 40558.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/compile Qwen tokenizer (smp)": {
+            "ns": 55092.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/split whitespace (22 KiB)": {
+            "ns": 18104.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/split commas (29 KiB)": {
+            "ns": 17678.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find key-value key": {
+            "ns": 33939.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find JSON number": {
+            "ns": 28634.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find trailing spaces": {
+            "ns": 4.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find word boundary": {
+            "ns": 66502.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find digits": {
+            "ns": 28791.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch ASCII class (216 KiB)": {
+            "ns": 51975.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/fullmatch ASCII loop (216 KiB)": {
+            "ns": 76876.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find line (?m)^.*$": {
+            "ns": 33245.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream [a-z]+ (216 KiB, 4 KiB chunks)": {
+            "ns": 138581.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream [a-z]* (216 KiB, 4 KiB chunks)": {
+            "ns": 141681.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream [a-z]+ [a-z]+ (216 KiB, 4 KiB chunks)": {
+            "ns": 211306.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/stream Han chain (191 KiB, 4 KiB chunks)": {
+            "ns": 150310.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/RegexSet 9 no-match patterns": {
+            "ns": 3034.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find xDS-like after 4KB prefix": {
+            "ns": 244.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find literal after 4KB prefix": {
+            "ns": 88.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find multi-literal after 4KB prefix": {
+            "ns": 319.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find large alternation (24 literals) no-match": {
+            "ns": 1509.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/find (?i) literal no-match": {
+            "ns": 1636.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAll a+ -> x": {
+            "ns": 22021.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replacen a+ -> x (limit 10000)": {
+            "ns": 22637.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllLen a+ (24 KiB)": {
+            "ns": 10508.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllInto a+ (24 KiB)": {
+            "ns": 19293.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAll , -> ;": {
+            "ns": 2752.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replacen , -> ; (limit 10000)": {
+            "ns": 4221.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllLen , (29 KiB)": {
+            "ns": 1118.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/replaceAllInto , (29 KiB)": {
+            "ns": 501.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "bench/Workspace.init Qwen program": {
+            "ns": 59.7,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        }
+      }
+    }
+  ],
+  "medians": {
+    "bench/compile xDS-like": {
+      "before": 2624.9,
+      "after": 2695.5,
+      "unit": "ns/iter",
+      "speedup": 0.9738081988499351
+    },
+    "bench/compile xDS-like (smp allocator)": {
+      "before": 2569.9,
+      "after": 2546.5,
+      "unit": "ns/iter",
+      "speedup": 1.0091890830551737
+    },
+    "bench/compile long literal": {
+      "before": 10400.6,
+      "after": 10058.0,
+      "unit": "ns/iter",
+      "speedup": 1.0340624378604097
+    },
+    "bench/fullmatch literal (warm Regex API)": {
+      "before": 2.6,
+      "after": 2.5,
+      "unit": "ns/iter",
+      "speedup": 1.04
+    },
+    "bench/fullmatch literal (reuse)": {
+      "before": 2.0,
+      "after": 1.9,
+      "unit": "ns/iter",
+      "speedup": 1.0526315789473684
+    },
+    "bench/fullmatch class (warm Regex API)": {
+      "before": 5.9,
+      "after": 5.7,
+      "unit": "ns/iter",
+      "speedup": 1.0350877192982457
+    },
+    "bench/fullmatch class (reuse)": {
+      "before": 4.4,
+      "after": 4.5,
+      "unit": "ns/iter",
+      "speedup": 0.9777777777777779
+    },
+    "bench/fullmatch xDS-like (warm Regex API)": {
+      "before": 17.8,
+      "after": 17.3,
+      "unit": "ns/iter",
+      "speedup": 1.0289017341040463
+    },
+    "bench/fullmatch xDS-like (reuse)": {
+      "before": 10.3,
+      "after": 9.4,
+      "unit": "ns/iter",
+      "speedup": 1.0957446808510638
+    },
+    "bench/fullmatch unicode (reuse)": {
+      "before": 10.9,
+      "after": 10.8,
+      "unit": "ns/iter",
+      "speedup": 1.0092592592592593
+    },
+    "bench/fullmatch (?i) literal (reuse)": {
+      "before": 5.4,
+      "after": 5.1,
+      "unit": "ns/iter",
+      "speedup": 1.058823529411765
+    },
+    "bench/comptime fullmatch literal": {
+      "before": 0.7,
+      "after": 0.5,
+      "unit": "ns/iter",
+      "speedup": 1.4
+    },
+    "bench/comptime fullmatch class": {
+      "before": 4.6,
+      "after": 3.9,
+      "unit": "ns/iter",
+      "speedup": 1.1794871794871795
+    },
+    "bench/runtime input literal control": {
+      "before": 1.5,
+      "after": 2.0,
+      "unit": "ns/iter",
+      "speedup": 0.75
+    },
+    "bench/runtime input class control": {
+      "before": 5.4,
+      "after": 5.8,
+      "unit": "ns/iter",
+      "speedup": 0.9310344827586208
+    },
+    "bench/fullmatch backref (Regex)": {
+      "before": 19.1,
+      "after": 19.1,
+      "unit": "ns/iter",
+      "speedup": 1.0
+    },
+    "bench/fullmatch atomic (Regex)": {
+      "before": 26.8,
+      "after": 30.7,
+      "unit": "ns/iter",
+      "speedup": 0.8729641693811075
+    },
+    "bench/find Qwen tokenizer": {
+      "before": 43051.7,
+      "after": 44911.7,
+      "unit": "ns/iter",
+      "speedup": 0.9585854020221902
+    },
+    "bench/findAll Qwen (borrowed workspace)": {
+      "before": 44197.5,
+      "after": 43399.2,
+      "unit": "ns/iter",
+      "speedup": 1.0183943482829176
+    },
+    "bench/findAll Qwen (owning iterator)": {
+      "before": 44182.5,
+      "after": 45735.8,
+      "unit": "ns/iter",
+      "speedup": 0.9660375460798761
+    },
+    "bench/find capture email tokens": {
+      "before": 13198.8,
+      "after": 15086.7,
+      "unit": "ns/iter",
+      "speedup": 0.8748632901827437
+    },
+    "bench/find ASCII run scan": {
+      "before": 16165.4,
+      "after": 16680.8,
+      "unit": "ns/iter",
+      "speedup": 0.9691022013332694
+    },
+    "bench/find word space word": {
+      "before": 21562.5,
+      "after": 20933.3,
+      "unit": "ns/iter",
+      "speedup": 1.0300573727028228
+    },
+    "bench/find capture no-match": {
+      "before": 1931.3,
+      "after": 2012.5,
+      "unit": "ns/iter",
+      "speedup": 0.9596521739130435
+    },
+    "bench/find loop-exit no-match": {
+      "before": 4142.3,
+      "after": 4048.3,
+      "unit": "ns/iter",
+      "speedup": 1.0232196230516513
+    },
+    "bench/find extended no-match": {
+      "before": 2079.4,
+      "after": 1964.6,
+      "unit": "ns/iter",
+      "speedup": 1.058434286877736
+    },
+    "bench/find suffix no-match": {
+      "before": 3982.1,
+      "after": 3950.6,
+      "unit": "ns/iter",
+      "speedup": 1.0079734723839417
+    },
+    "bench/find byte escape scan": {
+      "before": 15.0,
+      "after": 14.2,
+      "unit": "ns/iter",
+      "speedup": 1.0563380281690142
+    },
+    "bench/find shared-prefix no-match": {
+      "before": 1508.4,
+      "after": 1494.1,
+      "unit": "ns/iter",
+      "speedup": 1.0095709791847935
+    },
+    "bench/find CJK tokenizer": {
+      "before": 172570.8,
+      "after": 172505.8,
+      "unit": "ns/iter",
+      "speedup": 1.0003767989250216
+    },
+    "bench/find CJK tokenizer (no lookahead)": {
+      "before": 175254.2,
+      "after": 173881.7,
+      "unit": "ns/iter",
+      "speedup": 1.0078932975695545
+    },
+    "bench/find Han class scan": {
+      "before": 118380.0,
+      "after": 116257.5,
+      "unit": "ns/iter",
+      "speedup": 1.018256886652474
+    },
+    "bench/fullmatch Han class (191 KiB)": {
+      "before": 60655.8,
+      "after": 65733.3,
+      "unit": "ns/iter",
+      "speedup": 0.9227560460223357
+    },
+    "bench/find JSON string literal": {
+      "before": 7335.6,
+      "after": 7385.6,
+      "unit": "ns/iter",
+      "speedup": 0.9932300693240901
+    },
+    "bench/find HTML tag": {
+      "before": 48826.7,
+      "after": 48457.5,
+      "unit": "ns/iter",
+      "speedup": 1.0076190476190476
+    },
+    "bench/find URL": {
+      "before": 34648.5,
+      "after": 34941.9,
+      "unit": "ns/iter",
+      "speedup": 0.9916032041760751
+    },
+    "bench/compile Qwen tokenizer (page)": {
+      "before": 39396.3,
+      "after": 40558.6,
+      "unit": "ns/iter",
+      "speedup": 0.971342699205594
+    },
+    "bench/compile Qwen tokenizer (smp)": {
+      "before": 49736.8,
+      "after": 52219.4,
+      "unit": "ns/iter",
+      "speedup": 0.9524582817879945
+    },
+    "bench/split whitespace (22 KiB)": {
+      "before": 17539.8,
+      "after": 16966.9,
+      "unit": "ns/iter",
+      "speedup": 1.033765743889573
+    },
+    "bench/split commas (29 KiB)": {
+      "before": 16865.2,
+      "after": 16091.9,
+      "unit": "ns/iter",
+      "speedup": 1.0480552327568529
+    },
+    "bench/find key-value key": {
+      "before": 34641.0,
+      "after": 34140.6,
+      "unit": "ns/iter",
+      "speedup": 1.0146570359044658
+    },
+    "bench/find JSON number": {
+      "before": 27162.7,
+      "after": 27781.3,
+      "unit": "ns/iter",
+      "speedup": 0.9777332234272694
+    },
+    "bench/find trailing spaces": {
+      "before": 3.3,
+      "after": 3.5,
+      "unit": "ns/iter",
+      "speedup": 0.9428571428571428
+    },
+    "bench/find word boundary": {
+      "before": 64382.3,
+      "after": 65392.1,
+      "unit": "ns/iter",
+      "speedup": 0.9845577676814172
+    },
+    "bench/find digits": {
+      "before": 26935.6,
+      "after": 26398.5,
+      "unit": "ns/iter",
+      "speedup": 1.020345852984071
+    },
+    "bench/fullmatch ASCII class (216 KiB)": {
+      "before": 53540.8,
+      "after": 52652.5,
+      "unit": "ns/iter",
+      "speedup": 1.0168709937799725
+    },
+    "bench/fullmatch ASCII loop (216 KiB)": {
+      "before": 76585.8,
+      "after": 76876.7,
+      "unit": "ns/iter",
+      "speedup": 0.9962160186376368
+    },
+    "bench/find line (?m)^.*$": {
+      "before": 33931.3,
+      "after": 33345.4,
+      "unit": "ns/iter",
+      "speedup": 1.0175706394285269
+    },
+    "bench/stream [a-z]+ (216 KiB, 4 KiB chunks)": {
+      "before": 144439.6,
+      "after": 141033.4,
+      "unit": "ns/iter",
+      "speedup": 1.0241517257614154
+    },
+    "bench/stream [a-z]* (216 KiB, 4 KiB chunks)": {
+      "before": 173254.2,
+      "after": 141681.3,
+      "unit": "ns/iter",
+      "speedup": 1.2228445108846406
+    },
+    "bench/stream [a-z]+ [a-z]+ (216 KiB, 4 KiB chunks)": {
+      "before": 188383.4,
+      "after": 196160.5,
+      "unit": "ns/iter",
+      "speedup": 0.9603533840910886
+    },
+    "bench/stream Han chain (191 KiB, 4 KiB chunks)": {
+      "before": 141552.1,
+      "after": 148864.6,
+      "unit": "ns/iter",
+      "speedup": 0.9508781805748311
+    },
+    "bench/RegexSet 9 no-match patterns": {
+      "before": 1987.9,
+      "after": 2874.2,
+      "unit": "ns/iter",
+      "speedup": 0.6916359334771416
+    },
+    "bench/find xDS-like after 4KB prefix": {
+      "before": 286.6,
+      "after": 273.1,
+      "unit": "ns/iter",
+      "speedup": 1.0494324423288173
+    },
+    "bench/find literal after 4KB prefix": {
+      "before": 95.7,
+      "after": 88.9,
+      "unit": "ns/iter",
+      "speedup": 1.076490438695163
+    },
+    "bench/find multi-literal after 4KB prefix": {
+      "before": 366.1,
+      "after": 322.2,
+      "unit": "ns/iter",
+      "speedup": 1.1362507759155804
+    },
+    "bench/find large alternation (24 literals) no-match": {
+      "before": 1647.3,
+      "after": 1606.2,
+      "unit": "ns/iter",
+      "speedup": 1.0255883451624952
+    },
+    "bench/find (?i) literal no-match": {
+      "before": 1620.4,
+      "after": 1672.1,
+      "unit": "ns/iter",
+      "speedup": 0.9690807966030741
+    },
+    "bench/replaceAll a+ -> x": {
+      "before": 22820.2,
+      "after": 22834.2,
+      "unit": "ns/iter",
+      "speedup": 0.9993868845854026
+    },
+    "bench/replacen a+ -> x (limit 10000)": {
+      "before": 22349.6,
+      "after": 23062.7,
+      "unit": "ns/iter",
+      "speedup": 0.9690799429381641
+    },
+    "bench/replaceAllLen a+ (24 KiB)": {
+      "before": 10415.0,
+      "after": 10508.5,
+      "unit": "ns/iter",
+      "speedup": 0.9911024408811914
+    },
+    "bench/replaceAllInto a+ (24 KiB)": {
+      "before": 18150.0,
+      "after": 19293.1,
+      "unit": "ns/iter",
+      "speedup": 0.9407508383826343
+    },
+    "bench/replaceAll , -> ;": {
+      "before": 3183.1,
+      "after": 2975.2,
+      "unit": "ns/iter",
+      "speedup": 1.0698776552836784
+    },
+    "bench/replacen , -> ; (limit 10000)": {
+      "before": 4237.9,
+      "after": 3697.3,
+      "unit": "ns/iter",
+      "speedup": 1.146214805398534
+    },
+    "bench/replaceAllLen , (29 KiB)": {
+      "before": 1395.0,
+      "after": 1104.0,
+      "unit": "ns/iter",
+      "speedup": 1.263586956521739
+    },
+    "bench/replaceAllInto , (29 KiB)": {
+      "before": 530.6,
+      "after": 548.5,
+      "unit": "ns/iter",
+      "speedup": 0.9673655423883318
+    },
+    "bench/Workspace.init Qwen program": {
+      "before": 64.2,
+      "after": 59.9,
+      "unit": "ns/iter",
+      "speedup": 1.0717863105175294
+    }
+  }
+}
