@@ -344,3 +344,8 @@ negative and reverted. See
 [search cache growth](benchmarks/search-cache-growth.json),
 [exact replacement fill](benchmarks/replace-exact-fill.json) and
 [fast-branch prefix skip](benchmarks/fast-branch-prefix-skip.json).
+
+Extending the later plans to `set* set+` branches (a leading newline run) was
+screened and reverted: Qwen find measured 0.96–0.98x and the CJK scans 1.01x,
+so the DFA's single-newline handling is already as cheap as the direct scan.
+See [star-run screen](benchmarks/fast-branch-star-run.json).
