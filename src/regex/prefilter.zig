@@ -680,23 +680,39 @@ pub const MultiFilter = struct {
 
     pub inline fn indexOf(self: *const MultiFilter, input: []const u8, start: usize) ?usize {
         var ignored: usize = undefined;
-        return self.scan(false, input, start, &ignored);
+        return self.scan(false, false, input, start, &ignored);
     }
 
     /// Like `indexOf`, but also reports which literal matched. The index is
     /// the first exact match in source order, so a caller can return the
     /// span without verifying the literals again.
     pub inline fn indexOfMatch(self: *const MultiFilter, input: []const u8, start: usize, literal_index: *usize) ?usize {
-        return self.scan(true, input, start, literal_index);
+        return self.scan(true, false, input, start, literal_index);
     }
 
-    fn scan(self: *const MultiFilter, comptime want_index: bool, input: []const u8, start: usize, literal_index: *usize) ?usize {
+    /// Case-folded scan for a whole-pattern caseless literal alternation.
+    /// Detection guarantees every leaf's fold class is ASCII-only, so the
+    /// bytes that fold to a literal byte are exactly its members.
+    pub inline fn indexOfCaseless(self: *const MultiFilter, input: []const u8, start: usize, literal_index: *usize) ?usize {
+        return self.scan(true, true, input, start, literal_index);
+    }
+
+    fn scan(
+        self: *const MultiFilter,
+        comptime want_index: bool,
+        comptime caseless: bool,
+        input: []const u8,
+        start: usize,
+        literal_index: *usize,
+    ) ?usize {
         if (start >= input.len or input.len - start < 2) return null;
         const count: usize = self.pair_count;
+        const fold: Vec = @splat(0x20);
         var offset = start;
         while (offset + 17 <= input.len) : (offset += 16) {
             const raw: [16]u8 = input[offset..][0..16].*;
-            const chunk: Vec = @bitCast(raw);
+            const base: Vec = @bitCast(raw);
+            const chunk: Vec = if (caseless) base | fold else base;
             var first_mask = chunk == self.first;
             if (!self.shared_first) {
                 var pair_index: usize = 0;
@@ -706,7 +722,8 @@ pub const MultiFilter = struct {
             }
             if (!@reduce(.Or, first_mask)) continue;
             const next_raw: [16]u8 = input[offset + 1 ..][0..16].*;
-            const next: Vec = @bitCast(next_raw);
+            const next_base: Vec = @bitCast(next_raw);
+            const next: Vec = if (caseless) next_base | fold else next_base;
             var seconds = @as(@Vector(16, bool), @splat(false));
             var pair_index: usize = 0;
             while (pair_index < count) : (pair_index += 1) {
@@ -717,7 +734,8 @@ pub const MultiFilter = struct {
             // there only leaves more candidates for exact verification.
             if (self.use_third and offset + 18 <= input.len and @reduce(.Or, mask)) {
                 const third_raw: [16]u8 = input[offset + 2 ..][0..16].*;
-                const third: Vec = @bitCast(third_raw);
+                const third_base: Vec = @bitCast(third_raw);
+                const third: Vec = if (caseless) third_base | fold else third_base;
                 var allowed = third == self.third_splats[0];
                 var third_index: usize = 1;
                 while (third_index < self.third_count) : (third_index += 1) {
@@ -732,7 +750,10 @@ pub const MultiFilter = struct {
                 // a scalar pass avoids extracting the same 16 candidates.
                 var index: usize = 0;
                 while (index < 16) : (index += 1) {
-                    const found = self.matchesAt(input, offset + index);
+                    const found = if (caseless)
+                        self.matchesAtCaseless(input, offset + index)
+                    else
+                        self.matchesAt(input, offset + index);
                     if (found != no_literal) {
                         if (want_index) literal_index.* = found;
                         return offset + index;
@@ -743,7 +764,10 @@ pub const MultiFilter = struct {
                 while (pending != 0) {
                     const index: usize = @ctz(pending);
                     pending &= pending - 1;
-                    const found = self.matchesAt(input, offset + index);
+                    const found = if (caseless)
+                        self.matchesAtCaseless(input, offset + index)
+                    else
+                        self.matchesAt(input, offset + index);
                     if (found != no_literal) {
                         if (want_index) literal_index.* = found;
                         return offset + index;
@@ -752,14 +776,45 @@ pub const MultiFilter = struct {
             }
         }
         while (offset < input.len - 1) : (offset += 1) {
-            if (self.shared_first and input[offset] != @as(u8, @intCast(self.pairs[0] >> 8))) continue;
-            const found = self.matchesAt(input, offset);
+            if (self.shared_first) {
+                const first = @as(u8, @intCast(self.pairs[0] >> 8));
+                const byte = if (caseless) foldByte(input[offset]) else input[offset];
+                if (byte != first) continue;
+            }
+            const found = if (caseless)
+                self.matchesAtCaseless(input, offset)
+            else
+                self.matchesAt(input, offset);
             if (found != no_literal) {
                 if (want_index) literal_index.* = found;
                 return offset;
             }
         }
         return null;
+    }
+
+    /// Folded verification: the lane tests compare folded bytes, so the
+    /// first three bytes are re-checked folded and the tail compares folded
+    /// input against the lowercase literal.
+    fn matchesAtCaseless(self: *const MultiFilter, input: []const u8, offset: usize) usize {
+        const second = foldByte(input[offset + 1]);
+        for (self.literals, 0..) |literal, index| {
+            if (offset + literal.len > input.len) continue;
+            if (literal[1] != second) continue;
+            if (literal.len > 2 and literal[2] != foldByte(input[offset + 2])) continue;
+            if (literal[0] != foldByte(input[offset])) continue;
+            var matched = true;
+            if (literal.len > 3) {
+                for (input[offset + 3 ..][0 .. literal.len - 3], literal[3..]) |byte, expected| {
+                    if (foldByte(byte) != expected) {
+                        matched = false;
+                        break;
+                    }
+                }
+            }
+            if (matched) return index;
+        }
+        return no_literal;
     }
 };
 

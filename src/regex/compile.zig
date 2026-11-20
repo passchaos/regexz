@@ -98,6 +98,10 @@ pub const Program = struct {
     /// Whole-pattern repetition of a fixed literal sequence (`(?:ab)+`).
     /// Not serialized.
     repeated_literal: ?[]const u8 = null,
+    /// Whole-pattern alternation of case-folded literals (`(?i)alpha|gamma`),
+    /// stored in lowercase form. Every leaf's fold class is ASCII-only, so a
+    /// byte-wise folded scan is exact. Not serialized.
+    caseless_literal_set: ?[]const []const u8 = null,
     /// Whole-pattern concatenation of bounded ASCII set runs
     /// (`\d{1,3}(?:\.\d{1,3}){3}`), at least one of which is variable
     /// width. Not serialized.
@@ -598,8 +602,15 @@ fn foldCanonical(rune: u21) ?u8 {
 }
 
 /// The canonical byte for a set that is exactly one case-fold class, or null.
+/// ASCII letters must appear with both cases: a singleton letter comes from a
+/// case-sensitive scope, and the byte-wise scan folds every input byte, so it
+/// must not accept the other case. Non-ASCII peers stay allowed because the
+/// scan only proposes ASCII candidates and the caller falls back to the
+/// general engine at any non-ASCII candidate byte.
 fn caselessCanonical(set: model.Set) ?u8 {
     var canonical: ?u8 = null;
+    var has_upper = false;
+    var has_lower = false;
     for (set.ranges) |range| {
         var rune: u32 = range.first;
         while (rune <= range.last) : (rune += 1) {
@@ -607,7 +618,14 @@ fn caselessCanonical(set: model.Set) ?u8 {
             if (canonical) |existing| {
                 if (existing != folded) return null;
             } else canonical = folded;
+            if (folded >= 'a' and folded <= 'z') {
+                if (rune >= 'a' and rune <= 'z') has_lower = true;
+                if (rune >= 'A' and rune <= 'Z') has_upper = true;
+            }
         }
+    }
+    if (canonical) |value| {
+        if (value >= 'a' and value <= 'z' and !(has_upper and has_lower)) return null;
     }
     return canonical;
 }
@@ -648,6 +666,8 @@ const LiteralExpander = struct {
     const max_total_bytes = 1024;
 
     allocator: std.mem.Allocator,
+    /// Every leaf is one complete ASCII case-fold class, stored lowercase.
+    caseless: bool = false,
     total_bytes: usize = 0,
 
     fn single(self: *LiteralExpander, bytes: []const u8) model.Error![]const []const u8 {
@@ -663,6 +683,16 @@ const LiteralExpander = struct {
             .empty, .flag_change => try self.single(""),
             .group => |child| self.expand(child),
             .set => |set| blk: {
+                if (self.caseless) {
+                    // A non-ASCII peer means a byte-wise folded scan cannot
+                    // represent the branch exactly.
+                    for (set.ranges) |range| {
+                        if (range.first >= 0x80) break :blk null;
+                    }
+                    const canonical = caselessCanonical(set) orelse break :blk null;
+                    const byte = [1]u8{canonical};
+                    break :blk try self.single(byte[0..1]);
+                }
                 if (set.ranges.len != 1 or set.ranges[0].first != set.ranges[0].last) break :blk null;
                 var encoded: [4]u8 = undefined;
                 const len = std.unicode.utf8Encode(set.ranges[0].first, &encoded) catch break :blk null;
@@ -701,8 +731,8 @@ const LiteralExpander = struct {
     }
 };
 
-fn expandLiteralSet(allocator: std.mem.Allocator, root: *const model.Node) model.Error!?[]const []const u8 {
-    var expander = LiteralExpander{ .allocator = allocator };
+fn expandLiteralSet(allocator: std.mem.Allocator, root: *const model.Node, caseless: bool) model.Error!?[]const []const u8 {
+    var expander = LiteralExpander{ .allocator = allocator, .caseless = caseless };
     const branches = try expander.expand(root) orelse return null;
     if (branches.len < 2) return null;
     for (branches) |branch| {
@@ -1747,9 +1777,14 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
     else
         null;
     const literal_set: ?[]const []const u8 = if (literal == null and caseless_literal == null and
-        !limits.auto_callout) try expandLiteralSet(allocator, parsed.root) else null;
-    const repeated_literal: ?[]const u8 = if (literal == null and caseless_literal == null and
+        !limits.auto_callout) try expandLiteralSet(allocator, parsed.root, false) else null;
+    const caseless_literal_set: ?[]const []const u8 = if (literal == null and caseless_literal == null and
         literal_set == null and !limits.auto_callout)
+        try expandLiteralSet(allocator, parsed.root, true)
+    else
+        null;
+    const repeated_literal: ?[]const u8 = if (literal == null and caseless_literal == null and
+        literal_set == null and caseless_literal_set == null and !limits.auto_callout)
         try detectRepeatedLiteral(allocator, parsed.root)
     else
         null;
@@ -1824,6 +1859,7 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         .caseless_literal = caseless_literal,
         .literal_set = literal_set,
         .repeated_literal = repeated_literal,
+        .caseless_literal_set = caseless_literal_set,
         .bounded_sequence = bounded_sequence,
         .unbounded_sequence = unbounded_sequence,
         .prefix_run = prefix_run,

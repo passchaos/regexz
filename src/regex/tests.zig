@@ -287,6 +287,40 @@ test "Unicode 16 case folding" {
     }
 }
 
+test "caseless literal alternation scans folded branches" {
+    var value = try regex.Regex.init(gpa, "(?i)alpha|gamma", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind == .caseless_literal_set);
+
+    try expectFastSpans("(?i)alpha|gamma", "xx ALPHA Gamma yy", &.{ .{ 3, 8 }, .{ 9, 14 } });
+    try expectFastSpans("(?i)alpha|gamma", "ALPHABET", &.{.{ 0, 5 }});
+    try expectFastSpans("(?i)alpha|gamma", "\u{03B1}\u{03BB}\u{03C6}\u{03B1}", &.{});
+    try expectFastSpans("(?i)alpha|gamma", "zzz", &.{});
+}
+
+test "caseless alternation with non-ASCII fold peers falls back" {
+    // 's' folds with U+017F and 'k' with U+212A; a byte-wise folded scan
+    // cannot represent those branches, so the general engine is used.
+    var value = try regex.Regex.init(gpa, "(?i)skip|stop", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind != .caseless_literal_set);
+
+    try expectFastSpans("(?i)skip|stop", "SKIP stop", &.{ .{ 0, 4 }, .{ 5, 9 } });
+    try expectFastSpans("(?i)ss|aa", "\u{017F}\u{017F} aa", &.{ .{ 0, 4 }, .{ 5, 7 } });
+}
+
+test "caseless literal fast path respects case-sensitive scopes" {
+    // The whole-pattern caseless-literal scan folds every input byte, so a
+    // case-sensitive scope inside the pattern must disable it.
+    try expectFastSpans("(?i)a(?-i)b", "aB Ab ab AB", &.{ .{ 3, 5 }, .{ 6, 8 } });
+    try expectFastSpans("(?i:ab)c", "ABC ABc", &.{.{ 4, 7 }});
+    try expectFastSpans("(?i)a(?^)b", "aB Ab ab AB", &.{ .{ 3, 5 }, .{ 6, 8 } });
+}
+
 test "option reset and start-up directives" {
     const Case = struct { pattern: []const u8, input: []const u8, matches: bool };
     for ([_]Case{

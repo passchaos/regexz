@@ -265,5 +265,22 @@ exactly at a line break and skip the line-start search (2.02x ahead), and
 chain walks compare single-byte separators directly, cutting the semver scan
 11% to a statistical tie with Rust.
 
-The comparison now covers 58 cases: regexz is faster on 57 and the semver
-scan is a tie (0.98x here, 0.89-1.05x across runs).
+## Case-folded literal alternations
+
+A whole-pattern case-folded literal alternation (`(?i)alpha|gamma`) now uses
+a folded candidate scan: input lanes are folded with `| 0x20` before the
+two-byte lane tests, and verification folds each byte against the lowercase
+branch. Detection accepts a branch only when every leaf is one complete ASCII
+case-fold class, so bytes that fold to a literal byte are exactly its
+members and non-ASCII input can never match. The case-insensitive
+alternation improves 1.58x and is 2.34x ahead.
+
+The same closure check fixes a pre-existing false positive: a singleton
+letter inside a case-sensitive scope (`(?i:ab)c`, `(?i)a(?-i)b`) previously
+passed the caseless-literal detector, so `find` accepted the other case even
+though full match rejected it. Such patterns now fall back to the general
+engine.
+
+The comparison now covers 58 cases and regexz is faster on all of them; the
+thinnest margins are the semver scan at 1.04x and the camelCase scan at
+1.16x.

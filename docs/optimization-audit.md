@@ -809,6 +809,10 @@ heading scans skip the line-start search when the previous match ended at a
 line break (2.02x ahead), candidate filters skip the three bytes they already
 checked and drop the third-byte stage for distinct pairs (shared-prefix
 1.32x, 10-word 1.45x), and chain walks compare single-byte separators
-directly (semver 11% faster, a statistical tie). The comparison covers 58
-cases: 57 are faster and the semver scan is a tie. See
-[literal fast paths](benchmarks/literal-fast-paths.md).
+directly (semver 11% faster). Whole-pattern case-folded literal
+alternations (`(?i)alpha|gamma`) now scan folded lanes and return the
+matching branch, improving 1.58x (2.34x ahead). The caseless detector now
+requires both ASCII cases per letter, which also fixes a pre-existing false
+positive for case-sensitive scopes inside a caseless pattern (`(?i:ab)c`
+must not match `ABC`). The comparison covers 58 cases and all of them are
+faster. See [literal fast paths](benchmarks/literal-fast-paths.md).

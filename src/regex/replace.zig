@@ -61,6 +61,7 @@ pub const FastKind = enum {
     literal_pair,
     literal_bytes,
     literal_first,
+    caseless_literal_set,
     repeated_literal,
     run_then_literal,
     fixed_sequence,
@@ -217,6 +218,9 @@ pub const Workspace = struct {
     /// Every literal-set branch is one byte, so a first-byte hit is the
     /// whole match.
     literal_set_single: bool = false,
+    /// Folded candidate filter for a whole-pattern caseless literal
+    /// alternation (`(?i)alpha|gamma`).
+    caseless_literal_set: ?prefilter.MultiFilter = null,
     /// A whole-pattern fixed literal repetition (`(?:ab)+`).
     repeated_literal: ?RepeatedLiteralState = null,
     /// `set+ literal` with a literal first byte outside the set.
@@ -335,6 +339,10 @@ pub const Workspace = struct {
                 if (literal.len != 1) literal_set_single = false;
             }
         }
+        const caseless_literal_set: ?prefilter.MultiFilter = if (limits.longest) null else blk: {
+            const literals = program.caseless_literal_set orelse break :blk null;
+            break :blk prefilter.MultiFilter.initAny(literals);
+        };
         const repeated_literal: ?RepeatedLiteralState = if (limits.longest) null else blk: {
             const bytes = program.repeated_literal orelse break :blk null;
             var state = RepeatedLiteralState{ .literal_len = @intCast(bytes.len) };
@@ -554,6 +562,8 @@ pub const Workspace = struct {
                 .literal_pair
             else
                 .literal_first)
+        else if (caseless_literal_set != null)
+            .caseless_literal_set
         else if (repeated_literal != null)
             .repeated_literal
         else if (utf8_run != null)
@@ -692,6 +702,7 @@ pub const Workspace = struct {
             .literal_set_multi = literal_set_multi,
             .literal_set_pair = literal_set_pair,
             .literal_set_single = literal_set_single,
+            .caseless_literal_set = caseless_literal_set,
             .repeated_literal = repeated_literal,
             .run_then_literal = run_then_literal,
             .fixed_sequence = fixed_sequence,
@@ -809,6 +820,7 @@ pub const Workspace = struct {
             .literal_pair => return self.findLiteralPair(input, search_start),
             .literal_bytes => return self.findLiteralBytes(input, search_start),
             .literal_first => return self.findLiteralFirst(input, search_start),
+            .caseless_literal_set => return self.findCaselessLiteralSet(input, search_start),
             .repeated_literal => return self.findRepeatedLiteral(&self.repeated_literal.?, input, search_start),
             .run_then_literal => return self.findRunThenLiteral(&self.run_then_literal.?, input, search_start),
             .fixed_sequence => return self.findFixedSequence(self.fixed_sequence.?, input, search_start),
@@ -1406,6 +1418,7 @@ pub const Workspace = struct {
             .literal_pair => return self.findLiteralPair(input, search_start),
             .literal_bytes => return self.findLiteralBytes(input, search_start),
             .literal_first => return self.findLiteralFirst(input, search_start),
+            .caseless_literal_set => return self.findCaselessLiteralSet(input, search_start),
             .repeated_literal => return self.findRepeatedLiteral(&self.repeated_literal.?, input, search_start),
             .run_then_literal => return self.findRunThenLiteral(&self.run_then_literal.?, input, search_start),
             .fixed_sequence => return self.findFixedSequence(self.fixed_sequence.?, input, search_start),
@@ -2059,6 +2072,18 @@ pub const Workspace = struct {
         self.slots[0] = start;
         self.slots[1] = start + 1;
         return .{ .start = start, .end = start + 1, .slots = self.slots };
+    }
+
+    /// A whole-pattern case-folded literal alternation. The folded filter
+    /// reports the matching branch, so the span is returned directly.
+    inline fn findCaselessLiteralSet(self: *Workspace, input: []const u8, search_start: usize) ?Match {
+        const filter = &self.caseless_literal_set.?;
+        var literal_index: usize = undefined;
+        const start = filter.indexOfCaseless(input, search_start, &literal_index) orelse return null;
+        const literal = filter.literals[literal_index];
+        self.slots[0] = start;
+        self.slots[1] = start + literal.len;
+        return .{ .start = start, .end = start + literal.len, .slots = self.slots };
     }
 
     /// `(?:literal)+`: find the literal, then consume greedy repetitions.
