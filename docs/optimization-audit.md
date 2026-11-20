@@ -349,3 +349,13 @@ Extending the later plans to `set* set+` branches (a leading newline run) was
 screened and reverted: Qwen find measured 0.96–0.98x and the CJK scans 1.01x,
 so the DFA's single-newline handling is already as cheap as the direct scan.
 See [star-run screen](benchmarks/fast-branch-star-run.json).
+
+Restructuring `find`/`findOnce` so `.none` programs skip the fast-kind switch
+was screened and reverted: Qwen find measured 1.00x, the borrowed iterator
+0.94x and the CJK scans 0.96x, so the switch is not a bottleneck. See
+[find dispatch screen](benchmarks/find-dispatch-screen.json).
+
+Raising the split parts reservation from `input.len / 8` to `input.len / 4`
+was neutral across two interleaved runs (1.05x then 0.99x on the whitespace
+split), so the extra temporary memory was not justified. See
+[split reserve screen](benchmarks/split-reserve-screen.json).
