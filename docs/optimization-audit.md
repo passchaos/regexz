@@ -159,6 +159,14 @@ prefixes fall back to the general engine. Covered capture searches improve
 1.32–2.43x, the lazy case 1.64x, and the nullable chains 1.42–2.03x; controls
 stay within host noise. See [captured run chains](benchmarks/run-chain.md).
 
+The `RegexSet` combined DFA now stores pre-multiplied row offsets in its
+packed ASCII transition entries, so the hot scan indexes `row + byte` without
+a shift on the dependent-load chain; the cold path shifts the row back to a
+state id. The nine-pattern no-match median improves 8%, but the host spread
+overlaps and an untouched control moved 10%, so the sample is consistent with
+the expected effect rather than proof. See
+[set DFA row offsets](benchmarks/set-dfa-rows.md).
+
 Further work on these candidates needs fresh measurements before implementation.
 Current warmed throughput does not establish their cold-start cost or the
 benefit of replacing their fallback paths.

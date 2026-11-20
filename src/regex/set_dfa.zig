@@ -161,14 +161,16 @@ pub const Workspace = struct {
         const full = allMask(self.included.len);
         var offset = start;
         if (self.packed_masks) {
-            // The accept mask rides in the transition entry, so the hot path
-            // is one load plus a truncate.
+            // The accept mask rides in the transition entry and the entry
+            // stores the target's row offset (`state * 128`), so the hot
+            // path is one load, one add and a truncate.
+            var row: u32 = state << 7;
             while (offset < input.len) {
                 const byte = input[offset];
                 if (byte < 0x80) {
-                    const cached = self.ascii_table.items[@as(usize, state) * 128 + byte];
+                    const cached = self.ascii_table.items[@as(usize, row) + byte];
                     if (cached != 0) {
-                        state = @as(u32, @truncate(cached)) - 1;
+                        row = @as(u32, @truncate(cached)) - 1;
                         mask |= cached >> 32;
                         offset += 1;
                         if (mask == full) break;
@@ -176,26 +178,29 @@ pub const Workspace = struct {
                     }
                 }
                 const rune = runeAt(input, offset) orelse return error.InvalidUtf8;
-                state = try self.transition(state, rune.value);
+                state = try self.transition(row >> 7, rune.value);
+                row = state << 7;
                 mask |= self.state_accept.items[state];
                 offset += rune.len;
                 if (mask == full) break;
             }
         } else {
+            var row: u32 = state << 7;
             while (offset < input.len) {
                 const byte = input[offset];
                 if (byte < 0x80) {
-                    const cached = self.ascii_table.items[@as(usize, state) * 128 + byte];
+                    const cached = self.ascii_table.items[@as(usize, row) + byte];
                     if (cached != 0) {
-                        state = @as(u32, @truncate(cached)) - 1;
-                        mask |= self.state_accept.items[state];
+                        row = @as(u32, @truncate(cached)) - 1;
+                        mask |= self.state_accept.items[row >> 7];
                         offset += 1;
                         if (mask == full) break;
                         continue;
                     }
                 }
                 const rune = runeAt(input, offset) orelse return error.InvalidUtf8;
-                state = try self.transition(state, rune.value);
+                state = try self.transition(row >> 7, rune.value);
+                row = state << 7;
                 mask |= self.state_accept.items[state];
                 offset += rune.len;
                 if (mask == full) break;
@@ -307,7 +312,7 @@ pub const Workspace = struct {
     fn transition(self: *Workspace, state_id: u32, rune: u21) Error!u32 {
         if (rune < 128) {
             const cached = self.ascii_table.items[@as(usize, state_id) * 128 + rune];
-            if (cached != 0) return @as(u32, @truncate(cached)) - 1;
+            if (cached != 0) return (@as(u32, @truncate(cached)) - 1) >> 7;
         } else {
             const key = (@as(u64, state_id) << 21) | rune;
             if (self.unicode.get(key)) |cached| return cached;
@@ -351,7 +356,7 @@ pub const Workspace = struct {
         const next = try self.buildState();
         if (rune < 128) {
             const packed_mask: u64 = if (self.packed_masks) self.state_accept.items[next] else 0;
-            self.ascii_table.items[@as(usize, state_id) * 128 + rune] = (@as(u64, next) + 1) | (packed_mask << 32);
+            self.ascii_table.items[@as(usize, state_id) * 128 + rune] = ((@as(u64, next) << 7) + 1) | (packed_mask << 32);
         } else {
             try self.unicode.put(self.allocator, (@as(u64, state_id) << 21) | rune, next);
         }
