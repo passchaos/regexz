@@ -138,6 +138,14 @@ loop shape improves 6.47x, its cold first match 6.34x and its fresh-DFA
 three-match mode 5.76x; other shapes are unchanged. See
 [shape detection from ASCII bitmaps](benchmarks/shape-init.md).
 
+Search workspaces now build their first-byte filter from the ASCII bitmap:
+one `@ctz` walk of the two words collects the candidate bytes and closes
+contiguous runs, replacing two 128-value probe loops. Search-DFA workspace
+initialization improves 1.33–1.67x, the first search 1.11–1.24x and the
+one-shot API first search 1.19–1.35x; literal and ineligible controls and
+warmed calls are unchanged. See
+[first-byte filter construction](benchmarks/first-filter-init.md).
+
 Further work on these candidates needs fresh measurements before implementation.
 Current warmed throughput does not establish their cold-start cost or the
 benefit of replacing their fallback paths.

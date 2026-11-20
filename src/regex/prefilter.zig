@@ -252,36 +252,55 @@ pub const FirstFilter = struct {
 
     pub fn init(first: model.FirstSet) FirstFilter {
         var result = FirstFilter{ .first = first };
-        var byte: usize = 0;
-        while (byte < 128) : (byte += 1) {
-            if (!first.allowsByte(@intCast(byte))) continue;
-            if (result.count == max_simd_bytes) {
-                result.too_many = true;
-                break;
-            }
-            result.bytes[result.count] = @intCast(byte);
-            result.count += 1;
-        }
-        // Contiguous runs: classes like `[A-Z]` or `\w` are far cheaper to
-        // match as ranges than as byte splats.
-        var run_start: usize = 0;
+        // The ASCII bitmap is authoritative, so walk its set bits instead of
+        // probing all 128 byte values twice.
+        var run_count: usize = 0;
+        var run_disabled = false;
+        var run_start: u8 = 0;
+        var run_end: u8 = 0;
         var in_run = false;
-        byte = 0;
-        while (byte <= 128) : (byte += 1) {
-            const member = byte < 128 and first.allowsByte(@intCast(byte));
-            if (member and !in_run) {
-                run_start = byte;
-                in_run = true;
-            } else if (!member and in_run) {
-                if (result.range_count == max_simd_ranges) {
-                    result.range_count = 0;
-                    break;
+        for (first.ascii, 0..) |word, word_index| {
+            var remaining = word;
+            while (remaining != 0) {
+                const bit: u6 = @intCast(@ctz(remaining));
+                const byte: u8 = @intCast(word_index * 64 + bit);
+                remaining &= remaining - 1;
+                if (!result.too_many) {
+                    if (result.count == max_simd_bytes) {
+                        result.too_many = true;
+                    } else {
+                        result.bytes[result.count] = byte;
+                        result.count += 1;
+                    }
                 }
-                result.ranges[result.range_count] = .{ @intCast(run_start), @intCast(byte - 1) };
-                result.range_count += 1;
-                in_run = false;
+                // Contiguous runs: classes like `[A-Z]` or `\w` are far
+                // cheaper to match as ranges than as byte splats.
+                if (in_run and byte == run_end + 1) {
+                    run_end = byte;
+                    continue;
+                }
+                if (in_run) {
+                    if (run_count == max_simd_ranges) {
+                        run_disabled = true;
+                    } else {
+                        result.ranges[run_count] = .{ run_start, run_end };
+                        run_count += 1;
+                    }
+                }
+                run_start = byte;
+                run_end = byte;
+                in_run = true;
             }
         }
+        if (in_run) {
+            if (run_count == max_simd_ranges) {
+                run_disabled = true;
+            } else {
+                result.ranges[run_count] = .{ run_start, run_end };
+                run_count += 1;
+            }
+        }
+        result.range_count = if (run_disabled) 0 else @intCast(run_count);
         var index: usize = 0;
         while (index < result.count) : (index += 1) result.byte_splats[index] = @splat(result.bytes[index]);
         index = 0;
