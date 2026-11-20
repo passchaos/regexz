@@ -8,6 +8,15 @@ const prefilter = @import("prefilter.zig");
 pub const Span = struct { start: usize, end: usize };
 pub const Result = struct { span: ?Span, prepared: bool = false };
 
+/// First offset after `offset` that is not a UTF-8 continuation byte.
+/// Continuation bytes cannot start a rune, so a rejected sequence can be
+/// skipped whole instead of probed byte by byte.
+inline fn skipContinuations(input: []const u8, offset: usize) usize {
+    var pos = offset + 1;
+    while (pos < input.len and input[pos] & 0xc0 == 0x80) pos += 1;
+    return pos;
+}
+
 pub inline fn findDeferred(
     run: *deferred.CompactRun,
     allocator: std.mem.Allocator,
@@ -81,7 +90,12 @@ pub inline fn findPrepared(run: *const utf8_run.Utf8Run, first: *const prefilter
         var prefix_state = table[input[offset]];
         offset += 1;
         if (prefix_state == utf8_set.accept) break :search;
-        if (prefix_state == utf8_set.dead) continue;
+        if (prefix_state == utf8_set.dead) {
+            // No member starts with this byte; the following continuation
+            // bytes cannot start one either, so skip the whole sequence.
+            offset = skipContinuations(input, rune_start);
+            continue;
+        }
         while (offset < input.len) {
             const next = table[@as(usize, prefix_state) * 256 + input[offset]];
             if (next == utf8_set.accept) {
@@ -90,8 +104,8 @@ pub inline fn findPrepared(run: *const utf8_run.Utf8Run, first: *const prefilter
             }
             if (next == utf8_set.dead) {
                 // A failed prefix may be followed by a fresh rune start.
-                // Continuation bytes cannot start a rune and advance once.
-                if (input[offset] & 0xc0 == 0x80) offset += 1;
+                // Continuation bytes cannot start a rune, so skip their run.
+                if (input[offset] & 0xc0 == 0x80) offset = skipContinuations(input, offset);
                 continue :search;
             }
             prefix_state = next;

@@ -413,3 +413,9 @@ Scanning delimiters with a 16-byte vector compare instead of the existing
 scalar-then-vector probe was screened and reverted: tags and quoted strings
 start within one or two bytes of the previous match, so the vector setup made
 `find HTML tag` 2.3x slower and the JSON string scan 2.2x slower.
+
+Unicode set-run searches now skip the continuation bytes of a rejected UTF-8
+sequence instead of probing each byte again. Punctuation between Han runs was
+the main beneficiary: `find Han class scan` improves 1.22x (148.7 → 122.4 us)
+while the 66 control cases stay at a 1.00x median. See
+[skipping rejected UTF-8 sequences](benchmarks/unicode-dead-skip.md).
