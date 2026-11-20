@@ -4,11 +4,19 @@ const model = @import("model.zig");
 const utf8 = @import("utf8_run.zig");
 const byte_table = @import("byte_table.zig");
 
+/// Materialize the UTF-8 table only after this many Unicode runes. Broad
+/// classes build multi-megabyte tables, and sparse Unicode input is cheaper to
+/// probe than to materialize.
+const prepare_probes: u16 = 2048;
+
 pub const Run = struct {
     set: model.Set,
     ascii: [256]bool,
     table: ?utf8.Utf8Run = null,
-    unicode_probes: u8 = 0,
+    unicode_probes: u16 = 0,
+    /// The fast branch's run set can be a broad class whose UTF-8 table is
+    /// multi-megabyte; require a dense Unicode run before materializing it.
+    prepare_after: u16 = prepare_probes,
     failed: bool = false,
 
     pub fn init(set: model.Set) Run {
@@ -48,9 +56,12 @@ pub const Run = struct {
             while (end < input.len and self.ascii[input[end]]) end += 1;
             if (end >= input.len or input[end] < 0x80) break;
             const next = self.set.matchAdvance(input, end) orelse break;
-            if (!self.failed and input.len - end >= 64) {
-                self.prepare(allocator);
-                if (self.table) |*table| return table.runEnd(input, end);
+            if (!self.failed) {
+                self.unicode_probes +|= 1;
+                if (self.unicode_probes >= self.prepare_after) {
+                    self.prepare(allocator);
+                    if (self.table) |*table| return table.runEnd(input, end);
+                }
             }
             end = next;
         }
@@ -68,6 +79,7 @@ pub const CompactRun = struct {
     set: model.Set,
     table: ?utf8.Utf8Run = null,
     unicode_probes: u8 = 0,
+    prepare_after: u8 = 4,
     failed: bool = false,
 
     pub fn init(set: model.Set) CompactRun {
@@ -99,7 +111,7 @@ pub const CompactRun = struct {
         const matched = self.set.matches(rune);
         if (!self.failed and (matched or prepare_misses)) {
             self.unicode_probes +|= 1;
-            if (self.unicode_probes >= 4) self.prepare(allocator);
+            if (self.unicode_probes >= self.prepare_after) self.prepare(allocator);
         }
         return .{ .length = length, .matched = matched };
     }
@@ -109,7 +121,7 @@ pub const CompactRun = struct {
     pub noinline fn restoreSearchMisses(self: *CompactRun, allocator: std.mem.Allocator, count: u8) void {
         if (self.failed) return;
         self.unicode_probes +|= count;
-        if (self.unicode_probes >= 4) self.prepare(allocator);
+        if (self.unicode_probes >= self.prepare_after) self.prepare(allocator);
     }
 
     noinline fn unicodeRuneAt(self: *CompactRun, allocator: std.mem.Allocator, input: []const u8, offset: usize) ?usize {
@@ -142,7 +154,7 @@ fn unicodeProbe(self: anytype, allocator: std.mem.Allocator, input: []const u8, 
     const matches = self.set.matches(rune);
     if (!self.failed) {
         self.unicode_probes +|= 1;
-        if (self.unicode_probes >= 4) self.prepare(allocator);
+        if (self.unicode_probes >= self.prepare_after) self.prepare(allocator);
     }
     return if (matches) length else null;
 }

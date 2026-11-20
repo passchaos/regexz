@@ -14,38 +14,39 @@ text and small full-match subjects.
 
 | Case | regexz, ns/iter | Rust, ns/iter | Rust / regexz |
 | --- | ---: | ---: | ---: |
-| compile Qwen tokenizer | 56,216.3 | 448,531.7 | 7.98x |
-| compile xDS-like | 4,205.9 | 22,046.7 | 5.24x |
-| find Qwen tokenizer | 53,715.8 | 72,299.2 | 1.35x |
-| findAll Qwen, borrowed workspace | 58,195.8 | 65,100.0 | 1.12x |
-| findAll Qwen, fresh workspace | 258,623.3 | 64,619.2 | 0.25x |
-| find CJK tokenizer | 180,410.8 | 242,730.0 | 1.35x |
-| find HTML tag | 49,834.6 | 128,539.0 | 2.58x |
-| find URL | 35,088.5 | 94,279.2 | 2.69x |
-| find JSON string literal | 7,406.3 | 17,637.9 | 2.38x |
-| find JSON number | 28,944.0 | 62,803.5 | 2.17x |
-| find word boundary | 65,155.4 | 138,716.7 | 2.13x |
-| split whitespace (22 KiB) | 18,720.4 | 83,853.3 | 4.48x |
-| split commas (29 KiB) | 32,355.0 | 56,804.0 | 1.76x |
-| fullmatch literal | 1.8 | 9.8 | 5.44x |
-| fullmatch class | 5.4 | 33.6 | 6.22x |
-| fullmatch xDS-like | 10.5 | 33.8 | 3.22x |
-| replaceAll `a+` → `x` | 25,850.8 | 110,079.8 | 4.26x |
-| replaceAll `\A|\z` → `X` | 4,864.2 | 8,726.5 | 1.79x |
-| RegexSet 9 no-match patterns | 9,382.3 | 39,858.8 | 4.25x |
+| compile Qwen tokenizer | 65,967.3 | 512,282.8 | 7.77x |
+| compile xDS-like | 4,597.3 | 23,629.6 | 5.14x |
+| find Qwen tokenizer | 58,700.8 | 73,080.8 | 1.24x |
+| findAll Qwen, borrowed workspace | 60,432.5 | 74,121.7 | 1.23x |
+| findAll Qwen, fresh workspace | 119,738.3 | 76,884.2 | 0.64x |
+| find CJK tokenizer | 187,660.0 | 271,450.0 | 1.45x |
+| find HTML tag | 51,163.3 | 143,051.0 | 2.80x |
+| find URL | 38,075.8 | 100,283.8 | 2.63x |
+| find JSON string literal | 7,904.8 | 19,849.4 | 2.51x |
+| find JSON number | 29,882.7 | 70,682.5 | 2.37x |
+| find word boundary | 71,860.8 | 152,073.5 | 2.12x |
+| split whitespace (22 KiB) | 20,813.5 | 86,030.8 | 4.13x |
+| split commas (29 KiB) | 35,362.1 | 57,285.0 | 1.62x |
+| fullmatch literal | 2.2 | 9.9 | 4.50x |
+| fullmatch class | 5.9 | 37.1 | 6.29x |
+| fullmatch xDS-like | 13.9 | 35.3 | 2.54x |
+| replaceAll `a+` → `x` | 28,417.1 | 116,394.0 | 4.10x |
+| replaceAll `\A|\z` → `X` | 5,941.7 | 9,657.5 | 1.63x |
+| RegexSet 9 no-match patterns | 10,695.4 | 41,169.2 | 3.85x |
 
-regexz is faster on 19 of the 20 measured cases: 7.98x on tokenizer
-compilation, 5.24x on a small-pattern compile, 1.12–1.35x on tokenizer scans,
-2.13–2.69x on search scans, 1.76–4.48x on splits, 3.22–6.22x on full-match
-calls, 4.26x on a set-run replacement, 1.79x on a zero-width replacement and
-4.25x on the nine-pattern set.
+regexz is faster on 19 of the 20 measured cases: 7.77x on tokenizer
+compilation, 5.14x on a small-pattern compile, 1.23–1.45x on tokenizer scans,
+2.12–2.80x on search scans, 1.62–4.13x on splits, 2.54–6.29x on full-match
+calls, 4.10x on a set-run replacement, 1.63x on a zero-width replacement and
+3.85x on the nine-pattern set.
 
-The exception is a fresh `findAll` per call (0.25x): Rust's `find_iter` reuses
+The exception is a fresh `findAll` per call (0.64x): Rust's `find_iter` reuses
 a thread-local cache pool, while regexz's owning iterator builds a workspace
 and pays the lazy search-DFA preparation on every call. `Regex.findAllWith`
-with a caller-owned workspace reuses the warmed caches, restores the lead over
-Rust (1.12x) and matches a manual `Workspace.find` loop. See
-[reusing a workspace for match iteration](find-all-workspace.md).
+with a caller-owned workspace reuses the warmed caches and is ahead of Rust
+(1.23x). The fresh iterator improved from 0.25x after the deferred fast-branch
+table threshold change; see
+[deferred fast-branch tables](deferred-fast-branch-threshold.md).
 
 Caveats: the iteration APIs are the natural ones for each library
 (`Workspace.find` in a loop versus `Regex::find_iter`), full match is

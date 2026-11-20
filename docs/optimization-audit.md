@@ -255,14 +255,23 @@ substitutions with syntax and other patterns keep the general path. See
 
 A reproducible comparison harness now runs the same workloads through regexz
 and Rust's `regex` crate (`tools/compare`). On this host regexz is faster on
-19 of the 20 measured cases: 7.98x on tokenizer compilation, 5.24x on a
-small-pattern compile, 1.12–1.35x on tokenizer scans, 2.13–2.69x on search
-scans, 1.76–4.48x on splits, 3.22–6.22x on full-match calls, 4.26x on a
-set-run replacement, 1.79x on a zero-width replacement and 4.25x on the
-nine-pattern set. The exception is a fresh `findAll` per call (0.25x), where
+19 of the 20 measured cases: 7.77x on tokenizer compilation, 5.14x on a
+small-pattern compile, 1.23–1.45x on tokenizer scans, 2.12–2.80x on search
+scans, 1.62–4.13x on splits, 2.54–6.29x on full-match calls, 4.10x on a
+set-run replacement, 1.63x on a zero-width replacement and 3.85x on the
+nine-pattern set. The exception is a fresh `findAll` per call (0.64x), where
 Rust's thread-local cache pool stays warm; `findAllWith` with a caller
-workspace restores the lead (1.12x). See
+workspace restores the lead (1.23x). See
 [comparison with Rust's regex](benchmarks/rust-comparison.md).
+
+The fast-branch deferred run now counts Unicode probes and materializes its
+UTF-8 table only after 2,048 probes. The old remaining-input check built the
+1.87 MB Latin-plus-Mark table on the first non-ASCII rune of any long mixed
+text; the Qwen tokenizer text probes 1,200 times per pass, so every fresh
+`findAll` pass paid the build. The fresh pass improves 2.42x (302 → 125 us)
+and the fresh `findAll` gap against Rust narrows from 0.25x to 0.64x; warm
+scans, CJK and the controls stay within host noise. See
+[deferred fast-branch table threshold](benchmarks/deferred-fast-branch-threshold.md).
 
 `Matches` now supports a caller-owned workspace: `Regex.findAllWith` iterates
 on warmed search-DFA caches without copying or freeing the workspace, while

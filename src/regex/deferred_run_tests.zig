@@ -32,7 +32,7 @@ test "deferred run matches interpreter across Unicode cache initialization" {
     reference.search_dfa_ineligible = true;
     var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
     defer workspace.deinit();
-    for ([_][]const u8{ "hello world", "猫Σé café", "。猫 abc!\n", "'s 'ſ foo", "\xff猫1", "Σ" ** 80 }) |input| {
+    for ([_][]const u8{ "hello world", "猫Σé café", "。猫 abc!\n", "'s 'ſ foo", "\xff猫1", "Σ" ** 2100 }) |input| {
         for (0..input.len + 1) |from| {
             const expected = try reference.find(input, from);
             const found = try workspace.find(input, from);
@@ -46,13 +46,28 @@ test "deferred run matches interpreter across Unicode cache initialization" {
     try std.testing.expect(workspace.fast_branch.?.run.table != null);
 }
 
+test "deferred run keeps broad Unicode tables scalar on sparse input" {
+    var value = try regex.Regex.init(gpa, pattern, .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    const input = "hello 你好世界 café";
+    var offset: usize = 0;
+    while (offset <= input.len) {
+        const found = (try workspace.find(input, offset)) orelse break;
+        if (found.end <= found.start) break;
+        offset = found.end;
+    }
+    try std.testing.expect(workspace.fast_branch.?.run.table == null);
+}
+
 test "deferred run table allocation failures retain scalar matching and cleanup" {
     const Harness = struct {
         fn run(allocator: std.mem.Allocator, program: regex.Program) !void {
             var workspace = try regex.ReplaceWorkspace.init(allocator, program, .{});
             defer workspace.deinit();
             for (0..6) |_| {
-                for ([_][]const u8{ "Σ猫", "。Σ猫", "hello" }) |input| {
+                for ([_][]const u8{ "Σ猫", "。Σ猫", "hello", "Σ" ** 2100 }) |input| {
                     const found = (try workspace.find(input, 0)).?;
                     try std.testing.expectEqual(@as(usize, 0), found.start);
                     try std.testing.expectEqual(input.len, found.end);
@@ -83,9 +98,9 @@ test "deferred run warms valid Unicode misses and rejects malformed probes" {
     for ([_][]const u8{ "\xff", "\xe0\x80\x80", "\xe7\x8c", "\x80" }) |input| {
         for (0..4) |_| try std.testing.expect(run.runeAt(failing.allocator(), input, 0) == null);
     }
-    try std.testing.expectEqual(@as(u8, 0), run.unicode_probes);
+    try std.testing.expectEqual(@as(u16, 0), run.unicode_probes);
     try std.testing.expect(!failing.has_induced_failure);
-    for (0..4) |_| try std.testing.expect(run.runeAt(failing.allocator(), "猫", 0) == null);
+    for (0..2048) |_| try std.testing.expect(run.runeAt(failing.allocator(), "猫", 0) == null);
     try std.testing.expect(failing.has_induced_failure);
     try std.testing.expect(run.failed);
     try std.testing.expect(run.table == null);
