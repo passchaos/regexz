@@ -77,6 +77,26 @@ test "literal length and caller-buffer writers" {
     try std.testing.expectEqualStrings("abc", try workspace.replaceAllInto("abc", ";", &output));
 }
 
+test "set-run limited replacement and writers" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const program = try regex.compile(allocator, "a+", .{});
+    var workspace = try regex.ReplaceWorkspace.init(allocator, program, .{});
+    defer workspace.deinit();
+
+    try std.testing.expectEqualStrings("x b aaa", try workspace.replacen("aa b aaa", 1, "x"));
+    try std.testing.expectEqualStrings("x b x", try workspace.replacen("aa b aaa", 2, "x"));
+    try std.testing.expectEqualStrings("aa b aaa", try workspace.replacen("aa b aaa", 0, "x"));
+
+    try std.testing.expectEqual(@as(usize, 5), try workspace.replaceAllLen("aa b aaa", "x"));
+    var output: [5]u8 = undefined;
+    try std.testing.expectEqualStrings("x b x", try workspace.replaceAllInto("aa b aaa", "x", &output));
+    var small: [4]u8 = undefined;
+    try std.testing.expectError(error.RegexLimitExceeded, workspace.replaceAllInto("aa b aaa", "x", &small));
+    try std.testing.expectEqual(@as(usize, 3), try workspace.replaceAllLen("bbb", "x"));
+}
+
 test "regex replacement honors lazy quantifiers" {
     try expectReplace(
         "^(.*?)one(.*)$",

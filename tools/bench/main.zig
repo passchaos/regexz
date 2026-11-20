@@ -427,6 +427,30 @@ pub fn main() !void {
     defer long.deinit(gpa);
     for (0..2000) |_| try long.appendSlice(gpa, "aaa bbb aaa bbb ");
     try benchReplace(io, out, "replaceAll a+ -> x", "a+", long.items, "x", 200);
+    try benchReplacen(io, out, "replacen a+ -> x (limit 10000)", "a+", long.items, 10000, "x", 200);
+    {
+        var value = try regexz.Regex.init(gpa, "a+", .{});
+        defer value.deinit();
+        var workspace = try regexz.ReplaceWorkspace.init(gpa, value.program, .{});
+        defer workspace.deinit();
+        const buffer = try gpa.alloc(u8, long.items.len);
+        defer gpa.free(buffer);
+        const iterations = 200;
+        for (0..20) |_| {
+            std.mem.doNotOptimizeAway(try workspace.replaceAllLen(long.items, "x"));
+            std.mem.doNotOptimizeAway(try workspace.replaceAllInto(long.items, "x", buffer));
+        }
+        var start = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds;
+        for (0..iterations) |_| {
+            std.mem.doNotOptimizeAway(try workspace.replaceAllLen(long.items, "x"));
+        }
+        try report(out, "replaceAllLen a+ (24 KiB)", iterations, long.items.len, elapsed(io, .{ .nanoseconds = start }));
+        start = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds;
+        for (0..iterations) |_| {
+            std.mem.doNotOptimizeAway(try workspace.replaceAllInto(long.items, "x", buffer));
+        }
+        try report(out, "replaceAllInto a+ (24 KiB)", iterations, long.items.len, elapsed(io, .{ .nanoseconds = start }));
+    }
     try benchReplace(io, out, "replaceAll , -> ;", ",", csv_text.items, ";", 200);
     try benchReplacen(io, out, "replacen , -> ; (limit 10000)", ",", csv_text.items, 10000, ";", 200);
     {

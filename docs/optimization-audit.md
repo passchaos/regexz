@@ -295,6 +295,13 @@ writer fills the buffer directly while still failing closed on a short buffer.
 The 29 KiB `,` length and buffer writers improve 2.06x and 1.54x. See
 [literal length and caller-buffer writers](benchmarks/replace-literal-writers.md).
 
+The ASCII `set+` replacement scan now also serves `replacen`,
+`replaceAllLen` and `replaceAllInto`: the limited form shares the run scan,
+the length writer counts runs and run bytes, and the caller-buffer writer
+fills directly while failing closed on a short buffer. The 24 KiB `a+`
+replacen, length and buffer writers improve 1.53x, 2.51x and 1.73x. See
+[set-run limited replacement and writers](benchmarks/set-run-writers.md).
+
 Further work on these candidates needs fresh measurements before implementation.
 Current warmed throughput does not establish their cold-start cost or the
 benefit of replacing their fallback paths.

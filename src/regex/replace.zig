@@ -476,7 +476,7 @@ pub const Workspace = struct {
         // A pure ASCII `set+` matches maximal runs, and a literal substitution
         // needs no expansion, so the whole pass is one table scan.
         if (self.fast_kind == .set_run and std.mem.indexOfAny(u8, substitution, "\\$") == null) {
-            return self.replaceAllSetRun(input, substitution);
+            return self.replaceSetRun(input, substitution, std.math.maxInt(usize));
         }
         // A pure literal pattern matches exactly its occurrences; scan them
         // with the literal search and append the gaps directly.
@@ -514,14 +514,15 @@ pub const Workspace = struct {
         return out.toOwnedSlice(self.allocator);
     }
 
-    fn replaceAllSetRun(self: *Workspace, input: []const u8, substitution: []const u8) Error![]u8 {
+    fn replaceSetRun(self: *Workspace, input: []const u8, substitution: []const u8, limit: usize) Error![]u8 {
         const table = &self.simple_set_table;
         var out: std.ArrayList(u8) = .empty;
         errdefer out.deinit(self.allocator);
         try out.ensureTotalCapacity(self.allocator, input.len);
         var last: usize = 0;
         var offset: usize = 0;
-        while (offset < input.len) {
+        var replaced: usize = 0;
+        while (offset < input.len and replaced < limit) {
             while (offset < input.len and !table[input[offset]]) offset += 1;
             if (offset == input.len) break;
             const start = offset;
@@ -529,9 +530,58 @@ pub const Workspace = struct {
             try out.appendSlice(self.allocator, input[last..start]);
             try out.appendSlice(self.allocator, substitution);
             last = offset;
+            replaced += 1;
         }
         try out.appendSlice(self.allocator, input[last..]);
         return out.toOwnedSlice(self.allocator);
+    }
+
+    fn replaceSetRunLen(self: *Workspace, input: []const u8, substitution: []const u8) Error!usize {
+        const table = &self.simple_set_table;
+        var runs: usize = 0;
+        var run_bytes: usize = 0;
+        var offset: usize = 0;
+        while (offset < input.len) {
+            while (offset < input.len and !table[input[offset]]) offset += 1;
+            if (offset == input.len) break;
+            const start = offset;
+            while (offset < input.len and table[input[offset]]) offset += 1;
+            runs += 1;
+            run_bytes += offset - start;
+        }
+        const added = std.math.mul(usize, runs, substitution.len) catch return error.RegexLimitExceeded;
+        return input.len - run_bytes + added;
+    }
+
+    fn replaceSetRunInto(
+        self: *Workspace,
+        input: []const u8,
+        substitution: []const u8,
+        output: []u8,
+    ) Error![]const u8 {
+        const table = &self.simple_set_table;
+        var write: usize = 0;
+        var last: usize = 0;
+        var offset: usize = 0;
+        while (offset < input.len) {
+            while (offset < input.len and !table[input[offset]]) offset += 1;
+            if (offset == input.len) break;
+            const start = offset;
+            while (offset < input.len and table[input[offset]]) offset += 1;
+            const gap = start - last;
+            if (gap > output.len - write) return error.RegexLimitExceeded;
+            @memcpy(output[write..][0..gap], input[last..start]);
+            write += gap;
+            if (substitution.len > output.len - write) return error.RegexLimitExceeded;
+            @memcpy(output[write..][0..substitution.len], substitution);
+            write += substitution.len;
+            last = offset;
+        }
+        const tail = input.len - last;
+        if (tail > output.len - write) return error.RegexLimitExceeded;
+        @memcpy(output[write..][0..tail], input[last..]);
+        write += tail;
+        return output[0..write];
     }
 
     /// Replace at most `limit` non-overlapping leftmost-first matches.
@@ -541,6 +591,9 @@ pub const Workspace = struct {
         limit: usize,
         substitution: []const u8,
     ) Error![]u8 {
+        if (self.fast_kind == .set_run and std.mem.indexOfAny(u8, substitution, "\\$") == null) {
+            return self.replaceSetRun(input, substitution, limit);
+        }
         if (self.program.literal) |literal| {
             if (literal.len != 0 and std.mem.indexOfAny(u8, substitution, "\\$") == null) {
                 return self.replaceLiteral(input, literal, substitution, limit);
@@ -559,6 +612,9 @@ pub const Workspace = struct {
         input: []const u8,
         substitution: []const u8,
     ) Error!usize {
+        if (self.fast_kind == .set_run and std.mem.indexOfAny(u8, substitution, "\\$") == null) {
+            return self.replaceSetRunLen(input, substitution);
+        }
         if (self.program.literal) |literal| {
             if (literal.len != 0 and std.mem.indexOfAny(u8, substitution, "\\$") == null) {
                 return self.replaceLiteralLen(input, literal, substitution);
@@ -591,6 +647,9 @@ pub const Workspace = struct {
         substitution: []const u8,
         output: []u8,
     ) Error![]const u8 {
+        if (self.fast_kind == .set_run and std.mem.indexOfAny(u8, substitution, "\\$") == null) {
+            return self.replaceSetRunInto(input, substitution, output);
+        }
         if (self.program.literal) |literal| {
             if (literal.len != 0 and std.mem.indexOfAny(u8, substitution, "\\$") == null) {
                 return self.replaceLiteralInto(input, literal, substitution, output);
