@@ -432,3 +432,21 @@ array was an mmap/munmap pair. Scanner creation and destruction drops from
 6.3–6.6 us to 1.9–2.2 us (3.0–3.4x), and a focused 216 KiB stream pass is
 faster in every paired run (1.05x median). See
 [single-allocation scanner storage](benchmarks/scanner-storage.md).
+
+Streaming chains whose two runs use the same set (`\p{Han}+，\p{Han}+`) now
+build one UTF-8 transition table instead of two. The table has 260 rows and
+costs about 15.5 us to build; scanners are created per stream. The stream Han
+chain improves 1.09x (185.8 -> 170.9 us) and the focused pass 1.13x, with the
+other 66 cases at a 1.02x median. See
+[shared chain table](benchmarks/shared-chain-table.md).
+
+Replacing the class-union comparison sort with a three-pass radix sort or a
+pairwise merge of the concatenated sorted runs was screened and reverted:
+compile Qwen measured 15-20% slower with the radix sort and neutral with the
+pairwise merge, so the existing sort is not the compile bottleneck it
+appeared to be in the call-graph sample.
+
+Direct single-byte stores in the set-run replacement writers, and dropping
+the redundant `runeAt` check before `runEnd` in the fast branch, were both
+screened and reverted: the replacement writers were neutral across the four
+`a+` cases, and Qwen find/findAll measured 1.01x/0.99x.

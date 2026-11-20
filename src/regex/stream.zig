@@ -122,6 +122,8 @@ pub const Scanner = struct {
     /// A `set+ literal set+` program (with the literal outside the first set)
     /// scans deterministically.
     simple_chain: ?shapes.Chain = null,
+    /// Both chain runs use the same set, so one UTF-8 table serves both.
+    chain_shared: bool = false,
     chain_phase: ChainPhase = .idle,
     chain_start: usize = 0,
     chain_b_start: usize = 0,
@@ -181,6 +183,10 @@ pub const Scanner = struct {
             }
         }
         const simple_chain = if (limits.longest) null else detectStreamChain(program);
+        const chain_shared = if (simple_chain) |chain|
+            chain.set_b != null and shapes.sameSet(chain.set_a, chain.set_b.?)
+        else
+            false;
         var chain_a_table: [256]bool = .{false} ** 256;
         var chain_b_table: [256]bool = .{false} ** 256;
         var chain_ascii = false;
@@ -213,6 +219,7 @@ pub const Scanner = struct {
             .simple_table = table,
             .simple_ascii = simple_set_ascii,
             .simple_chain = simple_chain,
+            .chain_shared = chain_shared,
             .chain_a_table = chain_a_table,
             .chain_b_table = chain_b_table,
             .chain_ascii = chain_ascii,
@@ -524,12 +531,15 @@ pub const Scanner = struct {
     const ChainRun = enum { a, b };
 
     fn chainRun(self: *Scanner, which: ChainRun) model.Error!*const utf8_run.Utf8Run {
+        // Both runs commonly use the same set (`\p{Han}+，\p{Han}+`); a
+        // UTF-8 table build costs more than a chunk scan, so share it.
+        if (which == .b and self.chain_shared) return self.chainRun(.a);
+        const chain = self.simple_chain.?;
         const slot = switch (which) {
             .a => &self.chain_a_run,
             .b => &self.chain_b_run,
         };
         if (slot.* == null) {
-            const chain = self.simple_chain.?;
             const set = switch (which) {
                 .a => chain.set_a,
                 .b => chain.set_b.?,
