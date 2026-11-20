@@ -14,7 +14,7 @@
 const std = @import("std");
 const model = @import("model.zig");
 
-pub const LaterKind = enum { single, run, prefix_run_tail };
+pub const LaterKind = enum { single, run, prefix_run_tail, whitespace };
 
 /// A branch after the dominant one whose match can be scanned directly once
 /// the dominant branch has failed at the position.
@@ -25,6 +25,10 @@ pub const Later = struct {
     run: model.Set,
     /// Optional trailing run (`set*`), for example `[\r\n]*`.
     tail: ?model.Set = null,
+    /// The trailing whitespace branches also include `\s*[\r\n]+` and/or
+    /// `\s+(?!\S)` before the bare `\s+` run.
+    newline_branch: bool = false,
+    lookahead_branch: bool = false,
 };
 
 pub const Plan = struct {
@@ -50,9 +54,18 @@ pub fn analyze(allocator: std.mem.Allocator, root: *const model.Node) model.Erro
         if (branchPlan(branch)) |plan| {
             var later: std.ArrayList(Later) = .empty;
             defer later.deinit(allocator);
-            for (branches.items[index + 1 ..]) |next| {
-                const next_plan = laterPlan(next) orelse break;
-                try later.append(allocator, next_plan);
+            for (branches.items[index + 1 ..], 0..) |next, offset| {
+                if (laterPlan(next)) |next_plan| {
+                    try later.append(allocator, next_plan);
+                    continue;
+                }
+                // The trailing branches may be the whitespace tail
+                // (`\s*[\r\n]+`, `\s+(?!\S)`, `\s+`), which one scan
+                // decides exactly.
+                if (whitespacePlan(branches.items[index + 1 + offset ..])) |plan_ws| {
+                    try later.append(allocator, plan_ws);
+                }
+                break;
             }
             return .{
                 .prior_first = prior_first,
@@ -183,6 +196,114 @@ fn laterPlan(branch: *const model.Node) ?Later {
         },
         else => null,
     };
+}
+
+const WhitespaceShape = struct { set: model.Set, newline: bool = false, lookahead: bool = false };
+
+/// Recognizes `\s*[\r\n]+`, `\s+(?!\S)` and `\s+` branches.
+fn whitespaceShape(node: *const model.Node) ?WhitespaceShape {
+    const value = strip(node);
+    return switch (value.*) {
+        .repeat => |repeat| blk: {
+            if (repeat.minimum < 1 or repeat.maximum != null or repeat.lazy) break :blk null;
+            const child = strip(repeat.child);
+            if (child.* != .set) break :blk null;
+            break :blk .{ .set = child.set };
+        },
+        .pair => |pair| blk: {
+            const left = strip(pair.left);
+            const right = strip(pair.right);
+            if (left.* == .repeat and right.* == .repeat) {
+                const star = left.repeat;
+                const plus = right.repeat;
+                if (star.minimum != 0 or star.lazy) break :blk null;
+                if (star.maximum != null and star.maximum.? > 1) break :blk null;
+                if (plus.minimum < 1 or plus.maximum != null or plus.lazy) break :blk null;
+                const run = strip(star.child);
+                const newline = strip(plus.child);
+                if (run.* != .set or newline.* != .set) break :blk null;
+                if (!isNewlineSet(newline.set)) break :blk null;
+                break :blk .{ .set = run.set, .newline = true };
+            }
+            if (left.* == .repeat and right.* == .lookahead_set) {
+                const plus = left.repeat;
+                if (plus.minimum < 1 or plus.maximum != null or plus.lazy) break :blk null;
+                const run = strip(plus.child);
+                if (run.* != .set) break :blk null;
+                const look = right.lookahead_set;
+                if (!look.negative or !isComplement(run.set, look.set)) break :blk null;
+                break :blk .{ .set = run.set, .lookahead = true };
+            }
+            break :blk null;
+        },
+        else => null,
+    };
+}
+
+fn sameSet(a: model.Set, b: model.Set) bool {
+    if (a.ranges.len != b.ranges.len) return false;
+    for (a.ranges, b.ranges) |left, right| {
+        if (left.first != right.first or left.last != right.last) return false;
+    }
+    return true;
+}
+
+fn isNewlineSet(set: model.Set) bool {
+    if (set.ranges.len != 2) return false;
+    return set.ranges[0].first == '\n' and set.ranges[0].last == '\n' and
+        set.ranges[1].first == '\r' and set.ranges[1].last == '\r';
+}
+
+/// Whether `b` is exactly the complement of the normalized set `a`.
+fn isComplement(a: model.Set, b: model.Set) bool {
+    var next: u32 = 0;
+    var index: usize = 0;
+    for (a.ranges) |range| {
+        if (range.first > next) {
+            if (index >= b.ranges.len) return false;
+            if (b.ranges[index].first != next or b.ranges[index].last != range.first - 1) return false;
+            index += 1;
+        }
+        next = @as(u32, range.last) + 1;
+    }
+    if (next <= 0x10FFFF) {
+        if (index >= b.ranges.len) return false;
+        if (b.ranges[index].first != next or b.ranges[index].last != 0x10FFFF) return false;
+        index += 1;
+    }
+    return index == b.ranges.len;
+}
+
+/// Recognizes the trailing whitespace branches as one exact scan. The slice
+/// must contain exactly the remaining branches.
+fn whitespacePlan(rest: []const *const model.Node) ?Later {
+    if (rest.len == 0) return null;
+    const first = whitespaceShape(rest[0]) orelse return null;
+    var plan = Later{ .kind = .whitespace, .run = first.set };
+    if (first.newline) {
+        plan.newline_branch = true;
+        if (rest.len == 1) return plan;
+        const second = whitespaceShape(rest[1]) orelse return null;
+        if (second.newline or !sameSet(first.set, second.set)) return null;
+        if (second.lookahead) {
+            plan.lookahead_branch = true;
+            if (rest.len == 2) return plan;
+            if (rest.len != 3) return null;
+            const third = whitespaceShape(rest[2]) orelse return null;
+            if (third.newline or third.lookahead or !sameSet(first.set, third.set)) return null;
+            return plan;
+        }
+        return if (rest.len == 2) plan else null;
+    }
+    if (first.lookahead) {
+        plan.lookahead_branch = true;
+        if (rest.len == 1) return plan;
+        if (rest.len != 2) return null;
+        const second = whitespaceShape(rest[1]) orelse return null;
+        if (second.newline or second.lookahead or !sameSet(first.set, second.set)) return null;
+        return plan;
+    }
+    return if (rest.len == 1) plan else null;
 }
 
 fn optionalPrefix(node: *const model.Node) ?model.Set {

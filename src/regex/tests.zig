@@ -774,10 +774,22 @@ test "fast branch scans digit and punctuation fallbacks" {
     defer workspace.deinit();
 
     const inputs = [_][]const u8{
-        "12345", "a1b2", "!@#$%^&*()", " !@#", "a !@# b", "hello, world!",
-        "  x",   "\n\n", "a\n\nb",
+        "12345",  "a1b2", "!@#$%^&*()", " !@#", "a !@# b",   "hello, world!",
+        "  x",    "\n\n", "a\n\nb",
         "你好 123 !@# x",
-        "1",     "!",    " !",         "a!",   "!a",
+        "1",      "!",    " !",         "a!",   "!a",
+        // Whitespace tails: newline runs, trailing spaces, lookahead backtracking.
+               "  ",
+        "a  b",   "a ",   " ",          "\t\t", "a\r\n\r\n", "a \n ",
+        " \n\n ", "a\n",  "\n",
+        // Non-ASCII punctuation runs take the direct prefix/run-tail scan.
+        "你好。\n",
+        "。\n",
+        "，你好",
+        "。",
+        "。x",
+        "。 \n",
+        "a。\n",
     };
     for (inputs) |input| {
         for (0..input.len + 1) |from| {

@@ -369,6 +369,8 @@ pub const Workspace = struct {
                         .prefix = if (later.prefix) |set| deferred_utf8.Run.init(set) else null,
                         .run = deferred_utf8.Run.init(later.run),
                         .tail = if (later.tail) |set| deferred_utf8.Run.init(set) else null,
+                        .newline_branch = later.newline_branch,
+                        .lookahead_branch = later.lookahead_branch,
                     };
                     initialized += 1;
                 }
@@ -1710,6 +1712,32 @@ pub const Workspace = struct {
                         self.slots[1] = end;
                         return .{ .start = search_start, .end = end, .slots = self.slots };
                     },
+                    .whitespace => {
+                        // `\s*[\r\n]+` matches through the last newline in
+                        // the whitespace run; `\s+(?!\S)` backtracks one
+                        // space when the run is followed by text, and the
+                        // bare `\s+` takes the whole run otherwise.
+                        const end = later.run.runEnd(self.allocator, input, search_start);
+                        if (end == search_start) continue;
+                        var match_end = end;
+                        if (later.newline_branch) {
+                            var last_newline: ?usize = null;
+                            var scan = search_start;
+                            while (scan < end) : (scan += 1) {
+                                if (input[scan] == '\n' or input[scan] == '\r') last_newline = scan;
+                            }
+                            if (last_newline) |at| {
+                                match_end = at + 1;
+                            } else if (later.lookahead_branch and end < input.len and end - search_start >= 2) {
+                                match_end = end - 1;
+                            }
+                        } else if (later.lookahead_branch and end < input.len and end - search_start >= 2) {
+                            match_end = end - 1;
+                        }
+                        self.slots[0] = search_start;
+                        self.slots[1] = match_end;
+                        return .{ .start = search_start, .end = match_end, .slots = self.slots };
+                    },
                 }
             }
         }
@@ -2701,6 +2729,8 @@ const LaterRun = struct {
     prefix: ?deferred_utf8.Run,
     run: deferred_utf8.Run,
     tail: ?deferred_utf8.Run,
+    newline_branch: bool = false,
+    lookahead_branch: bool = false,
 
     fn deinit(self: *LaterRun, allocator: std.mem.Allocator) void {
         if (self.prefix) |*prefix| prefix.deinit(allocator);

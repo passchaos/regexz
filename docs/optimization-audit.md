@@ -508,3 +508,11 @@ allocators bypass the cache so leak checks still see every allocation.
 Caching the multi-megabyte Qwen workspace tables was screened and rejected:
 it slowed the CJK tokenizer by about 10%. See
 [bounded UTF-8 run cache](benchmarks/utf8-run-cache.md).
+
+The tokenizer's trailing `\s*[\r\n]+`, `\s+(?!\S)` and `\s+` branches are now
+recognized as one exact `whitespace` later plan instead of falling back to
+the search DFA per whitespace token. `find Qwen tokenizer` improves 1.05x
+(42.7 -> 40.8 us); the `findAll` rows are noise-dominated (40-48 us per
+round) and the control median is 1.00x. The lookahead form is accepted only
+when its set is exactly the complement of the run set. See
+[exact whitespace later plan](benchmarks/whitespace-later-plan.md).
