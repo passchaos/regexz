@@ -88,6 +88,16 @@ fn property(p: anytype, negative: bool, fold: m.Fold) m.Error!m.ParsedSet {
         name = name[1..];
     }
     name = std.mem.trim(u8, name, " \t\n\r\x0b\x0c");
+    if (p.cachedProperty(name, negate, fold)) |set| {
+        return .{ .ranges = set.ranges, .negate = false, .fold = .none, .materialized = set };
+    }
+    const parsed = try propertyRanges(p, name, negate, fold);
+    const set = try p.materialize(parsed);
+    p.cacheProperty(name, negate, fold, set);
+    return .{ .ranges = set.ranges, .negate = false, .fold = .none, .materialized = set };
+}
+
+fn propertyRanges(p: anytype, name: []const u8, negate: bool, fold: m.Fold) m.Error!m.ParsedSet {
     if (std.mem.eql(u8, name, "Any")) return .{ .ranges = &any_range, .negate = negate, .fold = fold };
     if (nameEqual(name, "ASCII")) return .{ .ranges = &ascii_range, .negate = negate, .fold = fold };
     if (nameEqual(name, "Assigned")) {

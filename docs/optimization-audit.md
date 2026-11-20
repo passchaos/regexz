@@ -544,3 +544,11 @@ than the table walk it saved (CJK tokenizer 166 -> 217 us). A two-byte
 prefix bitmap was analyzed and not implemented: Han text accepts 14 runes per
 2 rejected punctuation runes, so the extra check would be paid on every
 accepted rune and could not replace any of the automaton's three loads.
+
+Unicode property escapes now materialize once per compile: an 8-entry parser
+cache keyed by name, negation and fold shares the set, and a `materialized`
+field on `ParsedSet` lets standalone properties and unfold classes reuse it
+without another normalize. Compile Qwen improves 1.13x on the page allocator
+(39.0 -> 34.6 us) and 1.29x on smp (52.9 -> 41.2 us), with the 65 control
+cases at a 1.02x median. See
+[per-compile Unicode property cache](benchmarks/property-cache.md).

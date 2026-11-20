@@ -136,6 +136,9 @@ pub const ParsedSet = struct {
     ranges: []const Range,
     negate: bool = false,
     fold: Fold = .none,
+    /// A property set already materialized (and possibly cached) for this
+    /// compile; consumers may use it instead of normalizing again.
+    materialized: ?Set = null,
 };
 /// A positive, case-folded set. Negation and `(?i)` folding are materialized
 /// at compile time so matching is a binary search (plus a 128-bit ASCII

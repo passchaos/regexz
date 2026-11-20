@@ -30,6 +30,10 @@ pub const Parser = struct {
     marks: std.ArrayList([]const u8) = .empty,
     callouts: std.ArrayList(m.CalloutSpec) = .empty,
     extended: bool = false,
+    /// Materialized Unicode property sets reused within one compile; tokenizer
+    /// patterns reference `\p{L}` and friends more than once.
+    property_cache: [8]PropertyCacheEntry = undefined,
+    property_cache_len: u8 = 0,
     /// Highest group number referenced before its definition was seen. Forward
     /// references are resolved after parsing, when the group count is final.
     max_reference: u16 = 0,
@@ -918,7 +922,28 @@ pub const Parser = struct {
         }
         return self.node(.{ .group = value });
     }
-    fn materialize(self: *Parser, parsed: m.ParsedSet) m.Error!m.Set {
+    pub const PropertyCacheEntry = struct {
+        name: []const u8,
+        negate: bool,
+        fold: m.Fold,
+        set: m.Set,
+    };
+
+    pub fn cachedProperty(self: *Parser, name: []const u8, negate: bool, fold: m.Fold) ?m.Set {
+        for (self.property_cache[0..self.property_cache_len]) |entry| {
+            if (entry.negate == negate and entry.fold == fold and std.mem.eql(u8, entry.name, name)) return entry.set;
+        }
+        return null;
+    }
+
+    pub fn cacheProperty(self: *Parser, name: []const u8, negate: bool, fold: m.Fold, set: m.Set) void {
+        if (self.property_cache_len == self.property_cache.len) return;
+        self.property_cache[self.property_cache_len] = .{ .name = name, .negate = negate, .fold = fold, .set = set };
+        self.property_cache_len += 1;
+    }
+
+    pub fn materialize(self: *Parser, parsed: m.ParsedSet) m.Error!m.Set {
+        if (parsed.materialized) |set| return set;
         // Parsed single-range sets are already canonical and owned by the
         // parser arena or static tables, so avoid a duplicate allocation.
         if (parsed.ranges.len == 1 and !parsed.negate and parsed.fold == .none) {
@@ -1080,7 +1105,13 @@ pub const Parser = struct {
                 if (operand.items.len >= self.limits.max_ranges) return error.RegexLimitExceeded;
                 try operand.append(self.allocator, .{ .first = start.ranges[0].first, .last = end.ranges[0].first });
             } else {
-                const folded = try classes.normalize(self.allocator, start.ranges, start.negate, self.foldMode(), self.limits.max_ranges);
+                // A cached property set is already canonical and carries the
+                // property's own negation; the class fold is applied here, so
+                // the cache is only reusable without one.
+                const folded = if (start.materialized != null and self.foldMode() == .none)
+                    start.materialized.?
+                else
+                    try classes.normalize(self.allocator, start.ranges, start.negate, self.foldMode(), self.limits.max_ranges);
                 try classes.append(&operand, self.allocator, folded, self.limits.max_ranges);
             }
         }
