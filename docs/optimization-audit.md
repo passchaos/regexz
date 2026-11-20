@@ -516,3 +516,15 @@ the search DFA per whitespace token. `find Qwen tokenizer` improves 1.05x
 round) and the control median is 1.00x. The lookahead form is accepted only
 when its set is exactly the complement of the run set. See
 [exact whitespace later plan](benchmarks/whitespace-later-plan.md).
+
+Several further candidates were screened and reverted this round. A SIMD
+range scan for the full-match set loop (`(?:[a-z0-9]+[ \n])+`) lowered 4.4x
+slower than the byte table (78 -> 348 us on the 216 KiB case), matching the
+earlier delimiter-scan result: vector range comparisons and lane masks lower
+poorly for these short runs. Letting the punctuation later plan accept
+non-ASCII runes was retried together with a direct `runEnd` (no first-rune
+re-walk); it still lost to the search DFA by about 2% on the CJK tokenizer,
+so the CJK punctuation token stays on the DFA. Inlining the deferred run
+`runeAt`/`runEnd` wrappers, an input-sized reserve in the general
+`replaceAll` writer, and a short scalar probe in `indexOfLiteral` were all
+neutral (within 1-2%).
