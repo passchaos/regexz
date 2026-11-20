@@ -235,7 +235,7 @@ pub fn main() !void {
             while (try iterator.next()) |_| pieces += 1;
         }
         std.mem.doNotOptimizeAway(pieces);
-        try report(out, "findAll Qwen (fresh workspace)", iterations, text.items.len, elapsed(io, .{ .nanoseconds = fresh_start }));
+        try report(out, "findAll Qwen (owning iterator)", iterations, text.items.len, elapsed(io, .{ .nanoseconds = fresh_start }));
     }
 
     var email_text: std.ArrayList(u8) = .empty;

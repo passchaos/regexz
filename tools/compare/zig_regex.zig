@@ -277,7 +277,7 @@ pub fn main() !void {
     try benchCompile(io, out, "compile xDS-like", "/(?:demo|test)\\.[A-Z][A-Za-z]+/(Get|List)", 20000, .{});
     try benchFind(io, out, "find Qwen tokenizer", qwen, ascii_text.items, 50, ucp);
     try benchFindAll(io, out, "findAll Qwen (borrowed)", qwen, ascii_text.items, 50, ucp, true);
-    try benchFindAll(io, out, "findAll Qwen (fresh)", qwen, ascii_text.items, 50, ucp, false);
+    try benchFindAll(io, out, "findAll Qwen (owning)", qwen, ascii_text.items, 50, ucp, false);
     try benchFind(io, out, "find CJK tokenizer", qwen, cjk_text.items, 50, ucp);
     try benchFind(io, out, "find HTML tag", "<[^>]+>", html_text.items, 200, .{});
     try benchFind(io, out, "find URL", "https?://[^\\s]+", url_text.items, 200, .{});

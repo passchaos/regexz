@@ -255,13 +255,12 @@ substitutions with syntax and other patterns keep the general path. See
 
 A reproducible comparison harness now runs the same workloads through regexz
 and Rust's `regex` crate (`tools/compare`). On this host regexz is faster on
-19 of the 20 measured cases: 7.77x on tokenizer compilation, 5.14x on a
-small-pattern compile, 1.23–1.45x on tokenizer scans, 2.12–2.80x on search
-scans, 1.62–4.13x on splits, 2.54–6.29x on full-match calls, 4.10x on a
-set-run replacement, 1.63x on a zero-width replacement and 3.85x on the
-nine-pattern set. The exception is a fresh `findAll` per call (0.64x), where
-Rust's thread-local cache pool stays warm; `findAllWith` with a caller
-workspace restores the lead (1.23x). See
+all 20 measured cases: 7.68x on tokenizer compilation, 4.93x on a
+small-pattern compile, 1.14–1.37x on tokenizer scans and match iteration,
+2.32–2.81x on search scans, 1.69–4.35x on splits, 2.62–6.31x on full-match
+calls, 4.01x on a set-run replacement, 1.47x on a zero-width replacement and
+3.84x on the nine-pattern set. The owning `findAll` iterator now reuses a
+process workspace pool and is 1.14x ahead of Rust instead of trailing it. See
 [comparison with Rust's regex](benchmarks/rust-comparison.md).
 
 The fast-branch deferred run now counts Unicode probes and materializes its
@@ -273,13 +272,15 @@ and the fresh `findAll` gap against Rust narrows from 0.25x to 0.64x; warm
 scans, CJK and the controls stay within host noise. See
 [deferred fast-branch table threshold](benchmarks/deferred-fast-branch-threshold.md).
 
-`Matches` now supports a caller-owned workspace: `Regex.findAllWith` iterates
-on warmed search-DFA caches without copying or freeing the workspace, while
-`Regex.findAll` keeps its owning behavior. The borrowed iterator matches a
-manual `Workspace.find` loop (64 us) and is 5.36x faster than a fresh
-`findAll` pass (344 us) on the Qwen tokenizer text, where the owning iterator
-pays the lazy DFA preparation per call. See
-[reusing a workspace for match iteration](benchmarks/find-all-workspace.md).
+`Regex.findAll` now returns its owning workspace to a process-wide pool when
+the caller uses the page or smp allocator, so repeated iteration starts with
+warmed search caches; other allocators are never pooled, avoiding
+caller-owned memory that could be released while cached. `Regex.findAllWith`
+remains the explicit caller-workspace form for any allocator and concurrent
+iterators. The owning iterator improves 1.91x (121 → 63 us) and matches the
+borrowed path; the pool is a single mutex-protected entry keyed by a
+process-unique regex id and cleared by `Regex.deinit`. See
+[match iteration workspaces](benchmarks/find-all-workspace.md).
 
 `split` and `splitn` now scan pure literal patterns (`,` or a fixed
 delimiter) with memchr/memmem and append the gaps, instead of creating a

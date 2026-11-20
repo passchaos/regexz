@@ -84,6 +84,22 @@ test "findAllWith reuses a caller workspace" {
     try std.testing.expectEqual(@as(usize, 2), found.end);
 }
 
+test "findAll reuses a pooled workspace for process allocators" {
+    var value = try regex.Regex.init(std.heap.page_allocator, "\\s+", .{});
+    defer value.deinit();
+
+    var first = try value.findAll(std.heap.page_allocator, "a b c");
+    var count: usize = 0;
+    while (try first.next()) |_| count += 1;
+    first.deinit();
+
+    var second = try value.findAll(std.heap.page_allocator, "a b c");
+    while (try second.next()) |_| count += 1;
+    second.deinit();
+
+    try std.testing.expectEqual(@as(usize, 4), count);
+}
+
 test "split returns slices of the input" {
     var value = try regex.Regex.init(gpa, ",", .{});
     defer value.deinit();
