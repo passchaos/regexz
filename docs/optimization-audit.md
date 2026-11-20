@@ -280,3 +280,14 @@ an accept bit, shrinking the hot tables from 96 KiB to 16 KiB, was screened
 and reverted: interleaved medians put `find Qwen tokenizer` at 0.97x and the
 other rune-mode cases within host noise, so the extra masking did not pay for
 itself. See [rune DFA ASCII packing screen](benchmarks/rune-dfa-ascii.json).
+
+Growing the search DFA's Unicode cache from 256 to 4096 entries on collisions
+was screened and reverted: the interleaved medians left the fresh `findAll`
+pass at 1.03x and moved the CJK scans to 0.94–0.97x, so cache table size is
+not the cold-start bottleneck. Filling a set-run replacement through an
+exact-size second pass (0.72x) and skipping the fast branch's prefix probe
+when its set is disjoint from the run (0.99–1.06x) were also neutral or
+negative and reverted. See
+[search cache growth](benchmarks/search-cache-growth.json),
+[exact replacement fill](benchmarks/replace-exact-fill.json) and
+[fast-branch prefix skip](benchmarks/fast-branch-prefix-skip.json).
