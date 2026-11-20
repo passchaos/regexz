@@ -18,6 +18,7 @@ const utf8_run_search = @import("utf8_run_search.zig");
 const prefilter = @import("prefilter.zig");
 const shapes = @import("shapes.zig");
 const zero_width = @import("zero_width.zig");
+const fast_branch_mod = @import("fast_branch.zig");
 const capture_run_mod = @import("capture_run.zig");
 const capture_replay = @import("capture_replay.zig");
 const subst = @import("substitution.zig");
@@ -313,10 +314,32 @@ pub const Workspace = struct {
             .number
         else
             .none;
-        const fast_branch: ?FastBranch = if (program.fast_branch) |plan| .{
-            .prior = prefilter.FirstFilter.init(plan.prior_first),
-            .prefix = if (plan.prefix) |set| deferred_utf8.Run.init(set) else null,
-            .run = deferred_utf8.Run.init(plan.run),
+        const fast_branch: ?FastBranch = if (program.fast_branch) |plan| blk: {
+            var value = FastBranch{
+                .prior = prefilter.FirstFilter.init(plan.prior_first),
+                .prefix = if (plan.prefix) |set| deferred_utf8.Run.init(set) else null,
+                .run = deferred_utf8.Run.init(plan.run),
+            };
+            errdefer value.deinit(allocator);
+            if (plan.later.len != 0) {
+                const list = try allocator.alloc(LaterRun, plan.later.len);
+                var initialized: usize = 0;
+                errdefer {
+                    for (list[0..initialized]) |*later| later.deinit(allocator);
+                    allocator.free(list);
+                }
+                for (plan.later, 0..) |later, index| {
+                    list[index] = .{
+                        .kind = later.kind,
+                        .prefix = if (later.prefix) |set| deferred_utf8.Run.init(set) else null,
+                        .run = deferred_utf8.Run.init(later.run),
+                        .tail = if (later.tail) |set| deferred_utf8.Run.init(set) else null,
+                    };
+                    initialized += 1;
+                }
+                value.later = list;
+            }
+            break :blk value;
         } else null;
         errdefer if (fast_branch) |*value| value.deinit(allocator);
         return .{
@@ -1492,6 +1515,40 @@ pub const Workspace = struct {
             self.slots[1] = end;
             return .{ .start = search_start, .end = end, .slots = self.slots };
         }
+        // The dominant branch failed and every earlier branch is ruled out;
+        // try the following branches that have a direct scan.
+        if (branch.later) |later_list| {
+            for (later_list) |*later| {
+                switch (later.kind) {
+                    .single => {
+                        const len = later.run.runeAt(self.allocator, input, search_start) orelse continue;
+                        const end = search_start + len;
+                        self.slots[0] = search_start;
+                        self.slots[1] = end;
+                        return .{ .start = search_start, .end = end, .slots = self.slots };
+                    },
+                    .run => {
+                        if (later.run.runeAt(self.allocator, input, search_start) == null) continue;
+                        const end = later.run.runEnd(self.allocator, input, search_start);
+                        self.slots[0] = search_start;
+                        self.slots[1] = end;
+                        return .{ .start = search_start, .end = end, .slots = self.slots };
+                    },
+                    .prefix_run_tail => {
+                        var pos = search_start;
+                        if (later.prefix) |*prefix| {
+                            if (prefix.runeAt(self.allocator, input, pos)) |len| pos += len;
+                        }
+                        if (later.run.runeAt(self.allocator, input, pos) == null) continue;
+                        var end = later.run.runEnd(self.allocator, input, pos);
+                        if (later.tail) |*tail| end = tail.runEnd(self.allocator, input, end);
+                        self.slots[0] = search_start;
+                        self.slots[1] = end;
+                        return .{ .start = search_start, .end = end, .slots = self.slots };
+                    },
+                }
+            }
+        }
         return null;
     }
 
@@ -2475,14 +2532,33 @@ fn runeLenAt(input: []const u8, offset: usize) usize {
 /// A dominant alternation branch (`set? setB+`) with its UTF-8 automata.
 /// When the byte at the search start cannot begin an earlier branch, this
 /// branch alone decides the match, so a dedicated run scan replaces the DFA.
+const LaterRun = struct {
+    kind: fast_branch_mod.LaterKind,
+    prefix: ?deferred_utf8.Run,
+    run: deferred_utf8.Run,
+    tail: ?deferred_utf8.Run,
+
+    fn deinit(self: *LaterRun, allocator: std.mem.Allocator) void {
+        if (self.prefix) |*prefix| prefix.deinit(allocator);
+        self.run.deinit(allocator);
+        if (self.tail) |*tail| tail.deinit(allocator);
+    }
+};
+
 const FastBranch = struct {
     prior: prefilter.FirstFilter,
     prefix: ?deferred_utf8.Run,
     run: deferred_utf8.Run,
+    /// Branches after the dominant one, scanned directly when it fails.
+    later: ?[]LaterRun = null,
 
     fn deinit(self: *FastBranch, allocator: std.mem.Allocator) void {
         if (self.prefix) |*prefix| prefix.deinit(allocator);
         self.run.deinit(allocator);
+        if (self.later) |list| {
+            for (list) |*later| later.deinit(allocator);
+            allocator.free(list);
+        }
         self.* = undefined;
     }
 };

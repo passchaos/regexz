@@ -761,6 +761,37 @@ test "dominant alternation branch scan" {
     try std.testing.expectEqual(@as(usize, 2), xy.end);
 }
 
+test "fast branch scans digit and punctuation fallbacks" {
+    const qwen = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+";
+    var value = try regex.Regex.init(gpa, qwen, .{});
+    defer value.deinit();
+    try std.testing.expect(value.program.fast_branch.?.later.len >= 2);
+    var reference_program = value.program;
+    reference_program.fast_branch = null;
+    var reference = try regex.ReplaceWorkspace.init(gpa, reference_program, .{});
+    defer reference.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+
+    const inputs = [_][]const u8{
+        "12345", "a1b2", "!@#$%^&*()", " !@#", "a !@# b", "hello, world!",
+        "  x",   "\n\n", "a\n\nb",
+        "你好 123 !@# x",
+        "1",     "!",    " !",         "a!",   "!a",
+    };
+    for (inputs) |input| {
+        for (0..input.len + 1) |from| {
+            const expected = try reference.find(input, from);
+            const actual = try workspace.find(input, from);
+            try std.testing.expectEqual(expected != null, actual != null);
+            if (expected) |match| {
+                try std.testing.expectEqual(match.start, actual.?.start);
+                try std.testing.expectEqual(match.end, actual.?.end);
+            }
+        }
+    }
+}
+
 test "prefix loop requires a full-coverage loop set" {
     // `(b)*` cannot skip `a`, so a fresh start at offset 1 can match even
     // though the scan from offset 0 died later.

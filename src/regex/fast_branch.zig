@@ -14,6 +14,19 @@
 const std = @import("std");
 const model = @import("model.zig");
 
+pub const LaterKind = enum { single, run, prefix_run_tail };
+
+/// A branch after the dominant one whose match can be scanned directly once
+/// the dominant branch has failed at the position.
+pub const Later = struct {
+    kind: LaterKind,
+    /// Optional single-rune prefix (`set?`); disjoint from `run`.
+    prefix: ?model.Set = null,
+    run: model.Set,
+    /// Optional trailing run (`set*`), for example `[\r\n]*`.
+    tail: ?model.Set = null,
+};
+
 pub const Plan = struct {
     /// Union of the first-byte summaries of every earlier branch. A byte
     /// outside it cannot start an earlier branch.
@@ -22,6 +35,9 @@ pub const Plan = struct {
     prefix: ?model.Set,
     /// The run set (`set+`).
     run: model.Set,
+    /// Branches after the dominant one, in order, up to the first branch
+    /// that cannot be scanned directly.
+    later: []const Later = &.{},
 };
 
 pub fn analyze(allocator: std.mem.Allocator, root: *const model.Node) model.Error!?Plan {
@@ -30,9 +46,20 @@ pub fn analyze(allocator: std.mem.Allocator, root: *const model.Node) model.Erro
     try collect(allocator, root, &branches);
     if (branches.items.len < 2) return null;
     var prior_first = model.FirstSet{};
-    for (branches.items) |branch| {
+    for (branches.items, 0..) |branch, index| {
         if (branchPlan(branch)) |plan| {
-            return .{ .prior_first = prior_first, .prefix = plan.prefix, .run = plan.run };
+            var later: std.ArrayList(Later) = .empty;
+            defer later.deinit(allocator);
+            for (branches.items[index + 1 ..]) |next| {
+                const next_plan = laterPlan(next) orelse break;
+                try later.append(allocator, next_plan);
+            }
+            return .{
+                .prior_first = prior_first,
+                .prefix = plan.prefix,
+                .run = plan.run,
+                .later = try later.toOwnedSlice(allocator),
+            };
         }
         // An earlier branch must be provably unable to match here, so its
         // first-byte summary must exist and must consume input.
@@ -101,6 +128,109 @@ fn branchPlan(branch: *const model.Node) ?Plan {
         },
         else => null,
     };
+}
+
+/// A branch after the dominant one, or null when it is not one of the shapes
+/// that can be scanned directly (`set`, `set+`, or `prefix? set+ set*`).
+fn laterPlan(branch: *const model.Node) ?Later {
+    const node = strip(branch);
+    return switch (node.*) {
+        .set => |set| .{ .kind = .single, .run = set },
+        .repeat => blk: {
+            const run = requiredRun(node) orelse break :blk null;
+            break :blk .{ .kind = .run, .run = run };
+        },
+        .pair => |pair| blk: {
+            const left = strip(pair.left);
+            const right = strip(pair.right);
+            // prefix? (run tail?)  [right-nested sequence]
+            if (optionalPrefix(left)) |prefix| {
+                if (right.* == .pair) {
+                    const inner = right.pair;
+                    const run = requiredRun(inner.left);
+                    const tail = optionalTail(inner.right);
+                    if (run != null and !setsOverlap(prefix, run.?)) {
+                        break :blk .{ .kind = .prefix_run_tail, .prefix = prefix, .run = run.?, .tail = tail };
+                    }
+                    break :blk null;
+                }
+                if (requiredRun(right)) |run| {
+                    if (!setsOverlap(prefix, run)) {
+                        break :blk .{ .kind = .prefix_run_tail, .prefix = prefix, .run = run };
+                    }
+                }
+                break :blk null;
+            }
+            // run tail  [right-nested sequence]
+            if (requiredRun(left)) |run| {
+                const tail = optionalTail(right);
+                if (tail != null) {
+                    break :blk .{ .kind = .prefix_run_tail, .run = run, .tail = tail };
+                }
+                break :blk null;
+            }
+            // (prefix? run) tail?  [left-nested sequence]
+            if (left.* == .pair) {
+                const inner = left.pair;
+                const prefix = optionalPrefix(inner.left);
+                const run = requiredRun(inner.right);
+                const tail = optionalTail(right);
+                if (prefix != null and run != null and !setsOverlap(prefix.?, run.?)) {
+                    break :blk .{ .kind = .prefix_run_tail, .prefix = prefix, .run = run.?, .tail = tail };
+                }
+            }
+            break :blk null;
+        },
+        else => null,
+    };
+}
+
+fn optionalPrefix(node: *const model.Node) ?model.Set {
+    const value = strip(node);
+    if (value.* != .repeat) return null;
+    const repeat = value.repeat;
+    if (repeat.lazy or repeat.possessive or repeat.minimum != 0 or repeat.maximum == null or repeat.maximum.? != 1) return null;
+    const child = strip(repeat.child);
+    if (child.* != .set) return null;
+    return child.set;
+}
+
+fn requiredRun(node: *const model.Node) ?model.Set {
+    const value = strip(node);
+    if (value.* != .repeat) return null;
+    const repeat = value.repeat;
+    if (repeat.lazy or repeat.possessive or repeat.minimum < 1 or repeat.maximum != null) return null;
+    const child = strip(repeat.child);
+    if (child.* != .set) return null;
+    return child.set;
+}
+
+fn optionalTail(node: *const model.Node) ?model.Set {
+    const value = strip(node);
+    if (value.* != .repeat) return null;
+    const repeat = value.repeat;
+    if (repeat.lazy or repeat.possessive or repeat.minimum != 0 or repeat.maximum != null) return null;
+    const child = strip(repeat.child);
+    if (child.* != .set) return null;
+    return child.set;
+}
+
+/// Whether two normalized range lists share any rune.
+fn setsOverlap(a: model.Set, b: model.Set) bool {
+    var ai: usize = 0;
+    var bi: usize = 0;
+    while (ai < a.ranges.len and bi < b.ranges.len) {
+        const ar = a.ranges[ai];
+        const br = b.ranges[bi];
+        if (ar.last < br.first) {
+            ai += 1;
+        } else if (br.last < ar.first) {
+            bi += 1;
+        } else {
+            return true;
+        }
+    }
+    return false;
 }
 
 /// First-byte summary of `node`, or null when it cannot be computed exactly.
