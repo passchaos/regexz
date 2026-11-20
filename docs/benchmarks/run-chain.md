@@ -13,17 +13,21 @@ slowest capture searches in the suite (124–155 MiB/s).
 - every capture group is exactly one unbounded run (`set*`, a lazy `set*?`,
   or a mandatory `set{n}` prefix followed by `set*`) or an empty group,
 - the run sets are pairwise disjoint,
-- the last non-empty run is mandatory and anchors the match end.
+- the last mandatory run anchors the match end (runs after it are nullable),
+  and a chain with no mandatory run matches at the search offset.
 
 The scan jumps to the next anchor rune with the anchor set's UTF-8
-candidate-byte filter, extends the maximal anchor run, and walks backward over
-the preceding runs to place every capture boundary. Runs are maximal and the
-sets are disjoint, so the greedy leftmost-first boundaries are forced; no DFA
-state, choice or trail is recorded, and the deterministic scan does not consume
-the interpreter step budget (matching the other shape scans). Starts inside a
-run, malformed UTF-8 and a failed mandatory prefix fall back to the general
-engine, so the fast path never changes semantics. Overlapping sets, nullable
-anchors, fixed-count runs, nested captures and non-captured runs reject the
+candidate-byte filter, extends the maximal anchor run, walks backward over the
+preceding runs and forward over the trailing nullable runs to place every
+capture boundary. A chain with no mandatory run skips the anchor search and
+extends all runs from the search offset. Runs are maximal and the sets are
+disjoint, so the greedy leftmost-first boundaries are forced; no DFA state,
+choice or trail is recorded, and the deterministic scan does not consume the
+interpreter step budget (matching the other shape scans). Starts inside a run,
+malformed UTF-8 and a failed mandatory prefix fall back to the general engine,
+so the fast path never changes semantics. Overlapping sets, fixed-count runs,
+nested captures, non-captured runs and the empty-match restrictions
+(`(*NOTEMPTY)`, `(*NOTEMPTY_ATSTART)`) on fully nullable chains reject the
 shape, and `Limits.longest` disables it. The plan and anchor filter are
 heap-allocated so workspaces without the shape keep their size.
 
@@ -81,6 +85,34 @@ executions; raw samples in [`run-chain-lazy.json`](run-chain-lazy.json)):
 The lazy case now records no choices or trails; the other cases stay within
 the host's spread.
 
+## Nullable and trailing-nullable runs
+
+The anchor rule was relaxed so that a mandatory run anchors the end and any
+runs after it extend forward as greedy nullable runs; a chain with no
+mandatory run matches at the search offset and extends every run from there.
+Fully nullable chains skip the anchor search entirely. The empty-match
+restrictions keep such programs on the general engine because their retry
+loop owns the empty-match semantics.
+
+Measured separately against `c6e9319` with the same method (five interleaved
+executions; raw samples in
+[`run-chain-nullable.json`](run-chain-nullable.json)):
+
+| Case | Before, ns/pass | After, ns/pass | Speedup |
+| --- | ---: | ---: | ---: |
+| nullable greedy captures (`(a*)(b*)`) | 132,525.8 | 65,129.6 | 2.03x |
+| trailing nullable capture (`(a+)(b*)`) | 74,049.6 | 42,145.4 | 1.76x |
+| sandwiched nullable captures (`(a*)(b+)(c*)`) | 86,507.1 | 60,902.9 | 1.42x |
+| overlap nullable control (`(a*)(a*)`) | 128,059.2 | 126,883.3 | 1.01x |
+| optional ASCII captures | 154,466.7 | 159,285.8 | 0.97x |
+| nullable Unicode captures | 234,589.6 | 239,144.2 | 0.98x |
+| Unicode optional captures | 226,672.1 | 231,497.9 | 0.98x |
+| Han capture control | 22,531.7 | 21,562.9 | 1.04x |
+
+The nullable chains record no choices or trails; the remaining cases stay
+within the host's spread. The fully nullable shape requires the benchmark
+loop to advance one rune per empty match, which the capture tests mirror.
+
 ## Validation
 
 ```sh
@@ -93,7 +125,8 @@ zig fmt --check src/regex/shapes.zig src/regex/replace.zig src/regex/run_chain_t
 ```
 
 The new tests cover detection, run and empty capture boundaries, malformed
-UTF-8, greedy and lazy run forms, and randomized differential comparison
-against the same program pinned to the interpreter. The two capture replay
-suites were updated: their disjoint-run cases now assert the run-chain path,
-and their strict-budget cases pin both workspaces to the interpreter.
+UTF-8, greedy, lazy, fully nullable and trailing-nullable run forms (including
+empty-match iteration), and randomized differential comparison against the
+same program pinned to the interpreter. The two capture replay suites were
+updated: their disjoint-run cases now assert the run-chain path, and their
+strict-budget cases pin both workspaces to the interpreter.

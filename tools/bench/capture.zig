@@ -132,6 +132,8 @@ pub fn main() !void {
     try bench(io, out, "Han after long prefix", "(\\p{Han}+)", han_misses.items);
     try bench(io, out, "Greek after long prefix", "((\\p{Greek}+))", greek_misses.items);
     try bench(io, out, "nullable greedy captures", "(a*)(b*)", nullable.items);
+    try bench(io, out, "trailing nullable capture", "(a+)(b*)", nullable.items);
+    try bench(io, out, "sandwiched nullable captures", "(a*)(b+)(c*)", nullable.items);
     try bench(io, out, "overlap nullable captures", "(a*)(a*)", overlap_nullable.items);
     try bench(io, out, "optional ASCII captures", "([a-z]+)([0-9]*)([A-Z]+)", optional_ascii.items);
     try bench(io, out, "optional overlapping run", "([a-z]+)([a-z0-9]*)([A-Z]+)", optional_ascii.items);

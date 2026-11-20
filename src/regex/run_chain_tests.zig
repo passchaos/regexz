@@ -1,4 +1,4 @@
-//! Captured run-chain shape: `(setA*)(setB*)...(setZ+)` with disjoint sets.
+//! Captured run-chain shape: `(setA*)(setB*)...(setZ*)` with disjoint sets.
 const std = @import("std");
 const regex = @import("../root.zig");
 const gpa = std.testing.allocator;
@@ -8,6 +8,13 @@ const RunMatch = struct {
     end: usize,
     slots: []const usize,
 };
+
+fn nextRune(input: []const u8, offset: usize) usize {
+    const length = std.unicode.utf8ByteSequenceLength(input[offset]) catch return offset + 1;
+    if (length > input.len - offset) return offset + 1;
+    _ = std.unicode.utf8Decode(input[offset..][0..length]) catch return offset + 1;
+    return offset + length;
+}
 
 fn collect(allocator: std.mem.Allocator, workspace: *regex.ReplaceWorkspace, input: []const u8) ![]RunMatch {
     var matches: std.ArrayList(RunMatch) = .empty;
@@ -22,7 +29,7 @@ fn collect(allocator: std.mem.Allocator, workspace: *regex.ReplaceWorkspace, inp
         try matches.append(allocator, .{ .start = match.start, .end = match.end, .slots = slots });
         if (match.end <= match.start) {
             if (match.start == input.len) break;
-            offset = match.start + 1;
+            offset = nextRune(input, match.start);
         } else {
             offset = match.end;
         }
@@ -184,5 +191,52 @@ test "lazy nullable run chains use the maximal run boundaries" {
         }
         try compare("([a-z]+)([0-9]*?)([A-Z]+)", buffer[0..length]);
         try compare("(\\p{Greek}+)(\\p{Nd}*?)(\\p{Han}+)", buffer[0..length]);
+    }
+}
+
+test "nullable and trailing-nullable run chains agree with the interpreter" {
+    const patterns = [_][]const u8{
+        "(a*)(b*)",
+        "(a+)(b*)",
+        "(a*)(b+)",
+        "(a*)(b+)(c*)",
+        "(\\p{Greek}*)(\\p{Nd}*)",
+        "(\\p{Greek}+)(\\p{Nd}*)",
+    };
+    const inputs = [_][]const u8{
+        "",
+        "a",
+        "b",
+        "aaabbb",
+        "aaaa",
+        "bbbb",
+        "ab",
+        "ba",
+        "aaabbb aaaa bbbb ab ba ",
+        "Σσ١٢ Σσ ١٢ ",
+        "Σσ\xff١٢",
+        "\xffΣσ١٢",
+        "Σσ١٢ Σσ١٢\nΣσ١٢",
+    };
+    for (patterns) |pattern| {
+        for (inputs) |input| try compare(pattern, input);
+    }
+    var random = std.Random.DefaultPrng.init(191);
+    const alphabet = [_][]const u8{ "a", "b", "c", "Σ", "σ", "١", " ", "\n" };
+    var buffer: [96]u8 = undefined;
+    for (0..200) |_| {
+        var length: usize = 0;
+        const runes = random.random().uintLessThan(usize, 24);
+        for (0..runes) |_| {
+            const value = alphabet[random.random().uintLessThan(usize, alphabet.len)];
+            if (length + value.len > buffer.len) break;
+            @memcpy(buffer[length..][0..value.len], value);
+            length += value.len;
+        }
+        try compare("(a*)(b*)", buffer[0..length]);
+        try compare("(a+)(b*)", buffer[0..length]);
+        try compare("(a*)(b+)(c*)", buffer[0..length]);
+        try compare("(\\p{Greek}*)(\\p{Nd}*)", buffer[0..length]);
+        try compare("(\\p{Greek}+)(\\p{Nd}*)", buffer[0..length]);
     }
 }

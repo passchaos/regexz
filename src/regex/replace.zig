@@ -209,9 +209,14 @@ pub const Workspace = struct {
             const plan = shapes.runChain(program) orelse break :blk null;
             const state = try allocator.create(RunChainState);
             state.plan = plan;
-            const anchor = plan.sets[plan.anchor];
-            state.filter = prefilter.FirstFilter.init(.{ .ascii = anchor.ascii, .nonascii = !anchor.ascii_only });
-            state.filter.prepareRunePrefixes(anchor);
+            if (plan.anchor != shapes.RunChain.no_anchor) {
+                const anchor = plan.sets[plan.anchor];
+                state.filter = prefilter.FirstFilter.init(.{ .ascii = anchor.ascii, .nonascii = !anchor.ascii_only });
+                state.filter.prepareRunePrefixes(anchor);
+            } else {
+                // All runs are nullable; the scan starts at the search offset.
+                state.filter = prefilter.FirstFilter.init(.{ .empty = true });
+            }
             break :blk state;
         };
         errdefer if (run_chain) |state| allocator.destroy(state);
@@ -835,13 +840,32 @@ pub const Workspace = struct {
         return .{ .start = span.start, .end = span.end, .slots = self.slots };
     }
 
-    /// `(setA*)(setB*)...(setZ+)`: each run is maximal, the sets are
-    /// pairwise disjoint, and the anchor run is mandatory, so the next anchor
-    /// rune determines the match end and a backward walk over the preceding
-    /// runs determines every capture boundary. A start inside a run or
-    /// malformed UTF-8 falls back to the general engine.
+    /// `(setA*)(setB*)...(setZ*)`: each run is maximal and the sets are
+    /// pairwise disjoint. When a mandatory run exists it anchors the match
+    /// end: the next anchor rune determines the run, a backward walk places
+    /// the preceding captures and a forward walk extends the trailing
+    /// nullable runs. A chain with no mandatory run matches at the search
+    /// offset and extends greedily. A start inside a run or malformed UTF-8
+    /// falls back to the general engine.
     fn findRunChain(self: *Workspace, state: *RunChainState, input: []const u8, search_start: usize) ?Match {
         const plan = &state.plan;
+        if (plan.anchor == shapes.RunChain.no_anchor) {
+            // Every run is nullable: the leftmost match starts at the search
+            // offset and the greedy runs extend from there.
+            if (search_start > input.len) return null;
+            var pos: [shapes.RunChain.max_items + 1]usize = undefined;
+            pos[0] = search_start;
+            var item: usize = 0;
+            while (item < plan.count) : (item += 1) {
+                if (plan.empty[item]) {
+                    pos[item + 1] = pos[item];
+                    continue;
+                }
+                pos[item + 1] = runEnd(input, pos[item], plan.sets[item]) orelse return null;
+            }
+            self.fillRunChainSlots(plan, &pos, search_start, pos[plan.count]);
+            return .{ .start = search_start, .end = pos[plan.count], .slots = self.slots };
+        }
         const anchor = plan.anchor;
         const anchor_set = plan.sets[anchor];
         var scan = search_start;
@@ -897,23 +921,34 @@ pub const Workspace = struct {
             // A start inside a run would need the run clamped to the search
             // offset; the general engine owns that case.
             if (pos[0] < search_start) return null;
+            var cursor = end;
             var trailing = anchor + 1;
-            while (trailing < plan.count) : (trailing += 1) pos[trailing] = end;
-            var item: usize = 0;
-            while (item < plan.count) : (item += 1) {
-                if (plan.empty[item]) {
-                    self.slots[plan.start_slots[item]] = pos[item];
-                    self.slots[plan.end_slots[item]] = pos[item];
-                } else {
-                    self.slots[plan.start_slots[item]] = pos[item];
-                    self.slots[plan.end_slots[item]] = pos[item + 1];
+            while (trailing < plan.count) : (trailing += 1) {
+                pos[trailing] = cursor;
+                if (!plan.empty[trailing]) {
+                    cursor = runEnd(input, cursor, plan.sets[trailing]) orelse return null;
                 }
+                pos[trailing + 1] = cursor;
             }
-            self.slots[plan.match_start_slot] = pos[0];
-            self.slots[plan.match_end_slot] = end;
-            return .{ .start = pos[0], .end = end, .slots = self.slots };
+            self.fillRunChainSlots(plan, &pos, pos[0], cursor);
+            return .{ .start = pos[0], .end = cursor, .slots = self.slots };
         }
         return null;
+    }
+
+    inline fn fillRunChainSlots(self: *Workspace, plan: *const shapes.RunChain, pos: *const [shapes.RunChain.max_items + 1]usize, start: usize, end: usize) void {
+        var item: usize = 0;
+        while (item < plan.count) : (item += 1) {
+            if (plan.empty[item]) {
+                self.slots[plan.start_slots[item]] = pos[item];
+                self.slots[plan.end_slots[item]] = pos[item];
+            } else {
+                self.slots[plan.start_slots[item]] = pos[item];
+                self.slots[plan.end_slots[item]] = pos[item + 1];
+            }
+        }
+        self.slots[plan.match_start_slot] = start;
+        self.slots[plan.match_end_slot] = end;
     }
 
     /// `set+` over an ASCII-only set: skip to the next member with the SIMD
@@ -1905,6 +1940,18 @@ fn runeBefore(input: []const u8, end: usize) ?struct { value: u21, start: usize 
     if (end - start > 4) return null;
     const value = std.unicode.utf8Decode(input[start..end]) catch return null;
     return .{ .value = value, .start = start };
+}
+
+/// End of the maximal run of `set` members at `start`. Null for malformed
+/// UTF-8, which makes the caller fall back to the general engine.
+fn runEnd(input: []const u8, start: usize, set: model.Set) ?usize {
+    var end = start;
+    while (end < input.len) {
+        const rune = runeAt(input, end) orelse return null;
+        if (!set.matches(rune.value)) break;
+        end += rune.len;
+    }
+    return end;
 }
 
 fn runeLenAt(input: []const u8, offset: usize) usize {

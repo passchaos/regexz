@@ -87,11 +87,14 @@ pub const Chain = struct {
 
 const max_literal_bytes = 8;
 
-/// `(setA*)(setB*)...(setZ+)`: captured greedy runs whose sets are pairwise
-/// disjoint. The last non-empty run is mandatory, so it anchors the match
-/// end; every capture boundary is a run boundary, and each run is maximal.
+/// `(setA*)(setB*)...(setZ*)`: captured greedy runs whose sets are pairwise
+/// disjoint. The last mandatory run anchors the match end; a chain with no
+/// mandatory run matches at the search offset and extends greedily from
+/// there. Every capture boundary is a run boundary, and each run is maximal.
 pub const RunChain = struct {
     pub const max_items = 5;
+    /// `anchor` value when every run is nullable.
+    pub const no_anchor: u8 = 255;
     sets: [max_items]model.Set = undefined,
     /// Mandatory members before the unbounded tail of the run (`set{2,}` -> 2,
     /// `set+` -> 1, `set*` -> 0).
@@ -101,15 +104,14 @@ pub const RunChain = struct {
     start_slots: [max_items]u16 = undefined,
     end_slots: [max_items]u16 = undefined,
     count: u8 = 0,
-    /// Index of the last non-empty run; items after it are empty captures.
-    anchor: u8 = 0,
+    /// Index of the last mandatory run; runs after it are nullable.
+    anchor: u8 = no_anchor,
     match_start_slot: u16 = 0,
     match_end_slot: u16 = 1,
 };
 
 /// Recognizes a captured run chain. Conservative: any other instruction,
-/// a fixed-count run, an overlapping pair of sets or a nullable anchor
-/// rejects the shape.
+/// a fixed-count run or an overlapping pair of sets rejects the shape.
 pub fn runChain(program: Program) ?RunChain {
     if (program.extended or program.capture_count == 0 or program.capture_count > 15) return null;
     const ins = program.instructions;
@@ -153,7 +155,6 @@ pub fn runChain(program: Program) ?RunChain {
             if (std.meta.activeTag(end) != .save or end.save.slot != save.slot + 1) return null;
             plan.sets[index] = star.set;
             plan.minimum[index] = 0;
-            plan.anchor = index;
             saw_run = true;
             pc = end.save.next;
         } else if (std.meta.activeTag(ins[pc]) == .split and !ins[pc].split.alternation) {
@@ -179,7 +180,6 @@ pub fn runChain(program: Program) ?RunChain {
             if (body_set.ranges.len == 0) return null;
             plan.sets[index] = body_set;
             plan.minimum[index] = 0;
-            plan.anchor = index;
             saw_run = true;
             pc = end.save.next;
         } else {
@@ -191,7 +191,7 @@ pub fn runChain(program: Program) ?RunChain {
             if (std.meta.activeTag(end) != .save or end.save.slot != save.slot + 1) return null;
             plan.sets[index] = run.set;
             plan.minimum[index] = run.min;
-            plan.anchor = index;
+            if (run.min != 0) plan.anchor = index;
             saw_run = true;
             pc = end.save.next;
         }
@@ -201,9 +201,9 @@ pub fn runChain(program: Program) ?RunChain {
     // Every capture group must be one of the walked items, so the plan's
     // slot writes cover the whole slot array.
     if (plan.count != program.capture_count) return null;
-    // The anchor must be mandatory: a nullable tail would accept before its
-    // maximal run, so the anchor rune search could miss the real match end.
-    if (plan.minimum[plan.anchor] == 0) return null;
+    // A chain with no mandatory run matches empty at every offset; the
+    // empty-match restrictions need the general engine's retry loop.
+    if (plan.anchor == RunChain.no_anchor and (program.notempty or program.notempty_atstart)) return null;
     for (0..plan.count) |i| {
         if (plan.empty[i]) continue;
         for (i + 1..plan.count) |j| {

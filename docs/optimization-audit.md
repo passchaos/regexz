@@ -147,16 +147,17 @@ warmed calls are unchanged. See
 [first-byte filter construction](benchmarks/first-filter-init.md).
 
 Captured run chains now scan directly. `shapes.runChain` recognizes
-`(setA*)(setB*)...(setZ+)` when every group is one unbounded run or an empty
-capture, the sets are pairwise disjoint, and the last non-empty run is
-mandatory; the scan jumps to the next anchor rune with a prepared UTF-8
-candidate-byte filter, extends the maximal run and walks backward to place
-every capture boundary without DFA state, choices or trails. Lazy `set*?`
-groups are accepted too: with disjoint sets the lazy capture expands to the
-maximal run. Starts inside a run, malformed UTF-8 and failed mandatory
+`(setA*)(setB*)...(setZ*)` when every group is one unbounded run or an empty
+capture and the sets are pairwise disjoint; the scan jumps to the next anchor
+rune with a prepared UTF-8 candidate-byte filter, extends the maximal run and
+walks backward over the prefixes and forward over the trailing nullable runs
+to place every capture boundary without DFA state, choices or trails. Lazy
+`set*?` groups and fully nullable chains are accepted too: with disjoint sets
+the greedy boundaries are forced, and a chain with no mandatory run matches at
+the search offset. Starts inside a run, malformed UTF-8 and failed mandatory
 prefixes fall back to the general engine. Covered capture searches improve
-1.32–2.43x and the lazy case 1.64x; controls stay within host noise. See
-[captured run chains](benchmarks/run-chain.md).
+1.32–2.43x, the lazy case 1.64x, and the nullable chains 1.42–2.03x; controls
+stay within host noise. See [captured run chains](benchmarks/run-chain.md).
 
 Further work on these candidates needs fresh measurements before implementation.
 Current warmed throughput does not establish their cold-start cost or the
