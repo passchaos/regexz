@@ -560,13 +560,13 @@ pub const Scanner = struct {
                 var scan = self.scan;
                 switch (self.chain_phase) {
                     .idle => {
-                        while (scan < items.len and items[scan] < 0x80 and !self.chain_a_table[items[scan]]) scan += 1;
+                        while (scan < items.len and !self.chain_a_table[items[scan]]) scan += 1;
                     },
                     .run_a => {
-                        while (scan < items.len and items[scan] < 0x80 and self.chain_a_table[items[scan]]) scan += 1;
+                        while (scan < items.len and self.chain_a_table[items[scan]]) scan += 1;
                     },
                     .run_b => {
-                        while (scan < items.len and items[scan] < 0x80 and self.chain_b_table[items[scan]]) scan += 1;
+                        while (scan < items.len and self.chain_b_table[items[scan]]) scan += 1;
                     },
                 }
                 self.scan = scan;
@@ -690,12 +690,12 @@ pub const Scanner = struct {
 
     /// Advance over ASCII member bytes. The caller checks the stop byte.
     fn skipMembers(self: *Scanner, items: []const u8) void {
-        while (self.scan < items.len and items[self.scan] < 0x80 and self.simple_table[items[self.scan]]) self.scan += 1;
+        while (self.scan < items.len and self.simple_table[items[self.scan]]) self.scan += 1;
     }
 
-    /// Advance over ASCII non-member bytes. The caller checks the stop byte.
+    /// Advance over non-member bytes. The caller checks the stop byte.
     fn skipNonMembers(self: *Scanner, items: []const u8) void {
-        while (self.scan < items.len and items[self.scan] < 0x80 and !self.simple_table[items[self.scan]]) self.scan += 1;
+        while (self.scan < items.len and !self.simple_table[items[self.scan]]) self.scan += 1;
     }
 
     fn processSimple(self: *Scanner, context: ?*anyopaque, emit: EmitFn, at_eof: bool) model.Error!void {

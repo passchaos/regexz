@@ -569,3 +569,17 @@ slower than the comparison sort (33.5-33.9 -> 35.1-35.5 us), so the sort
 remains. Inlining `emitStarEmpty` into the streaming star loop to hoist the
 empty-match suppression flags was neutral against the unchanged `[a-z]+`
 control (0.94x versus 0.96x under the same host drift).
+
+The streaming scanner's ASCII tight loops dropped their redundant
+`items[scan] < 0x80` guards. The byte tables are only built for `ascii_only`
+sets and leave every byte >= 0x80 false, so a high byte already stops a
+member scan and is always a non-member; idle stretches now consume high bytes
+byte-wise instead of handing each rune back to the decoder. A first screen
+that changed only `skipNonMembers` was neutral (focused plus 0.98x), so the
+member-run loop was included: a focused ten-round harness improves
+`[a-z]+` 1.08x, `[a-z]*` 1.04x, and `[a-z]+ [a-z]+` 1.02x, and the fresh
+67-case interleave reads 1.07x, 1.02x, and 1.03x with the 63 controls at a
+1.01x median. Two earlier interleaves of the split variant reported the
+untouched `[a-z]*` path at 0.88x, which identifies that row in those binaries
+as layout noise rather than a code effect. See
+[high-byte checks in stream loops](benchmarks/stream-high-byte-checks.md).
