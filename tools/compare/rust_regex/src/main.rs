@@ -133,6 +133,8 @@ fn main() {
     let replace_text = "aaa bbb aaa bbb ".repeat(2000);
     let greek_text = "αβγδε ζηθικ λμνξο ".repeat(2000);
     let email_text = "user.name@example.com ".repeat(800);
+    let ip_text = "192.168.1.1 10.0.0.255 172.16.0.1 ".repeat(2000);
+    let date_text = "2026-11-21 2025-01-05 1999-12-31 ".repeat(2000);
 
     let qwen = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+";
 
@@ -174,6 +176,15 @@ fn main() {
         "$2@$1",
         200,
     );
+    bench_find("find IPv4", "\\d{1,3}(?:\\.\\d{1,3}){3}", &ip_text, 200);
+    bench_find("find date", "\\d{4}-\\d{2}-\\d{2}", &date_text, 200);
+    bench_find(
+        "find 20-word alternation",
+        "alpha|beta|gamma|delta|epsilon|zeta|eta|theta|iota|kappa|lambda|mu|nu|xi|omicron|pi|rho|sigma|tau|upsilon",
+        &word_text,
+        200,
+    );
+    bench_find("find anchored line", "(?m)^\\w+", &ascii_text, 200);
     bench_split("split whitespace (22 KiB)", "\\s+", &ascii_text, 200);
     bench_split("split commas (29 KiB)", ",", &csv_text, 200);
     bench_fullmatch(

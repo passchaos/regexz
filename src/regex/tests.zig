@@ -926,6 +926,41 @@ test "literal-run detection rejects an optional literal that overlaps the run" {
     }
 }
 
+test "fixed sequence fast path matches set and literal concatenations" {
+    var value = try regex.Regex.init(gpa, "\\d{4}-\\d{2}-\\d{2}", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind == .fixed_sequence);
+
+    const cases = [_]struct { input: []const u8, from: usize, spans: []const [2]usize }{
+        .{ .input = "2026-11-21 x 1999-12-31", .from = 0, .spans = &.{ .{ 0, 10 }, .{ 13, 23 } } },
+        .{ .input = "2026-11-21 x 1999-12-31", .from = 3, .spans = &.{.{ 13, 23 }} },
+        .{ .input = "2026-11-2", .from = 0, .spans = &.{} },
+        .{ .input = "2026/11/21", .from = 0, .spans = &.{} },
+        .{ .input = "x2026-11-21y", .from = 0, .spans = &.{.{ 1, 11 }} },
+        .{ .input = "", .from = 0, .spans = &.{} },
+    };
+    for (cases) |case| {
+        var offset = case.from;
+        var index: usize = 0;
+        while (offset <= case.input.len and index < case.spans.len) : (index += 1) {
+            const m = (try workspace.find(case.input, offset)) orelse break;
+            try std.testing.expectEqual(case.spans[index][0], m.start);
+            try std.testing.expectEqual(case.spans[index][1], m.end);
+            offset = m.end;
+        }
+        try std.testing.expectEqual(case.spans.len, index);
+    }
+
+    // A variable-width run is not a fixed sequence.
+    var run = try regex.Regex.init(gpa, "\\d+", .{});
+    defer run.deinit();
+    var run_workspace = try regex.ReplaceWorkspace.init(gpa, run.program, .{});
+    defer run_workspace.deinit();
+    try std.testing.expect(run_workspace.fast_kind != .fixed_sequence);
+}
+
 test "run-then-literal fast path anchors on the required literal" {
     var value = try regex.Regex.init(gpa, "\\w+@example\\.com", .{});
     defer value.deinit();

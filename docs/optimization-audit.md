@@ -685,3 +685,16 @@ nibble-table candidate filter, improving the 10-word alternation 1.17x
 alternation, 10-word alternation, Greek class, prefix+suffix and capture
 replacement were added, and all 26 are faster than Rust. See
 [literal fast paths](benchmarks/literal-fast-paths.md).
+
+Fixed-width concatenations of single-rune sets and literal bytes
+(`\d{4}-\d{2}-\d{2}`) now have a direct path. The chain and run shapes only
+cover variable-width runs, so dates had been running the search DFA at about
+41 ns per match. The new `fixed_sequence` kind records the element sequence,
+deduplicates the ASCII set tables, and verifies each candidate with byte
+tables and literal compares; variable-width runs (`\d+`, `\d{1,3}`), captures,
+non-ASCII sets and all-literal patterns keep their existing paths. The date
+case improves 6.4x internally (252.2 -> 39.1 us) and moves from 1.9x behind
+Rust to 3.53x ahead. The comparison now covers 30 cases (IPv4, date, 20-word
+alternation and a multiline anchored line scan were added); all 30 are faster,
+with the anchored line scan the thinnest at 1.09x. See
+[literal fast paths](benchmarks/literal-fast-paths.md).

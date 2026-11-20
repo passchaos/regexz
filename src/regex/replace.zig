@@ -51,6 +51,7 @@ pub const FastKind = enum {
     caseless_literal,
     literal_set,
     run_then_literal,
+    fixed_sequence,
 };
 pub const Error = model.Error;
 
@@ -191,6 +192,8 @@ pub const Workspace = struct {
     literal_set_filter: ?prefilter.MultiFilter = null,
     /// `set+ literal` with a literal first byte outside the set.
     run_then_literal: ?RunThenLiteral = null,
+    /// Fixed-width concatenation of single-rune sets and literal bytes.
+    fixed_sequence: ?*FixedSequence = null,
     /// Byte membership tables for the chain fast path. `Set.matches` is a
     /// binary search over rune ranges; the per-byte chain scans run several
     /// lookups per input byte, so cache the answers once per workspace.
@@ -327,6 +330,14 @@ pub const Workspace = struct {
         else
             program.zero_width;
         const run_then_literal: ?RunThenLiteral = if (limits.longest) null else detectRunThenLiteral(program);
+        const fixed_sequence: ?*FixedSequence = if (limits.longest) null else blk: {
+            const shape = detectFixedSequence(program) orelse break :blk null;
+            const state = try allocator.create(FixedSequence);
+            state.* = shape;
+            state.buildTables();
+            break :blk state;
+        };
+        errdefer if (fixed_sequence) |state| allocator.destroy(state);
         const fast_kind: FastKind = if (simple_set != null)
             .set_run
         else if (capture_run) |plan|
@@ -345,6 +356,8 @@ pub const Workspace = struct {
             .chain
         else if (run_then_literal != null)
             .run_then_literal
+        else if (fixed_sequence != null)
+            .fixed_sequence
         else if (literal_run != null)
             .literal_run
         else if (simple_anchored != null)
@@ -452,6 +465,7 @@ pub const Workspace = struct {
             .fold_filter = if (program.caseless_literal) |literal| prefilter.FoldFilter.init(literal) else null,
             .literal_set_filter = if (program.literal_set) |literals| literalSetFilter(literals) else null,
             .run_then_literal = run_then_literal,
+            .fixed_sequence = fixed_sequence,
         };
     }
 
@@ -459,6 +473,7 @@ pub const Workspace = struct {
         if (self.pair_filter) |filter| self.allocator.destroy(filter);
         if (self.run_chain) |state| self.allocator.destroy(state);
         if (self.literal_run) |state| state.deinit(self.allocator);
+        if (self.fixed_sequence) |state| self.allocator.destroy(state);
         if (self.utf8_run) |*value| value.deinit(self.allocator);
         if (self.fast_branch) |*value| value.deinit(self.allocator);
         if (self.pike_workspace) |*workspace| workspace.deinit();
@@ -534,6 +549,7 @@ pub const Workspace = struct {
             },
             .literal_set => return self.findLiteralSet(input, search_start),
             .run_then_literal => return self.findRunThenLiteral(&self.run_then_literal.?, input, search_start),
+            .fixed_sequence => return self.findFixedSequence(self.fixed_sequence.?, input, search_start),
         }
         // Every match must start at a start-literal occurrence, so the first
         // occurrence bounds the leftmost match start and the DFA can skip
@@ -1113,6 +1129,7 @@ pub const Workspace = struct {
             },
             .literal_set => return self.findLiteralSet(input, search_start),
             .run_then_literal => return self.findRunThenLiteral(&self.run_then_literal.?, input, search_start),
+            .fixed_sequence => return self.findFixedSequence(self.fixed_sequence.?, input, search_start),
         }
         var from = search_start;
         if (self.pair_filter) |filter| {
@@ -1754,6 +1771,36 @@ pub const Workspace = struct {
             self.slots[1] = found + literal.len;
             return .{ .start = start, .end = found + literal.len, .slots = self.slots };
         }
+    }
+
+    /// Fixed-width concatenation of single-rune sets and literal bytes.
+    /// The first element drives the candidate scan; each candidate checks
+    /// the remaining bytes with byte tables.
+    fn findFixedSequence(self: *Workspace, state: *const FixedSequence, input: []const u8, search_start: usize) ?Match {
+        const len: usize = state.len;
+        if (search_start > input.len or input.len - search_start < len) return null;
+        const first_literal = state.literal[0];
+        const first_value = state.value[0];
+        const limit = input.len - len;
+        var start = search_start;
+        while (start <= limit) : (start += 1) {
+            if (first_literal) {
+                if (input[start] != first_value) continue;
+            } else if (!state.tables[first_value][input[start]]) continue;
+            var index: usize = 1;
+            while (index < len) : (index += 1) {
+                const byte = input[start + index];
+                if (state.literal[index]) {
+                    if (byte != state.value[index]) break;
+                } else if (!state.tables[state.value[index]][byte]) break;
+            }
+            if (index == len) {
+                self.slots[0] = start;
+                self.slots[1] = start + len;
+                return .{ .start = start, .end = start + len, .slots = self.slots };
+            }
+        }
+        return null;
     }
 
     fn findFastBranch(self: *Workspace, branch: *FastBranch, input: []const u8, search_start: usize) ?Match {
@@ -2906,6 +2953,78 @@ fn detectRunThenLiteral(program: Program) ?RunThenLiteral {
     const save1 = ins[pc];
     if (std.meta.activeTag(save1) != .save or save1.save.slot != 1 or save1.save.next != program.accept) return null;
     if (set.matches(@as(u21, state.literal[0]))) return null;
+    return state;
+}
+
+/// Pure concatenation of single-rune sets and literal bytes with a fixed
+/// width, for example `\d{4}-\d{2}-\d{2}`.
+const FixedSequence = struct {
+    const max_len = 64;
+    const max_sets = 8;
+
+    literal: [max_len]bool = undefined,
+    value: [max_len]u8 = undefined,
+    len: u8 = 0,
+    sets: [max_sets]model.Set = undefined,
+    set_count: u8 = 0,
+    tables: [max_sets][256]bool = undefined,
+
+    fn buildTables(self: *FixedSequence) void {
+        for (self.sets[0..self.set_count], 0..) |set, index| {
+            self.tables[index] = byte_table.init(256, set);
+        }
+    }
+};
+
+fn detectFixedSequence(program: Program) ?FixedSequence {
+    if (program.capture_count != 0 or program.extended or program.literal != null) return null;
+    const ins = program.instructions;
+    if (ins.len < 6 or program.accept != 0) return null;
+    if (std.meta.activeTag(ins[0]) != .accept or std.meta.activeTag(ins[1]) != .sub_accept or
+        std.meta.activeTag(ins[2]) != .ret) return null;
+    if (program.start >= ins.len) return null;
+    const whole = ins[program.start];
+    if (std.meta.activeTag(whole) != .save or whole.save.slot != 0 or whole.save.next != program.body) return null;
+    var state = FixedSequence{};
+    var saw_set = false;
+    var pc = program.body;
+    while (pc < ins.len) {
+        switch (ins[pc]) {
+            .consume => |consume| {
+                const set = consume.set;
+                if (!set.ascii_only or set.ranges.len == 0) return null;
+                var set_index: u8 = 0;
+                while (set_index < state.set_count) : (set_index += 1) {
+                    if (shapes.sameSet(state.sets[set_index], set)) break;
+                }
+                if (set_index == state.set_count) {
+                    if (state.set_count == state.sets.len) return null;
+                    state.sets[state.set_count] = set;
+                    state.set_count += 1;
+                }
+                if (state.len == state.literal.len) return null;
+                state.literal[state.len] = false;
+                state.value[state.len] = set_index;
+                state.len += 1;
+                saw_set = true;
+                pc = consume.next;
+            },
+            .literal_byte => |literal| {
+                if (state.len == state.literal.len) return null;
+                state.literal[state.len] = true;
+                state.value[state.len] = literal.value;
+                state.len += 1;
+                pc = literal.next;
+            },
+            .save => |save| {
+                if (save.slot != 1 or save.next != program.accept) return null;
+                pc = save.next;
+                break;
+            },
+            else => return null,
+        }
+    }
+    if (!saw_set or state.len < 2 or pc != program.accept) return null;
     return state;
 }
 

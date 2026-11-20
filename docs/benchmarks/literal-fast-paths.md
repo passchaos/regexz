@@ -74,3 +74,18 @@ literal-set fast path now builds the multi-literal filter only when the
 alternatives have at most eight distinct first bytes; wider sets use the
 `PairSet` nibble-table candidate filter. The 10-word alternation improves
 1.17x (289.1 -> 247.5 us) and is 1.20x ahead of Rust.
+
+## Fixed-width sequences
+
+`\d{4}-\d{2}-\d{2}` is a pure concatenation of single-rune sets and literal
+bytes, but the chain and run shapes only cover variable-width runs, so it had
+been running the search DFA. The new `fixed_sequence` kind records the
+element sequence (deduplicating the ASCII set tables) and checks a candidate
+directly: the first element drives the scan and the remaining bytes are byte
+table and literal compares. Variable-width runs (`\d+`, `\d{1,3}`), captures,
+non-ASCII sets and all-literal patterns stay on their existing paths.
+
+The date-text case improves 6.4x internally (252,237.7 -> 39,146.7 ns) and is
+3.53x ahead of Rust. The comparison also added an IPv4 case (`\d{1,3}` is
+variable width and stays on the DFA, 1.16x ahead), a 20-word alternation
+(1.49x), and a multiline anchored line scan (1.09x).
