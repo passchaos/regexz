@@ -536,3 +536,11 @@ improves 1.06x (125.1 -> 118.2 us per 191 KiB pass) and the full bench's
 `find Han class scan` 1.02x, with the 66 control cases at a 1.01x median.
 Prepared rune prefixes keep the filter call. See
 [skipping the first filter](benchmarks/han-filter-skip.md).
+
+A two-entry rune cache on the fast branch's non-ASCII prefix check was
+screened and reverted: tokenizer text alternates a line-start letter and a
+punctuation prefix, but the `mem.eql` verification on every miss cost more
+than the table walk it saved (CJK tokenizer 166 -> 217 us). A two-byte
+prefix bitmap was analyzed and not implemented: Han text accepts 14 runes per
+2 rejected punctuation runes, so the extra check would be paid on every
+accepted rune and could not replace any of the automaton's three loads.
