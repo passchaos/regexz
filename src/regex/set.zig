@@ -25,6 +25,10 @@ pub const RegexSet = struct {
     /// Single-pass DFA over the subset of patterns it can model.
     dfa: ?set_dfa.Workspace = null,
     dfa_failed: bool = false,
+    /// Every pattern decides its search with a separator/delimiter scan, so
+    /// the per-pattern workspaces are cheaper than one combined DFA pass and
+    /// no DFA is built.
+    prefer_individual: bool = false,
 
     /// Compile `patterns` into a set. Every pattern shares one arena; the
     /// per-pattern workspaces are allocated from `allocator`.
@@ -51,6 +55,13 @@ pub const RegexSet = struct {
             workspaces[index] = try replace.Workspace.init(allocator, program, limits);
             initialized += 1;
         }
+        var prefer_individual = pattern_list.len != 0;
+        for (workspaces) |*workspace| {
+            if (!workspace.usesSeparatorScan()) {
+                prefer_individual = false;
+                break;
+            }
+        }
         return .{
             .allocator = allocator,
             .arena = arena,
@@ -58,7 +69,8 @@ pub const RegexSet = struct {
             .sources = sources,
             .workspaces = workspaces,
             .limits = limits,
-            .dfa = try set_dfa.Workspace.init(allocator, programs),
+            .prefer_individual = prefer_individual,
+            .dfa = if (prefer_individual) null else try set_dfa.Workspace.init(allocator, programs),
         };
     }
 
@@ -94,7 +106,7 @@ pub const RegexSet = struct {
         if (start > input.len) return;
         const dfa_ptr: ?*set_dfa.Workspace = if (self.dfa) |*value| value else null;
         var use_dfa = false;
-        if (!self.dfa_failed) {
+        if (!self.prefer_individual and !self.dfa_failed) {
             if (dfa_ptr) |dfa| {
                 if (dfa.scanFrom(input, start, matched[0..limit])) |_| {
                     use_dfa = true;

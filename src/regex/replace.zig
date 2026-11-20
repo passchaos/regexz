@@ -365,6 +365,13 @@ pub const Workspace = struct {
         self.* = undefined;
     }
 
+    /// Whether searches are decided by scanning for a separator/delimiter,
+    /// which costs one vector scan per pattern rather than a full-input DFA
+    /// pass. A set made only of these shapes does not need the combined DFA.
+    pub fn usesSeparatorScan(self: *const Workspace) bool {
+        return self.fast_kind == .chain or self.fast_kind == .delimited;
+    }
+
     /// Full match for extended programs, delegated to the backtracking VM.
     pub fn fullMatch(self: *Workspace, input: []const u8) Error!bool {
         if (self.backtrack_workspace == null) {

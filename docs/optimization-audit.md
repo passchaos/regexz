@@ -234,6 +234,12 @@ switch phase once per boundary instead of once per byte. The 216 KiB
 the search controls stay within host noise. See
 [tight streaming chain phase loops](benchmarks/stream-chain-ascii-loops.md).
 
+`RegexSet` now skips the combined DFA when every pattern decides its search
+with a separator/delimiter scan, searching each pattern with its own
+memchr-driven workspace instead. The 9-pattern `[a-z]+<punctuation>` set
+improves 4.48x; sets with other shapes keep the combined DFA. See
+[per-pattern scans for separator sets](benchmarks/set-individual-scans.md).
+
 Further work on these candidates needs fresh measurements before implementation.
 Current warmed throughput does not establish their cold-start cost or the
 benefit of replacing their fallback paths.
