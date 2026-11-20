@@ -94,6 +94,30 @@ fn splitAsciiSet(gpa: std.mem.Allocator, input: []const u8, set: model.Set, limi
     return parts.toOwnedSlice(gpa);
 }
 
+/// Split around occurrences of a pure literal, scanning with the standard
+/// byte/pair search instead of creating a search workspace per part.
+fn splitLiteral(gpa: std.mem.Allocator, input: []const u8, literal: []const u8, limit: usize) Error![][]const u8 {
+    var parts: std.ArrayList([]const u8) = .empty;
+    errdefer parts.deinit(gpa);
+    if (limit == 0) return parts.toOwnedSlice(gpa);
+    try parts.ensureTotalCapacity(gpa, @min(@min(input.len / 8 + 1, 4096), limit));
+    var last: usize = 0;
+    var offset: usize = 0;
+    while (parts.items.len + 1 < limit) {
+        const found = findLiteral(input, offset, literal) orelse break;
+        try parts.append(gpa, input[last..found]);
+        last = found + literal.len;
+        offset = last;
+    }
+    try parts.append(gpa, input[last..]);
+    return parts.toOwnedSlice(gpa);
+}
+
+inline fn findLiteral(input: []const u8, from: usize, literal: []const u8) ?usize {
+    if (literal.len == 1) return std.mem.indexOfScalarPos(u8, input, from, literal[0]);
+    return std.mem.indexOfPos(u8, input, from, literal);
+}
+
 /// Iterator over non-overlapping matches. Returned `Match.slots` points into
 /// the iterator and is valid until the next `next` call.
 pub const Matches = struct {
@@ -361,6 +385,7 @@ pub const Regex = struct {
     /// its elements are slices of `input`.
     pub fn split(self: *const Regex, gpa: std.mem.Allocator, input: []const u8) Error![][]const u8 {
         if (self.splitSetRun()) |set| return splitAsciiSet(gpa, input, set, std.math.maxInt(usize));
+        if (self.splitLiteralRun()) |literal| return splitLiteral(gpa, input, literal, std.math.maxInt(usize));
         var parts: std.ArrayList([]const u8) = .empty;
         errdefer parts.deinit(gpa);
         var iterator = try self.findAll(gpa, input);
@@ -377,6 +402,7 @@ pub const Regex = struct {
     /// the unmatched remainder. `limit == 0` returns no parts.
     pub fn splitn(self: *const Regex, gpa: std.mem.Allocator, input: []const u8, limit: usize) Error![][]const u8 {
         if (self.splitSetRun()) |set| return splitAsciiSet(gpa, input, set, limit);
+        if (self.splitLiteralRun()) |literal| return splitLiteral(gpa, input, literal, limit);
         var parts: std.ArrayList([]const u8) = .empty;
         errdefer parts.deinit(gpa);
         if (limit == 0) return parts.toOwnedSlice(gpa);
@@ -398,6 +424,12 @@ pub const Regex = struct {
         if (self.limits.longest) return null;
         const set = shapes.setRun(self.program) orelse return null;
         return if (set.ascii_only) set else null;
+    }
+    /// A pure literal pattern, whose matches are exactly its occurrences.
+    fn splitLiteralRun(self: *const Regex) ?[]const u8 {
+        if (self.limits.longest) return null;
+        const literal = self.program.literal orelse return null;
+        return if (literal.len == 0) null else literal;
     }
     /// Expand a replacement template for one match without searching again.
     pub fn expandMatch(self: *const Regex, gpa: std.mem.Allocator, input: []const u8, match: Match, substitution: []const u8) Error![]u8 {

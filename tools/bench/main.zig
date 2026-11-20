@@ -295,6 +295,25 @@ pub fn main() !void {
         try report(out, "split whitespace (22 KiB)", iterations, text.items.len, elapsed(io, .{ .nanoseconds = start }));
     }
 
+    var csv_text: std.ArrayList(u8) = .empty;
+    defer csv_text.deinit(gpa);
+    for (0..1000) |_| try csv_text.appendSlice(gpa, "alpha,beta,gamma,delta,epsilon,");
+    {
+        var value = try regexz.Regex.init(gpa, ",", .{});
+        defer value.deinit();
+        const iterations = 200;
+        for (0..20) |_| {
+            const parts = try value.split(gpa, csv_text.items);
+            gpa.free(parts);
+        }
+        const start = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds;
+        for (0..iterations) |_| {
+            const parts = try value.split(gpa, csv_text.items);
+            gpa.free(parts);
+        }
+        try report(out, "split commas (29 KiB)", iterations, csv_text.items.len, elapsed(io, .{ .nanoseconds = start }));
+    }
+
     var kv_text: std.ArrayList(u8) = .empty;
     defer kv_text.deinit(gpa);
     for (0..2000) |_| try kv_text.appendSlice(gpa, "server.port: 8080\nlog.level: debug\n");

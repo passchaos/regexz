@@ -131,6 +131,30 @@ test "split set-run fast path handles edges and limits" {
     try std.testing.expectEqualStrings("", empty[0]);
 }
 
+test "split literal fast path handles multi-byte separators" {
+    var value = try regex.Regex.init(gpa, "::", .{});
+    defer value.deinit();
+
+    const parts = try value.split(gpa, "a::b::::c");
+    defer gpa.free(parts);
+    try std.testing.expectEqual(@as(usize, 4), parts.len);
+    try std.testing.expectEqualStrings("a", parts[0]);
+    try std.testing.expectEqualStrings("b", parts[1]);
+    try std.testing.expectEqualStrings("", parts[2]);
+    try std.testing.expectEqualStrings("c", parts[3]);
+
+    const limited = try value.splitn(gpa, "a::b::c", 2);
+    defer gpa.free(limited);
+    try std.testing.expectEqual(@as(usize, 2), limited.len);
+    try std.testing.expectEqualStrings("a", limited[0]);
+    try std.testing.expectEqualStrings("b::c", limited[1]);
+
+    const empty = try value.split(gpa, "");
+    defer gpa.free(empty);
+    try std.testing.expectEqual(@as(usize, 1), empty.len);
+    try std.testing.expectEqualStrings("", empty[0]);
+}
+
 test "replacement supports dollar syntax and named groups" {
     var numbered = try regex.Regex.init(gpa, "(\\w+)\\s+(\\w+)", .{});
     defer numbered.deinit();

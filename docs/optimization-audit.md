@@ -271,6 +271,12 @@ manual `Workspace.find` loop (64 us) and is 5.36x faster than a fresh
 pays the lazy DFA preparation per call. See
 [reusing a workspace for match iteration](benchmarks/find-all-workspace.md).
 
+`split` and `splitn` now scan pure literal patterns (`,` or a fixed
+delimiter) with memchr/memmem and append the gaps, instead of creating a
+workspace and searching per part. The 29 KiB comma split improves 2.66x;
+whitespace and other shapes keep their existing fast paths. See
+[split over a literal separator](benchmarks/split-literal.md).
+
 Further work on these candidates needs fresh measurements before implementation.
 Current warmed throughput does not establish their cold-start cost or the
 benefit of replacing their fallback paths.
