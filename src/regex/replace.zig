@@ -107,6 +107,41 @@ inline fn indexOfDelimiter(input: []const u8, start: usize, byte: u8) ?usize {
     return std.mem.indexOfScalarPos(u8, input, limit, byte);
 }
 
+/// Occurrences of `byte` in `input`, counted 16 bytes at a time.
+fn countByte(input: []const u8, byte: u8) usize {
+    const needle: @Vector(16, u8) = @splat(byte);
+    var count: usize = 0;
+    var offset: usize = 0;
+    while (offset + 16 <= input.len) : (offset += 16) {
+        const raw: [16]u8 = input[offset..][0..16].*;
+        const chunk: @Vector(16, u8) = @bitCast(raw);
+        count += @popCount(@as(u16, @bitCast(chunk == needle)));
+    }
+    while (offset < input.len) : (offset += 1) {
+        if (input[offset] == byte) count += 1;
+    }
+    return count;
+}
+
+/// Copy `input` to `output`, replacing every occurrence of `byte`. The
+/// output has the same length as the input, so the caller must provide at
+/// least `input.len` bytes.
+fn replaceByteInto(input: []const u8, byte: u8, replacement: u8, output: []u8) Error![]u8 {
+    if (output.len < input.len) return error.RegexLimitExceeded;
+    const needle: @Vector(16, u8) = @splat(byte);
+    const repl: @Vector(16, u8) = @splat(replacement);
+    var offset: usize = 0;
+    while (offset + 16 <= input.len) : (offset += 16) {
+        const raw: [16]u8 = input[offset..][0..16].*;
+        const chunk: @Vector(16, u8) = @bitCast(raw);
+        output[offset..][0..16].* = @bitCast(@select(u8, chunk == needle, repl, chunk));
+    }
+    while (offset < input.len) : (offset += 1) {
+        output[offset] = if (input[offset] == byte) replacement else input[offset];
+    }
+    return output[0..input.len];
+}
+
 pub const Workspace = struct {
     allocator: std.mem.Allocator,
     program: Program,
@@ -515,6 +550,9 @@ pub const Workspace = struct {
         // with the literal search and append the gaps directly.
         if (self.program.literal) |literal| {
             if (literal.len != 0 and std.mem.indexOfAny(u8, substitution, "\\$") == null) {
+                if (literal.len == 1 and substitution.len == 1) {
+                    return self.replaceByteAlloc(input, literal[0], substitution[0]);
+                }
                 return self.replaceAllLiteral(input, literal, substitution);
             }
         }
@@ -523,6 +561,16 @@ pub const Workspace = struct {
         var writer = subst.ListWriter{ .list = &out, .allocator = self.allocator };
         try self.replaceAllWith(&writer, input, substitution, std.math.maxInt(usize));
         return out.toOwnedSlice(self.allocator);
+    }
+
+    /// A one-byte literal and a one-byte substitution keep the output the
+    /// same size as the input, so the whole pass is a vector translate
+    /// instead of one gap copy plus one substitution copy per occurrence.
+    fn replaceByteAlloc(self: *Workspace, input: []const u8, byte: u8, replacement: u8) Error![]u8 {
+        const out = try self.allocator.alloc(u8, input.len);
+        errdefer self.allocator.free(out);
+        _ = try replaceByteInto(input, byte, replacement, out);
+        return out;
     }
 
     fn replaceAllLiteral(self: *Workspace, input: []const u8, literal: []const u8, substitution: []const u8) Error![]u8 {
@@ -629,6 +677,9 @@ pub const Workspace = struct {
         }
         if (self.program.literal) |literal| {
             if (literal.len != 0 and std.mem.indexOfAny(u8, substitution, "\\$") == null) {
+                if (literal.len == 1 and substitution.len == 1 and countByte(input, literal[0]) <= limit) {
+                    return self.replaceByteAlloc(input, literal[0], substitution[0]);
+                }
                 return self.replaceLiteral(input, literal, substitution, limit);
             }
         }
@@ -662,10 +713,14 @@ pub const Workspace = struct {
     fn replaceLiteralLen(self: *Workspace, input: []const u8, literal: []const u8, substitution: []const u8) Error!usize {
         _ = self;
         var count: usize = 0;
-        var offset: usize = 0;
-        while (indexOfLiteral(input, offset, literal)) |found| {
-            count += 1;
-            offset = found + literal.len;
+        if (literal.len == 1) {
+            count = countByte(input, literal[0]);
+        } else {
+            var offset: usize = 0;
+            while (indexOfLiteral(input, offset, literal)) |found| {
+                count += 1;
+                offset = found + literal.len;
+            }
         }
         const removed = std.math.mul(usize, count, literal.len) catch return error.RegexLimitExceeded;
         const added = std.math.mul(usize, count, substitution.len) catch return error.RegexLimitExceeded;
@@ -685,6 +740,9 @@ pub const Workspace = struct {
         }
         if (self.program.literal) |literal| {
             if (literal.len != 0 and std.mem.indexOfAny(u8, substitution, "\\$") == null) {
+                if (literal.len == 1 and substitution.len == 1) {
+                    return replaceByteInto(input, literal[0], substitution[0], output);
+                }
                 return self.replaceLiteralInto(input, literal, substitution, output);
             }
         }

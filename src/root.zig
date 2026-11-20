@@ -104,7 +104,23 @@ fn splitLiteral(gpa: std.mem.Allocator, input: []const u8, literal: []const u8, 
     var last: usize = 0;
     var offset: usize = 0;
     while (parts.items.len + 1 < limit) {
-        const found = findLiteral(input, offset, literal) orelse break;
+        var found: usize = undefined;
+        if (literal.len == 1) {
+            // Delimiters in CSV-like text are close together; a short scalar
+            // probe avoids the per-call vector setup of the generic search.
+            const byte = literal[0];
+            const near = @min(input.len, offset + 16);
+            while (offset < near and input[offset] != byte) offset += 1;
+            if (offset < near) {
+                found = offset;
+            } else if (near >= input.len) {
+                break;
+            } else {
+                found = std.mem.indexOfScalarPos(u8, input, offset, byte) orelse break;
+            }
+        } else {
+            found = findLiteral(input, offset, literal) orelse break;
+        }
         try parts.append(gpa, input[last..found]);
         last = found + literal.len;
         offset = last;

@@ -399,3 +399,17 @@ Prefiltering each separator candidate by a vectorized "predecessor in
 `set_a`" test was screened and reverted: the extra lookups per chunk cost
 more than the rejected scalar candidates saved (2.57 us versus 1.99 us on
 the nine-pattern set).
+
+Single-byte literal replacement now translates in 16-byte vectors when the
+substitution is also one byte, so the output length is unchanged and the pass
+avoids one search plus two small copies per occurrence. `replaceAllLen` counts
+with a vector popcount, and `replacen` uses the translate path when its limit
+covers every occurrence. The 29 KiB comma replacement improves 9.80–64.96x
+across the four replacement entry points. Single-byte splits probe 16 bytes
+scalar before the generic search, improving the comma split 1.72x. See
+[literal byte paths](benchmarks/literal-byte-paths.md).
+
+Scanning delimiters with a 16-byte vector compare instead of the existing
+scalar-then-vector probe was screened and reverted: tags and quoted strings
+start within one or two bytes of the previous match, so the vector setup made
+`find HTML tag` 2.3x slower and the JSON string scan 2.2x slower.
