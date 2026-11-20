@@ -737,3 +737,20 @@ covers 35 cases (Unicode caseless literal, shared-prefix and one-char
 alternations, hex color, version were added); all 35 are faster, with the
 five-word and shared-prefix alternations the thinnest at 1.13-1.14x. See
 [literal fast paths](benchmarks/literal-fast-paths.md).
+
+Four run-anchored shapes that had been on the search DFA now have direct
+scans. `set* literal` (`.*test`) was the worst case: a nullable first set
+made the DFA restart at every position, costing 1.98 ms on 22 KiB. The star
+now consumes the maximal member run with the UTF-8 run scan (invalid bytes
+stop it exactly as the engine does) and backtracks to the last literal
+occurrence inside the run; a first-byte scalar scan beats a reverse memmem
+for the occurrence search. It falls to about 30 us (65x) and is 1.25x ahead
+of Rust. A single set byte then a greedy run (`[A-Za-z_]\w*`) improves 4.2x
+(2.01x ahead), a run then a greedy `separator run` repetition
+(`[a-z0-9-]+(?:\.[a-z0-9-]+)+`) improves 5.1x (3.51x ahead), and a run with
+an optional `separator run` group before a literal (`\d+(?:\.\d+)?%`)
+improves 4.9x (3.77x ahead). All are gated on ASCII-only sets and
+separator/run disjointness so the flat walks need no backtracking. The
+comparison now covers 41 cases and all are faster, with the five-word
+alternation the thinnest at 1.19x. See
+[literal fast paths](benchmarks/literal-fast-paths.md).

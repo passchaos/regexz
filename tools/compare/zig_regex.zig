@@ -302,6 +302,26 @@ pub fn main() !void {
     defer version_text.deinit(gpa);
     for (0..2000) |_| try version_text.appendSlice(gpa, "v1.2.3 10.0.0 v2.11.5 ");
 
+    var code_text: std.ArrayList(u8) = .empty;
+    defer code_text.deinit(gpa);
+    for (0..2000) |_| try code_text.appendSlice(gpa, "int foo_1 = bar2; x = y_3; ");
+
+    var thousands_text: std.ArrayList(u8) = .empty;
+    defer thousands_text.deinit(gpa);
+    for (0..2000) |_| try thousands_text.appendSlice(gpa, "1,234 12,345,678 999,000 ");
+
+    var domain_text: std.ArrayList(u8) = .empty;
+    defer domain_text.deinit(gpa);
+    for (0..1500) |_| try domain_text.appendSlice(gpa, "www.example.com api.test.org sub.domain.net ");
+
+    var percent_text: std.ArrayList(u8) = .empty;
+    defer percent_text.deinit(gpa);
+    for (0..2000) |_| try percent_text.appendSlice(gpa, "12.5% 100% 0.25% ");
+
+    var time_text: std.ArrayList(u8) = .empty;
+    defer time_text.deinit(gpa);
+    for (0..2000) |_| try time_text.appendSlice(gpa, "12:34 23:59:59 07:08 ");
+
     const qwen = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+";
     const ucp = regexz.Limits{ .unicode_perl_space = true, .max_execution_steps = 16_000_000 };
 
@@ -332,6 +352,12 @@ pub fn main() !void {
     try benchFind(io, out, "find one-char alternation", "a|b|c", ascii_text.items, 200, .{});
     try benchFind(io, out, "find hex color", "#[0-9a-fA-F]{6}", color_text.items, 200, .{});
     try benchFind(io, out, "find version", "v?\\d+\\.\\d+\\.\\d+", version_text.items, 200, .{});
+    try benchFind(io, out, "find nullable prefix", ".*test", ascii_text.items, 200, .{});
+    try benchFind(io, out, "find identifier", "[A-Za-z_]\\w*", code_text.items, 200, .{});
+    try benchFind(io, out, "find thousands", "\\d{1,3}(?:,\\d{3})+", thousands_text.items, 200, .{});
+    try benchFind(io, out, "find domain", "[a-z0-9-]+(?:\\.[a-z0-9-]+)+", domain_text.items, 200, .{});
+    try benchFind(io, out, "find percent", "\\d+(?:\\.\\d+)?%", percent_text.items, 200, .{});
+    try benchFind(io, out, "find time", "\\d{1,2}:\\d{2}(?::\\d{2})?", time_text.items, 200, .{});
     try benchSplit(io, out, "split whitespace (22 KiB)", "\\s+", ascii_text.items, 200);
     try benchSplit(io, out, "split commas (29 KiB)", ",", csv_text.items, 200);
     try benchMatches(io, out, "fullmatch literal", "hello, world!", "hello, world!", 200000, .{});

@@ -19,6 +19,23 @@ pub const UnboundedElement = union(enum) {
     optional: u8,
 };
 
+pub const PrefixRunShape = struct { set_a: model.Set, set_b: model.Set, min_b: u8 };
+
+pub const OptionalTailShape = struct {
+    set_a: model.Set,
+    set_b: model.Set,
+    separator: u8,
+    literal: u8,
+};
+
+pub const ChainLoopShape = struct {
+    set_a: model.Set,
+    set_b: model.Set,
+    separator: [8]u8 = undefined,
+    separator_len: u8 = 0,
+    min_groups: u8 = 0,
+};
+
 pub const Program = struct {
     instructions: []const model.Instruction,
     start: usize,
@@ -51,6 +68,15 @@ pub const Program = struct {
     /// Whole-pattern alternation of unbounded ASCII runs and literal
     /// separators (`v?\d+\.\d+\.\d+`). Not serialized.
     unbounded_sequence: ?[]const UnboundedElement = null,
+    /// One ASCII set byte followed by a greedy unbounded run
+    /// (`[A-Za-z_]\w*`). Not serialized.
+    prefix_run: ?PrefixRunShape = null,
+    /// A run followed by a greedy repetition of `separator run`
+    /// (`[a-z0-9-]+(?:\.[a-z0-9-]+)+`). Not serialized.
+    chain_loop: ?ChainLoopShape = null,
+    /// A run followed by an optional `separator run` group and a literal
+    /// (`\d+(?:\.\d+)?%`). Not serialized.
+    optional_tail: ?OptionalTailShape = null,
     /// A dominant alternation branch (`set? setB+`) that decides the match
     /// when no earlier branch can start at the current byte. Not serialized.
     fast_branch: ?fast_branch_mod.Plan = null,
@@ -657,6 +683,150 @@ const BoundedSequenceBuilder = struct {
     }
 };
 
+/// A run, an optional `separator run` group, then a literal byte, for
+/// example `\d+(?:\.\d+)?%`.
+fn detectOptionalTail(root: *const model.Node) ?OptionalTailShape {
+    var flat: [3]*const model.Node = undefined;
+    var count: usize = 0;
+    if (!flattenSequence(root, &flat, &count) or count != 3) return null;
+    const run_a = repeatSet(flat[0], 1) orelse return null;
+    var group = flat[1];
+    while (group.* == .group) group = group.group;
+    if (group.* != .repeat) return null;
+    const optional = group.repeat;
+    if (optional.lazy or optional.possessive or optional.minimum != 0 or optional.maximum == null or optional.maximum.? != 1) return null;
+    var child = optional.child;
+    while (child.* == .group) child = child.group;
+    if (child.* != .pair) return null;
+    var separator_node = child.pair.left;
+    while (separator_node.* == .group) separator_node = separator_node.group;
+    if (separator_node.* != .set or separator_node.set.ranges.len != 1 or
+        separator_node.set.ranges[0].first != separator_node.set.ranges[0].last or separator_node.set.ranges[0].first >= 0x80)
+    {
+        return null;
+    }
+    const run_b = repeatSet(child.pair.right, 1) orelse return null;
+    var literal_node = flat[2];
+    while (literal_node.* == .group) literal_node = literal_node.group;
+    if (literal_node.* != .set or literal_node.set.ranges.len != 1 or
+        literal_node.set.ranges[0].first != literal_node.set.ranges[0].last or literal_node.set.ranges[0].first >= 0x80)
+    {
+        return null;
+    }
+    const set_a = run_a;
+    const set_b = run_b;
+    const separator: u8 = @intCast(separator_node.set.ranges[0].first);
+    if (!set_a.ascii_only or set_a.ranges.len == 0 or !set_b.ascii_only or set_b.ranges.len == 0) return null;
+    if (set_a.matches(separator) or set_b.matches(separator)) return null;
+    return .{
+        .set_a = set_a,
+        .set_b = set_b,
+        .separator = separator,
+        .literal = @intCast(literal_node.set.ranges[0].first),
+    };
+}
+
+/// Flattens a right- or left-nested pair chain into its leaves.
+fn flattenSequence(node: *const model.Node, out: *[3]*const model.Node, count: *usize) bool {
+    var current = node;
+    while (current.* == .group) current = current.group;
+    if (current.* == .pair) {
+        return flattenSequence(current.pair.left, out, count) and
+            flattenSequence(current.pair.right, out, count);
+    }
+    if (count.* == out.len) return false;
+    out[count.*] = current;
+    count.* += 1;
+    return true;
+}
+
+/// The set of a greedy `set{minimum,}` repeat, with groups stripped.
+fn repeatSet(node: *const model.Node, minimum: usize) ?model.Set {
+    var current = node;
+    while (current.* == .group) current = current.group;
+    if (current.* != .repeat) return null;
+    const repeat = current.repeat;
+    if (repeat.lazy or repeat.possessive or repeat.maximum != null or repeat.minimum < minimum) return null;
+    var child = repeat.child;
+    while (child.* == .group) child = child.group;
+    if (child.* != .set) return null;
+    return child.set;
+}
+
+/// A run followed by a greedy repetition of `separator run`, for example
+/// `[a-z0-9-]+(?:\.[a-z0-9-]+)+`. The separator must be disjoint from both
+/// run sets so the flat walk needs no backtracking.
+fn detectChainLoop(root: *const model.Node) ?ChainLoopShape {
+    var node = root;
+    while (node.* == .group) node = node.group;
+    if (node.* != .pair) return null;
+    var left = node.pair.left;
+    while (left.* == .group) left = left.group;
+    if (left.* != .repeat) return null;
+    const run_a = left.repeat;
+    if (run_a.lazy or run_a.possessive or run_a.maximum != null or run_a.minimum < 1) return null;
+    var run_a_node = run_a.child;
+    while (run_a_node.* == .group) run_a_node = run_a_node.group;
+    if (run_a_node.* != .set) return null;
+    const set_a = run_a_node.set;
+    var right = node.pair.right;
+    while (right.* == .group) right = right.group;
+    if (right.* != .repeat) return null;
+    const group_repeat = right.repeat;
+    if (group_repeat.lazy or group_repeat.possessive or group_repeat.maximum != null) return null;
+    var child = group_repeat.child;
+    while (child.* == .group) child = child.group;
+    if (child.* != .pair) return null;
+    var separator_node = child.pair.left;
+    while (separator_node.* == .group) separator_node = separator_node.group;
+    var shape = ChainLoopShape{ .set_a = set_a, .set_b = undefined, .min_groups = @intCast(group_repeat.minimum) };
+    if (separator_node.* != .set or separator_node.set.ranges.len != 1 or
+        separator_node.set.ranges[0].first != separator_node.set.ranges[0].last or separator_node.set.ranges[0].first >= 0x80)
+    {
+        return null;
+    }
+    shape.separator[0] = @intCast(separator_node.set.ranges[0].first);
+    shape.separator_len = 1;
+    var run_b_node = child.pair.right;
+    while (run_b_node.* == .group) run_b_node = run_b_node.group;
+    if (run_b_node.* != .repeat) return null;
+    const run_b = run_b_node.repeat;
+    if (run_b.lazy or run_b.possessive or run_b.maximum != null or run_b.minimum < 1) return null;
+    var run_b_set_node = run_b.child;
+    while (run_b_set_node.* == .group) run_b_set_node = run_b_set_node.group;
+    if (run_b_set_node.* != .set) return null;
+    const set_b = run_b_set_node.set;
+    if (!set_a.ascii_only or set_a.ranges.len == 0) return null;
+    if (!set_b.ascii_only or set_b.ranges.len == 0) return null;
+    if (set_a.matches(shape.separator[0]) or set_b.matches(shape.separator[0])) return null;
+    shape.set_b = set_b;
+    return shape;
+}
+
+/// One ASCII set byte followed by a greedy unbounded ASCII run.
+fn detectPrefixRun(root: *const model.Node) ?PrefixRunShape {
+    var node = root;
+    while (node.* == .group) node = node.group;
+    if (node.* != .pair) return null;
+    var left = node.pair.left;
+    while (left.* == .group) left = left.group;
+    if (left.* != .set) return null;
+    const set_a = left.set;
+    var right = node.pair.right;
+    while (right.* == .group) right = right.group;
+    if (right.* != .repeat) return null;
+    const repeat = right.repeat;
+    if (repeat.lazy or repeat.possessive or repeat.maximum != null or repeat.minimum > 1) return null;
+    const child = repeat.child;
+    var run_node = child;
+    while (run_node.* == .group) run_node = run_node.group;
+    if (run_node.* != .set) return null;
+    const set_b = run_node.set;
+    if (!set_a.ascii_only or set_a.ranges.len == 0) return null;
+    if (!set_b.ascii_only or set_b.ranges.len == 0) return null;
+    return .{ .set_a = set_a, .set_b = set_b, .min_b = @intCast(repeat.minimum) };
+}
+
 /// Whole-pattern sequence of unbounded ASCII set runs separated by literal
 /// bytes, with an optional leading literal. Adjacent runs and literal bytes
 /// inside a following run set would need backtracking, so they reject the
@@ -1073,6 +1243,12 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
     else
         null;
     const unbounded_storage = try allocator.alloc(u8, UnboundedSequenceBuilder.max_literal_bytes);
+    const prefix_run: ?PrefixRunShape = if (literal == null and caseless_literal == null and
+        literal_set == null and !limits.auto_callout) detectPrefixRun(parsed.root) else null;
+    const chain_loop: ?ChainLoopShape = if (literal == null and caseless_literal == null and
+        literal_set == null and !limits.auto_callout) detectChainLoop(parsed.root) else null;
+    const optional_tail: ?OptionalTailShape = if (literal == null and caseless_literal == null and
+        literal_set == null and !limits.auto_callout) detectOptionalTail(parsed.root) else null;
     var unbounded_builder = UnboundedSequenceBuilder{ .allocator = allocator, .literal_bytes = unbounded_storage };
     defer unbounded_builder.elements.deinit(allocator);
     const unbounded_sequence: ?[]const UnboundedElement = if (literal == null and caseless_literal == null and
@@ -1126,6 +1302,9 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         .literal_set = literal_set,
         .bounded_sequence = bounded_sequence,
         .unbounded_sequence = unbounded_sequence,
+        .prefix_run = prefix_run,
+        .chain_loop = chain_loop,
+        .optional_tail = optional_tail,
         .dfa_eligible = dfa_eligible,
         .extended = extended,
         .newline = parsed.newline,

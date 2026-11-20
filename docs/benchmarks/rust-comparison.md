@@ -14,49 +14,54 @@ text and small full-match subjects.
 
 | Case | regexz, ns/iter | Rust, ns/iter | Rust / regexz |
 | --- | ---: | ---: | ---: |
-| compile Qwen tokenizer | 32,370.5 | 462,727.2 | 14.29x |
-| compile xDS-like | 2,626.1 | 21,859.3 | 8.32x |
-| find Qwen tokenizer | 41,491.7 | 68,459.2 | 1.65x |
-| findAll Qwen (borrowed) | 41,517.5 | 64,932.5 | 1.56x |
-| findAll Qwen (owning) | 41,061.7 | 64,931.7 | 1.58x |
-| find CJK tokenizer | 171,280.0 | 233,771.7 | 1.36x |
-| find HTML tag | 49,582.3 | 122,412.7 | 2.47x |
-| find URL | 35,436.9 | 90,997.7 | 2.57x |
-| find JSON string literal | 7,441.0 | 17,707.9 | 2.38x |
-| find JSON number | 28,997.5 | 63,546.9 | 2.19x |
-| find word boundary | 86,475.0 | 138,838.8 | 1.61x |
-| find (?i) literal | 44,385.6 | 85,918.1 | 1.94x |
-| find alternation (5 words) | 148,635.6 | 168,587.9 | 1.13x |
-| find (?i) alternation | 132,257.7 | 188,219.4 | 1.42x |
-| find 10-word alternation | 256,611.5 | 308,439.8 | 1.20x |
-| find Greek class | 50,291.9 | 101,876.5 | 2.03x |
-| find prefix+suffix | 9,156.5 | 32,341.2 | 3.53x |
-| replaceAll email captures | 27,262.3 | 91,578.8 | 3.36x |
-| find IPv4 | 68,301.9 | 134,120.0 | 1.96x |
-| find date | 39,546.0 | 133,737.1 | 3.38x |
-| find 20-word alternation | 229,218.8 | 326,871.7 | 1.43x |
-| find anchored line | 2,270.8 | 8,907.9 | 3.92x |
-| find (?i) Unicode literal | 76,637.3 | 131,773.8 | 1.72x |
-| find shared-prefix alternation | 27,527.9 | 31,310.4 | 1.14x |
-| find one-char alternation | 15,988.5 | 19,085.6 | 1.19x |
-| find hex color | 31,874.0 | 87,314.4 | 2.74x |
-| find version | 55,470.0 | 110,800.2 | 2.00x |
-| split whitespace (22 KiB) | 17,651.3 | 76,043.8 | 4.31x |
-| split commas (29 KiB) | 16,434.2 | 55,972.5 | 3.41x |
-| fullmatch literal | 1.8 | 9.4 | 5.22x |
-| fullmatch class | 5.2 | 33.2 | 6.38x |
-| fullmatch xDS-like | 10.0 | 32.8 | 3.28x |
-| replaceAll a+ -> x | 21,668.5 | 104,633.8 | 4.83x |
-| replaceAll \A|\z -> X | 2,792.3 | 8,014.0 | 2.87x |
-| RegexSet 9 no-match patterns | 1,965.0 | 38,819.8 | 19.76x |
+| compile Qwen tokenizer | 30,978.4 | 420,356.2 | 13.57x |
+| compile xDS-like | 2,602.2 | 20,839.4 | 8.01x |
+| find Qwen tokenizer | 39,633.3 | 63,168.3 | 1.59x |
+| findAll Qwen (borrowed) | 37,664.2 | 63,444.2 | 1.68x |
+| findAll Qwen (owning) | 38,665.0 | 66,610.0 | 1.72x |
+| find CJK tokenizer | 162,240.0 | 218,525.0 | 1.35x |
+| find HTML tag | 47,290.8 | 120,055.0 | 2.54x |
+| find URL | 34,081.5 | 83,895.6 | 2.46x |
+| find JSON string literal | 7,260.0 | 16,689.8 | 2.30x |
+| find JSON number | 31,742.9 | 61,081.2 | 1.92x |
+| find word boundary | 75,855.4 | 133,482.7 | 1.76x |
+| find (?i) literal | 43,068.8 | 78,715.8 | 1.83x |
+| find alternation (5 words) | 144,645.4 | 172,026.7 | 1.19x |
+| find (?i) alternation | 129,894.0 | 172,923.5 | 1.33x |
+| find 10-word alternation | 237,141.7 | 315,137.7 | 1.33x |
+| find Greek class | 49,074.4 | 89,191.0 | 1.82x |
+| find prefix+suffix | 8,625.4 | 28,911.0 | 3.35x |
+| replaceAll email captures | 24,317.3 | 87,704.4 | 3.61x |
+| find IPv4 | 63,675.2 | 123,124.0 | 1.93x |
+| find date | 36,293.5 | 123,170.0 | 3.39x |
+| find 20-word alternation | 221,206.3 | 324,892.5 | 1.47x |
+| find anchored line | 2,302.5 | 8,388.3 | 3.64x |
+| find (?i) Unicode literal | 72,426.3 | 123,847.9 | 1.71x |
+| find shared-prefix alternation | 24,783.8 | 30,410.8 | 1.23x |
+| find one-char alternation | 15,274.6 | 18,593.8 | 1.22x |
+| find hex color | 30,019.4 | 81,261.0 | 2.71x |
+| find version | 53,709.4 | 104,500.0 | 1.95x |
+| find nullable prefix | 30,299.0 | 37,960.0 | 1.25x |
+| find identifier | 50,017.1 | 100,457.1 | 2.01x |
+| find thousands | 97,482.1 | 115,856.7 | 1.19x |
+| find domain | 33,454.8 | 117,343.5 | 3.51x |
+| find percent | 31,734.8 | 119,750.4 | 3.77x |
+| find time | 86,317.1 | 106,360.0 | 1.23x |
+| split whitespace (22 KiB) | 16,876.7 | 75,809.8 | 4.49x |
+| split commas (29 KiB) | 16,055.8 | 54,656.2 | 3.40x |
+| fullmatch literal | 1.7 | 9.4 | 5.53x |
+| fullmatch class | 5.2 | 31.4 | 6.04x |
+| fullmatch xDS-like | 9.4 | 29.6 | 3.15x |
+| replaceAll a+ -> x | 21,465.2 | 100,776.9 | 4.69x |
+| replaceAll \A|\z -> X | 2,820.8 | 7,667.9 | 2.72x |
+| RegexSet 9 no-match patterns | 1,952.5 | 38,130.4 | 19.53x |
 
-regexz is faster on all 35 measured cases: 14.29x on tokenizer compilation,
-8.32x on a small-pattern compile, 1.36–1.65x on tokenizer scans and match
-iteration, 1.13–3.92x on search scans, 3.41–4.31x on splits, 3.28–6.38x on
-full-match calls, 4.83x on a set-run replacement, 3.36x on a capture
-replacement, 2.87x on a zero-width replacement and 19.76x on the nine-pattern
-set. The thinnest margins are the five-word alternation at 1.13x and the
-shared-prefix alternation at 1.14x.
+regexz is faster on all 41 measured cases: 13.57x on tokenizer compilation,
+8.01x on a small-pattern compile, 1.35–1.72x on tokenizer scans and match
+iteration, 1.19–3.77x on search scans, 3.40–4.49x on splits, 3.15–6.04x on
+full-match calls, 4.69x on a set-run replacement, 3.61x on a capture
+replacement, 2.72x on a zero-width replacement and 19.53x on the nine-pattern
+set. The thinnest margin is the five-word alternation at 1.19x.
 
 Compilation now selects a 16 KiB, 64 KiB or 256 KiB block by pattern shape,
 reuses page-allocator blocks from a process pool, and falls back to the arena
@@ -101,9 +106,10 @@ nibble-table candidate filter. Fixed-width sequences such as
 the date case from 1.9x behind to 3.66x ahead, `(?m)^\w+` scans line starts
 directly, moving from 1.09x to 3.69x ahead, and bounded set runs such as
 IPv4 address shapes are walked greedily with a backtracking fallback, taking
-IPv4 from 1.16x to 1.96x ahead, and unbounded run chains such as
-`v?\d+\.\d+\.\d+` are walked directly, taking the version case from
-1.17x to 2.00x ahead.
+IPv4 from 1.16x to 1.93x ahead, unbounded run chains such as
+`v?\d+\.\d+\.\d+` are walked directly (1.95x ahead), and four
+run-anchored shapes were added: `.*test` (1.25x), identifiers (2.01x),
+repeated-separator domains (3.51x) and optional-group percentages (3.77x).
 
 Caveats: the iteration APIs are the natural ones for each library
 (`Workspace.find` in a loop versus `Regex::find_iter`), full match is

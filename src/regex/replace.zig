@@ -12,6 +12,9 @@ const model = @import("model.zig");
 const Program = @import("compile.zig").Program;
 const BoundedElement = @import("compile.zig").BoundedElement;
 const UnboundedElement = @import("compile.zig").UnboundedElement;
+const PrefixRunShape = @import("compile.zig").PrefixRunShape;
+const ChainLoopShape = @import("compile.zig").ChainLoopShape;
+const OptionalTailShape = @import("compile.zig").OptionalTailShape;
 const pike = @import("pike.zig");
 const backtrack = @import("backtrack.zig");
 const search_dfa = @import("search_dfa.zig");
@@ -57,6 +60,10 @@ pub const FastKind = enum {
     line_start_run,
     bounded_sequence,
     unbounded_sequence,
+    star_literal,
+    prefix_run,
+    chain_loop,
+    optional_tail,
 };
 pub const Error = model.Error;
 
@@ -205,6 +212,14 @@ pub const Workspace = struct {
     bounded_sequence: ?*BoundedSequenceState = null,
     /// Unbounded run chain separated by literal bytes.
     unbounded_sequence: ?*UnboundedSequenceState = null,
+    /// `set* literal` with a greedy nullable star.
+    star_literal: ?*StarLiteralState = null,
+    /// One set byte followed by a greedy unbounded run.
+    prefix_run: ?PrefixRunState = null,
+    /// A run followed by a greedy repetition of `separator run`.
+    chain_loop: ?ChainLoopState = null,
+    /// A run, an optional `separator run` group, then a literal byte.
+    optional_tail: ?OptionalTailState = null,
     /// Byte membership tables for the chain fast path. `Set.matches` is a
     /// binary search over rune ranges; the per-byte chain scans run several
     /// lookups per input byte, so cache the answers once per workspace.
@@ -366,6 +381,46 @@ pub const Workspace = struct {
             break :blk state;
         };
         errdefer if (unbounded_sequence) |state| allocator.destroy(state);
+        const optional_tail: ?OptionalTailState = if (limits.longest) null else blk: {
+            const shape = program.optional_tail orelse break :blk null;
+            break :blk .{
+                .table_a = byte_table.init(256, shape.set_a),
+                .table_b = byte_table.init(256, shape.set_b),
+                .separator = shape.separator,
+                .literal = shape.literal,
+            };
+        };
+        const chain_loop: ?ChainLoopState = if (limits.longest) null else blk: {
+            const shape = program.chain_loop orelse break :blk null;
+            break :blk .{
+                .table_a = byte_table.init(256, shape.set_a),
+                .table_b = byte_table.init(256, shape.set_b),
+                .separator = shape.separator[0],
+                .min_groups = shape.min_groups,
+            };
+        };
+        const prefix_run: ?PrefixRunState = if (limits.longest) null else blk: {
+            const shape = program.prefix_run orelse break :blk null;
+            break :blk .{
+                .table_a = byte_table.init(256, shape.set_a),
+                .table_b = byte_table.init(256, shape.set_b),
+                .min_b = shape.min_b,
+            };
+        };
+        const star_literal: ?*StarLiteralState = if (limits.longest) null else blk: {
+            const shape = detectStarLiteral(program) orelse break :blk null;
+            const state = try allocator.create(StarLiteralState);
+            errdefer allocator.destroy(state);
+            state.* = .{ .run = deferred_utf8.Run.init(shape.set) };
+            state.run.prepare_after = std.math.maxInt(u16);
+            state.literal = shape.literal;
+            state.literal_len = shape.literal_len;
+            break :blk state;
+        };
+        errdefer if (star_literal) |state| {
+            state.run.deinit(allocator);
+            allocator.destroy(state);
+        };
         const fixed_sequence: ?*FixedSequence = if (limits.longest) null else blk: {
             const shape = detectFixedSequence(program) orelse break :blk null;
             const state = try allocator.create(FixedSequence);
@@ -400,6 +455,14 @@ pub const Workspace = struct {
             .bounded_sequence
         else if (unbounded_sequence != null)
             .unbounded_sequence
+        else if (star_literal != null)
+            .star_literal
+        else if (prefix_run != null)
+            .prefix_run
+        else if (chain_loop != null)
+            .chain_loop
+        else if (optional_tail != null)
+            .optional_tail
         else if (literal_run != null)
             .literal_run
         else if (simple_anchored != null)
@@ -511,6 +574,10 @@ pub const Workspace = struct {
             .line_start_run = line_start_run,
             .bounded_sequence = bounded_sequence,
             .unbounded_sequence = unbounded_sequence,
+            .star_literal = star_literal,
+            .prefix_run = prefix_run,
+            .chain_loop = chain_loop,
+            .optional_tail = optional_tail,
         };
     }
 
@@ -521,6 +588,10 @@ pub const Workspace = struct {
         if (self.fixed_sequence) |state| self.allocator.destroy(state);
         if (self.bounded_sequence) |state| self.allocator.destroy(state);
         if (self.unbounded_sequence) |state| self.allocator.destroy(state);
+        if (self.star_literal) |state| {
+            state.run.deinit(self.allocator);
+            self.allocator.destroy(state);
+        }
         if (self.utf8_run) |*value| value.deinit(self.allocator);
         if (self.fast_branch) |*value| value.deinit(self.allocator);
         if (self.pike_workspace) |*workspace| workspace.deinit();
@@ -600,6 +671,10 @@ pub const Workspace = struct {
             .line_start_run => return self.findLineStartRun(&self.line_start_run.?, input, search_start),
             .bounded_sequence => return self.findBoundedSequence(self.bounded_sequence.?, input, search_start),
             .unbounded_sequence => return self.findUnboundedSequence(self.unbounded_sequence.?, input, search_start),
+            .star_literal => return self.findStarLiteral(self.star_literal.?, input, search_start),
+            .prefix_run => return self.findPrefixRun(&self.prefix_run.?, input, search_start),
+            .chain_loop => return self.findChainLoop(&self.chain_loop.?, input, search_start),
+            .optional_tail => return self.findOptionalTail(&self.optional_tail.?, input, search_start),
         }
         // Every match must start at a start-literal occurrence, so the first
         // occurrence bounds the leftmost match start and the DFA can skip
@@ -1183,6 +1258,10 @@ pub const Workspace = struct {
             .line_start_run => return self.findLineStartRun(&self.line_start_run.?, input, search_start),
             .bounded_sequence => return self.findBoundedSequence(self.bounded_sequence.?, input, search_start),
             .unbounded_sequence => return self.findUnboundedSequence(self.unbounded_sequence.?, input, search_start),
+            .star_literal => return self.findStarLiteral(self.star_literal.?, input, search_start),
+            .prefix_run => return self.findPrefixRun(&self.prefix_run.?, input, search_start),
+            .chain_loop => return self.findChainLoop(&self.chain_loop.?, input, search_start),
+            .optional_tail => return self.findOptionalTail(&self.optional_tail.?, input, search_start),
         }
         var from = search_start;
         if (self.pair_filter) |filter| {
@@ -1973,6 +2052,129 @@ pub const Workspace = struct {
                 self.slots[1] = pos;
                 return .{ .start = start, .end = pos, .slots = self.slots };
             }
+        }
+        return null;
+    }
+
+    /// `set* literal`: the greedy star consumes the maximal member run and
+    /// backtracks to the last literal occurrence inside it, so a failed start
+    /// skips the whole run.
+    fn findStarLiteral(self: *Workspace, state: *StarLiteralState, input: []const u8, search_start: usize) ?Match {
+        const literal = state.literal[0..state.literal_len];
+        var start = search_start;
+        while (start < input.len) {
+            const run_end = state.run.runEnd(self.allocator, input, start);
+            if (lastLiteralInRange(input, start, run_end, literal)) |occurrence| {
+                self.slots[0] = start;
+                self.slots[1] = occurrence + literal.len;
+                return .{ .start = start, .end = occurrence + literal.len, .slots = self.slots };
+            }
+            start = run_end + 1;
+        }
+        return null;
+    }
+
+    /// Last occurrence of `literal` starting in `[start, run_end]`. The
+    /// literal may extend past `run_end`; only its start is bounded. A
+    /// first-byte scalar scan beats a reverse memmem for short literals.
+    fn lastLiteralInRange(input: []const u8, start: usize, run_end: usize, literal: []const u8) ?usize {
+        const limit = @min(run_end + 1, input.len);
+        if (start >= limit) return null;
+        var best: ?usize = null;
+        var cursor = start;
+        while (cursor < limit) {
+            const hit = std.mem.indexOfScalarPos(u8, input[0..limit], cursor, literal[0]) orelse break;
+            if (hit + literal.len <= input.len and std.mem.eql(u8, input[hit..][0..literal.len], literal)) best = hit;
+            cursor = hit + 1;
+        }
+        return best;
+    }
+
+    /// One set byte followed by a greedy run: the first set byte anchors the
+    /// match and the run is maximal, so no backtracking is needed.
+    fn findPrefixRun(self: *Workspace, state: *const PrefixRunState, input: []const u8, search_start: usize) ?Match {
+        const first = &state.table_a;
+        const rest = &state.table_b;
+        var start = search_start;
+        while (start < input.len) {
+            while (start < input.len and !first[input[start]]) start += 1;
+            if (start >= input.len) return null;
+            var end = start + 1;
+            while (end < input.len and rest[input[end]]) end += 1;
+            if (state.min_b == 1 and end == start + 1) {
+                start += 1;
+                continue;
+            }
+            self.slots[0] = start;
+            self.slots[1] = end;
+            return .{ .start = start, .end = end, .slots = self.slots };
+        }
+        return null;
+    }
+
+    /// A run followed by a greedy repetition of `separator run`. The
+    /// separator is disjoint from both run sets, so the run ends exactly at
+    /// the separator and the walk needs no backtracking.
+    fn findChainLoop(self: *Workspace, state: *const ChainLoopState, input: []const u8, search_start: usize) ?Match {
+        const first = &state.table_a;
+        const rest = &state.table_b;
+        var start = search_start;
+        while (start < input.len) {
+            if (!first[input[start]]) {
+                start += 1;
+                continue;
+            }
+            var end = start + 1;
+            while (end < input.len and first[input[end]]) end += 1;
+            var cursor = end;
+            var groups: usize = 0;
+            while (cursor < input.len and input[cursor] == state.separator) {
+                const run_start = cursor + 1;
+                if (run_start >= input.len or !rest[input[run_start]]) break;
+                var run_end = run_start + 1;
+                while (run_end < input.len and rest[input[run_end]]) run_end += 1;
+                cursor = run_end;
+                groups += 1;
+            }
+            if (groups >= state.min_groups) {
+                self.slots[0] = start;
+                self.slots[1] = cursor;
+                return .{ .start = start, .end = cursor, .slots = self.slots };
+            }
+            start = end + 1;
+        }
+        return null;
+    }
+
+    /// A run, an optional `separator run` group, then a literal byte. The
+    /// optional group is tried first (greedy); when its literal fails, the
+    /// group is skipped and the literal is retried at the first run's end.
+    fn findOptionalTail(self: *Workspace, state: *const OptionalTailState, input: []const u8, search_start: usize) ?Match {
+        const first = &state.table_a;
+        const rest = &state.table_b;
+        var start = search_start;
+        while (start < input.len) {
+            if (!first[input[start]]) {
+                start += 1;
+                continue;
+            }
+            var end = start + 1;
+            while (end < input.len and first[input[end]]) end += 1;
+            if (end + 1 < input.len and input[end] == state.separator and rest[input[end + 1]]) {
+                var group_end = end + 2;
+                while (group_end < input.len and rest[input[group_end]]) group_end += 1;
+                if (group_end < input.len and input[group_end] == state.literal) {
+                    self.slots[0] = start;
+                    self.slots[1] = group_end + 1;
+                    return .{ .start = start, .end = group_end + 1, .slots = self.slots };
+                }
+            }
+            if (end < input.len and input[end] == state.literal) {
+                self.slots[0] = start;
+                self.slots[1] = end + 1;
+                return .{ .start = start, .end = end + 1, .slots = self.slots };
+            }
+            start = end + 1;
         }
         return null;
     }
@@ -3338,6 +3540,60 @@ const UnboundedSequenceState = struct {
         return result;
     }
 };
+
+const OptionalTailState = struct {
+    table_a: [256]bool = undefined,
+    table_b: [256]bool = undefined,
+    separator: u8 = 0,
+    literal: u8 = 0,
+};
+
+const ChainLoopState = struct {
+    table_a: [256]bool = undefined,
+    table_b: [256]bool = undefined,
+    separator: u8 = 0,
+    min_groups: u8 = 0,
+};
+
+const PrefixRunState = struct {
+    table_a: [256]bool = undefined,
+    table_b: [256]bool = undefined,
+    min_b: u8 = 0,
+};
+
+const StarLiteralShape = struct { set: model.Set, literal: [64]u8, literal_len: u8 };
+
+const StarLiteralState = struct {
+    run: deferred_utf8.Run,
+    literal: [64]u8 = undefined,
+    literal_len: u8 = 0,
+};
+
+fn detectStarLiteral(program: Program) ?StarLiteralShape {
+    if (program.capture_count != 0 or program.extended) return null;
+    const ins = program.instructions;
+    if (ins.len < 7 or program.accept != 0) return null;
+    if (std.meta.activeTag(ins[0]) != .accept or std.meta.activeTag(ins[1]) != .sub_accept or
+        std.meta.activeTag(ins[2]) != .ret) return null;
+    if (program.start >= ins.len) return null;
+    const whole = ins[program.start];
+    if (std.meta.activeTag(whole) != .save or whole.save.slot != 0 or whole.save.next != program.body) return null;
+    if (program.body >= ins.len) return null;
+    const star = ins[program.body];
+    if (std.meta.activeTag(star) != .star or star.star.set.ranges.len == 0) return null;
+    var shape = StarLiteralShape{ .set = star.star.set, .literal = undefined, .literal_len = 0 };
+    var pc = star.star.next;
+    while (pc < ins.len and std.meta.activeTag(ins[pc]) == .literal_byte) {
+        if (shape.literal_len == shape.literal.len) return null;
+        shape.literal[shape.literal_len] = ins[pc].literal_byte.value;
+        shape.literal_len += 1;
+        pc = ins[pc].literal_byte.next;
+    }
+    if (shape.literal_len == 0 or pc >= ins.len) return null;
+    const save1 = ins[pc];
+    if (std.meta.activeTag(save1) != .save or save1.save.slot != 1 or save1.save.next != program.accept) return null;
+    return shape;
+}
 
 const FastBranch = struct {
     prior: prefilter.FirstFilter,

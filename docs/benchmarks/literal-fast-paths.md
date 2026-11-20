@@ -135,3 +135,28 @@ optional literal cannot help; adjacent runs and non-ASCII sets reject it.
 The version case improves 1.74x internally (91,001.9 -> 52,292.3 ns) and moves
 from 1.17x to 2.00x ahead of Rust. Single-separator chains such as `\w+=\w+`
 keep the existing chain path.
+
+## Run-anchored shapes
+
+Four common run-anchored shapes had been on the search DFA and are now
+scanned directly:
+
+- `set* literal` (`.*test`, `[a-z]*test`): the greedy star consumes the
+  maximal member run and backtracks to the last literal occurrence inside it,
+  so a failed start skips the whole run. The star uses the UTF-8 run scan, so
+  invalid bytes stop the run exactly as the engine does. `.*test` had been
+  restarting the search DFA at every position: it moves from 1.98 ms to about
+  30 us (65x) and is 1.25x ahead of Rust.
+- one set byte then a greedy run (`[A-Za-z_]\w*`): the first set byte anchors
+  the match and the run is maximal. It improves 4.2x and is 2.01x ahead.
+- a run then a greedy repetition of `separator run`
+  (`[a-z0-9-]+(?:\.[a-z0-9-]+)+`): the separator is disjoint from both run
+  sets, so the walk needs no backtracking. It improves 5.1x and is 3.51x
+  ahead.
+- a run, an optional `separator run` group, then a literal
+  (`\d+(?:\.\d+)?%`): the greedy group is tried first and skipped when its
+  literal fails. It improves 4.9x and is 3.77x ahead.
+
+Each shape is accepted only when its sets are ASCII-only and its separators
+are disjoint from the runs; captures, assertions, lazy/possessive repeats and
+ambiguous optional groups fall back to the general engine.

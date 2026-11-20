@@ -139,6 +139,11 @@ fn main() {
     let day_text = "sunday monday tuesday wednesday ".repeat(2000);
     let color_text = "#ff00aa #00FF00 #123456 ".repeat(2000);
     let version_text = "v1.2.3 10.0.0 v2.11.5 ".repeat(2000);
+    let code_text = "int foo_1 = bar2; x = y_3; ".repeat(2000);
+    let thousands_text = "1,234 12,345,678 999,000 ".repeat(2000);
+    let domain_text = "www.example.com api.test.org sub.domain.net ".repeat(1500);
+    let percent_text = "12.5% 100% 0.25% ".repeat(2000);
+    let time_text = "12:34 23:59:59 07:08 ".repeat(2000);
 
     let qwen = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+";
 
@@ -204,6 +209,17 @@ fn main() {
         &version_text,
         200,
     );
+    bench_find("find nullable prefix", ".*test", &ascii_text, 200);
+    bench_find("find identifier", "[A-Za-z_]\\w*", &code_text, 200);
+    bench_find("find thousands", "\\d{1,3}(?:,\\d{3})+", &thousands_text, 200);
+    bench_find(
+        "find domain",
+        "[a-z0-9-]+(?:\\.[a-z0-9-]+)+",
+        &domain_text,
+        200,
+    );
+    bench_find("find percent", "\\d+(?:\\.\\d+)?%", &percent_text, 200);
+    bench_find("find time", "\\d{1,2}:\\d{2}(?::\\d{2})?", &time_text, 200);
     bench_split("split whitespace (22 KiB)", "\\s+", &ascii_text, 200);
     bench_split("split commas (29 KiB)", ",", &csv_text, 200);
     bench_fullmatch(

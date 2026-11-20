@@ -926,6 +926,82 @@ test "literal-run detection rejects an optional literal that overlaps the run" {
     }
 }
 
+fn expectFastSpans(pattern: []const u8, input: []const u8, spans: []const [2]usize) !void {
+    var value = try regex.Regex.init(gpa, pattern, .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    var offset: usize = 0;
+    var index: usize = 0;
+    while (offset <= input.len and index < spans.len) : (index += 1) {
+        const m = (try workspace.find(input, offset)) orelse break;
+        try std.testing.expectEqual(spans[index][0], m.start);
+        try std.testing.expectEqual(spans[index][1], m.end);
+        offset = m.end;
+    }
+    try std.testing.expectEqual(spans.len, index);
+}
+
+test "star-literal fast path matches the last occurrence in the run" {
+    var value = try regex.Regex.init(gpa, ".*test", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind == .star_literal);
+
+    try expectFastSpans(".*test", "test", &.{.{ 0, 4 }});
+    try expectFastSpans(".*test", "x test", &.{.{ 0, 6 }});
+    try expectFastSpans(".*test", "abc test def test", &.{.{ 0, 17 }});
+    try expectFastSpans(".*test", "no match", &.{});
+    try expectFastSpans(".*test", "\xfftest", &.{.{ 1, 5 }});
+    try expectFastSpans(".*test", "a\xfftest", &.{.{ 2, 6 }});
+    try expectFastSpans("(?s).*test", "a\nb test", &.{.{ 0, 8 }});
+    try expectFastSpans("[a-z]*test", "x test", &.{.{ 2, 6 }});
+}
+
+test "prefix-run fast path starts at the first set byte" {
+    var value = try regex.Regex.init(gpa, "[A-Za-z_]\\w*", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind == .prefix_run);
+
+    try expectFastSpans("[A-Za-z_]\\w*", "int foo_1 = bar2;", &.{ .{ 0, 3 }, .{ 4, 9 }, .{ 12, 16 } });
+    try expectFastSpans("[A-Za-z_]\\w*", "2foo", &.{.{ 1, 4 }});
+    try expectFastSpans("[A-Za-z_]\\w*", "___", &.{.{ 0, 3 }});
+    try expectFastSpans("[A-Za-z_]\\w*", "123", &.{});
+    try expectFastSpans("[A-Za-z_]\\w+", "a", &.{});
+    try expectFastSpans("[A-Za-z_]\\w+", "ab", &.{.{ 0, 2 }});
+}
+
+test "chain-loop fast path repeats separator and run" {
+    var value = try regex.Regex.init(gpa, "[a-z0-9-]+(?:\\.[a-z0-9-]+)+", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind == .chain_loop);
+
+    try expectFastSpans("[a-z0-9-]+(?:\\.[a-z0-9-]+)+", "www.example.com x api.test.org", &.{ .{ 0, 15 }, .{ 18, 30 } });
+    try expectFastSpans("[a-z0-9-]+(?:\\.[a-z0-9-]+)+", "abc", &.{});
+    try expectFastSpans("[a-z0-9-]+(?:\\.[a-z0-9-]+)+", "abc.", &.{});
+    try expectFastSpans("[a-z0-9-]+(?:\\.[a-z0-9-]+)+", "abc.def", &.{.{ 0, 7 }});
+    try expectFastSpans("[a-z0-9-]+(?:\\.[a-z0-9-]+)+", "a.b.c", &.{.{ 0, 5 }});
+    try expectFastSpans("[a-z0-9-]+(?:\\.[a-z0-9-]+)+", ".abc", &.{});
+}
+
+test "optional-tail fast path backtracks the optional group" {
+    var value = try regex.Regex.init(gpa, "\\d+(?:\\.\\d+)?%", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind == .optional_tail);
+
+    try expectFastSpans("\\d+(?:\\.\\d+)?%", "12.5% 100% 0.25%", &.{ .{ 0, 5 }, .{ 6, 10 }, .{ 11, 16 } });
+    try expectFastSpans("\\d+(?:\\.\\d+)?%", "12.5x", &.{});
+    try expectFastSpans("\\d+(?:\\.\\d+)?%", "12%3", &.{.{ 0, 3 }});
+    try expectFastSpans("\\d+(?:\\.\\d+)?%", "12.5.6%", &.{.{ 3, 7 }});
+}
+
 test "unbounded sequence fast path walks runs and separators" {
     var value = try regex.Regex.init(gpa, "v?\\d+\\.\\d+\\.\\d+", .{});
     defer value.deinit();
