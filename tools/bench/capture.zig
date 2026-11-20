@@ -6,13 +6,22 @@ const gpa = std.heap.smp_allocator;
 fn pass(workspace: *regexz.ReplaceWorkspace, input: []const u8) !usize {
     var offset: usize = 0;
     var checksum: usize = 0;
-    while (offset < input.len) {
+    while (offset <= input.len) {
         const match = (try workspace.find(input, offset)) orelse break;
         for (match.slots) |slot| checksum +%= slot;
-        if (match.end <= match.start) break;
-        offset = match.end;
+        if (match.end <= match.start) {
+            if (match.start == input.len) break;
+            offset = nextRune(input, match.start);
+        } else offset = match.end;
     }
     return checksum;
+}
+
+fn nextRune(input: []const u8, offset: usize) usize {
+    const length = std.unicode.utf8ByteSequenceLength(input[offset]) catch return offset + 1;
+    if (length > input.len - offset) return offset + 1;
+    _ = std.unicode.utf8Decode(input[offset..][0..length]) catch return offset + 1;
+    return offset + length;
 }
 
 fn bench(io: std.Io, out: *std.Io.Writer, name: []const u8, pattern: []const u8, input: []const u8) !void {
@@ -71,6 +80,14 @@ pub fn main() !void {
     defer sparse_han.deinit(gpa);
     var long_han: std.ArrayList(u8) = .empty;
     defer long_han.deinit(gpa);
+    var nullable: std.ArrayList(u8) = .empty;
+    defer nullable.deinit(gpa);
+    var overlap_nullable: std.ArrayList(u8) = .empty;
+    defer overlap_nullable.deinit(gpa);
+    var optional_ascii: std.ArrayList(u8) = .empty;
+    defer optional_ascii.deinit(gpa);
+    var optional_unicode: std.ArrayList(u8) = .empty;
+    defer optional_unicode.deinit(gpa);
     for (0..4000) |_| {
         try words.appendSlice(gpa, "aaa bbb ");
         try digits.appendSlice(gpa, "12345 x ");
@@ -83,6 +100,10 @@ pub fn main() !void {
         try greek_misses.appendSlice(gpa, "你好世界😀𠀀１２３ ");
         try sparse_han.appendSlice(gpa, "Ελληνικά😀𐐀𠀀猫 ");
         try long_han.appendSlice(gpa, "猫𠀀");
+        try nullable.appendSlice(gpa, "aaabbb ");
+        try overlap_nullable.appendSlice(gpa, "aaaa ");
+        try optional_ascii.appendSlice(gpa, "hello123XYZ helloXYZ ");
+        try optional_unicode.appendSlice(gpa, "Σσ١٢猫狗 Σσ猫狗 猫狗 ");
     }
     try bench(io, out, "word capture", "(\\w+)", words.items);
     try bench(io, out, "literal capture", "(a+)", words.items);
@@ -110,5 +131,13 @@ pub fn main() !void {
     try greek_misses.appendSlice(gpa, "Σσ");
     try bench(io, out, "Han after long prefix", "(\\p{Han}+)", han_misses.items);
     try bench(io, out, "Greek after long prefix", "((\\p{Greek}+))", greek_misses.items);
+    try bench(io, out, "nullable greedy captures", "(a*)(b*)", nullable.items);
+    try bench(io, out, "overlap nullable captures", "(a*)(a*)", overlap_nullable.items);
+    try bench(io, out, "optional ASCII captures", "([a-z]+)([0-9]*)([A-Z]+)", optional_ascii.items);
+    try bench(io, out, "optional overlapping run", "([a-z]+)([a-z0-9]*)([A-Z]+)", optional_ascii.items);
+    try bench(io, out, "nullable Unicode captures", "(\\p{Greek}*)(\\p{Nd}*)(\\p{Han}+)", optional_unicode.items);
+    try bench(io, out, "Unicode optional captures", "()(\\p{Greek}+)(\\p{Nd}*)(\\p{Han}+)()", optional_unicode.items);
+    try bench(io, out, "optional lazy control", "([a-z]+)([0-9]*?)([A-Z]+)", optional_ascii.items);
+    try bench(io, out, "overlap mandatory control", "([a-z]+)([a-z]*)([a-z]+)", optional_ascii.items);
     try out.flush();
 }

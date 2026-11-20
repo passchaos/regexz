@@ -17,7 +17,8 @@ pub const Plan = enum {
     }
 };
 
-fn canReplay(instructions: []const model.Instruction, body: usize) bool {
+// Keep the one-time graph walk out of warmed capture and search dispatch.
+noinline fn canReplay(instructions: []const model.Instruction, body: usize) bool {
     var pc = body;
     for (0..instructions.len) |_| {
         if (pc >= instructions.len) return false;
@@ -44,6 +45,10 @@ fn forcedContinuation(instructions: []const model.Instruction, set: model.Set, n
         if (pc >= instructions.len) return false;
         switch (instructions[pc]) {
             .save => |save| pc = save.next,
+            // A following greedy star can take zero members. canReplay
+            // also proves that star's own mandatory continuation, so it
+            // cannot force an earlier run to reserve characters for it.
+            .star => |star| pc = star.next,
             .accept => return true,
             .literal_byte => |literal| return !set.matches(literal.value),
             .literal_rune => |literal| return !set.matches(literal.value),
@@ -65,8 +70,9 @@ pub const Context = struct {
 };
 
 /// Deterministic replay for a straight-line program of saves, literals,
-/// and greedy set runs whose continuation cannot start with a member.
-/// Such a run is forced to its maximal length, so no choice or trail
+/// and greedy set runs whose mandatory continuation is disjoint. Following
+/// nullable greedy runs are also checked by the prepared plan. Each run is
+/// forced to its maximal length in program order, so no choice or trail
 /// bookkeeping is needed. Returns null when the shape is not covered;
 /// otherwise whether the walk ended exactly at `end`.
 pub inline fn linear(context: Context, input: []const u8, start: usize, end: usize) ?bool {

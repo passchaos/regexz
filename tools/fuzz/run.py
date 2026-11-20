@@ -99,6 +99,14 @@ def generate(case_count: int, seed: int) -> list[dict]:
         "([a-z]*)([0-9]+)([A-Z]+)",
     ]
     seeds += [(pattern, "u") for pattern in replay_runs]
+    nullable_capture_runs = [
+        "(a*)(b*)", "(a*)(a*)", "(a*){3}", "(a*)([ab]*)(b*)(C+)",
+        "([a-z]+)([0-9]*)([A-Z]+)", "([a-z]+)([a-z0-9]*)([A-Z]+)",
+        "(\\p{Script=Greek}*)(\\p{Nd}*)(\\p{Script=Han}+)",
+        "()(\\p{Script=Greek}+)(\\p{Nd}*)(\\p{Script=Han}+)()",
+        "([a-z]+)([a-z]*)([a-z]+)", "(a*)(b*?)(C+)", "(a*)(b*)(?=C)(C+)",
+    ]
+    seeds += [(pattern, "u") for pattern in nullable_capture_runs]
     seeds += [("(?:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+", "iu")]
     for pattern, flags in seeds[:case_count]:
         seen.add((pattern, flags))
@@ -117,6 +125,11 @@ def generate(case_count: int, seed: int) -> list[dict]:
     # Legacy JS /i does not fold long s into ASCII word characters.
     # Keep this Unicode-caseless probe on the explicit Qwen seed.
     for case in cases:
+        if case["pattern"] in nullable_capture_runs and case["flags"] == "u":
+            case["inputs"] = case["inputs"] + [
+                "aaabbb", "aaaa", "aaabbC", "hello123XYZ helloXYZ",
+                "Σσ١٢猫狗 Σσ猫狗 猫狗", "😀𠀀Σ١猫",
+            ]
         if case["pattern"] in unicode_capture_runs and case["flags"] == "u":
             case["inputs"] = case["inputs"] + [
                 "Ελληνικά café ١٢٣ 😀𐐀 𠀀猫猫", "你好世界😀𠀀１２３ Σσ",
