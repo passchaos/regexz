@@ -277,6 +277,12 @@ workspace and searching per part. The 29 KiB comma split improves 2.66x;
 whitespace and other shapes keep their existing fast paths. See
 [split over a literal separator](benchmarks/split-literal.md).
 
+`replaceAll` now fuses a pure literal pattern with a literal substitution:
+occurrences are found with the literal search and each gap and the fixed
+substitution are appended directly. The 29 KiB `,` → `;` replacement improves
+1.41x; substitutions with syntax and other patterns keep the general path.
+See [replacement over a literal pattern](benchmarks/replace-literal.md).
+
 Further work on these candidates needs fresh measurements before implementation.
 Current warmed throughput does not establish their cold-start cost or the
 benefit of replacing their fallback paths.

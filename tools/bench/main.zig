@@ -409,6 +409,7 @@ pub fn main() !void {
     defer long.deinit(gpa);
     for (0..2000) |_| try long.appendSlice(gpa, "aaa bbb aaa bbb ");
     try benchReplace(io, out, "replaceAll a+ -> x", "a+", long.items, "x", 200);
+    try benchReplace(io, out, "replaceAll , -> ;", ",", csv_text.items, ";", 200);
 
     {
         var value = try regexz.Regex.init(gpa, qwen, ucp);

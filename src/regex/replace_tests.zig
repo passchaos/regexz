@@ -51,6 +51,14 @@ test "set-run replacement scans runs in one pass" {
     try expectReplace("a+", "[$0]", "aa b a", "[aa] b [a]");
 }
 
+test "literal replacement scans occurrences directly" {
+    try expectReplace(",", ";", "a,b,,c", "a;b;;c");
+    try expectReplace("::", ":", "a::b::::c", "a:b::c");
+    try expectReplace(",", "X", "", "");
+    try expectReplace(",", "X", "abc", "abc");
+    try expectReplace(",", "[$0]", "a,b", "a[,]b");
+}
+
 test "regex replacement honors lazy quantifiers" {
     try expectReplace(
         "^(.*?)one(.*)$",

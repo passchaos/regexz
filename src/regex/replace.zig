@@ -478,10 +478,33 @@ pub const Workspace = struct {
         if (self.fast_kind == .set_run and std.mem.indexOfAny(u8, substitution, "\\$") == null) {
             return self.replaceAllSetRun(input, substitution);
         }
+        // A pure literal pattern matches exactly its occurrences; scan them
+        // with the literal search and append the gaps directly.
+        if (self.program.literal) |literal| {
+            if (literal.len != 0 and std.mem.indexOfAny(u8, substitution, "\\$") == null) {
+                return self.replaceAllLiteral(input, literal, substitution);
+            }
+        }
         var out: std.ArrayList(u8) = .empty;
         errdefer out.deinit(self.allocator);
         var writer = subst.ListWriter{ .list = &out, .allocator = self.allocator };
         try self.replaceAllWith(&writer, input, substitution, std.math.maxInt(usize));
+        return out.toOwnedSlice(self.allocator);
+    }
+
+    fn replaceAllLiteral(self: *Workspace, input: []const u8, literal: []const u8, substitution: []const u8) Error![]u8 {
+        var out: std.ArrayList(u8) = .empty;
+        errdefer out.deinit(self.allocator);
+        try out.ensureTotalCapacity(self.allocator, input.len);
+        var last: usize = 0;
+        var offset: usize = 0;
+        while (indexOfLiteral(input, offset, literal)) |found| {
+            try out.appendSlice(self.allocator, input[last..found]);
+            try out.appendSlice(self.allocator, substitution);
+            last = found + literal.len;
+            offset = last;
+        }
+        try out.appendSlice(self.allocator, input[last..]);
         return out.toOwnedSlice(self.allocator);
     }
 
