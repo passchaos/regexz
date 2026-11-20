@@ -13,6 +13,12 @@ const zero_width_mod = @import("zero_width.zig");
 
 pub const BoundedElement = struct { set: model.Set, min: u8, max: u8 };
 
+pub const UnboundedElement = union(enum) {
+    run: model.Set,
+    literal: []const u8,
+    optional: u8,
+};
+
 pub const Program = struct {
     instructions: []const model.Instruction,
     start: usize,
@@ -42,6 +48,9 @@ pub const Program = struct {
     /// (`\d{1,3}(?:\.\d{1,3}){3}`), at least one of which is variable
     /// width. Not serialized.
     bounded_sequence: ?[]const BoundedElement = null,
+    /// Whole-pattern alternation of unbounded ASCII runs and literal
+    /// separators (`v?\d+\.\d+\.\d+`). Not serialized.
+    unbounded_sequence: ?[]const UnboundedElement = null,
     /// A dominant alternation branch (`set? setB+`) that decides the match
     /// when no earlier branch can start at the current byte. Not serialized.
     fast_branch: ?fast_branch_mod.Plan = null,
@@ -648,6 +657,124 @@ const BoundedSequenceBuilder = struct {
     }
 };
 
+/// Whole-pattern sequence of unbounded ASCII set runs separated by literal
+/// bytes, with an optional leading literal. Adjacent runs and literal bytes
+/// inside a following run set would need backtracking, so they reject the
+/// shape.
+const UnboundedSequenceBuilder = struct {
+    const max_elements = 32;
+    const max_literal_bytes = 64;
+
+    allocator: std.mem.Allocator,
+    elements: std.ArrayList(UnboundedElement) = .empty,
+    /// Arena-owned fixed buffer; element slices stay valid across appends.
+    literal_bytes: []u8,
+    literal_len: usize = 0,
+    last_literal_offset: usize = 0,
+    run_count: u8 = 0,
+
+    fn setOf(value: *const model.Node) ?model.Set {
+        return switch (value.*) {
+            .group => |child| setOf(child),
+            .set => |set| set,
+            else => null,
+        };
+    }
+
+    fn appendLiteral(self: *UnboundedSequenceBuilder, byte: u8) model.Error!bool {
+        if (byte >= 0x80) return false;
+        if (self.elements.items.len != 0) {
+            const last = &self.elements.items[self.elements.items.len - 1];
+            if (last.* == .literal) {
+                if (self.literal_len == self.literal_bytes.len) return false;
+                self.literal_bytes[self.literal_len] = byte;
+                self.literal_len += 1;
+                last.literal = self.literal_bytes[self.last_literal_offset..self.literal_len];
+                return true;
+            }
+        }
+        if (self.elements.items.len == max_elements or self.literal_len == self.literal_bytes.len) return false;
+        self.last_literal_offset = self.literal_len;
+        self.literal_bytes[self.literal_len] = byte;
+        self.literal_len += 1;
+        try self.elements.append(self.allocator, .{ .literal = self.literal_bytes[self.last_literal_offset..self.literal_len] });
+        return true;
+    }
+
+    fn appendRun(self: *UnboundedSequenceBuilder, set: model.Set) model.Error!bool {
+        if (!set.ascii_only or set.ranges.len == 0) return false;
+        if (self.elements.items.len == max_elements) return false;
+        if (self.elements.items.len != 0) {
+            const last = self.elements.items[self.elements.items.len - 1];
+            // Adjacent runs need backtracking when their sets overlap.
+            if (last == .run) return false;
+        }
+        try self.elements.append(self.allocator, .{ .run = set });
+        self.run_count += 1;
+        return true;
+    }
+
+    fn add(self: *UnboundedSequenceBuilder, value: *const model.Node) model.Error!bool {
+        return switch (value.*) {
+            .empty, .flag_change => true,
+            .group => |child| self.add(child),
+            .pair => |pair| (try self.add(pair.left)) and (try self.add(pair.right)),
+            .set => |set| blk: {
+                if (set.ranges.len != 1 or set.ranges[0].first != set.ranges[0].last) break :blk false;
+                if (set.ranges[0].first >= 0x80) break :blk false;
+                break :blk self.appendLiteral(@intCast(set.ranges[0].first));
+            },
+            .repeat => |repeat| blk: {
+                if (repeat.lazy or repeat.possessive) break :blk false;
+                const set = setOf(repeat.child) orelse break :blk false;
+                if (repeat.minimum >= 1 and repeat.maximum == null) {
+                    break :blk self.appendRun(set);
+                }
+                // A leading `x?` literal prefix, for example `v?`.
+                if (repeat.minimum == 0 and repeat.maximum == 1 and self.elements.items.len == 0) {
+                    if (set.ranges.len != 1 or set.ranges[0].first != set.ranges[0].last) break :blk false;
+                    if (set.ranges[0].first >= 0x80) break :blk false;
+                    if (self.elements.items.len == max_elements) break :blk false;
+                    try self.elements.append(self.allocator, .{ .optional = @intCast(set.ranges[0].first) });
+                    break :blk true;
+                }
+                break :blk false;
+            },
+            else => false,
+        };
+    }
+
+    fn validate(self: *UnboundedSequenceBuilder) bool {
+        if (self.run_count < 2) return false;
+        var index: usize = 0;
+        while (index < self.elements.items.len) : (index += 1) {
+            const element = self.elements.items[index];
+            if (element == .run and index + 1 < self.elements.items.len) {
+                const next = self.elements.items[index + 1];
+                if (next == .run) return false;
+                if (next == .literal and next.literal.len != 0 and element.run.matches(next.literal[0])) return false;
+            }
+            if (element == .optional) {
+                if (index + 1 >= self.elements.items.len) return false;
+                const next = self.elements.items[index + 1];
+                const next_set = switch (next) {
+                    .run => |set| set,
+                    .literal => |bytes| if (bytes.len == 0) return false else null,
+                    .optional => return false,
+                };
+                if (next_set) |set| {
+                    if (set.matches(element.optional)) return false;
+                } else if (next == .literal and next.literal.len != 0 and next.literal[0] == element.optional) {
+                    // Skipping the optional would let the literal match; the
+                    // flat matcher cannot backtrack into it.
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+};
+
 const PrefixBuilder = struct {
     allocator: std.mem.Allocator,
     bytes: std.ArrayList(u8) = .empty,
@@ -945,6 +1072,15 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         try literal_set_builder.literals.toOwnedSlice(allocator)
     else
         null;
+    const unbounded_storage = try allocator.alloc(u8, UnboundedSequenceBuilder.max_literal_bytes);
+    var unbounded_builder = UnboundedSequenceBuilder{ .allocator = allocator, .literal_bytes = unbounded_storage };
+    defer unbounded_builder.elements.deinit(allocator);
+    const unbounded_sequence: ?[]const UnboundedElement = if (literal == null and caseless_literal == null and
+        literal_set == null and !limits.auto_callout and try unbounded_builder.add(parsed.root) and
+        unbounded_builder.validate())
+        try unbounded_builder.elements.toOwnedSlice(allocator)
+    else
+        null;
     var bounded_builder = BoundedSequenceBuilder{ .allocator = allocator };
     defer bounded_builder.elements.deinit(allocator);
     const bounded_sequence: ?[]const BoundedElement = if (literal == null and caseless_literal == null and
@@ -989,6 +1125,7 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         .caseless_literal = caseless_literal,
         .literal_set = literal_set,
         .bounded_sequence = bounded_sequence,
+        .unbounded_sequence = unbounded_sequence,
         .dfa_eligible = dfa_eligible,
         .extended = extended,
         .newline = parsed.newline,

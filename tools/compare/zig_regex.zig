@@ -286,6 +286,22 @@ pub fn main() !void {
     defer date_text.deinit(gpa);
     for (0..2000) |_| try date_text.appendSlice(gpa, "2026-11-21 2025-01-05 1999-12-31 ");
 
+    var cafe_text: std.ArrayList(u8) = .empty;
+    defer cafe_text.deinit(gpa);
+    for (0..2000) |_| try cafe_text.appendSlice(gpa, "café CAFÉ Café ");
+
+    var day_text: std.ArrayList(u8) = .empty;
+    defer day_text.deinit(gpa);
+    for (0..2000) |_| try day_text.appendSlice(gpa, "sunday monday tuesday wednesday ");
+
+    var color_text: std.ArrayList(u8) = .empty;
+    defer color_text.deinit(gpa);
+    for (0..2000) |_| try color_text.appendSlice(gpa, "#ff00aa #00FF00 #123456 ");
+
+    var version_text: std.ArrayList(u8) = .empty;
+    defer version_text.deinit(gpa);
+    for (0..2000) |_| try version_text.appendSlice(gpa, "v1.2.3 10.0.0 v2.11.5 ");
+
     const qwen = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+";
     const ucp = regexz.Limits{ .unicode_perl_space = true, .max_execution_steps = 16_000_000 };
 
@@ -311,6 +327,11 @@ pub fn main() !void {
     try benchFind(io, out, "find date", "\\d{4}-\\d{2}-\\d{2}", date_text.items, 200, .{});
     try benchFind(io, out, "find 20-word alternation", "alpha|beta|gamma|delta|epsilon|zeta|eta|theta|iota|kappa|lambda|mu|nu|xi|omicron|pi|rho|sigma|tau|upsilon", word_text.items, 200, .{});
     try benchFind(io, out, "find anchored line", "(?m)^\\w+", ascii_text.items, 200, .{});
+    try benchFind(io, out, "find (?i) Unicode literal", "(?i)café", cafe_text.items, 200, .{});
+    try benchFind(io, out, "find shared-prefix alternation", "sunday|saturday|someday", day_text.items, 200, .{});
+    try benchFind(io, out, "find one-char alternation", "a|b|c", ascii_text.items, 200, .{});
+    try benchFind(io, out, "find hex color", "#[0-9a-fA-F]{6}", color_text.items, 200, .{});
+    try benchFind(io, out, "find version", "v?\\d+\\.\\d+\\.\\d+", version_text.items, 200, .{});
     try benchSplit(io, out, "split whitespace (22 KiB)", "\\s+", ascii_text.items, 200);
     try benchSplit(io, out, "split commas (29 KiB)", ",", csv_text.items, 200);
     try benchMatches(io, out, "fullmatch literal", "hello, world!", "hello, world!", 200000, .{});

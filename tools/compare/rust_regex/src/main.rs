@@ -135,6 +135,10 @@ fn main() {
     let email_text = "user.name@example.com ".repeat(800);
     let ip_text = "192.168.1.1 10.0.0.255 172.16.0.1 ".repeat(2000);
     let date_text = "2026-11-21 2025-01-05 1999-12-31 ".repeat(2000);
+    let cafe_text = "café CAFÉ Café ".repeat(2000);
+    let day_text = "sunday monday tuesday wednesday ".repeat(2000);
+    let color_text = "#ff00aa #00FF00 #123456 ".repeat(2000);
+    let version_text = "v1.2.3 10.0.0 v2.11.5 ".repeat(2000);
 
     let qwen = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+";
 
@@ -185,6 +189,21 @@ fn main() {
         200,
     );
     bench_find("find anchored line", "(?m)^\\w+", &ascii_text, 200);
+    bench_find("find (?i) Unicode literal", "(?i)café", &cafe_text, 200);
+    bench_find(
+        "find shared-prefix alternation",
+        "sunday|saturday|someday",
+        &day_text,
+        200,
+    );
+    bench_find("find one-char alternation", "a|b|c", &ascii_text, 200);
+    bench_find("find hex color", "#[0-9a-fA-F]{6}", &color_text, 200);
+    bench_find(
+        "find version",
+        "v?\\d+\\.\\d+\\.\\d+",
+        &version_text,
+        200,
+    );
     bench_split("split whitespace (22 KiB)", "\\s+", &ascii_text, 200);
     bench_split("split commas (29 KiB)", ",", &csv_text, 200);
     bench_fullmatch(

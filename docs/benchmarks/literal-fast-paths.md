@@ -120,3 +120,18 @@ succeed enter the backtracking matcher (bounded by a small step budget).
 The IPv4 case improves 1.78x internally (119,776.9 -> 67,156.9 ns) and moves
 from 1.16x to 2.12x ahead of Rust. Fixed-width programs such as
 `\d{4}-\d{2}-\d{2}` keep the instruction-based `fixed_sequence` path.
+
+## Unbounded run chains
+
+`v?\d+\.\d+\.\d+` is a chain of unbounded runs separated by literals, but
+the chain detector only covers a single separator, so it ran the search DFA.
+The compiler now records `unbounded_sequence` for a whole pattern that is a
+sequence of ASCII `set+` runs separated by literal bytes, optionally led by a
+one-byte optional literal. The shape is accepted only when each separator's
+first byte is outside the preceding run set (so the run ends exactly at the
+separator and the flat walk needs no backtracking) and when skipping the
+optional literal cannot help; adjacent runs and non-ASCII sets reject it.
+
+The version case improves 1.74x internally (91,001.9 -> 52,292.3 ns) and moves
+from 1.17x to 2.00x ahead of Rust. Single-separator chains such as `\w+=\w+`
+keep the existing chain path.

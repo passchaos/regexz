@@ -723,3 +723,17 @@ backtracking matcher when a shorter run could succeed. IPv4 improves 1.78x
 internally (119.8 -> 67.2 us) and moves from 1.16x to 2.12x ahead of Rust.
 All 30 comparison cases remain faster, with the five-word alternation the
 thinnest at 1.18x. See [literal fast paths](benchmarks/literal-fast-paths.md).
+
+Unbounded run chains (`v?\d+\.\d+\.\d+`) now have a compile-time shape and a
+direct flat walk. The chain detector only covers one separator, so these
+patterns had been on the search DFA. The compiler records the sequence when
+the whole pattern is ASCII `set+` runs separated by literal bytes with an
+optional one-byte leading literal; each separator's first byte must be
+outside the preceding run set and skipping the optional must not help, so the
+walk needs no backtracking. Adjacent runs, non-ASCII sets and ambiguous
+optionals fall back. The version case improves 1.74x internally (91.0 ->
+52.3 us) and moves from 1.17x to 2.00x ahead of Rust. The comparison now
+covers 35 cases (Unicode caseless literal, shared-prefix and one-char
+alternations, hex color, version were added); all 35 are faster, with the
+five-word and shared-prefix alternations the thinnest at 1.13-1.14x. See
+[literal fast paths](benchmarks/literal-fast-paths.md).

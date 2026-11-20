@@ -926,6 +926,52 @@ test "literal-run detection rejects an optional literal that overlaps the run" {
     }
 }
 
+test "unbounded sequence fast path walks runs and separators" {
+    var value = try regex.Regex.init(gpa, "v?\\d+\\.\\d+\\.\\d+", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind == .unbounded_sequence);
+
+    const cases = [_]struct { input: []const u8, from: usize, spans: []const [2]usize }{
+        .{ .input = "v1.2.3 10.0.0 v2.11.5", .from = 0, .spans = &.{ .{ 0, 6 }, .{ 7, 13 }, .{ 14, 21 } } },
+        .{ .input = "v1.2.3 10.0.0 v2.11.5", .from = 8, .spans = &.{ .{ 8, 13 }, .{ 14, 21 } } },
+        .{ .input = "1.2.3", .from = 0, .spans = &.{.{ 0, 5 }} },
+        .{ .input = "12.34.56", .from = 0, .spans = &.{.{ 0, 8 }} },
+        .{ .input = "1.2", .from = 0, .spans = &.{} },
+        .{ .input = "v", .from = 0, .spans = &.{} },
+        .{ .input = "vv1.2.3", .from = 0, .spans = &.{.{ 1, 7 }} },
+    };
+    for (cases) |case| {
+        var offset = case.from;
+        var index: usize = 0;
+        while (offset <= case.input.len and index < case.spans.len) : (index += 1) {
+            const m = (try workspace.find(case.input, offset)) orelse break;
+            try std.testing.expectEqual(case.spans[index][0], m.start);
+            try std.testing.expectEqual(case.spans[index][1], m.end);
+            offset = m.end;
+        }
+        try std.testing.expectEqual(case.spans.len, index);
+    }
+
+    // An optional byte inside the following run set would need backtracking.
+    var ambiguous = try regex.Regex.init(gpa, "1?\\d+\\.\\d+", .{});
+    defer ambiguous.deinit();
+    var ambiguous_workspace = try regex.ReplaceWorkspace.init(gpa, ambiguous.program, .{});
+    defer ambiguous_workspace.deinit();
+    try std.testing.expect(ambiguous_workspace.fast_kind != .unbounded_sequence);
+    const still_correct = (try ambiguous_workspace.find("1.2", 0)).?;
+    try std.testing.expectEqual(@as(usize, 0), still_correct.start);
+    try std.testing.expectEqual(@as(usize, 3), still_correct.end);
+
+    // A single-separator chain keeps its existing path.
+    var chain = try regex.Regex.init(gpa, "\\w+=\\w+", .{});
+    defer chain.deinit();
+    var chain_workspace = try regex.ReplaceWorkspace.init(gpa, chain.program, .{});
+    defer chain_workspace.deinit();
+    try std.testing.expect(chain_workspace.fast_kind == .chain);
+}
+
 test "bounded sequence fast path backtracks greedy runs" {
     var value = try regex.Regex.init(gpa, "\\d{1,3}(?:\\.\\d{1,3}){3}", .{});
     defer value.deinit();
