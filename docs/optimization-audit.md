@@ -458,3 +458,10 @@ measures 1.10x (3,825 -> 3,487 ns); the comparison harness is
 allocation-noise-dominated for this case (0.86-1.44x across runs). Plans that
 include line edges keep the general writer. See
 [edge-only zero-width replacement](benchmarks/edge-zero-replace.md).
+
+The stream scanner's ASCII `set+` and `set*` paths now consume member and
+non-member runs in tight loops instead of checking the pending-match state on
+every byte; the star path emits its empty matches inside the non-member loop.
+`stream [a-z]+` improves 1.31x (183.8 -> 140.3 us) and `stream [a-z]*` 1.40x
+(223.9 -> 160.1 us), with the other 65 cases at a 1.00x median. See
+[tight ASCII run loops](benchmarks/stream-ascii-runs.md).

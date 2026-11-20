@@ -688,25 +688,41 @@ pub const Scanner = struct {
         emit(context, .{ .start = start, .end = end, .slots = self.best_slots[0..self.slot_count] });
     }
 
+    /// Advance over ASCII member bytes. The caller checks the stop byte.
+    fn skipMembers(self: *Scanner, items: []const u8) void {
+        while (self.scan < items.len and items[self.scan] < 0x80 and self.simple_table[items[self.scan]]) self.scan += 1;
+    }
+
+    /// Advance over ASCII non-member bytes. The caller checks the stop byte.
+    fn skipNonMembers(self: *Scanner, items: []const u8) void {
+        while (self.scan < items.len and items[self.scan] < 0x80 and !self.simple_table[items[self.scan]]) self.scan += 1;
+    }
+
     fn processSimple(self: *Scanner, context: ?*anyopaque, emit: EmitFn, at_eof: bool) model.Error!void {
         const set = self.simple_set.?;
         while (true) {
             if (self.scan >= self.buffer.items.len) break;
             const byte = self.buffer.items[self.scan];
             if (self.simple_ascii and byte < 0x80) {
-                const member = self.simple_table[byte];
-                if (self.simple_pending_start == null) {
-                    if (member) self.simple_pending_start = self.buffer_base + self.scan;
-                    self.scan += 1;
+                const items = self.buffer.items;
+                // Consume ASCII runs in tight loops instead of checking the
+                // pending state on every byte.
+                if (self.simple_pending_start != null) {
+                    self.skipMembers(items);
+                    if (self.scan >= items.len) break;
+                    if (items[self.scan] < 0x80) {
+                        self.emitSimple(context, emit, self.simple_pending_start.?, self.buffer_base + self.scan);
+                        self.simple_pending_start = null;
+                        self.scan += 1;
+                    }
                     continue;
                 }
-                if (member) {
+                self.skipNonMembers(items);
+                if (self.scan >= items.len) break;
+                if (items[self.scan] < 0x80) {
+                    self.simple_pending_start = self.buffer_base + self.scan;
                     self.scan += 1;
-                    continue;
                 }
-                self.emitSimple(context, emit, self.simple_pending_start.?, self.buffer_base + self.scan);
-                self.simple_pending_start = null;
-                self.scan += 1;
                 continue;
             }
             const status = self.runeStatus(self.buffer_base + self.scan);
@@ -767,21 +783,23 @@ pub const Scanner = struct {
             if (self.scan >= self.buffer.items.len) break;
             const abs = self.buffer_base + self.scan;
             if (self.simple_ascii and self.buffer.items[self.scan] < 0x80) {
-                const member = self.simple_table[self.buffer.items[self.scan]];
+                const items = self.buffer.items;
                 if (self.star_start) |start| {
-                    if (member) {
-                        self.scan += 1;
-                        continue;
-                    }
-                    self.emitSimple(context, emit, start, abs);
+                    // Extend the run in a tight loop; the byte that ends it
+                    // also starts the next attempt, whose only match is empty.
+                    self.skipMembers(items);
+                    if (self.scan >= items.len) break;
+                    if (items[self.scan] >= 0x80) continue;
+                    self.emitSimple(context, emit, start, self.buffer_base + self.scan);
                     self.star_start = null;
                 }
-                if (member) {
-                    self.star_start = abs;
+                while (self.scan < items.len and items[self.scan] < 0x80 and !self.simple_table[items[self.scan]]) {
+                    self.emitStarEmpty(context, emit, self.buffer_base + self.scan);
                     self.scan += 1;
-                    continue;
                 }
-                self.emitStarEmpty(context, emit, abs);
+                if (self.scan >= items.len) break;
+                if (items[self.scan] >= 0x80) continue;
+                self.star_start = self.buffer_base + self.scan;
                 self.scan += 1;
                 continue;
             }
