@@ -479,3 +479,10 @@ decode plus bit test measured 1.6x slower than the byte automaton (178 ->
 pipeline better than the branchy decoder. A prefix lead-byte filter in the
 fast branch was also reverted (5% slower), as were a 3-byte rune fast path
 and short-separator `mem.eql` replacement in the stream chain (both neutral).
+
+`replaceSetRun` now appends gaps and a zero- or one-byte substitution with
+the assume-capacity variants: the output cannot exceed the reserved
+`input.len` because every matched run removes at least one byte. The 24 KiB
+`a+` replacement improves 1.21x (25.0 -> 20.6 us) and `replacen` 1.18x, with
+the 65 control cases at a 1.01x median. See
+[capacity-guaranteed appends](benchmarks/set-run-append.md).

@@ -660,17 +660,29 @@ pub const Workspace = struct {
         var last: usize = 0;
         var offset: usize = 0;
         var replaced: usize = 0;
+        // A zero- or one-byte substitution never grows the output: every run
+        // removes at least one byte, so the reserved capacity always fits.
+        const bounded = substitution.len <= 1;
         while (offset < input.len and replaced < limit) {
             while (offset < input.len and !table[input[offset]]) offset += 1;
             if (offset == input.len) break;
             const start = offset;
             while (offset < input.len and table[input[offset]]) offset += 1;
-            try out.appendSlice(self.allocator, input[last..start]);
-            try out.appendSlice(self.allocator, substitution);
+            if (bounded) {
+                out.appendSliceAssumeCapacity(input[last..start]);
+                if (substitution.len == 1) out.appendAssumeCapacity(substitution[0]);
+            } else {
+                try out.appendSlice(self.allocator, input[last..start]);
+                try out.appendSlice(self.allocator, substitution);
+            }
             last = offset;
             replaced += 1;
         }
-        try out.appendSlice(self.allocator, input[last..]);
+        if (bounded) {
+            out.appendSliceAssumeCapacity(input[last..]);
+        } else {
+            try out.appendSlice(self.allocator, input[last..]);
+        }
         return out.toOwnedSlice(self.allocator);
     }
 
