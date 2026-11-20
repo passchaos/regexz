@@ -292,6 +292,56 @@ fn clearPooledWorkspace(id: u64) void {
     stale.deinit();
 }
 
+const CompileBlock = struct { allocator: std.mem.Allocator, bytes: []u8 };
+const max_pooled_blocks: usize = 8;
+var block_mutex: std.atomic.Mutex = .unlocked;
+var block_pool: [max_pooled_blocks]?CompileBlock = .{null} ** max_pooled_blocks;
+
+fn blockLock() void {
+    while (!block_mutex.tryLock()) std.Thread.yield() catch {};
+}
+
+fn blockUnlock() void {
+    block_mutex.unlock();
+}
+
+fn blockPoolable(gpa: std.mem.Allocator) bool {
+    return gpa.vtable == std.heap.page_allocator.vtable;
+}
+
+fn takeCompileBlock(gpa: std.mem.Allocator) ?[]u8 {
+    if (!blockPoolable(gpa)) return null;
+    blockLock();
+    for (&block_pool) |*entry| {
+        if (entry.*) |value| {
+            if (value.allocator.vtable == gpa.vtable) {
+                entry.* = null;
+                blockUnlock();
+                return value.bytes;
+            }
+        }
+    }
+    blockUnlock();
+    return null;
+}
+
+fn returnCompileBlock(gpa: std.mem.Allocator, bytes: []u8) void {
+    if (!blockPoolable(gpa)) {
+        gpa.free(bytes);
+        return;
+    }
+    blockLock();
+    for (&block_pool) |*entry| {
+        if (entry.* == null) {
+            entry.* = .{ .allocator = gpa, .bytes = bytes };
+            blockUnlock();
+            return;
+        }
+    }
+    blockUnlock();
+    gpa.free(bytes);
+}
+
 pub const Regex = struct {
     arena: std.heap.ArenaAllocator,
     /// Fast-path storage for small compilations; null when `arena` owns the
@@ -320,29 +370,34 @@ pub const Regex = struct {
         // page allocations. Long patterns grow several parse lists and pay
         // the block's reallocation copies, so they compile in the arena.
         if (pattern.len > 64) return initArena(gpa, pattern, limits);
+        if (takeCompileBlock(gpa)) |block| return compileInBlock(gpa, block, pattern, limits);
         if (gpa.alloc(u8, compile_block_size)) |block| {
-            var fba = std.heap.FixedBufferAllocator.init(block);
-            const parsed = parse_mod.parse(fba.allocator(), pattern, limits) catch |err| {
-                gpa.free(block);
-                if (err == error.OutOfMemory) return initArena(gpa, pattern, limits);
-                return err;
-            };
-            const program = compile_mod.compile(fba.allocator(), parsed, limits) catch |err| {
-                gpa.free(block);
-                if (err == error.OutOfMemory) return initArena(gpa, pattern, limits);
-                return err;
-            };
-            return .{
-                .arena = std.heap.ArenaAllocator.init(gpa),
-                .block = block,
-                .allocator = gpa,
-                .program = program,
-                .program_id = nextProgramId(),
-                .limits = limits,
-            };
+            return compileInBlock(gpa, block, pattern, limits);
         } else |_| {
             return initArena(gpa, pattern, limits);
         }
+    }
+
+    fn compileInBlock(gpa: std.mem.Allocator, block: []u8, pattern: []const u8, limits: Limits) Error!Regex {
+        var fba = std.heap.FixedBufferAllocator.init(block);
+        const parsed = parse_mod.parse(fba.allocator(), pattern, limits) catch |err| {
+            returnCompileBlock(gpa, block);
+            if (err == error.OutOfMemory) return initArena(gpa, pattern, limits);
+            return err;
+        };
+        const program = compile_mod.compile(fba.allocator(), parsed, limits) catch |err| {
+            returnCompileBlock(gpa, block);
+            if (err == error.OutOfMemory) return initArena(gpa, pattern, limits);
+            return err;
+        };
+        return .{
+            .arena = std.heap.ArenaAllocator.init(gpa),
+            .block = block,
+            .allocator = gpa,
+            .program = program,
+            .program_id = nextProgramId(),
+            .limits = limits,
+        };
     }
 
     fn initArena(gpa: std.mem.Allocator, pattern: []const u8, limits: Limits) Error!Regex {
@@ -357,7 +412,7 @@ pub const Regex = struct {
         clearPooledWorkspace(self.program_id);
         if (self.workspace) |*workspace| workspace.deinit();
         if (self.replace_workspace) |*workspace| workspace.deinit();
-        if (self.block) |block| self.allocator.free(block);
+        if (self.block) |block| returnCompileBlock(self.allocator, block);
         self.arena.deinit();
         self.* = undefined;
     }

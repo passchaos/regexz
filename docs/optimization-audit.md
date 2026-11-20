@@ -371,3 +371,10 @@ reallocating inside the block copies; the arena grows them with its chunk
 policy. Qwen tokenizer compilation improves 1.04–1.05x, while the 40-byte xDS
 pattern keeps the block (0.96x page control, host noise). See
 [arena compilation for long patterns](benchmarks/compile-arena-long-patterns.md).
+
+`Regex.init` now reuses its 16 KiB compile block from a process-wide pool
+when the caller uses the page allocator; `Regex.deinit` returns the block.
+The xDS-like compile improves 2.07x (5.15 → 2.49 us) by avoiding the
+per-compile mmap/munmap. The SMP allocator bypasses the pool and is unchanged;
+other allocators keep direct allocate/free so leak tracking still works. See
+[reusing the compile block](benchmarks/compile-block-pool.md).
