@@ -317,8 +317,9 @@ pub const Regex = struct {
 
     pub fn init(gpa: std.mem.Allocator, pattern: []const u8, limits: Limits) Error!Regex {
         // Small patterns fit in one fixed block, avoiding the arena's multiple
-        // page allocations. Fall back to an arena when the block is too small
-        // or cannot be allocated.
+        // page allocations. Long patterns grow several parse lists and pay
+        // the block's reallocation copies, so they compile in the arena.
+        if (pattern.len > 64) return initArena(gpa, pattern, limits);
         if (gpa.alloc(u8, compile_block_size)) |block| {
             var fba = std.heap.FixedBufferAllocator.init(block);
             const parsed = parse_mod.parse(fba.allocator(), pattern, limits) catch |err| {

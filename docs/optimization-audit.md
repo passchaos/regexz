@@ -364,3 +364,10 @@ Calling the fast branch directly from `Matches.next` to skip the public find
 dispatch was screened and reverted: the borrowed iterator measured 0.97x and
 the owning iterator 0.95x, so the iterator is not dispatch-bound. See
 [iterator shortcut screen](benchmarks/find-all-fast-branch.json).
+
+`Regex.init` now compiles patterns longer than 64 bytes in an arena instead of
+the fixed 16 KiB block. Long patterns grow several parse lists, and
+reallocating inside the block copies; the arena grows them with its chunk
+policy. Qwen tokenizer compilation improves 1.04–1.05x, while the 40-byte xDS
+pattern keeps the block (0.96x page control, host noise). See
+[arena compilation for long patterns](benchmarks/compile-arena-long-patterns.md).
