@@ -359,3 +359,8 @@ Raising the split parts reservation from `input.len / 8` to `input.len / 4`
 was neutral across two interleaved runs (1.05x then 0.99x on the whitespace
 split), so the extra temporary memory was not justified. See
 [split reserve screen](benchmarks/split-reserve-screen.json).
+
+Calling the fast branch directly from `Matches.next` to skip the public find
+dispatch was screened and reverted: the borrowed iterator measured 0.97x and
+the owning iterator 0.95x, so the iterator is not dispatch-bound. See
+[iterator shortcut screen](benchmarks/find-all-fast-branch.json).
