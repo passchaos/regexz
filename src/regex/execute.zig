@@ -53,10 +53,27 @@ const UnicodeEntry = rune_cache.Entry;
 /// use it after a few calls so one-shot matching does not pay construction.
 const dfa_min_input: usize = 4096;
 const dfa_warmup_calls: usize = 2;
+/// Consuming instructions tracked per state for mask memoization. Four bits
+/// cover the common alternation shapes and bound the per-state table at 16
+/// entries; wider states keep the full instruction walk.
+const max_mask_bits = 4;
+const no_single: u32 = std.math.maxInt(u32);
 const DfaState = struct {
     instructions: []const u32,
     accept: bool,
+    /// Target slots appended after the instruction copy in the same arena
+    /// block (`1 << k` for k consuming instructions); 0 when the state keeps
+    /// the full instruction walk.
+    target_count: u8 = 0,
 };
+
+/// Memoized targets live directly after the state's instruction copy, so the
+/// state stays small and no separate allocation is needed.
+inline fn stateTargets(state: DfaState) []u32 {
+    if (state.target_count == 0) return &.{};
+    const base: [*]u32 = @constCast(state.instructions.ptr);
+    return base[state.instructions.len .. state.instructions.len + state.target_count];
+}
 const Dfa = struct {
     allocator: std.mem.Allocator,
     arena: std.heap.ArenaAllocator,
@@ -311,14 +328,27 @@ pub const Workspace = struct {
         const key = std.mem.sliceAsBytes(scratch);
         if (dfa.index.get(key)) |id| return id;
         if (dfa.states.items.len >= dfa_max_states) return error.OutOfMemory;
-        const owned = try dfa.arena.allocator().dupe(u32, scratch);
-        var state: DfaState = .{ .instructions = owned, .accept = false };
-        for (owned) |index| switch (program.instructions[index]) {
-            .accept => {
-                state.accept = true;
-                break;
-            },
+        var accept = false;
+        var consuming: usize = 0;
+        for (scratch) |index| switch (program.instructions[index]) {
+            .accept => accept = true,
+            .consume, .star, .literal_byte, .literal_rune => consuming += 1,
             else => {},
+        };
+        // Only non-ASCII runes consult the mask table, so ASCII-only DFAs
+        // skip the target slots entirely.
+        const target_count: u8 = if (!dfa.ascii_only and consuming <= max_mask_bits)
+            @as(u8, 1) << @intCast(consuming)
+        else
+            0;
+        const owned = try dfa.arena.allocator().alloc(u32, scratch.len + target_count);
+        @memcpy(owned[0..scratch.len], scratch);
+        const targets = owned[scratch.len..];
+        @memset(targets, no_single);
+        const state: DfaState = .{
+            .instructions = owned[0..scratch.len],
+            .accept = accept,
+            .target_count = target_count,
         };
         const id: u32 = @intCast(dfa.states.items.len);
         try dfa.states.append(dfa.allocator, state);
@@ -330,7 +360,7 @@ pub const Workspace = struct {
         } else {
             try dfa.ascii_table.appendNTimes(dfa.allocator, ascii_unprepared, 128);
         }
-        try dfa.index.put(dfa.allocator, std.mem.sliceAsBytes(owned), id);
+        try dfa.index.put(dfa.allocator, std.mem.sliceAsBytes(owned[0..scratch.len]), id);
         return id;
     }
     fn dfaStartState(self: *Workspace, program: *const Program) std.mem.Allocator.Error!u32 {
@@ -358,21 +388,28 @@ pub const Workspace = struct {
             const entry = &dfa.unicode_cache[rune_cache.slot(key, dfa.unicode_cache.len)];
             if (entry.key == key) return if (entry.next == dfa_dead) dfa_dead else entry.next - 1;
         }
-        const instructions = dfa.states.items[state_id].instructions;
-        self.dfaNextEpoch();
-        var count: usize = 0;
-        const list = self.storage[0..program.instructions.len];
-        for (instructions) |index| {
-            switch (program.instructions[index]) {
-                .consume => |*consume| if (consume.set.matches(rune)) self.dfaClosure(program, consume.next, list, &count),
-                .star => |*star| if (star.set.matches(rune)) self.dfaClosure(program, index, list, &count),
-                .literal_byte => |literal| if (rune == @as(u21, literal.value)) self.dfaClosure(program, literal.next, list, &count),
-                .literal_rune => |literal| if (rune == literal.value) self.dfaClosure(program, literal.next, list, &count),
-                .accept => {},
-                else => unreachable,
+        const state = dfa.states.items[state_id];
+        var next: u32 = dfa_dead;
+        // The ASCII table already deduplicates per byte, so the mask table
+        // only pays off for rune-cache misses on non-ASCII runes.
+        if (rune >= 128 and state.target_count != 0) {
+            next = try self.dfaMaskTransition(program, state, rune);
+        } else {
+            self.dfaNextEpoch();
+            var count: usize = 0;
+            const list = self.storage[0..program.instructions.len];
+            for (state.instructions) |index| {
+                switch (program.instructions[index]) {
+                    .consume => |*consume| if (consume.set.matches(rune)) self.dfaClosure(program, consume.next, list, &count),
+                    .star => |*star| if (star.set.matches(rune)) self.dfaClosure(program, index, list, &count),
+                    .literal_byte => |literal| if (rune == @as(u21, literal.value)) self.dfaClosure(program, literal.next, list, &count),
+                    .literal_rune => |literal| if (rune == literal.value) self.dfaClosure(program, literal.next, list, &count),
+                    .accept => {},
+                    else => unreachable,
+                }
             }
+            next = if (count == 0) dfa_dead else try self.dfaGetState(program, list[0..count]);
         }
-        const next: u32 = if (count == 0) dfa_dead else try self.dfaGetState(program, list[0..count]);
         if (rune < 128) {
             // Store the target's row offset so the scan loop can index with
             // one add instead of a shift plus add on the critical path.
@@ -380,6 +417,69 @@ pub const Workspace = struct {
         } else if (shift == 7) {
             rune_cache.put(dfa.allocator, &dfa.unicode_cache, &dfa.unicode_collisions, (@as(u64, state_id) << 21) | rune, if (next == dfa_dead) dfa_dead else next + 1);
         }
+        return next;
+    }
+    /// Transition for a state whose consuming instructions fit the mask
+    /// table. The target depends only on which instructions matched, so a
+    /// rune-cache miss on a distinct rune reuses the memoized target after
+    /// the set or value tests.
+    fn dfaMaskTransition(self: *Workspace, program: *const Program, state: DfaState, rune: u21) std.mem.Allocator.Error!u32 {
+        var mask: u8 = 0;
+        var matching: usize = 0;
+        var next_instructions: [max_mask_bits]u32 = undefined;
+        var bit: u3 = 0;
+        for (state.instructions) |index| {
+            switch (program.instructions[index]) {
+                .accept => {},
+                .consume => |consume| {
+                    if (consume.set.matches(rune)) {
+                        mask |= @as(u8, 1) << bit;
+                        next_instructions[matching] = @intCast(consume.next);
+                        matching += 1;
+                    }
+                    bit += 1;
+                },
+                .star => |star| {
+                    if (star.set.matches(rune)) {
+                        mask |= @as(u8, 1) << bit;
+                        next_instructions[matching] = index;
+                        matching += 1;
+                    }
+                    bit += 1;
+                },
+                .literal_byte => |literal| {
+                    if (rune == @as(u21, literal.value)) {
+                        mask |= @as(u8, 1) << bit;
+                        next_instructions[matching] = @intCast(literal.next);
+                        matching += 1;
+                    }
+                    bit += 1;
+                },
+                .literal_rune => |literal| {
+                    if (rune == literal.value) {
+                        mask |= @as(u8, 1) << bit;
+                        next_instructions[matching] = @intCast(literal.next);
+                        matching += 1;
+                    }
+                    bit += 1;
+                },
+                else => unreachable,
+            }
+        }
+        if (mask == 0) return dfa_dead;
+        const targets = stateTargets(state);
+        const cached = targets[mask];
+        if (cached != no_single) return cached;
+        self.dfaNextEpoch();
+        var count: usize = 0;
+        const list = self.storage[0..program.instructions.len];
+        for (next_instructions[0..matching]) |next_instruction| {
+            self.dfaClosure(program, next_instruction, list, &count);
+        }
+        const next: u32 = if (count == 0) dfa_dead else try self.dfaGetState(program, list[0..count]);
+        // The slots live in the arena block behind the instruction copy,
+        // which is stable across state-list growth.
+        stateTargets(state)[mask] = next;
         return next;
     }
     fn executeDfa(self: *Workspace, program: *const Program, input: []const u8) std.mem.Allocator.Error!bool {

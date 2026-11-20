@@ -118,6 +118,18 @@ search another 1.33–1.35x. Blocks at the end without a third-byte lane skip
 the filter stage, which only leaves more candidates for exact verification.
 See [third-byte filtering](benchmarks/prefix-third-byte.md).
 
+Full-match DFA transitions now memoize the target by match mask. A state's
+transition depends only on which consuming instructions match a rune, so
+states with at most four consuming instructions carry `1 << k` target slots
+in their arena instruction block; a rune-cache miss tests the sets once,
+builds the mask and reuses the memoized target instead of walking
+instructions, running the closure and interning the state again. ASCII
+transitions keep the per-byte table and the general walk, ASCII-only DFAs
+allocate no slots, and the state record and workspace size are unchanged.
+Varied Han first matches improve 1.76–2.35x and direct-mapped slot-collision
+warm scans 2.86x; ASCII controls stay within host noise. See
+[DFA transition masks](benchmarks/dfa-mask-cache.md).
+
 Further work on these candidates needs fresh measurements before implementation.
 Current warmed throughput does not establish their cold-start cost or the
 benefit of replacing their fallback paths.
