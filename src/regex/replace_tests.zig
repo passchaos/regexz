@@ -59,6 +59,24 @@ test "literal replacement scans occurrences directly" {
     try expectReplace(",", "[$0]", "a,b", "a[,]b");
 }
 
+test "literal length and caller-buffer writers" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const program = try regex.compile(allocator, ",", .{});
+    var workspace = try regex.ReplaceWorkspace.init(allocator, program, .{});
+    defer workspace.deinit();
+
+    try std.testing.expectEqual(@as(usize, 5), try workspace.replaceAllLen("a,b,c", ";"));
+    var output: [5]u8 = undefined;
+    try std.testing.expectEqualStrings("a;b;c", try workspace.replaceAllInto("a,b,c", ";", &output));
+    var small: [4]u8 = undefined;
+    try std.testing.expectError(error.RegexLimitExceeded, workspace.replaceAllInto("a,b,c", ";", &small));
+
+    try std.testing.expectEqual(@as(usize, 3), try workspace.replaceAllLen("abc", ";"));
+    try std.testing.expectEqualStrings("abc", try workspace.replaceAllInto("abc", ";", &output));
+}
+
 test "regex replacement honors lazy quantifiers" {
     try expectReplace(
         "^(.*?)one(.*)$",

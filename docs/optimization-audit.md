@@ -289,6 +289,12 @@ The 29 KiB `,` → `;` limited replacement improves 1.47x; substitutions with
 syntax and other patterns keep the general path. See
 [limited replacement over a literal pattern](benchmarks/replacen-literal.md).
 
+`replaceAllLen` and `replaceAllInto` now share the literal scan: the length
+writer counts occurrences and computes the result size, and the caller-buffer
+writer fills the buffer directly while still failing closed on a short buffer.
+The 29 KiB `,` length and buffer writers improve 2.06x and 1.54x. See
+[literal length and caller-buffer writers](benchmarks/replace-literal-writers.md).
+
 Further work on these candidates needs fresh measurements before implementation.
 Current warmed throughput does not establish their cold-start cost or the
 benefit of replacing their fallback paths.

@@ -559,10 +559,28 @@ pub const Workspace = struct {
         input: []const u8,
         substitution: []const u8,
     ) Error!usize {
+        if (self.program.literal) |literal| {
+            if (literal.len != 0 and std.mem.indexOfAny(u8, substitution, "\\$") == null) {
+                return self.replaceLiteralLen(input, literal, substitution);
+            }
+        }
         var length: usize = 0;
         var writer = subst.LengthWriter{ .length = &length };
         try self.replaceAllWith(&writer, input, substitution, std.math.maxInt(usize));
         return length;
+    }
+
+    fn replaceLiteralLen(self: *Workspace, input: []const u8, literal: []const u8, substitution: []const u8) Error!usize {
+        _ = self;
+        var count: usize = 0;
+        var offset: usize = 0;
+        while (indexOfLiteral(input, offset, literal)) |found| {
+            count += 1;
+            offset = found + literal.len;
+        }
+        const removed = std.math.mul(usize, count, literal.len) catch return error.RegexLimitExceeded;
+        const added = std.math.mul(usize, count, substitution.len) catch return error.RegexLimitExceeded;
+        return input.len - removed + added;
     }
 
     /// Write the replacement into a caller-owned buffer. The buffer must be at
@@ -573,9 +591,43 @@ pub const Workspace = struct {
         substitution: []const u8,
         output: []u8,
     ) Error![]const u8 {
+        if (self.program.literal) |literal| {
+            if (literal.len != 0 and std.mem.indexOfAny(u8, substitution, "\\$") == null) {
+                return self.replaceLiteralInto(input, literal, substitution, output);
+            }
+        }
         var writer = subst.BufferWriter{ .output = output };
         try self.replaceAllWith(&writer, input, substitution, std.math.maxInt(usize));
         return output[0..writer.len];
+    }
+
+    fn replaceLiteralInto(
+        self: *Workspace,
+        input: []const u8,
+        literal: []const u8,
+        substitution: []const u8,
+        output: []u8,
+    ) Error![]const u8 {
+        _ = self;
+        var write: usize = 0;
+        var last: usize = 0;
+        var offset: usize = 0;
+        while (indexOfLiteral(input, offset, literal)) |found| {
+            const gap = found - last;
+            if (gap > output.len - write) return error.RegexLimitExceeded;
+            @memcpy(output[write..][0..gap], input[last..found]);
+            write += gap;
+            if (substitution.len > output.len - write) return error.RegexLimitExceeded;
+            @memcpy(output[write..][0..substitution.len], substitution);
+            write += substitution.len;
+            last = found + literal.len;
+            offset = last;
+        }
+        const tail = input.len - last;
+        if (tail > output.len - write) return error.RegexLimitExceeded;
+        @memcpy(output[write..][0..tail], input[last..]);
+        write += tail;
+        return output[0..write];
     }
 
     /// Replace every non-overlapping leftmost-first match using a callback.
