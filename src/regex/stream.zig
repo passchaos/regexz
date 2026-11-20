@@ -32,6 +32,14 @@ pub const StreamMatch = struct {
 pub const EmitFn = *const fn (context: ?*anyopaque, match: StreamMatch) void;
 
 const Thread = struct { pc: u32, start: usize, slots: []usize };
+
+/// A typed view into the scanner's single storage block. The block starts
+/// 8-aligned and every preceding view ends on an 8-byte boundary.
+inline fn sliceAt(comptime T: type, base: [*]u8, cursor: *usize, count: usize) []T {
+    const ptr: [*]T = @ptrCast(@alignCast(base + cursor.*));
+    cursor.* += count * @sizeOf(T);
+    return ptr[0..count];
+}
 const ChainPhase = enum { idle, run_a, run_b };
 const ResetEntry = struct { slot: u16, old: usize };
 const Rune = struct { value: u21, len: usize };
@@ -74,6 +82,10 @@ pub const Scanner = struct {
     slot_count: usize,
     needs_final_newline: bool,
     first_filter: prefilter.FirstFilter,
+    /// One allocation for the thread lists, their slot storage and the seen
+    /// table. A scanner is created per stream, and separate small allocations
+    /// each cost a page-allocator round trip.
+    storage: []u64,
     // Thread state.
     raw: []Thread,
     raw_count: usize = 0,
@@ -134,20 +146,22 @@ pub const Scanner = struct {
         const count = program.instructions.len;
         const slot_count = 2 * (@as(usize, program.capture_count) + 1);
         if (slot_count > 256 or count > 2048) return error.UnsupportedRegexFeature;
-        const raw = try allocator.alloc(Thread, count);
-        errdefer allocator.free(raw);
-        const terminal = try allocator.alloc(Thread, count);
-        errdefer allocator.free(terminal);
-        const raw_slots = try allocator.alloc(usize, count * slot_count);
-        errdefer allocator.free(raw_slots);
-        const terminal_slots = try allocator.alloc(usize, count * slot_count);
-        errdefer allocator.free(terminal_slots);
-        const scratch = try allocator.alloc(usize, slot_count);
-        errdefer allocator.free(scratch);
-        const best_slots = try allocator.alloc(usize, slot_count);
-        errdefer allocator.free(best_slots);
+        const thread_bytes = count * @sizeOf(Thread);
+        const slots_bytes = count * slot_count * @sizeOf(usize);
+        const scratch_bytes = slot_count * @sizeOf(usize);
+        const total_bytes = 2 * thread_bytes + 2 * slots_bytes + 2 * scratch_bytes + count * @sizeOf(u32);
+        const storage = try allocator.alloc(u64, (total_bytes + @sizeOf(u64) - 1) / @sizeOf(u64));
+        errdefer allocator.free(storage);
+        const base: [*]u8 = @ptrCast(storage.ptr);
+        var cursor: usize = 0;
+        const raw = sliceAt(Thread, base, &cursor, count);
+        const terminal = sliceAt(Thread, base, &cursor, count);
+        const raw_slots = sliceAt(usize, base, &cursor, count * slot_count);
+        const terminal_slots = sliceAt(usize, base, &cursor, count * slot_count);
+        const scratch = sliceAt(usize, base, &cursor, slot_count);
+        const best_slots = sliceAt(usize, base, &cursor, slot_count);
         @memset(best_slots, unset);
-        const seen = try allocator.alloc(u32, count);
+        const seen = sliceAt(u32, base, &cursor, count);
         @memset(seen, 0);
         var needs_final_newline = false;
         for (program.instructions) |instruction| switch (instruction) {
@@ -186,6 +200,7 @@ pub const Scanner = struct {
             .slot_count = slot_count,
             .needs_final_newline = needs_final_newline,
             .first_filter = prefilter.FirstFilter.init(program.first),
+            .storage = storage,
             .raw = raw,
             .terminal = terminal,
             .raw_slots = raw_slots,
@@ -206,13 +221,7 @@ pub const Scanner = struct {
     }
 
     pub fn deinit(self: *Scanner) void {
-        self.allocator.free(self.raw);
-        self.allocator.free(self.terminal);
-        self.allocator.free(self.raw_slots);
-        self.allocator.free(self.terminal_slots);
-        self.allocator.free(self.scratch);
-        self.allocator.free(self.best_slots);
-        self.allocator.free(self.seen);
+        self.allocator.free(self.storage);
         self.reset_trail.deinit(self.allocator);
         self.buffer.deinit(self.allocator);
         if (self.chain_a_run) |*run| run.deinit(self.allocator);

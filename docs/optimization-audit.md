@@ -425,3 +425,10 @@ occurrence before translating: whole vector blocks are translated while at
 least 16 replacements remain and the scalar tail applies the exact limit. The
 29 KiB comma `replacen` improves 1.16x with a neutral control median. See
 [literal byte paths](benchmarks/literal-byte-paths.md).
+
+`StreamScanner.init` now carves its thread lists, slot storage and epoch
+table from one allocation instead of seven; with the page allocator each
+array was an mmap/munmap pair. Scanner creation and destruction drops from
+6.3–6.6 us to 1.9–2.2 us (3.0–3.4x), and a focused 216 KiB stream pass is
+faster in every paired run (1.05x median). See
+[single-allocation scanner storage](benchmarks/scanner-storage.md).
