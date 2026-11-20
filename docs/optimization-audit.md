@@ -247,6 +247,12 @@ run with a byte table (or the deferred UTF-8 run for non-ASCII bytes). URL
 search improves 2.77x; other search shapes stay within host noise. See
 [literal-prefix runs](benchmarks/literal-run-url.md).
 
+`replaceAll` fuses the search and expansion when the program is an ASCII
+`set+` and the substitution is literal: one byte-table scan appends each gap
+and the fixed replacement. The 24 KiB `a+` → `x` replacement improves 1.34x;
+substitutions with syntax and other patterns keep the general path. See
+[replacement over set runs](benchmarks/replace-set-runs.md).
+
 Further work on these candidates needs fresh measurements before implementation.
 Current warmed throughput does not establish their cold-start cost or the
 benefit of replacing their fallback paths.

@@ -473,10 +473,35 @@ pub const Workspace = struct {
         input: []const u8,
         substitution: []const u8,
     ) Error![]u8 {
+        // A pure ASCII `set+` matches maximal runs, and a literal substitution
+        // needs no expansion, so the whole pass is one table scan.
+        if (self.fast_kind == .set_run and std.mem.indexOfAny(u8, substitution, "\\$") == null) {
+            return self.replaceAllSetRun(input, substitution);
+        }
         var out: std.ArrayList(u8) = .empty;
         errdefer out.deinit(self.allocator);
         var writer = subst.ListWriter{ .list = &out, .allocator = self.allocator };
         try self.replaceAllWith(&writer, input, substitution, std.math.maxInt(usize));
+        return out.toOwnedSlice(self.allocator);
+    }
+
+    fn replaceAllSetRun(self: *Workspace, input: []const u8, substitution: []const u8) Error![]u8 {
+        const table = &self.simple_set_table;
+        var out: std.ArrayList(u8) = .empty;
+        errdefer out.deinit(self.allocator);
+        try out.ensureTotalCapacity(self.allocator, input.len);
+        var last: usize = 0;
+        var offset: usize = 0;
+        while (offset < input.len) {
+            while (offset < input.len and !table[input[offset]]) offset += 1;
+            if (offset == input.len) break;
+            const start = offset;
+            while (offset < input.len and table[input[offset]]) offset += 1;
+            try out.appendSlice(self.allocator, input[last..start]);
+            try out.appendSlice(self.allocator, substitution);
+            last = offset;
+        }
+        try out.appendSlice(self.allocator, input[last..]);
         return out.toOwnedSlice(self.allocator);
     }
 

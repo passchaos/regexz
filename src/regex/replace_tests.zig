@@ -41,6 +41,16 @@ test "regex replacement replaces every non-overlapping match" {
     );
 }
 
+test "set-run replacement scans runs in one pass" {
+    try expectReplace("a+", "x", "aa b aaa", "x b x");
+    try expectReplace("a+", "x", "", "");
+    try expectReplace("a+", "x", "bbb", "bbb");
+    try expectReplace("a+", "x", "aaaa", "x");
+    try expectReplace("\\s+", "_", " a  b ", "_a_b_");
+    // A substitution with syntax keeps the general expansion path.
+    try expectReplace("a+", "[$0]", "aa b a", "[aa] b [a]");
+}
+
 test "regex replacement honors lazy quantifiers" {
     try expectReplace(
         "^(.*?)one(.*)$",
