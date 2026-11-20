@@ -486,3 +486,10 @@ the assume-capacity variants: the output cannot exceed the reserved
 `a+` replacement improves 1.21x (25.0 -> 20.6 us) and `replacen` 1.18x, with
 the 65 control cases at a 1.01x median. See
 [capacity-guaranteed appends](benchmarks/set-run-append.md).
+
+`splitAsciiSet` and `splitLiteral` now reserve `input.len / 4 + 1` parts
+(capped at 8192) and append with the assume-capacity variants, removing the
+growth copy and the per-part capacity check for dense separators. The 22 KiB
+whitespace split improves 1.10x (20.0 -> 18.2 us) and the 29 KiB comma split
+1.16x (19.8 -> 17.1 us), with the 65 control cases at a 1.00x median. See
+[capacity-guaranteed split appends](benchmarks/split-appends.md).

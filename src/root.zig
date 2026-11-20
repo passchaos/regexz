@@ -76,9 +76,9 @@ fn splitAsciiSet(gpa: std.mem.Allocator, input: []const u8, set: model.Set, limi
     var parts: std.ArrayList([]const u8) = .empty;
     errdefer parts.deinit(gpa);
     if (limit == 0) return parts.toOwnedSlice(gpa);
-    // Matches are at least one byte, so `input.len / 8` is a bounded first
-    // guess; the list still grows if a separator-dense input needs more.
-    try parts.ensureTotalCapacity(gpa, @min(@min(input.len / 8 + 1, 4096), limit));
+    // A quarter of the input covers the common dense-separator case, so the
+    // hot appends skip their capacity check; the list still grows if needed.
+    try parts.ensureTotalCapacity(gpa, @min(@min(input.len / 4 + 1, 8192), limit));
     const table = byte_table.init(256, set);
     var last: usize = 0;
     var offset: usize = 0;
@@ -87,10 +87,12 @@ fn splitAsciiSet(gpa: std.mem.Allocator, input: []const u8, set: model.Set, limi
         if (offset == input.len) break;
         const start = offset;
         while (offset < input.len and table[input[offset]]) offset += 1;
-        try parts.append(gpa, input[last..start]);
+        if (parts.items.len == parts.capacity) try parts.ensureUnusedCapacity(gpa, 1);
+        parts.appendAssumeCapacity(input[last..start]);
         last = offset;
     }
-    try parts.append(gpa, input[last..]);
+    if (parts.items.len == parts.capacity) try parts.ensureUnusedCapacity(gpa, 1);
+    parts.appendAssumeCapacity(input[last..]);
     return parts.toOwnedSlice(gpa);
 }
 
@@ -100,7 +102,7 @@ fn splitLiteral(gpa: std.mem.Allocator, input: []const u8, literal: []const u8, 
     var parts: std.ArrayList([]const u8) = .empty;
     errdefer parts.deinit(gpa);
     if (limit == 0) return parts.toOwnedSlice(gpa);
-    try parts.ensureTotalCapacity(gpa, @min(@min(input.len / 8 + 1, 4096), limit));
+    try parts.ensureTotalCapacity(gpa, @min(@min(input.len / 4 + 1, 8192), limit));
     var last: usize = 0;
     var offset: usize = 0;
     while (parts.items.len + 1 < limit) {
@@ -121,11 +123,13 @@ fn splitLiteral(gpa: std.mem.Allocator, input: []const u8, literal: []const u8, 
         } else {
             found = findLiteral(input, offset, literal) orelse break;
         }
-        try parts.append(gpa, input[last..found]);
+        if (parts.items.len == parts.capacity) try parts.ensureUnusedCapacity(gpa, 1);
+        parts.appendAssumeCapacity(input[last..found]);
         last = found + literal.len;
         offset = last;
     }
-    try parts.append(gpa, input[last..]);
+    if (parts.items.len == parts.capacity) try parts.ensureUnusedCapacity(gpa, 1);
+    parts.appendAssumeCapacity(input[last..]);
     return parts.toOwnedSlice(gpa);
 }
 
