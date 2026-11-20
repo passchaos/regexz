@@ -493,3 +493,9 @@ growth copy and the per-part capacity check for dense separators. The 22 KiB
 whitespace split improves 1.10x (20.0 -> 18.2 us) and the 29 KiB comma split
 1.16x (19.8 -> 17.1 us), with the 65 control cases at a 1.00x median. See
 [capacity-guaranteed split appends](benchmarks/split-appends.md).
+
+`replaceLiteral` appends gaps and a substitution no longer than the literal
+with the assume-capacity variants, since the output cannot exceed the
+reserved `input.len`. Replacing `the` with `X` on the 216 KiB word text
+improves 1.08x (75.3 -> 69.5 us). See
+[literal replacement appends](benchmarks/literal-replace-appends.md).

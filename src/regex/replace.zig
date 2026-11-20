@@ -641,14 +641,26 @@ pub const Workspace = struct {
         var last: usize = 0;
         var offset: usize = 0;
         var replaced: usize = 0;
+        // A substitution no longer than the literal never grows the output,
+        // so the reserved capacity always fits.
+        const bounded = substitution.len <= literal.len;
         while (replaced < limit) : (replaced += 1) {
             const found = indexOfLiteral(input, offset, literal) orelse break;
-            try out.appendSlice(self.allocator, input[last..found]);
-            try out.appendSlice(self.allocator, substitution);
+            if (bounded) {
+                out.appendSliceAssumeCapacity(input[last..found]);
+                out.appendSliceAssumeCapacity(substitution);
+            } else {
+                try out.appendSlice(self.allocator, input[last..found]);
+                try out.appendSlice(self.allocator, substitution);
+            }
             last = found + literal.len;
             offset = last;
         }
-        try out.appendSlice(self.allocator, input[last..]);
+        if (bounded) {
+            out.appendSliceAssumeCapacity(input[last..]);
+        } else {
+            try out.appendSlice(self.allocator, input[last..]);
+        }
         return out.toOwnedSlice(self.allocator);
     }
 
