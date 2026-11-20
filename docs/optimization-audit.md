@@ -211,3 +211,9 @@ paths and allocation counts unchanged; see
 Further work on these candidates needs fresh measurements before implementation.
 Current warmed throughput does not establish their cold-start cost or the
 benefit of replacing their fallback paths.
+
+Packing the rune-mode search DFA's ASCII transitions into 16-bit entries with
+an accept bit, shrinking the hot tables from 96 KiB to 16 KiB, was screened
+and reverted: interleaved medians put `find Qwen tokenizer` at 0.97x and the
+other rune-mode cases within host noise, so the extra masking did not pay for
+itself. See [rune DFA ASCII packing screen](benchmarks/rune-dfa-ascii.json).
