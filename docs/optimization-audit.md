@@ -283,6 +283,12 @@ substitution are appended directly. The 29 KiB `,` → `;` replacement improves
 1.41x; substitutions with syntax and other patterns keep the general path.
 See [replacement over a literal pattern](benchmarks/replace-literal.md).
 
+`replacen` now shares the literal scanner with `replaceAll`: a literal
+pattern, a literal substitution and a match limit scan occurrences directly.
+The 29 KiB `,` → `;` limited replacement improves 1.47x; substitutions with
+syntax and other patterns keep the general path. See
+[limited replacement over a literal pattern](benchmarks/replacen-literal.md).
+
 Further work on these candidates needs fresh measurements before implementation.
 Current warmed throughput does not establish their cold-start cost or the
 benefit of replacing their fallback paths.

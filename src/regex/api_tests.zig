@@ -262,6 +262,10 @@ test "splitn and replacen honor their limits" {
     defer gpa.free(replaced);
     try std.testing.expectEqualStrings("a-b,c", replaced);
 
+    const replaced_two = try value.replacen(gpa, "a,b,c", 2, "-");
+    defer gpa.free(replaced_two);
+    try std.testing.expectEqualStrings("a-b-c", replaced_two);
+
     const replaced_none = try value.replacen(gpa, "a,b,c", 0, "-");
     defer gpa.free(replaced_none);
     try std.testing.expectEqualStrings("a,b,c", replaced_none);

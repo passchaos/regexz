@@ -493,12 +493,18 @@ pub const Workspace = struct {
     }
 
     fn replaceAllLiteral(self: *Workspace, input: []const u8, literal: []const u8, substitution: []const u8) Error![]u8 {
+        return self.replaceLiteral(input, literal, substitution, std.math.maxInt(usize));
+    }
+
+    fn replaceLiteral(self: *Workspace, input: []const u8, literal: []const u8, substitution: []const u8, limit: usize) Error![]u8 {
         var out: std.ArrayList(u8) = .empty;
         errdefer out.deinit(self.allocator);
         try out.ensureTotalCapacity(self.allocator, input.len);
         var last: usize = 0;
         var offset: usize = 0;
-        while (indexOfLiteral(input, offset, literal)) |found| {
+        var replaced: usize = 0;
+        while (replaced < limit) : (replaced += 1) {
+            const found = indexOfLiteral(input, offset, literal) orelse break;
             try out.appendSlice(self.allocator, input[last..found]);
             try out.appendSlice(self.allocator, substitution);
             last = found + literal.len;
@@ -535,6 +541,11 @@ pub const Workspace = struct {
         limit: usize,
         substitution: []const u8,
     ) Error![]u8 {
+        if (self.program.literal) |literal| {
+            if (literal.len != 0 and std.mem.indexOfAny(u8, substitution, "\\$") == null) {
+                return self.replaceLiteral(input, literal, substitution, limit);
+            }
+        }
         var out: std.ArrayList(u8) = .empty;
         errdefer out.deinit(self.allocator);
         var writer = subst.ListWriter{ .list = &out, .allocator = self.allocator };

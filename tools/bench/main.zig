@@ -124,6 +124,24 @@ fn benchReplace(io: std.Io, out: *std.Io.Writer, name: []const u8, pattern: []co
     try report(out, name, iterations, input.len, elapsed(io, .{ .nanoseconds = start }));
 }
 
+fn benchReplacen(io: std.Io, out: *std.Io.Writer, name: []const u8, pattern: []const u8, input: []const u8, limit: usize, substitution: []const u8, iterations: usize) !void {
+    var value = try regexz.Regex.init(gpa, pattern, .{});
+    defer value.deinit();
+    var workspace = try regexz.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    for (0..100) |_| {
+        const output = try workspace.replacen(input, limit, substitution);
+        gpa.free(output);
+    }
+    const start = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds;
+    for (0..iterations) |_| {
+        const output = try workspace.replacen(input, limit, substitution);
+        std.mem.doNotOptimizeAway(output);
+        gpa.free(output);
+    }
+    try report(out, name, iterations, input.len, elapsed(io, .{ .nanoseconds = start }));
+}
+
 pub fn main() !void {
     var threaded = std.Io.Threaded.init(gpa, .{});
     defer threaded.deinit();
@@ -410,6 +428,7 @@ pub fn main() !void {
     for (0..2000) |_| try long.appendSlice(gpa, "aaa bbb aaa bbb ");
     try benchReplace(io, out, "replaceAll a+ -> x", "a+", long.items, "x", 200);
     try benchReplace(io, out, "replaceAll , -> ;", ",", csv_text.items, ";", 200);
+    try benchReplacen(io, out, "replacen , -> ; (limit 10000)", ",", csv_text.items, 10000, ";", 200);
 
     {
         var value = try regexz.Regex.init(gpa, qwen, ucp);
