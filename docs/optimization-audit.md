@@ -419,3 +419,9 @@ sequence instead of probing each byte again. Punctuation between Han runs was
 the main beneficiary: `find Han class scan` improves 1.22x (148.7 → 122.4 us)
 while the 66 control cases stay at a 1.00x median. See
 [skipping rejected UTF-8 sequences](benchmarks/unicode-dead-skip.md).
+
+`replacen` for a one-byte literal and substitution no longer counts every
+occurrence before translating: whole vector blocks are translated while at
+least 16 replacements remain and the scalar tail applies the exact limit. The
+29 KiB comma `replacen` improves 1.16x with a neutral control median. See
+[literal byte paths](benchmarks/literal-byte-paths.md).

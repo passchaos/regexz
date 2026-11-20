@@ -322,3 +322,37 @@ test "substitution supports PCRE2 whole-input and angle-bracket forms" {
     try std.testing.expectError(error.InvalidRegex, regex.validateSubstitutionFor(program, "$<missing>"));
     try std.testing.expectError(error.InvalidRegex, regex.validateSubstitutionFor(program, "$<2>"));
 }
+
+test "replacen single-byte literal honors every limit" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const program = try regex.compile(allocator, ",", .{});
+    var workspace = try regex.ReplaceWorkspace.init(allocator, program, .{});
+    defer workspace.deinit();
+
+    const input = "a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z,";
+    try std.testing.expectEqualStrings(input, try workspace.replacen(input, 0, ";"));
+    try std.testing.expectEqualStrings(
+        "a;b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z,",
+        try workspace.replacen(input, 1, ";"),
+    );
+    // Limits below one vector block, inside it and beyond it all use the
+    // scalar tail once fewer than 16 replacements remain.
+    try std.testing.expectEqualStrings(
+        "a;b;c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z,",
+        try workspace.replacen(input, 2, ";"),
+    );
+    try std.testing.expectEqualStrings(
+        "a;b;c;d;e;f;g;h;i;j;k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z,",
+        try workspace.replacen(input, 10, ";"),
+    );
+    try std.testing.expectEqualStrings(
+        "a;b;c;d;e;f;g;h;i;j;k;l;m;n;o;p;q;r;s;t;u,v,w,x,y,z,",
+        try workspace.replacen(input, 20, ";"),
+    );
+    try std.testing.expectEqualStrings(
+        "a;b;c;d;e;f;g;h;i;j;k;l;m;n;o;p;q;r;s;t;u;v;w;x;y;z;",
+        try workspace.replacen(input, 100, ";"),
+    );
+}

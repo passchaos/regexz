@@ -59,3 +59,16 @@ zig fmt --check src/root.zig src/regex/replace.zig
 The replacement fuzzer diffs every output byte against the reference engine
 over 5,700 comparisons; the split tests cover leading, trailing and consecutive
 delimiters.
+
+## Limit-aware translate
+
+`replacen` first counted every occurrence to decide whether the translate
+covered the whole input, then translated. The translate now applies the limit
+directly: whole 16-byte blocks are translated while at least 16 replacements
+remain, and the scalar tail stops at the limit. This removes the counting
+pass; the 29 KiB comma `replacen` improves 1.16x (6,574 → 5,682 ns) and the
+66 control cases keep a 1.00x median. Raw samples are in
+[`replacen-limit-translate.json`](replacen-limit-translate.json).
+
+The new path is covered by a limit test that walks limits below, inside and
+beyond one vector block.

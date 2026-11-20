@@ -573,6 +573,41 @@ pub const Workspace = struct {
         return out;
     }
 
+    /// `replacen` variant: the translate stops replacing after `limit`
+    /// occurrences, so no separate counting pass is needed. A chunk is only
+    /// translated while at least one full chunk of replacements remains; the
+    /// scalar tail applies the exact remaining limit.
+    fn replaceByteAllocLimit(
+        self: *Workspace,
+        input: []const u8,
+        byte: u8,
+        replacement: u8,
+        limit: usize,
+    ) Error![]u8 {
+        const out = try self.allocator.alloc(u8, input.len);
+        errdefer self.allocator.free(out);
+        var remaining = limit;
+        const needle: @Vector(16, u8) = @splat(byte);
+        const repl: @Vector(16, u8) = @splat(replacement);
+        var offset: usize = 0;
+        while (offset + 16 <= input.len and remaining >= 16) : (offset += 16) {
+            const raw: [16]u8 = input[offset..][0..16].*;
+            const chunk: @Vector(16, u8) = @bitCast(raw);
+            const matches = chunk == needle;
+            out[offset..][0..16].* = @bitCast(@select(u8, matches, repl, chunk));
+            remaining -= @popCount(@as(u16, @bitCast(matches)));
+        }
+        while (offset < input.len) : (offset += 1) {
+            if (remaining != 0 and input[offset] == byte) {
+                out[offset] = replacement;
+                remaining -= 1;
+            } else {
+                out[offset] = input[offset];
+            }
+        }
+        return out;
+    }
+
     fn replaceAllLiteral(self: *Workspace, input: []const u8, literal: []const u8, substitution: []const u8) Error![]u8 {
         return self.replaceLiteral(input, literal, substitution, std.math.maxInt(usize));
     }
@@ -677,8 +712,8 @@ pub const Workspace = struct {
         }
         if (self.program.literal) |literal| {
             if (literal.len != 0 and std.mem.indexOfAny(u8, substitution, "\\$") == null) {
-                if (literal.len == 1 and substitution.len == 1 and countByte(input, literal[0]) <= limit) {
-                    return self.replaceByteAlloc(input, literal[0], substitution[0]);
+                if (literal.len == 1 and substitution.len == 1) {
+                    return self.replaceByteAllocLimit(input, literal[0], substitution[0], limit);
                 }
                 return self.replaceLiteral(input, literal, substitution, limit);
             }
