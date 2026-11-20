@@ -106,6 +106,13 @@ const Builder = struct {
     fn child(self: *Builder, node: u32, lo: u8, hi: u8) !u32 {
         const target = self.nodes.items[node];
         var edge_index = target.first;
+        if (target.last != no_edge) {
+            const tail = self.edges.items[target.last];
+            if (tail.range.lo == lo and tail.range.hi == hi) return tail.child;
+            // New edges are appended in strictly increasing lead order.
+            // A range beyond the tail cannot be an existing prefix.
+            if (lo > tail.range.lo) edge_index = no_edge;
+        }
         while (edge_index != no_edge) {
             const edge = self.edges.items[edge_index];
             if (edge.range.lo == lo and edge.range.hi == hi) return edge.child;
@@ -302,6 +309,22 @@ fn expectMatches(ranges: []const model.Range) !void {
             return error.TestUnexpectedResult;
         }
     }
+}
+
+test "utf8 builder reuses tail and earlier prefixes without duplicate edges" {
+    var builder = try Builder.init(std.testing.allocator);
+    defer builder.deinit();
+    const first = try builder.child(0, 0xc2, 0xc3);
+    const middle = try builder.child(0, 0xe0, 0xe2);
+    const last = try builder.child(0, 0xf0, 0xf4);
+    const node_count = builder.nodes.items.len;
+    const edge_count = builder.edges.items.len;
+    try std.testing.expectEqual(last, try builder.child(0, 0xf0, 0xf4));
+    try std.testing.expectEqual(first, try builder.child(0, 0xc2, 0xc3));
+    try std.testing.expectEqual(middle, try builder.child(0, 0xe0, 0xe2));
+    try std.testing.expectEqual(node_count, builder.nodes.items.len);
+    try std.testing.expectEqual(edge_count, builder.edges.items.len);
+    try std.testing.expectEqual(@as(u16, 3), builder.nodes.items[0].count);
 }
 
 test "utf8 automaton matches ASCII ranges" {
