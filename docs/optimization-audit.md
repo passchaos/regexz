@@ -644,3 +644,17 @@ cost. `find Qwen tokenizer` improves 1.04x in a focused seven-round harness
 and 1.05x in the full 67-case interleave with the 67-case median at 1.00x;
 the comparison against Rust moves from 1.52x to 1.67x. See
 [ASCII-first run scan](benchmarks/ascii-first-run-scan.md).
+
+Three further tokenizer candidates were screened and reverted. Letting the
+punctuation later plan scan non-ASCII runs directly (`。\n` in the CJK
+tokenizer) measured within 1% of the search-DFA fallback in a focused
+seven-round harness, and adding a two-entry positive rune cache to avoid the
+automaton loads made it 2-3% slower: the DFA's four-byte scan is already
+cheaper than the membership check plus tail scan. A vectorized 12-byte
+dense-range scan (`@Vector(16, u8)` lane checks for Han) did not beat the
+scalar automaton loop once the tail runes it skipped were accounted for.
+Dropping the redundant previous-byte boundary check in `findWordRun`
+regressed `find word boundary` 0.97x and `find word space word` 0.92x,
+because the extra start comparison cost more than the load it saved. The CJK
+time stays split between the run scan (about half, at the automaton's
+throughput limit) and the per-token prefix probe plus DFA fallback.
