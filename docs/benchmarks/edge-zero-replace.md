@@ -13,15 +13,19 @@ allocates once and writes once for those plans.
 
 ## Measurements
 
-The comparison harness (`tools/compare/zig_regex.zig`) was compiled for both
-trees and executed alternately before/after five times:
+A controlled harness calls `Workspace.replaceAll` on a 22 KiB input with a
+fixed workspace, 200,000 iterations per execution. Five executions were
+interleaved before/after:
 
 | Case | Before, ns/iter | After, ns/iter | Speedup |
 | --- | ---: | ---: | ---: |
-| replaceAll `\A|\z` -> `X` | 8,801.7 | 6,113.1 | 1.44x |
+| replaceAll zero-width | 3,825.2 | 3,487.4 | 1.10x |
 
-The other 18 comparison cases keep a 1.06x median. Raw samples and executable
-SHA-256 identities are in
+The comparison harness (`Regex.replaceAll`, which also creates a workspace per
+call) is allocation-noise-dominated for this case: repeated seven-round runs
+measured 0.86x, 1.10x and 1.44x on the same sources. The controlled harness
+keeps the workspace fixed, so it measures the write path itself and is
+stable. Raw samples and executable SHA-256 identities are in
 [`edge-zero-replace.json`](edge-zero-replace.json).
 
 ## Validation

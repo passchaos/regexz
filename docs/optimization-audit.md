@@ -453,7 +453,8 @@ screened and reverted: the replacement writers were neutral across the four
 
 `replaceAll` for an edge-only zero-width plan (`\A|\z`, `$`) now computes the
 exact output length and writes into one allocation instead of growing an
-ArrayList through several reallocations. The comparison harness's
-`replaceAll \A|\z` case improves 1.44x (8.8 -> 6.1 us) with a 1.06x control
-median. Plans that include line edges keep the general writer. See
+ArrayList through several reallocations. A controlled fixed-workspace harness
+measures 1.10x (3,825 -> 3,487 ns); the comparison harness is
+allocation-noise-dominated for this case (0.86-1.44x across runs). Plans that
+include line edges keep the general writer. See
 [edge-only zero-width replacement](benchmarks/edge-zero-replace.md).
