@@ -14,43 +14,44 @@ text and small full-match subjects.
 
 | Case | regexz, ns/iter | Rust, ns/iter | Rust / regexz |
 | --- | ---: | ---: | ---: |
-| compile Qwen tokenizer | 33,012.3 | 424,071.4 | 12.85x |
-| compile xDS-like | 2,413.1 | 20,438.7 | 8.47x |
-| find Qwen tokenizer | 38,041.7 | 61,796.7 | 1.62x |
-| findAll Qwen (borrowed) | 39,388.3 | 64,223.3 | 1.63x |
-| findAll Qwen (owning) | 38,030.0 | 68,635.8 | 1.80x |
-| find CJK tokenizer | 162,194.2 | 217,668.3 | 1.34x |
-| find HTML tag | 47,698.3 | 117,786.5 | 2.47x |
-| find URL | 34,013.5 | 82,111.9 | 2.41x |
-| find JSON string literal | 7,481.0 | 16,424.4 | 2.20x |
-| find JSON number | 28,099.4 | 60,521.5 | 2.15x |
-| find word boundary | 64,615.0 | 130,968.8 | 2.03x |
-| find (?i) literal | 42,735.2 | 79,631.7 | 1.86x |
-| find (?i) alternation | 126,952.7 | 178,561.2 | 1.41x |
-| find alternation (5 words) | 142,211.9 | 168,422.3 | 1.18x |
-| find 10-word alternation | 236,715.2 | 309,548.5 | 1.31x |
-| find 20-word alternation | 218,029.0 | 325,040.2 | 1.49x |
-| find Greek class | 48,295.6 | 90,118.5 | 1.87x |
-| find prefix+suffix | 8,210.0 | 28,016.5 | 3.41x |
-| find IPv4 | 106,624.6 | 123,531.9 | 1.16x |
-| find date | 34,633.5 | 122,410.2 | 3.53x |
-| find anchored line | 8,154.0 | 8,888.5 | 1.09x |
-| replaceAll email captures | 24,688.5 | 84,300.8 | 3.41x |
-| split whitespace (22 KiB) | 17,313.5 | 73,988.3 | 4.27x |
-| split commas (29 KiB) | 15,741.3 | 54,549.6 | 3.47x |
-| fullmatch literal | 1.7 | 9.8 | 5.76x |
-| fullmatch class | 5.1 | 31.6 | 6.20x |
-| fullmatch xDS-like | 9.6 | 29.7 | 3.09x |
-| replaceAll a+ -> x | 20,945.8 | 98,228.3 | 4.69x |
-| replaceAll \A|\z -> X | 2,840.2 | 8,318.3 | 2.93x |
-| RegexSet 9 no-match patterns | 1,901.3 | 37,577.9 | 19.76x |
+| compile Qwen tokenizer | 31,897.9 | 447,582.4 | 14.03x |
+| compile xDS-like | 2,673.6 | 21,539.6 | 8.06x |
+| find Qwen tokenizer | 40,446.7 | 66,615.8 | 1.65x |
+| findAll Qwen (borrowed) | 40,415.8 | 73,552.5 | 1.82x |
+| findAll Qwen (owning) | 40,110.0 | 66,302.5 | 1.65x |
+| find CJK tokenizer | 172,670.8 | 246,375.0 | 1.43x |
+| find HTML tag | 49,507.9 | 128,086.7 | 2.59x |
+| find URL | 35,956.5 | 90,235.4 | 2.51x |
+| find JSON string literal | 7,471.0 | 17,899.6 | 2.40x |
+| find JSON number | 28,616.9 | 62,405.2 | 2.18x |
+| find word boundary | 69,071.5 | 139,677.5 | 2.02x |
+| find (?i) literal | 44,319.0 | 86,388.3 | 1.95x |
+| find (?i) alternation | 138,796.7 | 189,480.4 | 1.37x |
+| find alternation (5 words) | 153,759.4 | 177,650.8 | 1.16x |
+| find 10-word alternation | 250,486.0 | 310,541.5 | 1.24x |
+| find 20-word alternation | 225,697.5 | 327,511.0 | 1.45x |
+| find Greek class | 50,807.9 | 91,424.2 | 1.80x |
+| find prefix+suffix | 8,388.3 | 29,351.2 | 3.50x |
+| find IPv4 | 123,166.3 | 142,942.7 | 1.16x |
+| find date | 37,335.2 | 124,644.8 | 3.34x |
+| find anchored line | 2,241.9 | 9,477.3 | 4.23x |
+| replaceAll email captures | 26,552.5 | 87,761.0 | 3.31x |
+| split whitespace (22 KiB) | 17,359.2 | 77,496.0 | 4.46x |
+| split commas (29 KiB) | 16,250.8 | 55,935.4 | 3.44x |
+| fullmatch literal | 1.8 | 9.7 | 5.39x |
+| fullmatch class | 5.2 | 33.3 | 6.40x |
+| fullmatch xDS-like | 10.4 | 33.0 | 3.17x |
+| replaceAll a+ -> x | 22,287.1 | 104,627.5 | 4.69x |
+| replaceAll \A|\z -> X | 2,830.0 | 7,912.9 | 2.80x |
+| RegexSet 9 no-match patterns | 1,804.8 | 38,900.4 | 21.55x |
 
-regexz is faster on all 30 measured cases: 12.85x on tokenizer compilation,
-8.47x on a small-pattern compile, 1.34–1.80x on tokenizer scans and match
-iteration, 1.09–3.53x on search scans, 3.41–4.27x on splits, 3.09–6.20x on
-full-match calls, 4.69x on a set-run replacement, 3.41x on a capture
-replacement, 2.93x on a zero-width replacement and 19.76x on the nine-pattern
-set. The thinnest margin is the multiline anchored line scan at 1.09x.
+regexz is faster on all 30 measured cases: 14.03x on tokenizer compilation,
+8.06x on a small-pattern compile, 1.43–1.82x on tokenizer scans and match
+iteration, 1.16–4.23x on search scans, 3.44–4.46x on splits, 3.17–6.40x on
+full-match calls, 4.69x on a set-run replacement, 3.31x on a capture
+replacement, 2.80x on a zero-width replacement and 21.55x on the nine-pattern
+set. The thinnest margins are the variable-width IPv4 case and the five-word
+alternation at 1.16x.
 
 Compilation now selects a 16 KiB, 64 KiB or 256 KiB block by pattern shape,
 reuses page-allocator blocks from a process pool, and falls back to the arena
@@ -92,7 +93,8 @@ directly (see the same page): `\w+@example\.com` had been 1.54x slower and
 is 3.41x ahead, and the 10-word alternation moved to 1.31x with the
 nibble-table candidate filter. Fixed-width sequences such as
 `\d{4}-\d{2}-\d{2}` are now verified directly (see the same page), taking
-the date case from 1.9x behind to 3.53x ahead.
+the date case from 1.9x behind to 3.34x ahead, and `(?m)^\w+` scans line
+starts directly, moving from 1.09x to 4.23x ahead.
 
 Caveats: the iteration APIs are the natural ones for each library
 (`Workspace.find` in a loop versus `Regex::find_iter`), full match is

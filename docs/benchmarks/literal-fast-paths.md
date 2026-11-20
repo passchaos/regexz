@@ -89,3 +89,19 @@ The date-text case improves 6.4x internally (252,237.7 -> 39,146.7 ns) and is
 3.53x ahead of Rust. The comparison also added an IPv4 case (`\d{1,3}` is
 variable width and stays on the DFA, 1.16x ahead), a 20-word alternation
 (1.49x), and a multiline anchored line scan (1.09x).
+
+## Line-start runs
+
+`(?m)^\w+` compiled to a start-line assertion followed by a run, which none
+of the existing run shapes covered, so every line start was decided by the
+search DFA. The new `line_start_run` kind is selected for
+`save0 -> assertion(start_line) -> consume(set) -> star(set) -> save1` in LF
+newline mode with an ASCII-only set. A match can only start at a line start,
+so each line start needs just the maximal run scan, and lines that begin
+outside the set are skipped with a newline search. A search offset inside a
+line advances to the next line start, matching the engine.
+
+The anchored line case improves 3.5x internally (8,154.0 -> 2,241.9 ns) and
+moves from 1.09x to 4.23x ahead of Rust. End-line variants
+(`(?m)^\w+$`), non-ASCII sets and other newline modes stay on the general
+engine.

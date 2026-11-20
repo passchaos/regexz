@@ -926,6 +926,49 @@ test "literal-run detection rejects an optional literal that overlaps the run" {
     }
 }
 
+test "line-start run fast path matches only at line starts" {
+    var value = try regex.Regex.init(gpa, "(?m)^\\w+", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind == .line_start_run);
+
+    const cases = [_]struct { input: []const u8, from: usize, spans: []const [2]usize }{
+        .{ .input = "hello world\n  second line\nthird", .from = 0, .spans = &.{ .{ 0, 5 }, .{ 26, 31 } } },
+        .{ .input = "hello world\n  second line\nthird", .from = 2, .spans = &.{.{ 26, 31 }} },
+        .{ .input = "hello world\n  second line\nthird", .from = 26, .spans = &.{.{ 26, 31 }} },
+        .{ .input = "a\r\nb", .from = 0, .spans = &.{ .{ 0, 1 }, .{ 3, 4 } } },
+        .{ .input = "\n\na", .from = 0, .spans = &.{.{ 2, 3 }} },
+        .{ .input = "abc\n", .from = 3, .spans = &.{} },
+        .{ .input = "", .from = 0, .spans = &.{} },
+    };
+    for (cases) |case| {
+        var offset = case.from;
+        var index: usize = 0;
+        while (offset <= case.input.len and index < case.spans.len) : (index += 1) {
+            const m = (try workspace.find(case.input, offset)) orelse break;
+            try std.testing.expectEqual(case.spans[index][0], m.start);
+            try std.testing.expectEqual(case.spans[index][1], m.end);
+            offset = m.end;
+        }
+        try std.testing.expectEqual(case.spans.len, index);
+    }
+
+    // A trailing end-line assertion is a different shape.
+    var anchored = try regex.Regex.init(gpa, "(?m)^\\w+$", .{});
+    defer anchored.deinit();
+    var anchored_workspace = try regex.ReplaceWorkspace.init(gpa, anchored.program, .{});
+    defer anchored_workspace.deinit();
+    try std.testing.expect(anchored_workspace.fast_kind != .line_start_run);
+
+    // Non-ASCII run sets stay on the general engine.
+    var unicode = try regex.Regex.init(gpa, "(?m)^\\p{Han}+", .{});
+    defer unicode.deinit();
+    var unicode_workspace = try regex.ReplaceWorkspace.init(gpa, unicode.program, .{});
+    defer unicode_workspace.deinit();
+    try std.testing.expect(unicode_workspace.fast_kind != .line_start_run);
+}
+
 test "fixed sequence fast path matches set and literal concatenations" {
     var value = try regex.Regex.init(gpa, "\\d{4}-\\d{2}-\\d{2}", .{});
     defer value.deinit();

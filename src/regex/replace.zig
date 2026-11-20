@@ -52,6 +52,7 @@ pub const FastKind = enum {
     literal_set,
     run_then_literal,
     fixed_sequence,
+    line_start_run,
 };
 pub const Error = model.Error;
 
@@ -194,6 +195,8 @@ pub const Workspace = struct {
     run_then_literal: ?RunThenLiteral = null,
     /// Fixed-width concatenation of single-rune sets and literal bytes.
     fixed_sequence: ?*FixedSequence = null,
+    /// `(?m)^set+` in LF newline mode.
+    line_start_run: ?LineStartRun = null,
     /// Byte membership tables for the chain fast path. `Set.matches` is a
     /// binary search over rune ranges; the per-byte chain scans run several
     /// lookups per input byte, so cache the answers once per workspace.
@@ -330,6 +333,7 @@ pub const Workspace = struct {
         else
             program.zero_width;
         const run_then_literal: ?RunThenLiteral = if (limits.longest) null else detectRunThenLiteral(program);
+        const line_start_run: ?LineStartRun = if (limits.longest) null else detectLineStartRun(program);
         const fixed_sequence: ?*FixedSequence = if (limits.longest) null else blk: {
             const shape = detectFixedSequence(program) orelse break :blk null;
             const state = try allocator.create(FixedSequence);
@@ -358,6 +362,8 @@ pub const Workspace = struct {
             .run_then_literal
         else if (fixed_sequence != null)
             .fixed_sequence
+        else if (line_start_run != null)
+            .line_start_run
         else if (literal_run != null)
             .literal_run
         else if (simple_anchored != null)
@@ -466,6 +472,7 @@ pub const Workspace = struct {
             .literal_set_filter = if (program.literal_set) |literals| literalSetFilter(literals) else null,
             .run_then_literal = run_then_literal,
             .fixed_sequence = fixed_sequence,
+            .line_start_run = line_start_run,
         };
     }
 
@@ -550,6 +557,7 @@ pub const Workspace = struct {
             .literal_set => return self.findLiteralSet(input, search_start),
             .run_then_literal => return self.findRunThenLiteral(&self.run_then_literal.?, input, search_start),
             .fixed_sequence => return self.findFixedSequence(self.fixed_sequence.?, input, search_start),
+            .line_start_run => return self.findLineStartRun(&self.line_start_run.?, input, search_start),
         }
         // Every match must start at a start-literal occurrence, so the first
         // occurrence bounds the leftmost match start and the DFA can skip
@@ -1130,6 +1138,7 @@ pub const Workspace = struct {
             .literal_set => return self.findLiteralSet(input, search_start),
             .run_then_literal => return self.findRunThenLiteral(&self.run_then_literal.?, input, search_start),
             .fixed_sequence => return self.findFixedSequence(self.fixed_sequence.?, input, search_start),
+            .line_start_run => return self.findLineStartRun(&self.line_start_run.?, input, search_start),
         }
         var from = search_start;
         if (self.pair_filter) |filter| {
@@ -1799,6 +1808,30 @@ pub const Workspace = struct {
                 self.slots[1] = start + len;
                 return .{ .start = start, .end = start + len, .slots = self.slots };
             }
+        }
+        return null;
+    }
+
+    /// `(?m)^set+`: the match starts exactly at a line start, so each line
+    /// start only needs the maximal run scan; lines that start outside the
+    /// set are skipped with a newline search.
+    fn findLineStartRun(self: *Workspace, state: *const LineStartRun, input: []const u8, search_start: usize) ?Match {
+        const table = &state.table;
+        var line = search_start;
+        if (line > 0 and input[line - 1] != '\n') {
+            line = std.mem.indexOfScalarPos(u8, input, line, '\n') orelse return null;
+            line += 1;
+        }
+        while (line < input.len) {
+            if (table[input[line]]) {
+                var end = line + 1;
+                while (end < input.len and table[input[end]]) end += 1;
+                self.slots[0] = line;
+                self.slots[1] = end;
+                return .{ .start = line, .end = end, .slots = self.slots };
+            }
+            line = std.mem.indexOfScalarPos(u8, input, line, '\n') orelse return null;
+            line += 1;
         }
         return null;
     }
@@ -3026,6 +3059,36 @@ fn detectFixedSequence(program: Program) ?FixedSequence {
     }
     if (!saw_set or state.len < 2 or pc != program.accept) return null;
     return state;
+}
+
+/// `save0 -> assertion(start_line) -> consume(set) -> star(set) -> save1`
+/// in LF newline mode with an ASCII-only set.
+const LineStartRun = struct {
+    set: model.Set,
+    table: [256]bool = undefined,
+};
+
+fn detectLineStartRun(program: Program) ?LineStartRun {
+    if (program.capture_count != 0 or program.extended or program.newline != .lf) return null;
+    const ins = program.instructions;
+    if (ins.len != 8 or program.accept != 0 or program.start != 7 or program.body != 6) return null;
+    if (std.meta.activeTag(ins[0]) != .accept or std.meta.activeTag(ins[1]) != .sub_accept or
+        std.meta.activeTag(ins[2]) != .ret) return null;
+    const save1 = ins[3];
+    if (std.meta.activeTag(save1) != .save or save1.save.slot != 1 or save1.save.next != program.accept) return null;
+    const star = ins[4];
+    if (std.meta.activeTag(star) != .star or star.star.next != 3 or star.star.backtrack) return null;
+    const consume = ins[5];
+    if (std.meta.activeTag(consume) != .consume or consume.consume.next != 4) return null;
+    const assertion = ins[6];
+    if (std.meta.activeTag(assertion) != .assertion or assertion.assertion.kind != .start_line or
+        assertion.assertion.next != 5) return null;
+    const save0 = ins[7];
+    if (std.meta.activeTag(save0) != .save or save0.save.slot != 0 or save0.save.next != 6) return null;
+    const set = consume.consume.set;
+    if (!set.ascii_only or set.ranges.len == 0) return null;
+    if (!shapes.sameSet(set, star.star.set)) return null;
+    return .{ .set = set, .table = byte_table.init(256, set) };
 }
 
 const FastBranch = struct {

@@ -698,3 +698,16 @@ Rust to 3.53x ahead. The comparison now covers 30 cases (IPv4, date, 20-word
 alternation and a multiline anchored line scan were added); all 30 are faster,
 with the anchored line scan the thinnest at 1.09x. See
 [literal fast paths](benchmarks/literal-fast-paths.md).
+
+Multiline line-start runs (`(?m)^\w+`) now have a direct path. The shape is a
+start-line assertion followed by a run, which none of the existing run shapes
+covered, so every line start went through the search DFA. The
+`line_start_run` kind is selected for that exact instruction sequence in LF
+newline mode with an ASCII-only set: a match can only start at a line start,
+so each line start needs just the maximal run scan and lines beginning
+outside the set are skipped with a newline search. The anchored line case
+improves 3.5x internally (8.2 -> 2.2 us) and moves from 1.09x to 4.23x ahead
+of Rust. End-line variants, non-ASCII sets and other newline modes stay on
+the general engine. All 30 comparison cases remain faster, with variable
+width IPv4 and the five-word alternation the thinnest at 1.16x. See
+[literal fast paths](benchmarks/literal-fast-paths.md).
