@@ -51,6 +51,9 @@ fn compare(allocator: std.mem.Allocator, pattern: []const u8, input: []const u8,
         return;
     };
     const expected = try reference.find(input, from);
+    if ((expected != null) != (actual != null)) {
+        std.debug.print("mismatch pattern={s} input={s} from={d} expected={} actual={}\n", .{ pattern, input, from, expected != null, actual != null });
+    }
     try std.testing.expectEqual(expected != null, actual != null);
     if (expected) |match| {
         try std.testing.expectEqual(match.start, actual.?.start);
@@ -156,4 +159,79 @@ test "zero-width empty-match restrictions keep the general engine" {
             try std.testing.expectEqualSlices(usize, right.slots, left.slots);
         }
     }
+}
+
+test "word-boundary zero-width fast path agrees with the interpreter" {
+    const patterns = [_][]const u8{
+        "\\b",
+        "\\B",
+        "\\b|$",
+        "^|\\b",
+        "(?m)^\\b",
+        "(?m)\\b$",
+        "\\b\\B",
+        "(\\b)",
+        "\\B|\\b",
+        "(?:\\b)(?:\\B)",
+        "\\b|^|$",
+    };
+    const inputs = [_][]const u8{
+        "",
+        "a",
+        "abc",
+        "aaa bbb",
+        " a ",
+        "a_b",
+        "a-b",
+        "!!!",
+        "a\nb",
+        "猫狗",
+        "a猫b",
+        "  ",
+        "a b c d",
+        "a_b c-d!e",
+        "aaa bbb aaa bbb ",
+    };
+    for (patterns) |pattern| {
+        for (inputs) |input| {
+            var from: usize = 0;
+            while (from <= input.len + 1) : (from += 1) {
+                try compare(gpa, pattern, input, from);
+            }
+        }
+    }
+}
+
+test "word-boundary replacement iterates the same matches" {
+    const cases = [_]struct { pattern: []const u8, substitution: []const u8, input: []const u8 }{
+        .{ .pattern = "\\b", .substitution = "|", .input = "aaa bbb aaa bbb " },
+        .{ .pattern = "\\B", .substitution = "|", .input = "aaa bbb aaa bbb " },
+        .{ .pattern = "\\b|$", .substitution = "|", .input = "abc\ndef\n" },
+        .{ .pattern = "^|\\b", .substitution = "|", .input = "a b" },
+        .{ .pattern = "(?m)^\\b", .substitution = "|", .input = "a b\nc d\n" },
+        .{ .pattern = "\\b", .substitution = "|", .input = "a_b c-d!e" },
+    };
+    for (cases) |case| {
+        var value = try regex.Regex.init(gpa, case.pattern, .{});
+        defer value.deinit();
+        var direct = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+        defer direct.deinit();
+        var reference = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+        defer reference.deinit();
+        reference.fast_kind = .none;
+        reference.search_dfa_ineligible = true;
+        const actual = try direct.replaceAll(case.input, case.substitution);
+        defer gpa.free(actual);
+        const expected = try reference.replaceAll(case.input, case.substitution);
+        defer gpa.free(expected);
+        try std.testing.expectEqualStrings(expected, actual);
+    }
+}
+
+test "Unicode word boundaries keep the general engine" {
+    var value = try regex.Regex.init(gpa, "\\b", .{ .unicode_perl_classes = true });
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind != .zero_width);
 }

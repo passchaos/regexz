@@ -23,13 +23,37 @@ pub const Path = struct {
     assertion_count: u8 = 0,
     slots: [Plan.max_slots]u16 = undefined,
     slot_count: u8 = 0,
+    /// Every assertion is an ASCII word boundary, so the boundary test can
+    /// skip the full position computation.
+    word_only: bool = false,
+    /// Every assertion is a text-edge check (`start_text`, `end_text`,
+    /// `end_text_or_newline`), so the candidates are the text start, the
+    /// final-newline start and the text end without a line scan.
+    edge_fast: bool = false,
 };
 
 fn allowed(assertion: model.Assertion) bool {
     return switch (assertion) {
         .start_text, .start_line, .end_text, .end_text_or_newline, .end_line => true,
+        // ASCII word boundaries only: the UCP and UAX #29 variants use
+        // Unicode word sets and stay on the general engine.
+        .word_boundary, .no_word_boundary => true,
         else => false,
     };
+}
+
+/// How a path constrains the ASCII word boundary at its candidate positions.
+pub const WordMode = enum { none, boundary, non_boundary };
+
+pub fn wordMode(path: *const Path) WordMode {
+    for (path.assertions[0..path.assertion_count]) |kind| {
+        switch (kind) {
+            .word_boundary => return .boundary,
+            .no_word_boundary => return .non_boundary,
+            else => {},
+        }
+    }
+    return .none;
 }
 
 /// Analyze a parsed pattern. Returns null for anything that is not a pure
@@ -41,6 +65,19 @@ pub fn analyze(root: *const model.Node, newline: model.Newline) ?Plan {
     var count: usize = 0;
     if (!expand(root, .{}, &plan.paths, &count, 0)) return null;
     if (count == 0) return null;
+    for (plan.paths[0..count]) |*path| {
+        var word_only = path.assertion_count != 0;
+        var edge_fast = path.assertion_count != 0;
+        for (path.assertions[0..path.assertion_count]) |kind| {
+            if (kind != .word_boundary and kind != .no_word_boundary) word_only = false;
+            switch (kind) {
+                .start_text, .end_text, .end_text_or_newline => {},
+                else => edge_fast = false,
+            }
+        }
+        path.word_only = word_only;
+        path.edge_fast = edge_fast;
+    }
     plan.count = @intCast(count);
     return plan;
 }

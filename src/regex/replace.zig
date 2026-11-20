@@ -1010,54 +1010,111 @@ pub const Workspace = struct {
         self.slots[plan.match_end_slot] = end;
     }
 
-    /// Zero-width edge assertions: the only positions that can satisfy
-    /// `^`, `$`, `(?m)^` or `(?m)$` are the text edges and the line-break
-    /// boundaries, so enumerate those in order and check each alternation
-    /// path instead of restarting the interpreter at every offset.
+    /// Zero-width assertions: edge assertions can only hold at the text
+    /// edges or next to a line break, and ASCII word assertions at word-run
+    /// edges, so enumerate those positions per alternation path instead of
+    /// restarting the interpreter at every offset. Word paths are evaluated
+    /// first so their usually-nearby candidates bound the line scans; ties
+    /// are resolved by the plan order, which is the alternation order.
     fn findZeroWidth(self: *Workspace, plan: *const zero_width.Plan, input: []const u8, search_start: usize) ?Match {
         if (search_start > input.len) return null;
-        if (self.zeroWidthAt(plan, input, search_start)) |match| return match;
-        const mode = self.program.newline;
-        // A break is at most two bytes (CRLF); start the scan far enough back
-        // to include a break that ends exactly at the search offset.
-        var scan = search_start -| 2;
-        while (nextLineBreak(input, scan, mode)) |line_break| {
-            const start = line_break.start;
-            const after = start + line_break.len;
-            if (start > search_start) {
-                if (self.zeroWidthAt(plan, input, start)) |match| return match;
-            }
-            if (after > search_start and after <= input.len) {
-                if (self.zeroWidthAt(plan, input, after)) |match| return match;
-            }
-            scan = after;
-        }
-        if (input.len > search_start) {
-            if (self.zeroWidthAt(plan, input, input.len)) |match| return match;
-        }
-        return null;
-    }
-
-    fn zeroWidthAt(self: *Workspace, plan: *const zero_width.Plan, input: []const u8, offset: usize) ?Match {
-        const at = position(input, offset, self.program.newline);
-        var path_index: usize = 0;
-        while (path_index < plan.count) : (path_index += 1) {
-            const path = &plan.paths[path_index];
-            var matched = true;
-            for (path.assertions[0..path.assertion_count]) |kind| {
-                if (!at.allows(kind)) {
-                    matched = false;
-                    break;
+        var best_offset: usize = input.len;
+        var best_index: usize = 0;
+        var found = false;
+        var pass: usize = 0;
+        while (pass < 2) : (pass += 1) {
+            for (plan.paths[0..plan.count], 0..) |*path, index| {
+                const word = zero_width.wordMode(path) != .none;
+                if ((pass == 0) != word) continue;
+                const limit = if (found) best_offset else input.len;
+                const candidate = self.zeroWidthCandidate(path, input, search_start, limit) orelse continue;
+                if (!found or candidate < best_offset or (candidate == best_offset and index < best_index)) {
+                    best_offset = candidate;
+                    best_index = index;
+                    found = true;
                 }
             }
-            if (!matched) continue;
-            @memset(self.slots, unset);
-            self.slots[0] = offset;
-            self.slots[1] = offset;
-            for (path.slots[0..path.slot_count]) |slot| self.slots[slot] = offset;
-            return .{ .start = offset, .end = offset, .slots = self.slots };
         }
-        return null;
+        if (!found) return null;
+        const path = &plan.paths[best_index];
+        @memset(self.slots, unset);
+        self.slots[0] = best_offset;
+        self.slots[1] = best_offset;
+        for (path.slots[0..path.slot_count]) |slot| self.slots[slot] = best_offset;
+        return .{ .start = best_offset, .end = best_offset, .slots = self.slots };
+    }
+
+    fn zeroWidthCandidate(self: *Workspace, path: *const zero_width.Path, input: []const u8, search_start: usize, limit: usize) ?usize {
+        switch (zero_width.wordMode(path)) {
+            .none => {
+                if (path.assertion_count == 0) return if (search_start <= limit) search_start else null;
+                if (path.edge_fast) {
+                    // Text-edge assertions only hold at the start, the final
+                    // newline start and the end, so no line scan is needed.
+                    if (search_start == 0 and self.zeroWidthAllows(path, input, 0)) return 0;
+                    if (finalNewlineStart(input, self.program.newline)) |final| {
+                        if (final >= search_start and final <= limit and self.zeroWidthAllows(path, input, final)) return final;
+                    }
+                    if (input.len >= search_start and input.len <= limit and self.zeroWidthAllows(path, input, input.len)) return input.len;
+                    return null;
+                }
+                if (search_start <= limit and self.zeroWidthAllows(path, input, search_start)) return search_start;
+                const mode = self.program.newline;
+                // A break is at most two bytes (CRLF); start the scan far
+                // enough back to include a break that ends at the search
+                // offset (already checked above).
+                var scan = search_start -| 2;
+                while (nextLineBreak(input, scan, mode, limit)) |line_break| {
+                    const start = line_break.start;
+                    if (start > limit) break;
+                    const after = start + line_break.len;
+                    if (start > search_start and self.zeroWidthAllows(path, input, start)) return start;
+                    if (after > search_start and after <= limit and self.zeroWidthAllows(path, input, after)) return after;
+                    scan = after;
+                }
+                if (input.len > search_start and input.len <= limit and self.zeroWidthAllows(path, input, input.len)) return input.len;
+                return null;
+            },
+            .boundary => {
+                var from = search_start;
+                while (nextWordBoundary(input, from)) |candidate| {
+                    if (candidate > limit) return null;
+                    if (self.zeroWidthAllows(path, input, candidate)) return candidate;
+                    from = candidate + 1;
+                }
+                return null;
+            },
+            .non_boundary => {
+                var from = search_start;
+                while (nextNonBoundary(input, from)) |candidate| {
+                    if (candidate > limit) return null;
+                    if (self.zeroWidthAllows(path, input, candidate)) return candidate;
+                    from = candidate + 1;
+                }
+                return null;
+            },
+        }
+    }
+
+    fn zeroWidthAllows(self: *Workspace, path: *const zero_width.Path, input: []const u8, offset: usize) bool {
+        if (path.word_only) {
+            const previous = offset > 0 and wordByte(input[offset - 1]);
+            const next = offset < input.len and wordByte(input[offset]);
+            const boundary = previous != next;
+            for (path.assertions[0..path.assertion_count]) |kind| {
+                switch (kind) {
+                    .word_boundary => if (!boundary) return false,
+                    .no_word_boundary => if (boundary) return false,
+                    else => unreachable,
+                }
+            }
+            return true;
+        }
+        const at = position(input, offset, self.program.newline);
+        for (path.assertions[0..path.assertion_count]) |kind| {
+            if (!at.allows(kind)) return false;
+        }
+        return true;
     }
 
     /// `set+` over an ASCII-only set: skip to the next member with the SIMD
@@ -2051,37 +2108,96 @@ fn runeBefore(input: []const u8, end: usize) ?struct { value: u21, start: usize 
     return .{ .value = value, .start = start };
 }
 
+inline fn wordByte(byte: u8) bool {
+    return byte == '_' or
+        (byte >= 'a' and byte <= 'z') or
+        (byte >= 'A' and byte <= 'Z') or
+        (byte >= '0' and byte <= '9');
+}
+
+/// Next position at or after `from` where the ASCII word-ness changes.
+fn nextWordBoundary(input: []const u8, from: usize) ?usize {
+    if (from > input.len) return null;
+    var cursor = from;
+    var previous = cursor > 0 and wordByte(input[cursor - 1]);
+    while (cursor < input.len) {
+        const next = wordByte(input[cursor]);
+        if (previous != next) return cursor;
+        previous = next;
+        cursor += runeLenAt(input, cursor);
+    }
+    return if (previous) input.len else null;
+}
+
+/// Next position at or after `from` where the ASCII word-ness is unchanged.
+fn nextNonBoundary(input: []const u8, from: usize) ?usize {
+    if (from > input.len) return null;
+    var cursor = from;
+    var previous = cursor > 0 and wordByte(input[cursor - 1]);
+    while (cursor < input.len) {
+        const next = wordByte(input[cursor]);
+        if (previous == next) return cursor;
+        previous = next;
+        cursor += runeLenAt(input, cursor);
+    }
+    return if (!previous) input.len else null;
+}
+
+/// Start of a line break that ends at the text end, if any.
+fn finalNewlineStart(input: []const u8, mode: model.Newline) ?usize {
+    if (input.len == 0) return null;
+    const last = input[input.len - 1];
+    return switch (mode) {
+        .lf => if (last == '\n') input.len - 1 else null,
+        .cr => if (last == '\r') input.len - 1 else null,
+        .nul => if (last == 0) input.len - 1 else null,
+        .crlf => if (input.len >= 2 and input[input.len - 2] == '\r' and last == '\n') input.len - 2 else null,
+        .anycrlf => blk: {
+            if (input.len >= 2 and input[input.len - 2] == '\r' and last == '\n') break :blk input.len - 2;
+            if (last == '\r') break :blk input.len - 1;
+            if (last == '\n') break :blk input.len - 1;
+            break :blk null;
+        },
+        .any => null,
+    };
+}
+
 const LineBreak = struct { start: usize, len: usize };
 
 /// Next line break at or after `from` for the program's newline convention.
 /// `(*ANY)` is rejected at compile time because its Unicode breaks need
 /// rune-level scanning.
-fn nextLineBreak(input: []const u8, from: usize, mode: model.Newline) ?LineBreak {
+fn nextLineBreak(input: []const u8, from: usize, mode: model.Newline, limit: usize) ?LineBreak {
+    // Only break starts at or before `limit` can produce a candidate that
+    // beats the current best, so the scan window is bounded there.
+    const end = @min(limit + 1, input.len);
+    if (from >= end) return null;
+    const window = input[0..end];
     var offset = from;
-    while (offset < input.len) {
+    while (offset < end) {
         switch (mode) {
             .lf => {
-                const found = prefilter.indexOfByte(input, offset, '\n') orelse return null;
+                const found = prefilter.indexOfByte(window, offset, '\n') orelse return null;
                 return .{ .start = found, .len = 1 };
             },
             .cr => {
-                const found = prefilter.indexOfByte(input, offset, '\r') orelse return null;
+                const found = prefilter.indexOfByte(window, offset, '\r') orelse return null;
                 return .{ .start = found, .len = 1 };
             },
             .nul => {
-                const found = prefilter.indexOfByte(input, offset, 0) orelse return null;
+                const found = prefilter.indexOfByte(window, offset, 0) orelse return null;
                 return .{ .start = found, .len = 1 };
             },
             .crlf => {
-                const found = prefilter.indexOfByte(input, offset, '\r') orelse return null;
+                const found = prefilter.indexOfByte(window, offset, '\r') orelse return null;
                 if (found + 1 < input.len and input[found + 1] == '\n') return .{ .start = found, .len = 2 };
                 offset = found + 1;
             },
             .anycrlf => {
-                const cr = prefilter.indexOfByte(input, offset, '\r');
-                const lf = prefilter.indexOfByte(input, offset, '\n');
-                const found = @min(cr orelse input.len, lf orelse input.len);
-                if (found >= input.len) return null;
+                const cr = prefilter.indexOfByte(window, offset, '\r');
+                const lf = prefilter.indexOfByte(window, offset, '\n');
+                const found = @min(cr orelse end, lf orelse end);
+                if (found >= end) return null;
                 if (input[found] == '\r') {
                     return .{ .start = found, .len = if (found + 1 < input.len and input[found + 1] == '\n') 2 else 1 };
                 }

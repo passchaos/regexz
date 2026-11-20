@@ -84,6 +84,9 @@ pub fn main() !void {
         .{ .name = "limited", .pattern = "a+", .substitution = "x", .mode = .limited },
         .{ .name = "callback", .pattern = "a+", .substitution = "x", .mode = .callback },
         .{ .name = "delete whole input", .pattern = ".+", .substitution = "" },
+        .{ .name = "word boundary", .pattern = "\\b", .substitution = "|" },
+        .{ .name = "not word boundary", .pattern = "\\B", .substitution = "|" },
+        .{ .name = "boundary or end", .pattern = "\\b|$", .substitution = "|" },
     };
     for (cases) |case| {
         try bench(io, out, gpa, "page", case, input);

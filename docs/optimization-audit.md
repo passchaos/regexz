@@ -179,10 +179,13 @@ directly. `zero_width.analyze` collects alternation paths of edge assertions
 and their capture slots at compile time; the search enumerates the search
 offset, line-break boundaries (SIMD byte search per newline convention) and
 the text end, and checks each path with the engine's own position helpers.
-Other assertion kinds, consuming nodes, `(*NOTEMPTY)` restrictions and
-`Limits.longest` keep the general engine. The `^|$` replacement over 32 KiB
-improves 130–139x and is now about 3x faster than the same-host Rust
-reference; see [zero-width edge assertions](benchmarks/zero-width.md).
+ASCII `\b`/`\B` paths enumerate word-run edges by rune length, evaluate
+word-first with scans bounded by the best candidate, and text-edge-only paths
+use an O(1) candidate set. Other assertion kinds, `(*NOTEMPTY)` restrictions
+and `Limits.longest` keep the general engine. The `^|$` replacement over
+32 KiB improves 130–139x and is now about 3x faster than the same-host Rust
+reference; `\b`/`\B`/`\b|$` replacements improve 1.64–1.95x and are ahead of
+Rust as well. See [zero-width edge assertions](benchmarks/zero-width.md).
 
 Further work on these candidates needs fresh measurements before implementation.
 Current warmed throughput does not establish their cold-start cost or the

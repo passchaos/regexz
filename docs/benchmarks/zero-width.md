@@ -53,6 +53,40 @@ larger than the host's spread. The other cases do not use the new path; their
 control, for example, moved 0.99x while the page allocator sample moved
 0.87x).
 
+## Word boundaries
+
+The same plan accepts ASCII `\b` and `\B` (the UCP and UAX #29 variants use
+Unicode word sets and stay on the general engine). Word paths enumerate the
+positions where the byte-level word-ness changes (or stays the same), walking
+by rune length so the candidate positions match the interpreter's search
+starts. Paths are evaluated word-first and every scan is bounded by the best
+candidate found so far, which keeps a dense boundary scan from re-walking the
+input for a line-assertion alternative; ties are resolved by the plan order,
+which is the alternation order. Paths made only of `start_text`, `end_text` or
+`end_text_or_newline` use an O(1) candidate set (text start, final-newline
+start, text end) instead of a line scan, and word-only paths skip the full
+position computation.
+
+Measured against `4f6674c` with the same method (five interleaved executions;
+raw samples in [`zero-width-words.json`](zero-width-words.json)):
+
+| Case | Before, ns/iter | After, ns/iter | Speedup |
+| --- | ---: | ---: | ---: |
+| word boundary (`\b` → `|`), SMP | 544,245.0 | 313,647.5 | 1.74x |
+| word boundary (`\b` → `|`), page | 545,178.3 | 331,691.0 | 1.64x |
+| not word boundary (`\B` → `|`), page | 542,079.0 | 294,381.9 | 1.84x |
+| not word boundary (`\B` → `|`), SMP | 539,046.3 | 327,467.5 | 1.65x |
+| boundary or end (`\b|$` → `|`), SMP | 713,109.6 | 364,909.4 | 1.95x |
+| boundary or end (`\b|$` → `|`), page | 662,637.1 | 365,272.3 | 1.81x |
+| zero width control (`^|$`) | 4,004.8 | 3,343.5 | 1.20x |
+| captures control | 324,858.3 | 331,140.6 | 0.98x |
+| shrink control | 57,377.9 | 63,465.0 | 0.90x |
+
+Same-host Rust `regex` 1.13.1 takes about 581 us for `\b`, 536 us for `\B`
+and 479 us for `\b|$` on the same 32 KiB subject, so the word paths are now
+ahead of the reference as well. The controls do not use the new path; their
+spread is host noise.
+
 ## Validation
 
 ```sh
@@ -65,7 +99,9 @@ zig fmt --check src/regex/zero_width.zig src/regex/zero_width_tests.zig src/rege
 ```
 
 The new tests compare the fast path with the same program pinned to the
-interpreter at every offset for thirteen assertion patterns over thirteen
-subjects (empty, final newlines, LF and CRLF line breaks, Unicode), compare
-`replaceAll` output for empty-match iteration, and check that the empty-match
-restrictions keep the general engine.
+interpreter at every offset for thirteen edge-assertion patterns over thirteen
+subjects (empty, final newlines, LF and CRLF line breaks, Unicode) and for
+eleven word-boundary patterns over fifteen subjects (word runs, separators,
+Unicode neighbours, empty input), compare `replaceAll` output for empty-match
+iteration, and check that the empty-match restrictions and UCP word
+boundaries keep the general engine.
