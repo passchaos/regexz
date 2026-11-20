@@ -261,6 +261,14 @@ on full-match calls, 4.24x on a set-run replacement, 1.68x on a zero-width
 replacement and 4.03x on the nine-pattern set. See
 [comparison with Rust's regex](benchmarks/rust-comparison.md).
 
+`Matches` now supports a caller-owned workspace: `Regex.findAllWith` iterates
+on warmed search-DFA caches without copying or freeing the workspace, while
+`Regex.findAll` keeps its owning behavior. The borrowed iterator matches a
+manual `Workspace.find` loop (64 us) and is 5.36x faster than a fresh
+`findAll` pass (344 us) on the Qwen tokenizer text, where the owning iterator
+pays the lazy DFA preparation per call. See
+[reusing a workspace for match iteration](benchmarks/find-all-workspace.md).
+
 Further work on these candidates needs fresh measurements before implementation.
 Current warmed throughput does not establish their cold-start cost or the
 benefit of replacing their fallback paths.

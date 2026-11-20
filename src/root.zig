@@ -98,12 +98,16 @@ fn splitAsciiSet(gpa: std.mem.Allocator, input: []const u8, set: model.Set, limi
 /// the iterator and is valid until the next `next` call.
 pub const Matches = struct {
     input: []const u8,
-    workspace: ReplaceWorkspace,
+    /// Owned workspace for `Regex.findAll`; unused when `borrowed` is set.
+    owned: ReplaceWorkspace = undefined,
+    /// Caller workspace for `Regex.findAllWith`.
+    borrowed: ?*ReplaceWorkspace = null,
     offset: usize = 0,
     done: bool = false,
     pub fn next(self: *Matches) Error!?Match {
         if (self.done) return null;
-        const found = try self.workspace.find(self.input, self.offset) orelse {
+        const workspace = self.borrowed orelse &self.owned;
+        const found = try workspace.find(self.input, self.offset) orelse {
             self.done = true;
             return null;
         };
@@ -117,7 +121,7 @@ pub const Matches = struct {
         return found;
     }
     pub fn deinit(self: *Matches) void {
-        self.workspace.deinit();
+        if (self.borrowed == null) self.owned.deinit();
         self.* = undefined;
     }
 };
@@ -340,7 +344,17 @@ pub const Regex = struct {
     pub fn findAll(self: *const Regex, gpa: std.mem.Allocator, input: []const u8) Error!Matches {
         return .{
             .input = input,
-            .workspace = try ReplaceWorkspace.init(gpa, self.program, self.limits),
+            .owned = try ReplaceWorkspace.init(gpa, self.program, self.limits),
+        };
+    }
+    /// Iterate with a caller-owned workspace. The workspace must have been
+    /// initialized from this regex's program and limits; the iterator does not
+    /// free it, so repeated calls reuse its warmed search caches.
+    pub fn findAllWith(self: *const Regex, workspace: *ReplaceWorkspace, input: []const u8) Matches {
+        _ = self;
+        return .{
+            .input = input,
+            .borrowed = workspace,
         };
     }
     /// Split `input` around matches. The returned slice is allocated in `gpa`;

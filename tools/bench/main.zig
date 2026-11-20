@@ -183,6 +183,42 @@ pub fn main() !void {
     const qwen_no_lookahead = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+";
     const ucp = regexz.Limits{ .unicode_perl_space = true, .max_execution_steps = 16_000_000 };
     try benchFind(io, out, "find Qwen tokenizer", qwen, text.items, 50, ucp);
+    {
+        // The owning iterator builds a fresh workspace per call, so its first
+        // pass pays the lazy DFA preparation; the borrowed form reuses it.
+        var value = try regexz.Regex.init(gpa, qwen, ucp);
+        defer value.deinit();
+        var workspace = try regexz.ReplaceWorkspace.init(gpa, value.program, ucp);
+        defer workspace.deinit();
+        const iterations = 50;
+        for (0..3) |_| {
+            var iterator = value.findAllWith(&workspace, text.items);
+            while (try iterator.next()) |_| {}
+        }
+        var pieces: usize = 0;
+        const start = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds;
+        for (0..iterations) |_| {
+            var iterator = value.findAllWith(&workspace, text.items);
+            while (try iterator.next()) |_| pieces += 1;
+        }
+        std.mem.doNotOptimizeAway(pieces);
+        try report(out, "findAll Qwen (borrowed workspace)", iterations, text.items.len, elapsed(io, .{ .nanoseconds = start }));
+
+        for (0..3) |_| {
+            var iterator = try value.findAll(gpa, text.items);
+            defer iterator.deinit();
+            while (try iterator.next()) |_| {}
+        }
+        pieces = 0;
+        const fresh_start = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds;
+        for (0..iterations) |_| {
+            var iterator = try value.findAll(gpa, text.items);
+            defer iterator.deinit();
+            while (try iterator.next()) |_| pieces += 1;
+        }
+        std.mem.doNotOptimizeAway(pieces);
+        try report(out, "findAll Qwen (fresh workspace)", iterations, text.items.len, elapsed(io, .{ .nanoseconds = fresh_start }));
+    }
 
     var email_text: std.ArrayList(u8) = .empty;
     defer email_text.deinit(gpa);

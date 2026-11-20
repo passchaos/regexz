@@ -63,6 +63,27 @@ test "findAll iterates non-overlapping matches" {
     try std.testing.expectEqual(expected.len, index);
 }
 
+test "findAllWith reuses a caller workspace" {
+    var value = try regex.Regex.init(gpa, "\\s+", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+
+    var iterator = value.findAllWith(&workspace, "a  b\tc");
+    var parts: usize = 0;
+    while (try iterator.next()) |match| {
+        try std.testing.expect(match.end > match.start);
+        parts += 1;
+    }
+    iterator.deinit();
+    try std.testing.expectEqual(@as(usize, 2), parts);
+
+    // The caller's workspace survives the iterator and stays usable.
+    const found = (try workspace.find("a b", 0)).?;
+    try std.testing.expectEqual(@as(usize, 1), found.start);
+    try std.testing.expectEqual(@as(usize, 2), found.end);
+}
+
 test "split returns slices of the input" {
     var value = try regex.Regex.init(gpa, ",", .{});
     defer value.deinit();

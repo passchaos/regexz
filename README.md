@@ -182,14 +182,16 @@ The engine picks the execution strategy automatically:
     are approximated conservatively).
   - Capture-aware search: `Regex.find`/`findFrom` with a reusable `Captures`
     buffer.
-  - Iteration and splitting: `Regex.findAll`, `Regex.split`, `Regex.splitn`
-    (limited parts).
+  - Iteration and splitting: `Regex.findAll`, `Regex.findAllWith` (iterate
+    with a caller-owned workspace to reuse warmed search caches), `Regex.split`,
+    `Regex.splitn` (limited parts).
   - Multi-pattern matching: `RegexSet` compiles independent patterns and
     reports which match anywhere in the input via `matches`/`matchesAt`,
     `isMatch`, or `matchIndices`, and exposes the original patterns via
-    `patterns`. Eligible patterns share one unanchored DFA
-    scan; patterns with assertions or extended features stay on their
-    per-pattern engines.
+    `patterns`. Eligible patterns share one unanchored DFA scan; sets made
+    entirely of separator/delimiter shapes instead search per pattern, and
+    patterns with assertions or extended features stay on their per-pattern
+    engines.
   - Replacement: `Regex.replaceAll`, `Regex.replacen` (limited matches),
     `Regex.expandMatch` (expand a template for one match), and
     `ReplaceWorkspace`. Dynamic
