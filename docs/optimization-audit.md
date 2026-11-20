@@ -146,6 +146,16 @@ one-shot API first search 1.19–1.35x; literal and ineligible controls and
 warmed calls are unchanged. See
 [first-byte filter construction](benchmarks/first-filter-init.md).
 
+Captured run chains now scan directly. `shapes.runChain` recognizes
+`(setA*)(setB*)...(setZ+)` when every group is one unbounded run or an empty
+capture, the sets are pairwise disjoint, and the last non-empty run is
+mandatory; the scan jumps to the next anchor rune with a prepared UTF-8
+candidate-byte filter, extends the maximal run and walks backward to place
+every capture boundary without DFA state, choices or trails. Starts inside a
+run, malformed UTF-8 and failed mandatory prefixes fall back to the general
+engine. Covered capture searches improve 1.32–2.43x; controls stay within
+host noise. See [captured run chains](benchmarks/run-chain.md).
+
 Further work on these candidates needs fresh measurements before implementation.
 Current warmed throughput does not establish their cold-start cost or the
 benefit of replacing their fallback paths.

@@ -38,8 +38,12 @@ test "nullable capture replay preserves maximal greedy capture order without rec
         try std.testing.expectEqual(@as(usize, 0), match.start);
         try std.testing.expectEqual(case.input.len, match.end);
         for (case.groups, 1..) |group, index| try std.testing.expectEqualStrings(group, match.group(case.input, index).?);
-        try std.testing.expect(workspace.search_dfa_workspace != null);
-        try std.testing.expect(workspace.capture_replay_plan == .forced);
+        // Disjoint adjacent runs take the deterministic run-chain path;
+        // nullable-only shapes still use the search DFA plus forced replay.
+        if (workspace.fast_kind != .run_chain) {
+            try std.testing.expect(workspace.search_dfa_workspace != null);
+            try std.testing.expect(workspace.capture_replay_plan == .forced);
+        }
         try std.testing.expectEqual(@as(usize, 0), workspace.trail.capacity);
         try std.testing.expectEqual(@as(usize, 0), workspace.choices.capacity);
     }
@@ -84,6 +88,8 @@ test "nullable capture replay agrees with interpreter across offsets and empty r
 }
 
 test "nullable capture replay retains strict budget boundaries and fallback captures" {
+    // Both workspaces are pinned to the interpreter so the step budget and
+    // its linear fallback are exercised directly.
     const cases = [_]struct { pattern: []const u8, input: []const u8 }{
         .{ .pattern = "(a*)(b*)", .input = "aaabbb" },
         .{ .pattern = "(a*)(a*)", .input = "aaaa" },
@@ -100,6 +106,8 @@ test "nullable capture replay retains strict budget boundaries and fallback capt
                 const limits = regex.Limits{ .max_execution_steps = budget, .linear_fallback = fallback };
                 var direct = try regex.ReplaceWorkspace.init(gpa, value.program, limits);
                 defer direct.deinit();
+                direct.fast_kind = .none;
+                direct.search_dfa_ineligible = true;
                 var reference = try regex.ReplaceWorkspace.init(gpa, value.program, limits);
                 defer reference.deinit();
                 reference.fast_kind = .none;

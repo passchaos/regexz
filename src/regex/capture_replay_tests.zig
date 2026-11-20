@@ -16,7 +16,7 @@ fn compare(direct: *regex.ReplaceWorkspace, reference: *regex.ReplaceWorkspace, 
     }
 }
 
-test "capture replay disjoint adjacent sets avoid choices and capture trails" {
+test "capture replay disjoint adjacent runs report captures without choices or trails" {
     const cases = [_]struct { pattern: []const u8, input: []const u8, groups: []const []const u8 }{
         .{ .pattern = "([a-z]+)([0-9]+)([A-Z]+)", .input = "hello123XYZ", .groups = &.{ "hello", "123", "XYZ" } },
         .{ .pattern = "(\\p{Greek}+)(\\p{Nd}+)(\\p{Han}+)", .input = "Σσ١٢猫狗", .groups = &.{ "Σσ", "١٢", "猫狗" } },
@@ -31,8 +31,9 @@ test "capture replay disjoint adjacent sets avoid choices and capture trails" {
         try std.testing.expectEqual(@as(usize, 0), found.start);
         try std.testing.expectEqual(case.input.len, found.end);
         for (case.groups, 1..) |group, index| try std.testing.expectEqualStrings(group, found.group(case.input, index).?);
-        try std.testing.expect(direct.search_dfa_workspace != null);
-        try std.testing.expect(direct.capture_replay_plan == .forced);
+        // Disjoint adjacent runs are a deterministic run chain, so neither
+        // the search DFA nor the interpreter records choices or trails.
+        try std.testing.expect(direct.fast_kind == .run_chain);
         try std.testing.expectEqual(@as(usize, 0), direct.trail.capacity);
         try std.testing.expectEqual(@as(usize, 0), direct.choices.capacity);
     }
@@ -64,6 +65,8 @@ test "capture replay adjacent and overlapping sets agree at every byte offset" {
 }
 
 test "capture replay adjacent runs retain strict execution limits and fallback captures" {
+    // Both workspaces are pinned to the interpreter so the step budget and
+    // its linear fallback are exercised directly.
     const cases = [_]struct { pattern: []const u8, input: []const u8 }{
         .{ .pattern = "([a-z]+)([0-9]+)([A-Z]+)", .input = "hello123XYZ" },
         .{ .pattern = "(\\p{Greek}+)(\\p{Nd}+)(\\p{Han}+)", .input = "Σσ١٢猫狗" },
@@ -76,6 +79,8 @@ test "capture replay adjacent runs retain strict execution limits and fallback c
                 const limits = regex.Limits{ .max_execution_steps = budget, .linear_fallback = fallback };
                 var direct = try regex.ReplaceWorkspace.init(gpa, value.program, limits);
                 defer direct.deinit();
+                direct.fast_kind = .none;
+                direct.search_dfa_ineligible = true;
                 var reference = try regex.ReplaceWorkspace.init(gpa, value.program, limits);
                 defer reference.deinit();
                 reference.fast_kind = .none;

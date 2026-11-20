@@ -87,6 +87,107 @@ pub const Chain = struct {
 
 const max_literal_bytes = 8;
 
+/// `(setA*)(setB*)...(setZ+)`: captured greedy runs whose sets are pairwise
+/// disjoint. The last non-empty run is mandatory, so it anchors the match
+/// end; every capture boundary is a run boundary, and each run is maximal.
+pub const RunChain = struct {
+    pub const max_items = 5;
+    sets: [max_items]model.Set = undefined,
+    /// Mandatory members before the unbounded tail of the run (`set{2,}` -> 2,
+    /// `set+` -> 1, `set*` -> 0).
+    minimum: [max_items]u8 = [_]u8{0} ** max_items,
+    /// Empty capture group: both slots take the boundary position.
+    empty: [max_items]bool = [_]bool{false} ** max_items,
+    start_slots: [max_items]u16 = undefined,
+    end_slots: [max_items]u16 = undefined,
+    count: u8 = 0,
+    /// Index of the last non-empty run; items after it are empty captures.
+    anchor: u8 = 0,
+    match_start_slot: u16 = 0,
+    match_end_slot: u16 = 1,
+};
+
+/// Recognizes a captured run chain. Conservative: any other instruction,
+/// a fixed-count run, an overlapping pair of sets or a nullable anchor
+/// rejects the shape.
+pub fn runChain(program: Program) ?RunChain {
+    if (program.extended or program.capture_count == 0 or program.capture_count > 15) return null;
+    const ins = program.instructions;
+    if (ins.len < 6 or ins.len > 128 or program.accept != 0) return null;
+    if (std.meta.activeTag(ins[0]) != .accept or std.meta.activeTag(ins[1]) != .sub_accept or
+        std.meta.activeTag(ins[2]) != .ret) return null;
+    if (program.start >= ins.len) return null;
+    const whole = ins[program.start];
+    if (std.meta.activeTag(whole) != .save or whole.save.slot != 0 or whole.save.next != program.body) return null;
+    var plan = RunChain{};
+    var pc = program.body;
+    var saw_run = false;
+    while (true) {
+        if (pc >= ins.len) return null;
+        const instruction = ins[pc];
+        if (std.meta.activeTag(instruction) != .save) return null;
+        const save = instruction.save;
+        if (save.slot == 1) {
+            // Whole-match end: the body must finish at accept.
+            if (save.next >= ins.len or std.meta.activeTag(ins[save.next]) != .accept) return null;
+            break;
+        }
+        if (save.slot < 2 or save.slot & 1 != 0) return null;
+        if (plan.count == RunChain.max_items) return null;
+        const index = plan.count;
+        plan.start_slots[index] = save.slot;
+        plan.end_slots[index] = save.slot + 1;
+        pc = save.next;
+        if (pc >= ins.len) return null;
+        if (std.meta.activeTag(ins[pc]) == .save and ins[pc].save.slot == save.slot + 1) {
+            plan.empty[index] = true;
+            plan.sets[index] = .{ .ranges = &.{} };
+            pc = ins[pc].save.next;
+        } else if (std.meta.activeTag(ins[pc]) == .star) {
+            // Nullable run: the star is the whole group body.
+            const star = ins[pc].star;
+            if (star.set.ranges.len == 0) return null;
+            const end_pc = star.next;
+            if (end_pc >= ins.len) return null;
+            const end = ins[end_pc];
+            if (std.meta.activeTag(end) != .save or end.save.slot != save.slot + 1) return null;
+            plan.sets[index] = star.set;
+            plan.minimum[index] = 0;
+            plan.anchor = index;
+            saw_run = true;
+            pc = end.save.next;
+        } else {
+            const run = runPrefix(ins, pc) orelse return null;
+            if (!run.star or run.set.ranges.len == 0) return null;
+            const end_pc = run.after;
+            if (end_pc >= ins.len) return null;
+            const end = ins[end_pc];
+            if (std.meta.activeTag(end) != .save or end.save.slot != save.slot + 1) return null;
+            plan.sets[index] = run.set;
+            plan.minimum[index] = run.min;
+            plan.anchor = index;
+            saw_run = true;
+            pc = end.save.next;
+        }
+        plan.count += 1;
+    }
+    if (!saw_run or plan.count == 0) return null;
+    // Every capture group must be one of the walked items, so the plan's
+    // slot writes cover the whole slot array.
+    if (plan.count != program.capture_count) return null;
+    // The anchor must be mandatory: a nullable tail would accept before its
+    // maximal run, so the anchor rune search could miss the real match end.
+    if (plan.minimum[plan.anchor] == 0) return null;
+    for (0..plan.count) |i| {
+        if (plan.empty[i]) continue;
+        for (i + 1..plan.count) |j| {
+            if (plan.empty[j]) continue;
+            if (setsOverlap(plan.sets[i], plan.sets[j])) return null;
+        }
+    }
+    return plan;
+}
+
 fn isLiteral(instruction: model.Instruction) bool {
     return std.meta.activeTag(instruction) == .literal_byte or std.meta.activeTag(instruction) == .literal_rune;
 }

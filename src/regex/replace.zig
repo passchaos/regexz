@@ -43,6 +43,7 @@ pub const FastKind = enum {
     number,
     capture_run,
     capture_unicode,
+    run_chain,
 };
 pub const Error = model.Error;
 
@@ -117,6 +118,9 @@ pub const Workspace = struct {
     /// A `set+ separator set+ tail` program is found by scanning for the
     /// separator instead of running the DFA over the whole input.
     simple_chain: ?shapes.Chain = null,
+    /// A captured chain of greedy runs (`(setA*)(setB*)(setC+)`) with
+    /// pairwise-disjoint sets and a mandatory anchor run.
+    run_chain: ?*RunChainState = null,
     /// A `set+` program ending in a line/text-end assertion scans runs and
     /// checks the assertion once at each run end.
     simple_anchored: ?AnchoredRun = null,
@@ -197,6 +201,20 @@ pub const Workspace = struct {
         const simple_chain = if (limits.longest) null else shapes.chain(program);
         const set_run = if (limits.longest) null else shapes.setRun(program);
         const capture_run = if (limits.longest) null else capture_run_mod.Plan.init(program);
+        // Captured run chains allocate their plan and anchor filter out of
+        // line: the shape is uncommon and the state is larger than the
+        // workspace's inline shape records. The single-run capture path takes
+        // precedence, so its programs skip detection and the allocation.
+        const run_chain: ?*RunChainState = if (limits.longest or capture_run != null) null else blk: {
+            const plan = shapes.runChain(program) orelse break :blk null;
+            const state = try allocator.create(RunChainState);
+            state.plan = plan;
+            const anchor = plan.sets[plan.anchor];
+            state.filter = prefilter.FirstFilter.init(.{ .ascii = anchor.ascii, .nonascii = !anchor.ascii_only });
+            state.filter.prepareRunePrefixes(anchor);
+            break :blk state;
+        };
+        errdefer if (run_chain) |state| allocator.destroy(state);
         const utf8_run: ?deferred_utf8.CompactRun = if (set_run) |set|
             (if (set.ascii_only) null else deferred_utf8.CompactRun.init(set))
         else
@@ -220,6 +238,8 @@ pub const Workspace = struct {
             .set_run
         else if (capture_run) |plan|
             (if (plan.set.ascii_only) .capture_run else .capture_unicode)
+        else if (run_chain != null)
+            .run_chain
         else if (utf8_run != null)
             .utf8_run
         else if (simple_chain != null)
@@ -268,6 +288,7 @@ pub const Workspace = struct {
             },
             .simple_chain = simple_chain,
             .simple_anchored = simple_anchored,
+            .run_chain = run_chain,
             .chain_tables = if (simple_chain) |chain| ChainTables.init(chain) else null,
             .line_run = line_run,
             .delimited_run = delimited_run,
@@ -296,6 +317,7 @@ pub const Workspace = struct {
 
     pub fn deinit(self: *Workspace) void {
         if (self.pair_filter) |filter| self.allocator.destroy(filter);
+        if (self.run_chain) |state| self.allocator.destroy(state);
         if (self.utf8_run) |*value| value.deinit(self.allocator);
         if (self.fast_branch) |*value| value.deinit(self.allocator);
         if (self.pike_workspace) |*workspace| workspace.deinit();
@@ -350,6 +372,11 @@ pub const Workspace = struct {
             .number => return self.findNumberRun(input, search_start),
             .capture_run => return self.findCaptureRun(input, search_start),
             .capture_unicode => return self.findCaptureUnicodeRun(input, search_start),
+            .run_chain => {
+                // The scan bails out on starts inside a run and malformed
+                // UTF-8, so a miss falls through to the general engine.
+                if (self.findRunChain(self.run_chain.?, input, search_start)) |match| return match;
+            },
         }
         // Every match must start at a start-literal occurrence, so the first
         // occurrence bounds the leftmost match start and the DFA can skip
@@ -634,6 +661,11 @@ pub const Workspace = struct {
             .number => return self.findNumberRun(input, search_start),
             .capture_run => return self.findCaptureRun(input, search_start),
             .capture_unicode => return self.findCaptureUnicodeRun(input, search_start),
+            .run_chain => {
+                // The scan bails out on starts inside a run and malformed
+                // UTF-8, so a miss falls through to the general engine.
+                if (self.findRunChain(self.run_chain.?, input, search_start)) |match| return match;
+            },
         }
         var from = search_start;
         if (self.pair_filter) |filter| {
@@ -801,6 +833,87 @@ pub const Workspace = struct {
             self.limits.linear_fallback,
         )) orelse return null;
         return .{ .start = span.start, .end = span.end, .slots = self.slots };
+    }
+
+    /// `(setA*)(setB*)...(setZ+)`: each run is maximal, the sets are
+    /// pairwise disjoint, and the anchor run is mandatory, so the next anchor
+    /// rune determines the match end and a backward walk over the preceding
+    /// runs determines every capture boundary. A start inside a run or
+    /// malformed UTF-8 falls back to the general engine.
+    fn findRunChain(self: *Workspace, state: *RunChainState, input: []const u8, search_start: usize) ?Match {
+        const plan = &state.plan;
+        const anchor = plan.anchor;
+        const anchor_set = plan.sets[anchor];
+        var scan = search_start;
+        while (scan < input.len) {
+            const candidate = state.filter.indexOfRuneCandidates(input, scan) orelse return null;
+            const rune = runeAt(input, candidate) orelse return null;
+            if (!anchor_set.matches(rune.value)) {
+                scan = candidate + rune.len;
+                continue;
+            }
+            var end = candidate + rune.len;
+            var members: usize = 1;
+            while (end < input.len) {
+                const next = runeAt(input, end) orelse return null;
+                if (!anchor_set.matches(next.value)) break;
+                end += next.len;
+                members += 1;
+            }
+            if (members < plan.minimum[anchor]) {
+                scan = end;
+                continue;
+            }
+            var pos: [shapes.RunChain.max_items + 1]usize = undefined;
+            pos[anchor] = candidate;
+            pos[anchor + 1] = end;
+            var index = anchor;
+            var retry = false;
+            while (index > 0) {
+                index -= 1;
+                if (plan.empty[index]) {
+                    pos[index] = pos[index + 1];
+                    continue;
+                }
+                const set = plan.sets[index];
+                var start = pos[index + 1];
+                var count: usize = 0;
+                while (start > 0) {
+                    const previous = runeBefore(input, start) orelse return null;
+                    if (!set.matches(previous.value)) break;
+                    start = previous.start;
+                    count += 1;
+                }
+                if (count < plan.minimum[index]) {
+                    retry = true;
+                    break;
+                }
+                pos[index] = start;
+            }
+            if (retry) {
+                scan = end;
+                continue;
+            }
+            // A start inside a run would need the run clamped to the search
+            // offset; the general engine owns that case.
+            if (pos[0] < search_start) return null;
+            var trailing = anchor + 1;
+            while (trailing < plan.count) : (trailing += 1) pos[trailing] = end;
+            var item: usize = 0;
+            while (item < plan.count) : (item += 1) {
+                if (plan.empty[item]) {
+                    self.slots[plan.start_slots[item]] = pos[item];
+                    self.slots[plan.end_slots[item]] = pos[item];
+                } else {
+                    self.slots[plan.start_slots[item]] = pos[item];
+                    self.slots[plan.end_slots[item]] = pos[item + 1];
+                }
+            }
+            self.slots[plan.match_start_slot] = pos[0];
+            self.slots[plan.match_end_slot] = end;
+            return .{ .start = pos[0], .end = end, .slots = self.slots };
+        }
+        return null;
     }
 
     /// `set+` over an ASCII-only set: skip to the next member with the SIMD
@@ -1778,6 +1891,22 @@ fn runeAt(input: []const u8, offset: usize) ?struct { value: u21, len: usize } {
     return .{ .value = value, .len = len };
 }
 
+/// Decode the rune ending at `end`. Null for malformed or truncated UTF-8,
+/// which makes the caller fall back to the general engine.
+fn runeBefore(input: []const u8, end: usize) ?struct { value: u21, start: usize } {
+    if (end == 0 or end > input.len) return null;
+    var start = end - 1;
+    var steps: usize = 0;
+    while ((input[start] & 0xC0) == 0x80) {
+        if (steps == 3 or start == 0) return null;
+        start -= 1;
+        steps += 1;
+    }
+    if (end - start > 4) return null;
+    const value = std.unicode.utf8Decode(input[start..end]) catch return null;
+    return .{ .value = value, .start = start };
+}
+
 fn runeLenAt(input: []const u8, offset: usize) usize {
     if (offset >= input.len) return 1;
     if (input[offset] < 0x80) return 1;
@@ -1800,6 +1929,13 @@ const FastBranch = struct {
         self.run.deinit(allocator);
         self.* = undefined;
     }
+};
+
+/// Captured run-chain plan plus the anchor run's candidate-byte filter.
+/// Heap-allocated so workspaces without the shape stay small.
+const RunChainState = struct {
+    plan: shapes.RunChain,
+    filter: prefilter.FirstFilter,
 };
 
 /// Byte membership tables and a SIMD separator filter for the chain fast
