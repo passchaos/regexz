@@ -174,6 +174,16 @@ overlaps and an untouched control moved 10%, so the sample is consistent with
 the expected effect rather than proof. See
 [set DFA row offsets](benchmarks/set-dfa-rows.md).
 
+Zero-width edge-assertion patterns (`^|$`, `(?m)^`, `$`, `\A\z`) now scan
+directly. `zero_width.analyze` collects alternation paths of edge assertions
+and their capture slots at compile time; the search enumerates the search
+offset, line-break boundaries (SIMD byte search per newline convention) and
+the text end, and checks each path with the engine's own position helpers.
+Other assertion kinds, consuming nodes, `(*NOTEMPTY)` restrictions and
+`Limits.longest` keep the general engine. The `^|$` replacement over 32 KiB
+improves 130–139x and is now about 3x faster than the same-host Rust
+reference; see [zero-width edge assertions](benchmarks/zero-width.md).
+
 Further work on these candidates needs fresh measurements before implementation.
 Current warmed throughput does not establish their cold-start cost or the
 benefit of replacing their fallback paths.

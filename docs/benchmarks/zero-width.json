@@ -1,0 +1,1616 @@
+{
+  "baseline": "bed42eb",
+  "method": "alternating before/after executions; suites run sequentially",
+  "executables": {
+    "replace": {
+      "before": {
+        "path": "/private/tmp/regexz-zero-width.Wl67TO/bin/replace-before",
+        "sha256": "3f08d45c495fced9584ceda4022eb5f210e5e1f36c3edaadbcefd3d00c5115df"
+      },
+      "after": {
+        "path": "/private/tmp/regexz-zero-width.Wl67TO/bin/replace-after",
+        "sha256": "fe570fd5bc8b74ebd71e83be12917a04281eb59499821254ff8e680a15bfce10"
+      }
+    }
+  },
+  "rounds": [
+    {
+      "order": [
+        "before",
+        "after"
+      ],
+      "runs": {
+        "before": {
+          "replace/page shrink": {
+            "ns": 65972.5,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/smp shrink": {
+            "ns": 67647.7,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 72123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/page grow": {
+            "ns": 78734.8,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 120446,
+              "output_bytes": 60000
+            }
+          },
+          "replace/smp grow": {
+            "ns": 71405.6,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 120446,
+              "output_bytes": 60000
+            }
+          },
+          "replace/page captures": {
+            "ns": 367444.4,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 48000
+            }
+          },
+          "replace/smp captures": {
+            "ns": 361842.3,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 48000
+            }
+          },
+          "replace/page no match": {
+            "ns": 5175.2,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48128,
+              "output_bytes": 32000
+            }
+          },
+          "replace/smp no match": {
+            "ns": 6072.5,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 80128,
+              "output_bytes": 32000
+            }
+          },
+          "replace/page zero width": {
+            "ns": 734596.3,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48128,
+              "output_bytes": 32002
+            }
+          },
+          "replace/smp zero width": {
+            "ns": 729572.9,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 80130,
+              "output_bytes": 32002
+            }
+          },
+          "replace/page limited": {
+            "ns": 5506.3,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 31998
+            }
+          },
+          "replace/smp limited": {
+            "ns": 4945.6,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 80121,
+              "output_bytes": 31998
+            }
+          },
+          "replace/page callback": {
+            "ns": 8766275.0,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 4001,
+              "allocated_bytes": 52123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/smp callback": {
+            "ns": 85344.8,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 4002,
+              "allocated_bytes": 76123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/page delete whole input": {
+            "ns": 10599.0,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 0,
+              "allocated_bytes": 0,
+              "output_bytes": 0
+            }
+          },
+          "replace/smp delete whole input": {
+            "ns": 9136.0,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 0,
+              "allocated_bytes": 0,
+              "output_bytes": 0
+            }
+          }
+        },
+        "after": {
+          "replace/page shrink": {
+            "ns": 70932.1,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/smp shrink": {
+            "ns": 70463.1,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 72123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/page grow": {
+            "ns": 81837.7,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 120446,
+              "output_bytes": 60000
+            }
+          },
+          "replace/smp grow": {
+            "ns": 83065.0,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 120446,
+              "output_bytes": 60000
+            }
+          },
+          "replace/page captures": {
+            "ns": 394332.5,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 48000
+            }
+          },
+          "replace/smp captures": {
+            "ns": 412587.7,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 48000
+            }
+          },
+          "replace/page no match": {
+            "ns": 5202.3,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48128,
+              "output_bytes": 32000
+            }
+          },
+          "replace/smp no match": {
+            "ns": 6011.5,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 80128,
+              "output_bytes": 32000
+            }
+          },
+          "replace/page zero width": {
+            "ns": 7594.6,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48128,
+              "output_bytes": 32002
+            }
+          },
+          "replace/smp zero width": {
+            "ns": 5728.5,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 80130,
+              "output_bytes": 32002
+            }
+          },
+          "replace/page limited": {
+            "ns": 4467.3,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 31998
+            }
+          },
+          "replace/smp limited": {
+            "ns": 4848.3,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 80121,
+              "output_bytes": 31998
+            }
+          },
+          "replace/page callback": {
+            "ns": 8701660.4,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 4001,
+              "allocated_bytes": 52123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/smp callback": {
+            "ns": 78864.8,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 4002,
+              "allocated_bytes": 76123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/page delete whole input": {
+            "ns": 9741.7,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 0,
+              "allocated_bytes": 0,
+              "output_bytes": 0
+            }
+          },
+          "replace/smp delete whole input": {
+            "ns": 9689.2,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 0,
+              "allocated_bytes": 0,
+              "output_bytes": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "order": [
+        "after",
+        "before"
+      ],
+      "runs": {
+        "after": {
+          "replace/page shrink": {
+            "ns": 60611.5,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/smp shrink": {
+            "ns": 59182.7,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 72123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/page grow": {
+            "ns": 68713.8,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 120446,
+              "output_bytes": 60000
+            }
+          },
+          "replace/smp grow": {
+            "ns": 65639.6,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 120446,
+              "output_bytes": 60000
+            }
+          },
+          "replace/page captures": {
+            "ns": 355990.2,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 48000
+            }
+          },
+          "replace/smp captures": {
+            "ns": 348827.5,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 48000
+            }
+          },
+          "replace/page no match": {
+            "ns": 4359.0,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48128,
+              "output_bytes": 32000
+            }
+          },
+          "replace/smp no match": {
+            "ns": 5582.9,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 80128,
+              "output_bytes": 32000
+            }
+          },
+          "replace/page zero width": {
+            "ns": 4642.1,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48128,
+              "output_bytes": 32002
+            }
+          },
+          "replace/smp zero width": {
+            "ns": 5329.6,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 80130,
+              "output_bytes": 32002
+            }
+          },
+          "replace/page limited": {
+            "ns": 3297.1,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 31998
+            }
+          },
+          "replace/smp limited": {
+            "ns": 4360.2,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 80121,
+              "output_bytes": 31998
+            }
+          },
+          "replace/page callback": {
+            "ns": 9016277.3,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 4001,
+              "allocated_bytes": 52123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/smp callback": {
+            "ns": 67897.7,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 4002,
+              "allocated_bytes": 76123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/page delete whole input": {
+            "ns": 8845.2,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 0,
+              "allocated_bytes": 0,
+              "output_bytes": 0
+            }
+          },
+          "replace/smp delete whole input": {
+            "ns": 8651.7,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 0,
+              "allocated_bytes": 0,
+              "output_bytes": 0
+            }
+          }
+        },
+        "before": {
+          "replace/page shrink": {
+            "ns": 55398.5,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/smp shrink": {
+            "ns": 51654.0,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 72123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/page grow": {
+            "ns": 63057.1,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 120446,
+              "output_bytes": 60000
+            }
+          },
+          "replace/smp grow": {
+            "ns": 67335.0,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 120446,
+              "output_bytes": 60000
+            }
+          },
+          "replace/page captures": {
+            "ns": 311384.8,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 48000
+            }
+          },
+          "replace/smp captures": {
+            "ns": 338249.2,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 48000
+            }
+          },
+          "replace/page no match": {
+            "ns": 5283.8,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48128,
+              "output_bytes": 32000
+            }
+          },
+          "replace/smp no match": {
+            "ns": 5849.2,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 80128,
+              "output_bytes": 32000
+            }
+          },
+          "replace/page zero width": {
+            "ns": 650196.5,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48128,
+              "output_bytes": 32002
+            }
+          },
+          "replace/smp zero width": {
+            "ns": 551391.0,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 80130,
+              "output_bytes": 32002
+            }
+          },
+          "replace/page limited": {
+            "ns": 3247.9,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 31998
+            }
+          },
+          "replace/smp limited": {
+            "ns": 4384.6,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 80121,
+              "output_bytes": 31998
+            }
+          },
+          "replace/page callback": {
+            "ns": 7982701.3,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 4001,
+              "allocated_bytes": 52123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/smp callback": {
+            "ns": 69186.9,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 4002,
+              "allocated_bytes": 76123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/page delete whole input": {
+            "ns": 8818.8,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 0,
+              "allocated_bytes": 0,
+              "output_bytes": 0
+            }
+          },
+          "replace/smp delete whole input": {
+            "ns": 8911.0,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 0,
+              "allocated_bytes": 0,
+              "output_bytes": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "order": [
+        "before",
+        "after"
+      ],
+      "runs": {
+        "before": {
+          "replace/page shrink": {
+            "ns": 57016.0,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/smp shrink": {
+            "ns": 55797.7,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 72123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/page grow": {
+            "ns": 61955.2,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 120446,
+              "output_bytes": 60000
+            }
+          },
+          "replace/smp grow": {
+            "ns": 63784.2,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 120446,
+              "output_bytes": 60000
+            }
+          },
+          "replace/page captures": {
+            "ns": 299736.7,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 48000
+            }
+          },
+          "replace/smp captures": {
+            "ns": 299792.9,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 48000
+            }
+          },
+          "replace/page no match": {
+            "ns": 3901.0,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48128,
+              "output_bytes": 32000
+            }
+          },
+          "replace/smp no match": {
+            "ns": 5005.8,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 80128,
+              "output_bytes": 32000
+            }
+          },
+          "replace/page zero width": {
+            "ns": 623400.6,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48128,
+              "output_bytes": 32002
+            }
+          },
+          "replace/smp zero width": {
+            "ns": 696791.9,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 80130,
+              "output_bytes": 32002
+            }
+          },
+          "replace/page limited": {
+            "ns": 3224.2,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 31998
+            }
+          },
+          "replace/smp limited": {
+            "ns": 3773.3,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 80121,
+              "output_bytes": 31998
+            }
+          },
+          "replace/page callback": {
+            "ns": 7789374.4,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 4001,
+              "allocated_bytes": 52123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/smp callback": {
+            "ns": 71826.3,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 4002,
+              "allocated_bytes": 76123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/page delete whole input": {
+            "ns": 8415.4,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 0,
+              "allocated_bytes": 0,
+              "output_bytes": 0
+            }
+          },
+          "replace/smp delete whole input": {
+            "ns": 8478.8,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 0,
+              "allocated_bytes": 0,
+              "output_bytes": 0
+            }
+          }
+        },
+        "after": {
+          "replace/page shrink": {
+            "ns": 61907.9,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/smp shrink": {
+            "ns": 61083.5,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 72123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/page grow": {
+            "ns": 69302.1,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 120446,
+              "output_bytes": 60000
+            }
+          },
+          "replace/smp grow": {
+            "ns": 72855.4,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 120446,
+              "output_bytes": 60000
+            }
+          },
+          "replace/page captures": {
+            "ns": 359681.9,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 48000
+            }
+          },
+          "replace/smp captures": {
+            "ns": 329844.0,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 48000
+            }
+          },
+          "replace/page no match": {
+            "ns": 3595.0,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48128,
+              "output_bytes": 32000
+            }
+          },
+          "replace/smp no match": {
+            "ns": 4713.1,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 80128,
+              "output_bytes": 32000
+            }
+          },
+          "replace/page zero width": {
+            "ns": 4139.2,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48128,
+              "output_bytes": 32002
+            }
+          },
+          "replace/smp zero width": {
+            "ns": 4254.4,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 80130,
+              "output_bytes": 32002
+            }
+          },
+          "replace/page limited": {
+            "ns": 3116.9,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 31998
+            }
+          },
+          "replace/smp limited": {
+            "ns": 3903.8,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 80121,
+              "output_bytes": 31998
+            }
+          },
+          "replace/page callback": {
+            "ns": 7667374.8,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 4001,
+              "allocated_bytes": 52123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/smp callback": {
+            "ns": 64597.3,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 4002,
+              "allocated_bytes": 76123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/page delete whole input": {
+            "ns": 8965.4,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 0,
+              "allocated_bytes": 0,
+              "output_bytes": 0
+            }
+          },
+          "replace/smp delete whole input": {
+            "ns": 8492.3,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 0,
+              "allocated_bytes": 0,
+              "output_bytes": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "order": [
+        "after",
+        "before"
+      ],
+      "runs": {
+        "after": {
+          "replace/page shrink": {
+            "ns": 54742.9,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/smp shrink": {
+            "ns": 55235.6,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 72123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/page grow": {
+            "ns": 68112.7,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 120446,
+              "output_bytes": 60000
+            }
+          },
+          "replace/smp grow": {
+            "ns": 65145.6,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 120446,
+              "output_bytes": 60000
+            }
+          },
+          "replace/page captures": {
+            "ns": 317782.7,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 48000
+            }
+          },
+          "replace/smp captures": {
+            "ns": 307543.1,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 48000
+            }
+          },
+          "replace/page no match": {
+            "ns": 3653.8,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48128,
+              "output_bytes": 32000
+            }
+          },
+          "replace/smp no match": {
+            "ns": 4776.7,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 80128,
+              "output_bytes": 32000
+            }
+          },
+          "replace/page zero width": {
+            "ns": 6356.5,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48128,
+              "output_bytes": 32002
+            }
+          },
+          "replace/smp zero width": {
+            "ns": 6332.9,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 80130,
+              "output_bytes": 32002
+            }
+          },
+          "replace/page limited": {
+            "ns": 3099.0,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 31998
+            }
+          },
+          "replace/smp limited": {
+            "ns": 6275.2,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 80121,
+              "output_bytes": 31998
+            }
+          },
+          "replace/page callback": {
+            "ns": 7141630.0,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 4001,
+              "allocated_bytes": 52123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/smp callback": {
+            "ns": 64599.6,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 4002,
+              "allocated_bytes": 76123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/page delete whole input": {
+            "ns": 8246.7,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 0,
+              "allocated_bytes": 0,
+              "output_bytes": 0
+            }
+          },
+          "replace/smp delete whole input": {
+            "ns": 8299.8,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 0,
+              "allocated_bytes": 0,
+              "output_bytes": 0
+            }
+          }
+        },
+        "before": {
+          "replace/page shrink": {
+            "ns": 51275.2,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/smp shrink": {
+            "ns": 52047.5,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 72123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/page grow": {
+            "ns": 58697.7,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 120446,
+              "output_bytes": 60000
+            }
+          },
+          "replace/smp grow": {
+            "ns": 64301.7,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 120446,
+              "output_bytes": 60000
+            }
+          },
+          "replace/page captures": {
+            "ns": 311574.2,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 48000
+            }
+          },
+          "replace/smp captures": {
+            "ns": 325635.4,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 48000
+            }
+          },
+          "replace/page no match": {
+            "ns": 4440.8,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48128,
+              "output_bytes": 32000
+            }
+          },
+          "replace/smp no match": {
+            "ns": 5502.5,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 80128,
+              "output_bytes": 32000
+            }
+          },
+          "replace/page zero width": {
+            "ns": 584153.1,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48128,
+              "output_bytes": 32002
+            }
+          },
+          "replace/smp zero width": {
+            "ns": 580314.0,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 80130,
+              "output_bytes": 32002
+            }
+          },
+          "replace/page limited": {
+            "ns": 3178.1,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 31998
+            }
+          },
+          "replace/smp limited": {
+            "ns": 3706.7,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 80121,
+              "output_bytes": 31998
+            }
+          },
+          "replace/page callback": {
+            "ns": 6984542.1,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 4001,
+              "allocated_bytes": 52123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/smp callback": {
+            "ns": 68560.0,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 4002,
+              "allocated_bytes": 76123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/page delete whole input": {
+            "ns": 8546.7,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 0,
+              "allocated_bytes": 0,
+              "output_bytes": 0
+            }
+          },
+          "replace/smp delete whole input": {
+            "ns": 8479.6,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 0,
+              "allocated_bytes": 0,
+              "output_bytes": 0
+            }
+          }
+        }
+      }
+    },
+    {
+      "order": [
+        "before",
+        "after"
+      ],
+      "runs": {
+        "before": {
+          "replace/page shrink": {
+            "ns": 54584.8,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/smp shrink": {
+            "ns": 58145.2,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 72123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/page grow": {
+            "ns": 67809.4,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 120446,
+              "output_bytes": 60000
+            }
+          },
+          "replace/smp grow": {
+            "ns": 64793.1,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 120446,
+              "output_bytes": 60000
+            }
+          },
+          "replace/page captures": {
+            "ns": 309951.3,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 48000
+            }
+          },
+          "replace/smp captures": {
+            "ns": 326648.1,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 48000
+            }
+          },
+          "replace/page no match": {
+            "ns": 5595.0,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48128,
+              "output_bytes": 32000
+            }
+          },
+          "replace/smp no match": {
+            "ns": 6193.5,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 80128,
+              "output_bytes": 32000
+            }
+          },
+          "replace/page zero width": {
+            "ns": 694504.0,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48128,
+              "output_bytes": 32002
+            }
+          },
+          "replace/smp zero width": {
+            "ns": 695292.1,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 80130,
+              "output_bytes": 32002
+            }
+          },
+          "replace/page limited": {
+            "ns": 4511.9,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 31998
+            }
+          },
+          "replace/smp limited": {
+            "ns": 4491.0,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 80121,
+              "output_bytes": 31998
+            }
+          },
+          "replace/page callback": {
+            "ns": 7414542.1,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 4001,
+              "allocated_bytes": 52123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/smp callback": {
+            "ns": 62477.1,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 4002,
+              "allocated_bytes": 76123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/page delete whole input": {
+            "ns": 8072.7,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 0,
+              "allocated_bytes": 0,
+              "output_bytes": 0
+            }
+          },
+          "replace/smp delete whole input": {
+            "ns": 8073.8,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 0,
+              "allocated_bytes": 0,
+              "output_bytes": 0
+            }
+          }
+        },
+        "after": {
+          "replace/page shrink": {
+            "ns": 55510.8,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/smp shrink": {
+            "ns": 55798.3,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 72123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/page grow": {
+            "ns": 62012.7,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 120446,
+              "output_bytes": 60000
+            }
+          },
+          "replace/smp grow": {
+            "ns": 62327.3,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 120446,
+              "output_bytes": 60000
+            }
+          },
+          "replace/page captures": {
+            "ns": 326739.2,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 48000
+            }
+          },
+          "replace/smp captures": {
+            "ns": 321472.3,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 48000
+            }
+          },
+          "replace/page no match": {
+            "ns": 3790.8,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48128,
+              "output_bytes": 32000
+            }
+          },
+          "replace/smp no match": {
+            "ns": 4583.8,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 80128,
+              "output_bytes": 32000
+            }
+          },
+          "replace/page zero width": {
+            "ns": 4678.3,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48128,
+              "output_bytes": 32002
+            }
+          },
+          "replace/smp zero width": {
+            "ns": 4567.7,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 80130,
+              "output_bytes": 32002
+            }
+          },
+          "replace/page limited": {
+            "ns": 3239.0,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 1,
+              "allocated_bytes": 48123,
+              "output_bytes": 31998
+            }
+          },
+          "replace/smp limited": {
+            "ns": 3954.0,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 2,
+              "allocated_bytes": 80121,
+              "output_bytes": 31998
+            }
+          },
+          "replace/page callback": {
+            "ns": 7406371.9,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 4001,
+              "allocated_bytes": 52123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/smp callback": {
+            "ns": 71746.3,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 4002,
+              "allocated_bytes": 76123,
+              "output_bytes": 24000
+            }
+          },
+          "replace/page delete whole input": {
+            "ns": 10990.4,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 0,
+              "allocated_bytes": 0,
+              "output_bytes": 0
+            }
+          },
+          "replace/smp delete whole input": {
+            "ns": 10597.5,
+            "unit": "ns/iter",
+            "counters": {
+              "allocations": 0,
+              "allocated_bytes": 0,
+              "output_bytes": 0
+            }
+          }
+        }
+      }
+    }
+  ],
+  "medians": {
+    "replace/page shrink": {
+      "before": 55398.5,
+      "after": 60611.5,
+      "unit": "ns/iter",
+      "speedup": 0.913993219108585
+    },
+    "replace/smp shrink": {
+      "before": 55797.7,
+      "after": 59182.7,
+      "unit": "ns/iter",
+      "speedup": 0.942804231642017
+    },
+    "replace/page grow": {
+      "before": 63057.1,
+      "after": 68713.8,
+      "unit": "ns/iter",
+      "speedup": 0.9176773806717137
+    },
+    "replace/smp grow": {
+      "before": 64793.1,
+      "after": 65639.6,
+      "unit": "ns/iter",
+      "speedup": 0.9871038214736225
+    },
+    "replace/page captures": {
+      "before": 311384.8,
+      "after": 355990.2,
+      "unit": "ns/iter",
+      "speedup": 0.8747004833279117
+    },
+    "replace/smp captures": {
+      "before": 326648.1,
+      "after": 329844.0,
+      "unit": "ns/iter",
+      "speedup": 0.9903108742314548
+    },
+    "replace/page no match": {
+      "before": 5175.2,
+      "after": 3790.8,
+      "unit": "ns/iter",
+      "speedup": 1.3651999577925502
+    },
+    "replace/smp no match": {
+      "before": 5849.2,
+      "after": 4776.7,
+      "unit": "ns/iter",
+      "speedup": 1.2245273933887413
+    },
+    "replace/page zero width": {
+      "before": 650196.5,
+      "after": 4678.3,
+      "unit": "ns/iter",
+      "speedup": 138.98136075070005
+    },
+    "replace/smp zero width": {
+      "before": 695292.1,
+      "after": 5329.6,
+      "unit": "ns/iter",
+      "speedup": 130.45858976283398
+    },
+    "replace/page limited": {
+      "before": 3247.9,
+      "after": 3239.0,
+      "unit": "ns/iter",
+      "speedup": 1.0027477616548317
+    },
+    "replace/smp limited": {
+      "before": 4384.6,
+      "after": 4360.2,
+      "unit": "ns/iter",
+      "speedup": 1.0055960735746068
+    },
+    "replace/page callback": {
+      "before": 7789374.4,
+      "after": 7667374.8,
+      "unit": "ns/iter",
+      "speedup": 1.0159115216331933
+    },
+    "replace/smp callback": {
+      "before": 69186.9,
+      "after": 67897.7,
+      "unit": "ns/iter",
+      "speedup": 1.0189873883798715
+    },
+    "replace/page delete whole input": {
+      "before": 8546.7,
+      "after": 8965.4,
+      "unit": "ns/iter",
+      "speedup": 0.9532982354384636
+    },
+    "replace/smp delete whole input": {
+      "before": 8479.6,
+      "after": 8651.7,
+      "unit": "ns/iter",
+      "speedup": 0.980107955661893
+    }
+  }
+}

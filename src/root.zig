@@ -395,6 +395,7 @@ test {
     _ = @import("regex/capture_replay_tests.zig");
     _ = @import("regex/capture_nullable_tests.zig");
     _ = @import("regex/run_chain_tests.zig");
+    _ = @import("regex/zero_width_tests.zig");
     _ = @import("regex/prefilter_tests.zig");
     _ = @import("regex/nibble_filter_tests.zig");
     _ = @import("regex/rune_cache_tests.zig");

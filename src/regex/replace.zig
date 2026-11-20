@@ -17,6 +17,7 @@ const deferred_utf8 = @import("deferred_utf8_run.zig");
 const utf8_run_search = @import("utf8_run_search.zig");
 const prefilter = @import("prefilter.zig");
 const shapes = @import("shapes.zig");
+const zero_width = @import("zero_width.zig");
 const capture_run_mod = @import("capture_run.zig");
 const capture_replay = @import("capture_replay.zig");
 const subst = @import("substitution.zig");
@@ -44,6 +45,7 @@ pub const FastKind = enum {
     capture_run,
     capture_unicode,
     run_chain,
+    zero_width,
 };
 pub const Error = model.Error;
 
@@ -249,12 +251,18 @@ pub const Workspace = struct {
         if (trailing_space_set) |set| {
             trailing_table = byte_table.init(256, set);
         }
+        const zero_width_plan = if (limits.longest or program.notempty or program.notempty_atstart)
+            null
+        else
+            program.zero_width;
         const fast_kind: FastKind = if (simple_set != null)
             .set_run
         else if (capture_run) |plan|
             (if (plan.set.ascii_only) .capture_run else .capture_unicode)
         else if (run_chain != null)
             .run_chain
+        else if (zero_width_plan != null)
+            .zero_width
         else if (utf8_run != null)
             .utf8_run
         else if (simple_chain != null)
@@ -391,6 +399,9 @@ pub const Workspace = struct {
                 // The scan bails out on starts inside a run and malformed
                 // UTF-8, so a miss falls through to the general engine.
                 if (self.findRunChain(self.run_chain.?, input, search_start)) |match| return match;
+            },
+            .zero_width => {
+                if (self.findZeroWidth(&self.program.zero_width.?, input, search_start)) |match| return match;
             },
         }
         // Every match must start at a start-literal occurrence, so the first
@@ -680,6 +691,9 @@ pub const Workspace = struct {
                 // The scan bails out on starts inside a run and malformed
                 // UTF-8, so a miss falls through to the general engine.
                 if (self.findRunChain(self.run_chain.?, input, search_start)) |match| return match;
+            },
+            .zero_width => {
+                if (self.findZeroWidth(&self.program.zero_width.?, input, search_start)) |match| return match;
             },
         }
         var from = search_start;
@@ -994,6 +1008,56 @@ pub const Workspace = struct {
         }
         self.slots[plan.match_start_slot] = start;
         self.slots[plan.match_end_slot] = end;
+    }
+
+    /// Zero-width edge assertions: the only positions that can satisfy
+    /// `^`, `$`, `(?m)^` or `(?m)$` are the text edges and the line-break
+    /// boundaries, so enumerate those in order and check each alternation
+    /// path instead of restarting the interpreter at every offset.
+    fn findZeroWidth(self: *Workspace, plan: *const zero_width.Plan, input: []const u8, search_start: usize) ?Match {
+        if (search_start > input.len) return null;
+        if (self.zeroWidthAt(plan, input, search_start)) |match| return match;
+        const mode = self.program.newline;
+        // A break is at most two bytes (CRLF); start the scan far enough back
+        // to include a break that ends exactly at the search offset.
+        var scan = search_start -| 2;
+        while (nextLineBreak(input, scan, mode)) |line_break| {
+            const start = line_break.start;
+            const after = start + line_break.len;
+            if (start > search_start) {
+                if (self.zeroWidthAt(plan, input, start)) |match| return match;
+            }
+            if (after > search_start and after <= input.len) {
+                if (self.zeroWidthAt(plan, input, after)) |match| return match;
+            }
+            scan = after;
+        }
+        if (input.len > search_start) {
+            if (self.zeroWidthAt(plan, input, input.len)) |match| return match;
+        }
+        return null;
+    }
+
+    fn zeroWidthAt(self: *Workspace, plan: *const zero_width.Plan, input: []const u8, offset: usize) ?Match {
+        const at = position(input, offset, self.program.newline);
+        var path_index: usize = 0;
+        while (path_index < plan.count) : (path_index += 1) {
+            const path = &plan.paths[path_index];
+            var matched = true;
+            for (path.assertions[0..path.assertion_count]) |kind| {
+                if (!at.allows(kind)) {
+                    matched = false;
+                    break;
+                }
+            }
+            if (!matched) continue;
+            @memset(self.slots, unset);
+            self.slots[0] = offset;
+            self.slots[1] = offset;
+            for (path.slots[0..path.slot_count]) |slot| self.slots[slot] = offset;
+            return .{ .start = offset, .end = offset, .slots = self.slots };
+        }
+        return null;
     }
 
     /// `set+` over an ASCII-only set: skip to the next member with the SIMD
@@ -1985,6 +2049,53 @@ fn runeBefore(input: []const u8, end: usize) ?struct { value: u21, start: usize 
     if (end - start > 4) return null;
     const value = std.unicode.utf8Decode(input[start..end]) catch return null;
     return .{ .value = value, .start = start };
+}
+
+const LineBreak = struct { start: usize, len: usize };
+
+/// Next line break at or after `from` for the program's newline convention.
+/// `(*ANY)` is rejected at compile time because its Unicode breaks need
+/// rune-level scanning.
+fn nextLineBreak(input: []const u8, from: usize, mode: model.Newline) ?LineBreak {
+    var offset = from;
+    while (offset < input.len) {
+        switch (mode) {
+            .lf => {
+                const found = prefilter.indexOfByte(input, offset, '\n') orelse return null;
+                return .{ .start = found, .len = 1 };
+            },
+            .cr => {
+                const found = prefilter.indexOfByte(input, offset, '\r') orelse return null;
+                return .{ .start = found, .len = 1 };
+            },
+            .nul => {
+                const found = prefilter.indexOfByte(input, offset, 0) orelse return null;
+                return .{ .start = found, .len = 1 };
+            },
+            .crlf => {
+                const found = prefilter.indexOfByte(input, offset, '\r') orelse return null;
+                if (found + 1 < input.len and input[found + 1] == '\n') return .{ .start = found, .len = 2 };
+                offset = found + 1;
+            },
+            .anycrlf => {
+                const cr = prefilter.indexOfByte(input, offset, '\r');
+                const lf = prefilter.indexOfByte(input, offset, '\n');
+                const found = @min(cr orelse input.len, lf orelse input.len);
+                if (found >= input.len) return null;
+                if (input[found] == '\r') {
+                    return .{ .start = found, .len = if (found + 1 < input.len and input[found + 1] == '\n') 2 else 1 };
+                }
+                // A `\n` preceded by `\r` belongs to the pair already returned.
+                if (found > 0 and input[found - 1] == '\r') {
+                    offset = found + 1;
+                    continue;
+                }
+                return .{ .start = found, .len = 1 };
+            },
+            .any => return null,
+        }
+    }
+    return null;
 }
 
 fn runeLenAt(input: []const u8, offset: usize) usize {

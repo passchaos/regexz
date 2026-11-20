@@ -9,6 +9,7 @@ const serialize_mod = @import("serialize.zig");
 const required_literals = @import("required_literals.zig");
 const start_literals_mod = @import("start_literals.zig");
 const fast_branch_mod = @import("fast_branch.zig");
+const zero_width_mod = @import("zero_width.zig");
 
 pub const Program = struct {
     instructions: []const model.Instruction,
@@ -34,6 +35,9 @@ pub const Program = struct {
     /// A dominant alternation branch (`set? setB+`) that decides the match
     /// when no earlier branch can start at the current byte. Not serialized.
     fast_branch: ?fast_branch_mod.Plan = null,
+    /// A zero-width edge-assertion alternation (`^|$`, `(?m)^$`, ...). Not
+    /// serialized; deserialized programs skip the optimization.
+    zero_width: ?zero_width_mod.Plan = null,
     /// True when a context-free lazy DFA can evaluate boolean full matches.
     dfa_eligible: bool = false,
     /// True when the program needs the extended backtracking VM.
@@ -849,6 +853,7 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         try fast_branch_mod.analyze(allocator, parsed.root)
     else
         null;
+    const zero_width = zero_width_mod.analyze(parsed.root, parsed.newline);
     return .{
         .instructions = instructions,
         .start = start,
@@ -880,5 +885,6 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         .required_literals = required,
         .start_literals = start_literals,
         .fast_branch = fast_branch,
+        .zero_width = zero_width,
     };
 }
