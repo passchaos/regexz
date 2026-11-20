@@ -222,6 +222,12 @@ searches improve 2.57x and JSON string literals 2.50x; other fast-path
 controls stay within host noise. See
 [short-span delimiter scans](benchmarks/delimited-short-spans.md).
 
+`split` and `splitn` now detect a pure ASCII `set+` program and partition the
+input in one byte-table pass with a bounded parts reservation, instead of
+building a workspace and searching once per part. The 22 KiB whitespace split
+improves 2.20x; other patterns keep the general `findAll` path. See
+[split over set runs](benchmarks/split-set-runs.md).
+
 Further work on these candidates needs fresh measurements before implementation.
 Current warmed throughput does not establish their cold-start cost or the
 benefit of replacing their fallback paths.

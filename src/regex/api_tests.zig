@@ -82,6 +82,34 @@ test "split returns slices of the input" {
     try std.testing.expectEqualStrings("b", words[1]);
 }
 
+test "split set-run fast path handles edges and limits" {
+    var value = try regex.Regex.init(gpa, "\\s+", .{});
+    defer value.deinit();
+
+    const edges = try value.split(gpa, "  a  b  ");
+    defer gpa.free(edges);
+    try std.testing.expectEqual(@as(usize, 4), edges.len);
+    try std.testing.expectEqualStrings("", edges[0]);
+    try std.testing.expectEqualStrings("a", edges[1]);
+    try std.testing.expectEqualStrings("b", edges[2]);
+    try std.testing.expectEqualStrings("", edges[3]);
+
+    const limited = try value.splitn(gpa, "a  b  c", 2);
+    defer gpa.free(limited);
+    try std.testing.expectEqual(@as(usize, 2), limited.len);
+    try std.testing.expectEqualStrings("a", limited[0]);
+    try std.testing.expectEqualStrings("b  c", limited[1]);
+
+    const none = try value.splitn(gpa, "a  b  c", 0);
+    defer gpa.free(none);
+    try std.testing.expectEqual(@as(usize, 0), none.len);
+
+    const empty = try value.split(gpa, "");
+    defer gpa.free(empty);
+    try std.testing.expectEqual(@as(usize, 1), empty.len);
+    try std.testing.expectEqualStrings("", empty[0]);
+}
+
 test "replacement supports dollar syntax and named groups" {
     var numbered = try regex.Regex.init(gpa, "(\\w+)\\s+(\\w+)", .{});
     defer numbered.deinit();

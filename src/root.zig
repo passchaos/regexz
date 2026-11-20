@@ -29,6 +29,8 @@ pub const Match = @import("regex/replace.zig").Match;
 pub const StreamScanner = @import("regex/stream.zig").Scanner;
 pub const StreamMatch = @import("regex/stream.zig").StreamMatch;
 pub const StreamEmitFn = @import("regex/stream.zig").EmitFn;
+const shapes = @import("regex/shapes.zig");
+const byte_table = @import("regex/byte_table.zig");
 const substitution_mod = @import("regex/substitution.zig");
 pub const validateSubstitution = substitution_mod.validateSubstitution;
 pub const validateSubstitutionFor = substitution_mod.validateSubstitutionFor;
@@ -66,6 +68,30 @@ fn runeLenAt(input: []const u8, offset: usize) usize {
     if (len > input.len - offset) return 1;
     _ = std.unicode.utf8Decode(input[offset..][0..len]) catch return 1;
     return len;
+}
+
+/// Split around maximal runs of an ASCII `set+`, scanning each input byte
+/// once instead of running a search per part.
+fn splitAsciiSet(gpa: std.mem.Allocator, input: []const u8, set: model.Set, limit: usize) Error![][]const u8 {
+    var parts: std.ArrayList([]const u8) = .empty;
+    errdefer parts.deinit(gpa);
+    if (limit == 0) return parts.toOwnedSlice(gpa);
+    // Matches are at least one byte, so `input.len / 8` is a bounded first
+    // guess; the list still grows if a separator-dense input needs more.
+    try parts.ensureTotalCapacity(gpa, @min(@min(input.len / 8 + 1, 4096), limit));
+    const table = byte_table.init(256, set);
+    var last: usize = 0;
+    var offset: usize = 0;
+    while (offset < input.len and parts.items.len + 1 < limit) {
+        while (offset < input.len and !table[input[offset]]) offset += 1;
+        if (offset == input.len) break;
+        const start = offset;
+        while (offset < input.len and table[input[offset]]) offset += 1;
+        try parts.append(gpa, input[last..start]);
+        last = offset;
+    }
+    try parts.append(gpa, input[last..]);
+    return parts.toOwnedSlice(gpa);
 }
 
 /// Iterator over non-overlapping matches. Returned `Match.slots` points into
@@ -320,6 +346,7 @@ pub const Regex = struct {
     /// Split `input` around matches. The returned slice is allocated in `gpa`;
     /// its elements are slices of `input`.
     pub fn split(self: *const Regex, gpa: std.mem.Allocator, input: []const u8) Error![][]const u8 {
+        if (self.splitSetRun()) |set| return splitAsciiSet(gpa, input, set, std.math.maxInt(usize));
         var parts: std.ArrayList([]const u8) = .empty;
         errdefer parts.deinit(gpa);
         var iterator = try self.findAll(gpa, input);
@@ -335,6 +362,7 @@ pub const Regex = struct {
     /// Split `input` around at most `limit` matches; the last part receives
     /// the unmatched remainder. `limit == 0` returns no parts.
     pub fn splitn(self: *const Regex, gpa: std.mem.Allocator, input: []const u8, limit: usize) Error![][]const u8 {
+        if (self.splitSetRun()) |set| return splitAsciiSet(gpa, input, set, limit);
         var parts: std.ArrayList([]const u8) = .empty;
         errdefer parts.deinit(gpa);
         if (limit == 0) return parts.toOwnedSlice(gpa);
@@ -348,6 +376,14 @@ pub const Regex = struct {
         }
         try parts.append(gpa, input[last..]);
         return parts.toOwnedSlice(gpa);
+    }
+    /// The set of a pure ASCII `set+` program, whose matches are exactly the
+    /// maximal runs. `split` can then scan the input once instead of running
+    /// a full search per part.
+    fn splitSetRun(self: *const Regex) ?model.Set {
+        if (self.limits.longest) return null;
+        const set = shapes.setRun(self.program) orelse return null;
+        return if (set.ascii_only) set else null;
     }
     /// Expand a replacement template for one match without searching again.
     pub fn expandMatch(self: *const Regex, gpa: std.mem.Allocator, input: []const u8, match: Match, substitution: []const u8) Error![]u8 {
