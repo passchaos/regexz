@@ -12,20 +12,7 @@ pub const Utf8Run = struct {
     table: []u16,
 
     pub fn init(allocator: std.mem.Allocator, set: model.Set) std.mem.Allocator.Error!Utf8Run {
-        var automaton = try utf8_set.build(allocator, set.ranges);
-        defer automaton.deinit(allocator);
-        const states = automaton.stateCount();
-        const table = try allocator.alloc(u16, states * 256);
-        errdefer allocator.free(table);
-        @memset(table, utf8_set.dead);
-        for (automaton.nodes, 0..) |node, state| {
-            for (automaton.edges[node.start..][0..node.count]) |edge| {
-                const start = state * 256 + edge.lo;
-                const end = state * 256 + @as(usize, edge.hi) + 1;
-                @memset(table[start..end], edge.next);
-            }
-        }
-        return .{ .table = table };
+        return .{ .table = try utf8_set.buildTable(allocator, set.ranges) };
     }
 
     pub fn deinit(self: *const Utf8Run, allocator: std.mem.Allocator) void {

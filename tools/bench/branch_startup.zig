@@ -118,6 +118,9 @@ pub fn main() !void {
         .{ .name = "Han mixed miss", .expression = "\\p{Han}+", .input = "Ελληνικά café ١٢٣ 😀𐐀 " ** 32 },
         .{ .name = "Han rejected gap", .expression = "\\p{Han}+", .input = "Ελληνικά café ١٢٣ 😀𐐀 " ** 32 ++ "𠀀猫" },
         .{ .name = "wide letters miss", .expression = "\\p{L}+", .input = "😀" ** 32 },
+        .{ .name = "Greek table init", .expression = "\\p{Greek}+", .input = "Σσ" ** 32 },
+        .{ .name = "Han table init", .expression = "\\p{Han}+", .input = "猫𠀀" ** 16 },
+        .{ .name = "letters table init", .expression = "\\p{L}+", .input = "Σ猫é" ** 24 },
     };
     for (cases) |case| for ([_]Mode{ .init, .first, .cold_pass, .warm_first, .warm_pass }) |mode| {
         try bench(io, &stdout.interface, case.name, case.expression, case.input, mode);

@@ -2,6 +2,7 @@ const std = @import("std");
 const regex = @import("../root.zig");
 const utf8_set = @import("utf8_set.zig");
 const utf8_run = @import("utf8_run.zig");
+const model = @import("model.zig");
 const gpa = std.testing.allocator;
 
 test "utf8 automaton construction rolls back allocation failures" {
@@ -36,12 +37,7 @@ test "Unicode workspace construction rolls back allocation failures" {
     }
 }
 
-test "expanded UTF8 rows agree with compact transitions for every byte" {
-    var value = try regex.Regex.init(gpa, "[\\p{Han}\\p{Greek}]", .{});
-    defer value.deinit();
-    const set = for (value.program.instructions) |instruction| {
-        if (instruction == .consume) break instruction.consume.set;
-    } else unreachable;
+fn checkExpanded(set: model.Set) !void {
     var compact = try utf8_set.build(gpa, set.ranges);
     defer compact.deinit(gpa);
     var expanded = try utf8_run.Utf8Run.init(gpa, set);
@@ -51,5 +47,40 @@ test "expanded UTF8 rows agree with compact transitions for every byte" {
         for (0..256) |byte| {
             try std.testing.expectEqual(compact.advance(@intCast(state), @intCast(byte)), expanded.table[state * 256 + byte]);
         }
+    }
+}
+
+test "expanded UTF8 rows agree with compact transitions for every byte" {
+    for ([_][]const u8{
+        "[\\p{Han}\\p{Greek}]",                                               "\\p{L}", "[\\x{80}-\\x{10ffff}]",
+        "[A-Za-zΣσ猫]",
+        "[\\x{7ff}\\x{800}\\x{d7ff}\\x{e000}\\x{ffff}\\x{10000}\\x{10ffff}]",
+    }) |pattern| {
+        var value = try regex.Regex.init(gpa, pattern, .{});
+        defer value.deinit();
+        const set = for (value.program.instructions) |instruction| {
+            if (instruction == .consume) break instruction.consume.set;
+        } else unreachable;
+        try checkExpanded(set);
+    }
+    try checkExpanded(.{ .ranges = &.{} });
+    try checkExpanded(.{ .ranges = &.{.{ .first = 0, .last = 0x10ffff }} });
+}
+
+test "expanded UTF8 direct construction rolls back allocation failures" {
+    const Harness = struct {
+        fn run(allocator: std.mem.Allocator, set: model.Set) !void {
+            var expanded = try utf8_run.Utf8Run.init(allocator, set);
+            defer expanded.deinit(allocator);
+            try std.testing.expect(expanded.table.len >= 256);
+        }
+    };
+    for ([_][]const u8{ "[\\p{Han}\\p{Greek}]", "\\p{L}", "[\\x{80}-\\x{10ffff}]" }) |pattern| {
+        var value = try regex.Regex.init(gpa, pattern, .{});
+        defer value.deinit();
+        const set = for (value.program.instructions) |instruction| {
+            if (instruction == .consume) break instruction.consume.set;
+        } else unreachable;
+        try std.testing.checkAllAllocationFailures(gpa, Harness.run, .{set});
     }
 }

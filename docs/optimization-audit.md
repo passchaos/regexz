@@ -89,6 +89,13 @@ and warmed matching. See [benchmark calibration](benchmarks/calibration.md).
 | 4 | `capture_replay.zig` | [Adjacent disjoint capture replay](benchmarks/adjacent-replay.md) avoids capture trails and backtracking choices. [Nullable greedy replay](benchmarks/nullable-replay.md) now extends the cached proof through nullable greedy continuations, with 1.66-1.79x complete-pass gains over ASCII, 1.22x for Unicode nullable prefixes and 1.43x for optional Unicode captures. First-find allocations fall by two or three, with workspace size unchanged. The one-time graph walk remains separate from warmed dispatch. Cold-start latency gains are not established. Bounded optional branches still require interpreter replay; measure their record cost before widening the proof. |
 | 5 | `replace.zig` | Deterministic capture replay now lives in a separate module with explicit borrowed slots and execution counters. The remaining API, search dispatch, deterministic scanners and interpreter occupy roughly 1,900 lines. Extract a cohesive scanner module when changing those paths; keep budget and capture state ownership explicit. |
 
+Dense UTF-8 run tables now use the [direct builder finish](benchmarks/dense-utf8.md),
+omitting two temporary compact arrays and their copies. Per-construction
+requested bytes fall by 1,484 for Greek, 3,116 for Han and 31,436 for letters,
+with the final row layout and workspace size unchanged. Construction timing
+gains are not established. Remaining linked-builder growth and row-allocation
+costs need separate measurements.
+
 Further work on these candidates needs fresh measurements before implementation.
 Current warmed throughput does not establish their cold-start cost or the
 benefit of replacing their fallback paths.

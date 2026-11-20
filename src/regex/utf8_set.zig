@@ -155,6 +155,24 @@ const Builder = struct {
         }
         return .{ .nodes = nodes, .edges = edges };
     }
+
+    /// Expand linked construction edges directly, without compact copies.
+    fn finishTable(self: *Builder) std.mem.Allocator.Error![]u16 {
+        const table = try self.gpa.alloc(u16, self.nodes.items.len * 256);
+        @memset(table, dead);
+        for (self.nodes.items, 0..) |node, state| {
+            var edge_index = node.first;
+            while (edge_index != no_edge) {
+                const edge = self.edges.items[edge_index];
+                const next: u16 = if (self.nodes.items[edge.child].leaf) accept else @intCast(edge.child);
+                const start = state * 256 + edge.range.lo;
+                const end = state * 256 + @as(usize, edge.range.hi) + 1;
+                @memset(table[start..end], next);
+                edge_index = edge.next;
+            }
+        }
+        return table;
+    }
 };
 
 fn encode(codepoint: u21, out: *[4]u8) usize {
@@ -224,6 +242,19 @@ fn emitRange(builder: *Builder, first: u21, last: u21) !void {
 
 /// Build the automaton for a positive, sorted, disjoint range list.
 pub fn build(gpa: std.mem.Allocator, ranges: []const model.Range) !Automaton {
+    var builder = try buildRanges(gpa, ranges);
+    defer builder.deinit();
+    return builder.finish();
+}
+
+/// Build dense 256-byte transition rows from the same range-emission pass.
+pub fn buildTable(gpa: std.mem.Allocator, ranges: []const model.Range) std.mem.Allocator.Error![]u16 {
+    var builder = try buildRanges(gpa, ranges);
+    defer builder.deinit();
+    return builder.finishTable();
+}
+
+fn buildRanges(gpa: std.mem.Allocator, ranges: []const model.Range) !Builder {
     var builder = try Builder.init(gpa);
     errdefer builder.deinit();
     for (ranges) |range| {
@@ -237,9 +268,7 @@ pub fn build(gpa: std.mem.Allocator, ranges: []const model.Range) !Automaton {
             if (segment[1] >= last) break;
         }
     }
-    const automaton = try builder.finish();
-    builder.deinit();
-    return automaton;
+    return builder;
 }
 
 /// Whether `ranges` contains `codepoint` (linear scan for tests).
