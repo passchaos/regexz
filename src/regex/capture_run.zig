@@ -87,7 +87,7 @@ pub const Plan = struct {
 
     pub fn findUnicode(
         self: *const Plan,
-        first: *const prefilter.FirstFilter,
+        first: *prefilter.FirstFilter,
         input: []const u8,
         from: usize,
         slots: []usize,
@@ -97,8 +97,9 @@ pub const Plan = struct {
     ) error{RegexLimitExceeded}!?Span {
         steps.* = 0;
         var start = from;
+        var rejected: u8 = 0;
         while (start < input.len) {
-            start = first.indexOf(input, start) orelse return null;
+            start = first.indexOfRuneCandidates(input, start) orelse return null;
             // Decode a candidate once. Its width advances rejected valid
             // runes as well as matches; malformed input advances one byte.
             const byte = input[start];
@@ -117,6 +118,10 @@ pub const Plan = struct {
             const first_end = start + length;
             if (!self.set.matches(rune)) {
                 start = first_end;
+                if (rejected < 8) {
+                    rejected += 1;
+                    if (rejected == 8) first.prepareRunePrefixes(self.set);
+                }
                 continue;
             }
             if (!linear_fallback and max_steps < self.instruction_steps) {

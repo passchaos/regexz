@@ -5,12 +5,14 @@
 //! ranges (classes like `[A-Z]` or `\w`) compare against the range bounds.
 //! Pure Unicode start sets skip ASCII in 32-byte blocks. Other sets fall back
 //! to the byte-at-a-time bitmap loop.
+//! Selective capture runs can later reuse range vectors for UTF-8 lead bytes.
 const std = @import("std");
 const model = @import("model.zig");
 const nibble_filter = @import("nibble_filter.zig");
+const utf8_prefix = @import("utf8_prefix.zig");
 
 const max_simd_bytes = 8;
-const max_simd_ranges = 4;
+const max_simd_ranges = utf8_prefix.max_ranges;
 const Vec = @Vector(16, u8);
 
 /// First offset at or after `start` holding `byte`, scanned 16 bytes at a
@@ -185,12 +187,14 @@ pub const FirstFilter = struct {
     count: u8 = 0,
     /// The set has more ASCII bytes than the byte-splat path can compare.
     too_many: bool = false,
-    /// Contiguous ASCII runs of the set (at most `max_simd_ranges`); zero
+    /// Contiguous candidate-byte runs (at most `max_simd_ranges`); zero
     /// when the set needs more runs than the range path supports.
     ranges: [max_simd_ranges][2]u8 = undefined,
     range_lo: [max_simd_ranges]Vec = undefined,
     range_hi: [max_simd_ranges]Vec = undefined,
     range_count: u8 = 0,
+    /// Selective rune sets prepare exact lead ranges after rejected probes.
+    prefix_state: enum { unprepared, ready, disabled } = .unprepared,
 
     pub fn init(first: model.FirstSet) FirstFilter {
         var result = FirstFilter{ .first = first };
@@ -232,6 +236,29 @@ pub const FirstFilter = struct {
             result.range_hi[index] = @splat(result.ranges[index][1]);
         }
         return result;
+    }
+
+    /// The caller owns a single-set run summarized by `first`. Reuse the
+    /// existing range vectors; keep the symbolic summary unchanged.
+    pub noinline fn prepareRunePrefixes(self: *FirstFilter, set: model.Set) void {
+        if (self.prefix_state != .unprepared) return;
+        self.prefix_state = .disabled;
+        const prefix = utf8_prefix.fromSet(set) orelse return;
+        self.ranges = prefix.values;
+        self.range_count = prefix.count;
+        for (0..prefix.count) |index| {
+            self.range_lo[index] = @splat(prefix.values[index][0]);
+            self.range_hi[index] = @splat(prefix.values[index][1]);
+        }
+        self.prefix_state = .ready;
+    }
+
+    /// Single-set capture scans use selective prefixes once prepared.
+    /// Ordinary first-rune scans keep their original dispatch and code.
+    pub inline fn indexOfRuneCandidates(self: *const FirstFilter, input: []const u8, start: usize) ?usize {
+        if (self.prefix_state != .ready) return self.indexOf(input, start);
+        if (start >= input.len) return null;
+        return self.indexOfPrefixes(input, start);
     }
 
     /// Return the first offset at or after `start` whose byte can begin a
@@ -309,6 +336,32 @@ pub const FirstFilter = struct {
             }
         }
         return byteLoop(input, offset, self.first);
+    }
+
+    fn indexOfPrefixes(self: *const FirstFilter, input: []const u8, start: usize) ?usize {
+        if (self.prefixCandidate(input[start])) return start;
+        var offset = start;
+        while (offset + 16 <= input.len) : (offset += 16) {
+            const raw: [16]u8 = input[offset..][0..16].*;
+            const chunk: Vec = @bitCast(raw);
+            var mask = (chunk >= self.range_lo[0]) & (chunk <= self.range_hi[0]);
+            var index: usize = 1;
+            while (index < self.range_count) : (index += 1) {
+                mask = mask | ((chunk >= self.range_lo[index]) & (chunk <= self.range_hi[index]));
+            }
+            if (std.simd.firstTrue(mask)) |lane| return offset + lane;
+        }
+        while (offset < input.len) : (offset += 1) {
+            if (self.prefixCandidate(input[offset])) return offset;
+        }
+        return null;
+    }
+
+    fn prefixCandidate(self: *const FirstFilter, byte: u8) bool {
+        for (self.ranges[0..self.range_count]) |range| {
+            if (byte >= range[0] and byte <= range[1]) return true;
+        }
+        return false;
     }
 };
 

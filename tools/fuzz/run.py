@@ -79,11 +79,14 @@ def generate(case_count: int, seed: int) -> list[dict]:
     seeds += [("(?:\\p{Script=Greek}|[0-9])+", "u"), ("(?:\\p{Script=Han}|[0-9])+", "u")]
     deferred_runs = ["\\p{L}+", "\\p{Script=Greek}+", "\\p{Script=Han}+", "(?:\\p{L}+\\n)+", "(?:\\p{Script=Han}+\\n)+"]
     seeds += [(pattern, "u") for pattern in deferred_runs]
+    boundary_capture_run = "([\u07ff\u0800\ud7ff\ue000\uffff\U00010000\U0010ffff]+)"
     unicode_capture_runs = [
         "(\\p{L}+)", "(\\p{Script=Han}+)", "((\\p{Script=Greek}+))",
         "()(\\p{Script=Han}+)()", "(\\p{Nd}+)", "(\\P{L}+)",
+        boundary_capture_run,
     ]
     seeds += [(pattern, "u") for pattern in unicode_capture_runs if (pattern, "u") not in seeds]
+    seeds += [("(k+)", "iu")]
     seeds += [(pattern, "u") for pattern in [
         "[a-z]+(?=\\p{Script=Han})", "[a-z]+(?!\\p{Script=Han})", "\\p{L}+(?!\\p{L})",
     ]]
@@ -125,6 +128,10 @@ def generate(case_count: int, seed: int) -> list[dict]:
     # Legacy JS /i does not fold long s into ASCII word characters.
     # Keep this Unicode-caseless probe on the explicit Qwen seed.
     for case in cases:
+        if case["pattern"] == boundary_capture_run and case["flags"] == "u":
+            case["inputs"] = case["inputs"] + ["Σσ" * 16 + "\u07ff\u0800\ud7ff\ue000\uffff\U00010000\U0010ffff"]
+        if case["pattern"] == "(k+)" and case["flags"] == "iu":
+            case["inputs"] = case["inputs"] + ["Σσ" * 16 + "KkK", "猫😀 " * 8 + "K"]
         if case["pattern"] in nullable_capture_runs and case["flags"] == "u":
             case["inputs"] = case["inputs"] + [
                 "aaabbb", "aaaa", "aaabbC", "hello123XYZ helloXYZ",

@@ -390,6 +390,7 @@ test {
     _ = @import("regex/dfa_scratch_tests.zig");
     _ = @import("regex/literal_workspace_tests.zig");
     _ = @import("regex/capture_run_tests.zig");
+    _ = @import("regex/utf8_prefix_tests.zig");
     _ = @import("regex/capture_storage_tests.zig");
     _ = @import("regex/capture_replay_tests.zig");
     _ = @import("regex/capture_nullable_tests.zig");
