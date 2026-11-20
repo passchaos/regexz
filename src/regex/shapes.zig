@@ -338,7 +338,7 @@ fn runPrefix(ins: []const model.Instruction, pc_in: usize) ?Run {
 }
 
 /// Whether two sets share any rune.
-fn setsOverlap(a: model.Set, b: model.Set) bool {
+pub fn setsOverlap(a: model.Set, b: model.Set) bool {
     var left: usize = 0;
     var right: usize = 0;
     while (left < a.ranges.len and right < b.ranges.len) {

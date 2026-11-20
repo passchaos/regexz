@@ -85,6 +85,15 @@ def generate(case_count: int, seed: int) -> list[dict]:
     seeds += [(pattern, "u") for pattern in [
         "(?:ab)?(?:cd)?(?:ef)?(?:gh)?(?:ij)?Z", "([a-z]+[0-9]+[A-Z]+)", "a*?b*",
     ]]
+    replay_runs = [
+        "([a-z]+)([0-9]+)([A-Z]+)",
+        "(\\p{Script=Greek}+)(\\p{Nd}+)(\\p{Script=Han}+)",
+        "()(\\p{Script=Greek}+)(\\p{Nd}+)(\\p{Script=Han}+)()",
+        "([a-z0-9]+)([0-9]+)([A-Z]+)",
+        "([a-z]+?)([0-9]+)([A-Z]+)",
+        "([a-z]*)([0-9]+)([A-Z]+)",
+    ]
+    seeds += [(pattern, "u") for pattern in replay_runs]
     seeds += [("(?:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+", "iu")]
     for pattern, flags in seeds[:case_count]:
         seen.add((pattern, flags))
@@ -103,6 +112,8 @@ def generate(case_count: int, seed: int) -> list[dict]:
     # Legacy JS /i does not fold long s into ASCII word characters.
     # Keep this Unicode-caseless probe on the explicit Qwen seed.
     for case in cases:
+        if case["pattern"] in replay_runs and case["flags"] == "u":
+            case["inputs"] = case["inputs"] + ["a1A", "hello123XYZ", "Σσ١٢猫狗", "Ω1𠀀", "abc12XYZ", "123ABC"]
         if case["pattern"] in deferred_runs and case["flags"] == "u":
             case["inputs"] = case["inputs"] + ["abcdefghijklmnop", "猫Σé", "Ελληνικά", "猫\n世界\n", "猫\n世界", "猫" * 24, "猫" * 24 + "\n世界\n"]
         if case["flags"] == "iu" and case["pattern"].startswith("(?:'s|'t|'re|'ve|'m|'ll|'d)|"):

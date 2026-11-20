@@ -25,7 +25,10 @@ fn bench(io: std.Io, out: *std.Io.Writer, name: []const u8, pattern: []const u8,
     var samples: [5]i96 = undefined;
     for (&samples) |*sample| {
         const start = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds;
-        for (0..iterations) |_| std.mem.doNotOptimizeAway(try pass(&workspace, input));
+        for (0..iterations) |_| {
+            std.mem.doNotOptimizeAway(input.ptr);
+            std.mem.doNotOptimizeAway(try pass(&workspace, input));
+        }
         sample.* = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds - start;
     }
     std.mem.sort(i96, &samples, {}, std.sort.asc(i96));
@@ -34,10 +37,13 @@ fn bench(io: std.Io, out: *std.Io.Writer, name: []const u8, pattern: []const u8,
     var cold = try regexz.ReplaceWorkspace.init(counter.allocator(), value.program, .{});
     defer cold.deinit();
     const init_allocations = counter.allocations;
+    const init_bytes = counter.allocated_bytes;
     std.mem.doNotOptimizeAway(try cold.find(input, 0));
     const first_allocations = counter.allocations - init_allocations;
     const ns = @as(f64, @floatFromInt(samples[samples.len / 2])) / iterations;
-    try out.print("{s:<24} {d:>12.1} ns/pass  first_find_allocations={d}\n", .{ name, ns, first_allocations });
+    try out.print("{s:<24} {d:>12.1} ns/pass first_find_allocations={d} first_requested_bytes={d} init_allocations={d} init_bytes={d} trail_capacity={d} choice_capacity={d}\n", .{
+        name, ns, first_allocations, counter.allocated_bytes - init_bytes, init_allocations, init_bytes, cold.trail.capacity, cold.choices.capacity,
+    });
 }
 
 pub fn main() !void {
@@ -53,11 +59,19 @@ pub fn main() !void {
     defer digits.deinit(gpa);
     var unicode: std.ArrayList(u8) = .empty;
     defer unicode.deinit(gpa);
+    var runs: std.ArrayList(u8) = .empty;
+    defer runs.deinit(gpa);
+    var unicode_runs: std.ArrayList(u8) = .empty;
+    defer unicode_runs.deinit(gpa);
     for (0..4000) |_| {
         try words.appendSlice(gpa, "aaa bbb ");
         try digits.appendSlice(gpa, "12345 x ");
     }
     for (0..1000) |_| try unicode.appendSlice(gpa, "猫狗 Ελληνικά abc ");
+    for (0..2000) |_| {
+        try runs.appendSlice(gpa, "hello123XYZ ");
+        try unicode_runs.appendSlice(gpa, "Σσ١٢猫狗 ");
+    }
     try bench(io, out, "word capture", "(\\w+)", words.items);
     try bench(io, out, "literal capture", "(a+)", words.items);
     try bench(io, out, "digit capture", "(\\d+)", digits.items);
@@ -70,6 +84,10 @@ pub fn main() !void {
     try bench(io, out, "Han capture", "(\\p{Han}+)", unicode.items);
     try bench(io, out, "Unicode literal capture", "(猫+)", unicode.items);
     try bench(io, out, "capture-free control", "\\w+", words.items);
+    try bench(io, out, "disjoint ASCII captures", "([a-z]+)([0-9]+)([A-Z]+)", runs.items);
+    try bench(io, out, "disjoint Unicode captures", "(\\p{Greek}+)(\\p{Nd}+)(\\p{Han}+)", unicode_runs.items);
+    try bench(io, out, "Unicode empty captures", "()(\\p{Greek}+)(\\p{Nd}+)(\\p{Han}+)()", unicode_runs.items);
+    try bench(io, out, "overlapping run control", "([a-z0-9]+)([0-9]+)([A-Z]+)", runs.items);
     try bench(io, out, "no-match control", "([A-Z]+)", words.items);
     try out.flush();
 }

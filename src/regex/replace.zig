@@ -18,6 +18,7 @@ const utf8_run_search = @import("utf8_run_search.zig");
 const prefilter = @import("prefilter.zig");
 const shapes = @import("shapes.zig");
 const capture_run_mod = @import("capture_run.zig");
+const capture_replay = @import("capture_replay.zig");
 const subst = @import("substitution.zig");
 const newline = @import("newline.zig");
 const required_literals = @import("required_literals.zig");
@@ -111,6 +112,8 @@ pub const Workspace = struct {
     simple_set: ?model.Set = null,
     /// ASCII set runs whose capture saves have fixed start/end positions.
     capture_run: ?capture_run_mod.Plan = null,
+    /// Lazily prove deterministic capture replay once per immutable program.
+    capture_replay_plan: capture_replay.Plan = .unprepared,
     /// A `set+ separator set+ tail` program is found by scanning for the
     /// separator instead of running the DFA over the whole input.
     simple_chain: ?shapes.Chain = null,
@@ -535,7 +538,14 @@ pub const Workspace = struct {
     /// the replay disagrees with the DFA bounds or exhausts the budget; the
     /// caller then falls back to a full interpreter search.
     fn extractCaptures(self: *Workspace, input: []const u8, start: usize, end: usize) ?Match {
-        if (self.replayLinear(input, start, end)) |matched| {
+        if (capture_replay.linear(.{
+            .instructions = self.program.instructions,
+            .body = self.program.body,
+            .slots = self.slots,
+            .steps = &self.steps,
+            .max_steps = self.limits.max_execution_steps,
+            .forced_runs = self.capture_replay_plan.prepare(self.program.instructions, self.program.body),
+        }, input, start, end)) |matched| {
             if (matched) {
                 self.slots[0] = start;
                 self.slots[1] = end;
@@ -549,99 +559,6 @@ pub const Workspace = struct {
         self.slots[0] = start;
         self.slots[1] = end;
         return .{ .start = start, .end = end, .slots = self.slots };
-    }
-
-    /// Deterministic replay for a straight-line program of saves, literals,
-    /// and greedy set runs whose continuation cannot start with a member.
-    /// Such a run is forced to its maximal length, so no choice or trail
-    /// bookkeeping is needed. Returns null when the shape is not covered;
-    /// otherwise whether the walk ended exactly at `end`.
-    fn replayLinear(self: *Workspace, input: []const u8, start: usize, end: usize) ?bool {
-        const instructions = self.program.instructions;
-        const max_steps = self.limits.max_execution_steps;
-        var steps = self.steps;
-        defer self.steps = steps;
-        @memset(self.slots, unset);
-        var pc = self.program.body;
-        var pos = start;
-        // Belt-and-braces cap for malformed zero-width cycles; the real
-        // limit is the interpreter budget, which the fallback path enforces.
-        const step_limit = (end - start) + instructions.len + 16;
-        var walked: usize = 0;
-        while (true) {
-            walked += 1;
-            if (walked > step_limit) return null;
-            steps += 1;
-            if (steps > max_steps) return null;
-            switch (instructions[pc]) {
-                .save => |save| {
-                    self.slots[save.slot] = pos;
-                    pc = save.next;
-                },
-                .literal_byte => |literal| {
-                    if (pos >= input.len or input[pos] != literal.value) return false;
-                    pos += 1;
-                    pc = literal.next;
-                },
-                .literal_rune => |literal| {
-                    const rune = runeAt(input, pos) orelse return false;
-                    if (rune.value != literal.value) return false;
-                    pos += rune.len;
-                    pc = literal.next;
-                },
-                .byte => |next| {
-                    if (pos >= input.len) return false;
-                    pos += 1;
-                    pc = next;
-                },
-                .consume => |consume| {
-                    if (consume.set.ascii_only) {
-                        if (pos >= input.len or !consume.set.matches(input[pos])) return false;
-                        pos += 1;
-                    } else {
-                        pos = consume.set.matchAdvance(input, pos) orelse return false;
-                    }
-                    pc = consume.next;
-                },
-                .star => |star| {
-                    // The greedy run is forced when the next consuming
-                    // instruction is the accept or a literal outside the set.
-                    var next = star.next;
-                    while (true) {
-                        switch (instructions[next]) {
-                            .save => |save| next = save.next,
-                            .accept => break,
-                            .literal_byte => |literal| {
-                                if (star.set.matches(literal.value)) return null;
-                                break;
-                            },
-                            .literal_rune => |literal| {
-                                if (star.set.matches(literal.value)) return null;
-                                break;
-                            },
-                            else => return null,
-                        }
-                    }
-                    var consumed: usize = 0;
-                    if (star.set.ascii_only) {
-                        while (pos < input.len and star.set.matches(input[pos])) {
-                            pos += 1;
-                            consumed += 1;
-                        }
-                    } else {
-                        while (star.set.matchAdvance(input, pos)) |advanced| {
-                            pos = advanced;
-                            consumed += 1;
-                        }
-                    }
-                    steps += consumed;
-                    if (steps > max_steps) return null;
-                    pc = star.next;
-                },
-                .accept => return pos == end,
-                else => return null,
-            }
-        }
     }
 
     /// True when a multi-byte literal required by every match is absent from
