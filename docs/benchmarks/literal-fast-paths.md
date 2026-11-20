@@ -160,3 +160,18 @@ scanned directly:
 Each shape is accepted only when its sets are ASCII-only and its separators
 are disjoint from the runs; captures, assertions, lazy/possessive repeats and
 ambiguous optional groups fall back to the general engine.
+
+## Alternation elements and anchored runs
+
+`\w+@\w+\.(?:com|org|net)` ends in a literal alternation, which the unbounded
+chain walker rejected, so it ran the search DFA. Alternation branches that
+are pure ASCII literal sequences are now a single chain element: the branches
+are stored in source order, checked in order, and a preceding run may not
+consume any branch's first byte. The email-TLD case improves 2.6x
+(47,839.0 -> 18,733.5 ns) and is 1.22x ahead of Rust.
+
+`(?m)\w+$` used the anchored-run path, which tested membership through the
+set bitmap and built a `Position` for every run. ASCII-only anchor sets now
+use a byte table, and only runs ending at a newline or the text end consult
+the newline mode. The end-anchored word case improves 2.4x
+(33,525.4 -> 14,100.2 ns) and is 2.29x ahead.

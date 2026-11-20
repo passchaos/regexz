@@ -208,6 +208,9 @@ pub const Workspace = struct {
     fixed_sequence: ?*FixedSequence = null,
     /// `(?m)^set+` in LF newline mode.
     line_start_run: ?LineStartRun = null,
+    /// Byte table for the anchored-run set when it is ASCII-only.
+    anchored_table: [256]bool = .{false} ** 256,
+    anchored_ascii: bool = false,
     /// Bounded set-run concatenation with at least one variable-width run.
     bounded_sequence: ?*BoundedSequenceState = null,
     /// Unbounded run chain separated by literal bytes.
@@ -357,6 +360,11 @@ pub const Workspace = struct {
             program.zero_width;
         const run_then_literal: ?RunThenLiteral = if (limits.longest) null else detectRunThenLiteral(program);
         const line_start_run: ?LineStartRun = if (limits.longest) null else detectLineStartRun(program);
+        const anchored_table: [256]bool = if (simple_anchored) |anchored|
+            (if (anchored.set.ascii_only) byte_table.init(256, anchored.set) else .{false} ** 256)
+        else
+            .{false} ** 256;
+        const anchored_ascii = if (simple_anchored) |anchored| anchored.set.ascii_only else false;
         const bounded_sequence: ?*BoundedSequenceState = if (limits.longest) null else blk: {
             const elements = program.bounded_sequence orelse break :blk null;
             const state = try allocator.create(BoundedSequenceState);
@@ -572,6 +580,8 @@ pub const Workspace = struct {
             .run_then_literal = run_then_literal,
             .fixed_sequence = fixed_sequence,
             .line_start_run = line_start_run,
+            .anchored_table = anchored_table,
+            .anchored_ascii = anchored_ascii,
             .bounded_sequence = bounded_sequence,
             .unbounded_sequence = unbounded_sequence,
             .star_literal = star_literal,
@@ -645,7 +655,10 @@ pub const Workspace = struct {
             .utf8_run_prepared => return self.findPreparedSetRunUtf8(&self.utf8_run.?, input, search_start),
             .chain => return self.findChain(&self.simple_chain.?, input, search_start),
             .literal_run => return self.findLiteralRun(self.literal_run.?, input, search_start),
-            .anchored => return self.findAnchoredRun(self.simple_anchored.?, input, search_start),
+            .anchored => return if (self.anchored_ascii)
+                self.findAnchoredRun(true, self.simple_anchored.?, input, search_start)
+            else
+                self.findAnchoredRun(false, self.simple_anchored.?, input, search_start),
             .line => return self.findLineRun(input, search_start),
             .delimited => return self.findDelimitedRun(self.delimited_run.?, input, search_start),
             .word => return self.findWordRun(input, search_start),
@@ -1232,7 +1245,10 @@ pub const Workspace = struct {
             .utf8_run_prepared => return self.findPreparedSetRunUtf8(&self.utf8_run.?, input, search_start),
             .chain => return self.findChain(&self.simple_chain.?, input, search_start),
             .literal_run => return self.findLiteralRun(self.literal_run.?, input, search_start),
-            .anchored => return self.findAnchoredRun(self.simple_anchored.?, input, search_start),
+            .anchored => return if (self.anchored_ascii)
+                self.findAnchoredRun(true, self.simple_anchored.?, input, search_start)
+            else
+                self.findAnchoredRun(false, self.simple_anchored.?, input, search_start),
             .line => return self.findLineRun(input, search_start),
             .delimited => return self.findDelimitedRun(self.delimited_run.?, input, search_start),
             .word => return self.findWordRun(input, search_start),
@@ -2045,6 +2061,18 @@ pub const Workspace = struct {
                     .optional => {
                         if (pos < input.len and input[pos] == element.value) pos += 1;
                     },
+                    .alternation => {
+                        var matched = false;
+                        for (state.alternatives[element.value..][0..element.len]) |alternative| {
+                            const bytes = state.literal_bytes[alternative.offset..][0..alternative.len];
+                            if (pos + bytes.len <= input.len and std.mem.eql(u8, input[pos..][0..bytes.len], bytes)) {
+                                pos += bytes.len;
+                                matched = true;
+                                break;
+                            }
+                        }
+                        if (!matched) break;
+                    },
                 }
             }
             if (index == state.len) {
@@ -2470,25 +2498,36 @@ pub const Workspace = struct {
     /// the maximal run end, so scan runs and check the assertion once. When
     /// it fails, every start inside the run fails too and the scan resumes
     /// after the run.
-    fn findAnchoredRun(self: *Workspace, anchored: AnchoredRun, input: []const u8, search_start: usize) ?Match {
+    inline fn findAnchoredRun(self: *Workspace, comptime ascii: bool, anchored: AnchoredRun, input: []const u8, search_start: usize) ?Match {
         const set = anchored.set;
         const kind = anchored.kind;
+        const table = &self.anchored_table;
         var offset = search_start;
         while (offset < input.len) {
-            if (!set.matches(input[offset])) {
+            const member = if (ascii) table[input[offset]] else set.matches(input[offset]);
+            if (!member) {
                 offset = self.first_filter.indexOf(input, offset) orelse return null;
                 if (offset >= input.len) return null;
-                if (!set.matches(input[offset])) {
+                const candidate = if (ascii) table[input[offset]] else set.matches(input[offset]);
+                if (!candidate) {
                     offset += 1;
                     continue;
                 }
             }
             const start = offset;
-            while (offset < input.len and set.matches(input[offset])) offset += 1;
-            if (position(input, offset, self.program.newline).allows(kind)) {
-                self.slots[0] = start;
-                self.slots[1] = offset;
-                return .{ .start = start, .end = offset, .slots = self.slots };
+            if (ascii) {
+                while (offset < input.len and table[input[offset]]) offset += 1;
+            } else {
+                while (offset < input.len and set.matches(input[offset])) offset += 1;
+            }
+            // Every anchor kind accepted here is a line/text-end check, so a
+            // run ending at an ordinary byte cannot satisfy it.
+            if (offset == input.len or input[offset] == '\n' or input[offset] == '\r') {
+                if (position(input, offset, self.program.newline).allows(kind)) {
+                    self.slots[0] = start;
+                    self.slots[1] = offset;
+                    return .{ .start = start, .end = offset, .slots = self.slots };
+                }
             }
             if (offset >= input.len) return null;
             offset += 1;
@@ -3469,8 +3508,9 @@ const UnboundedSequenceState = struct {
     const max_elements = 32;
     const max_sets = 8;
     const max_literal_bytes = 64;
-    const Kind = enum(u8) { run, literal, optional };
+    const Kind = enum(u8) { run, literal, optional, alternation };
     const Element = struct { kind: Kind, value: u8, len: u8 };
+    const Alternative = struct { offset: u8, len: u8 };
 
     elements: [max_elements]Element = undefined,
     len: u8 = 0,
@@ -3478,6 +3518,8 @@ const UnboundedSequenceState = struct {
     set_count: u8 = 0,
     literal_bytes: [max_literal_bytes]u8 = undefined,
     literal_len: u8 = 0,
+    alternatives: [16]Alternative = undefined,
+    alternative_count: u8 = 0,
     first_table: [256]bool = .{false} ** 256,
 
     fn build(self: *UnboundedSequenceState, source: []const UnboundedElement) bool {
@@ -3512,6 +3554,27 @@ const UnboundedSequenceState = struct {
                 .optional => |byte| {
                     self.elements[self.len] = .{ .kind = .optional, .value = byte, .len = 0 };
                 },
+                .alternation => |branches| {
+                    if (branches.len == 0 or branches.len > std.math.maxInt(u8)) return false;
+                    if (self.alternative_count + branches.len > self.alternatives.len) return false;
+                    const first = self.alternative_count;
+                    for (branches) |branch| {
+                        if (branch.len == 0 or branch.len > std.math.maxInt(u8)) return false;
+                        if (self.literal_len + branch.len > self.literal_bytes.len) return false;
+                        @memcpy(self.literal_bytes[self.literal_len..][0..branch.len], branch);
+                        self.alternatives[self.alternative_count] = .{
+                            .offset = self.literal_len,
+                            .len = @intCast(branch.len),
+                        };
+                        self.alternative_count += 1;
+                        self.literal_len += @intCast(branch.len);
+                    }
+                    self.elements[self.len] = .{
+                        .kind = .alternation,
+                        .value = first,
+                        .len = @intCast(branches.len),
+                    };
+                },
             }
             self.len += 1;
         }
@@ -3519,6 +3582,12 @@ const UnboundedSequenceState = struct {
         switch (self.elements[0].kind) {
             .run => self.first_table = self.tables[self.elements[0].value],
             .literal => self.first_table[self.literal_bytes[self.elements[0].value]] = true,
+            .alternation => {
+                const first = self.elements[0];
+                for (self.alternatives[first.value..][0..first.len]) |alternative| {
+                    self.first_table[self.literal_bytes[alternative.offset]] = true;
+                }
+            },
             .optional => {
                 self.first_table[self.elements[0].value] = true;
                 if (self.len > 1) {
@@ -3526,6 +3595,11 @@ const UnboundedSequenceState = struct {
                     switch (next.kind) {
                         .run => self.first_table = mergeTables(self.first_table, self.tables[next.value]),
                         .literal => self.first_table[self.literal_bytes[next.value]] = true,
+                        .alternation => {
+                            for (self.alternatives[next.value..][0..next.len]) |alternative| {
+                                self.first_table[self.literal_bytes[alternative.offset]] = true;
+                            }
+                        },
                         .optional => return false,
                     }
                 }

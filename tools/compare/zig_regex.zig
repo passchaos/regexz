@@ -322,6 +322,14 @@ pub fn main() !void {
     defer time_text.deinit(gpa);
     for (0..2000) |_| try time_text.appendSlice(gpa, "12:34 23:59:59 07:08 ");
 
+    var uuid_text: std.ArrayList(u8) = .empty;
+    defer uuid_text.deinit(gpa);
+    for (0..1000) |_| try uuid_text.appendSlice(gpa, "550e8400-e29b-41d4-a716-446655440000 123e4567-e89b-12d3-a456-426614174000 ");
+
+    var semver_text: std.ArrayList(u8) = .empty;
+    defer semver_text.deinit(gpa);
+    for (0..2000) |_| try semver_text.appendSlice(gpa, "1.2.3-beta.1 10.0.0-rc.2 2.11.5 ");
+
     const qwen = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+";
     const ucp = regexz.Limits{ .unicode_perl_space = true, .max_execution_steps = 16_000_000 };
 
@@ -358,6 +366,12 @@ pub fn main() !void {
     try benchFind(io, out, "find domain", "[a-z0-9-]+(?:\\.[a-z0-9-]+)+", domain_text.items, 200, .{});
     try benchFind(io, out, "find percent", "\\d+(?:\\.\\d+)?%", percent_text.items, 200, .{});
     try benchFind(io, out, "find time", "\\d{1,2}:\\d{2}(?::\\d{2})?", time_text.items, 200, .{});
+    try benchFind(io, out, "find end-anchored word", "(?m)\\w+$", ascii_text.items, 200, .{});
+    try benchFind(io, out, "find UUID", "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", uuid_text.items, 200, .{});
+    try benchFind(io, out, "find semver", "\\d+\\.\\d+\\.\\d+-[0-9A-Za-z.-]+", semver_text.items, 200, .{});
+    try benchFind(io, out, "find email TLD", "\\w+@\\w+\\.(?:com|org|net)", email_text.items, 200, .{});
+    try benchFind(io, out, "find CIDR", "\\d{1,3}(?:\\.\\d{1,3}){3}(?:/\\d{1,2})?", ip_text.items, 200, .{});
+    try benchFind(io, out, "find line full", "(?m)^.*$", ascii_text.items, 200, .{});
     try benchSplit(io, out, "split whitespace (22 KiB)", "\\s+", ascii_text.items, 200);
     try benchSplit(io, out, "split commas (29 KiB)", ",", csv_text.items, 200);
     try benchMatches(io, out, "fullmatch literal", "hello, world!", "hello, world!", 200000, .{});

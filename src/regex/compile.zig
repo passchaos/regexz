@@ -17,6 +17,7 @@ pub const UnboundedElement = union(enum) {
     run: model.Set,
     literal: []const u8,
     optional: u8,
+    alternation: []const []const u8,
 };
 
 pub const PrefixRunShape = struct { set_a: model.Set, set_b: model.Set, min_b: u8 };
@@ -834,6 +835,7 @@ fn detectPrefixRun(root: *const model.Node) ?PrefixRunShape {
 const UnboundedSequenceBuilder = struct {
     const max_elements = 32;
     const max_literal_bytes = 64;
+    const max_alternatives = 8;
 
     allocator: std.mem.Allocator,
     elements: std.ArrayList(UnboundedElement) = .empty,
@@ -884,11 +886,59 @@ const UnboundedSequenceBuilder = struct {
         return true;
     }
 
+    fn sequence(self: *UnboundedSequenceBuilder, value: *const model.Node, out: *std.ArrayList(u8)) model.Error!bool {
+        return switch (value.*) {
+            .empty, .flag_change => true,
+            .group => |child| self.sequence(child, out),
+            .pair => |pair| (try self.sequence(pair.left, out)) and (try self.sequence(pair.right, out)),
+            .set => |set| blk: {
+                if (set.ranges.len != 1 or set.ranges[0].first != set.ranges[0].last) break :blk false;
+                if (set.ranges[0].first >= 0x80) break :blk false;
+                try out.append(self.allocator, @intCast(set.ranges[0].first));
+                break :blk true;
+            },
+            else => false,
+        };
+    }
+
+    fn collectBranches(self: *UnboundedSequenceBuilder, value: *const model.Node, out: *std.ArrayList([]const u8)) model.Error!bool {
+        var current = value;
+        while (current.* == .group) current = current.group;
+        if (current.* == .alternate) {
+            return (try self.collectBranches(current.alternate.left, out)) and
+                (try self.collectBranches(current.alternate.right, out));
+        }
+        var bytes: std.ArrayList(u8) = .empty;
+        defer bytes.deinit(self.allocator);
+        if (!try self.sequence(current, &bytes)) return false;
+        if (bytes.items.len == 0) return false;
+        try out.append(self.allocator, try bytes.toOwnedSlice(self.allocator));
+        return true;
+    }
+
+    fn addAlternation(self: *UnboundedSequenceBuilder, value: *const model.Node) model.Error!bool {
+        var branches: std.ArrayList([]const u8) = .empty;
+        defer branches.deinit(self.allocator);
+        if (!try self.collectBranches(value, &branches)) return false;
+        if (branches.items.len < 2 or branches.items.len > max_alternatives) return false;
+        if (self.elements.items.len == max_elements) return false;
+        var stored: std.ArrayList([]const u8) = .empty;
+        for (branches.items) |branch| {
+            if (self.literal_len + branch.len > self.literal_bytes.len) return false;
+            @memcpy(self.literal_bytes[self.literal_len..][0..branch.len], branch);
+            try stored.append(self.allocator, self.literal_bytes[self.literal_len..][0..branch.len]);
+            self.literal_len += branch.len;
+        }
+        try self.elements.append(self.allocator, .{ .alternation = try stored.toOwnedSlice(self.allocator) });
+        return true;
+    }
+
     fn add(self: *UnboundedSequenceBuilder, value: *const model.Node) model.Error!bool {
         return switch (value.*) {
             .empty, .flag_change => true,
             .group => |child| self.add(child),
             .pair => |pair| (try self.add(pair.left)) and (try self.add(pair.right)),
+            .alternate => self.addAlternation(value),
             .set => |set| blk: {
                 if (set.ranges.len != 1 or set.ranges[0].first != set.ranges[0].last) break :blk false;
                 if (set.ranges[0].first >= 0x80) break :blk false;
@@ -923,6 +973,11 @@ const UnboundedSequenceBuilder = struct {
                 const next = self.elements.items[index + 1];
                 if (next == .run) return false;
                 if (next == .literal and next.literal.len != 0 and element.run.matches(next.literal[0])) return false;
+                if (next == .alternation) {
+                    for (next.alternation) |branch| {
+                        if (branch.len != 0 and element.run.matches(branch[0])) return false;
+                    }
+                }
             }
             if (element == .optional) {
                 if (index + 1 >= self.elements.items.len) return false;
@@ -931,6 +986,7 @@ const UnboundedSequenceBuilder = struct {
                     .run => |set| set,
                     .literal => |bytes| if (bytes.len == 0) return false else null,
                     .optional => return false,
+                    .alternation => null,
                 };
                 if (next_set) |set| {
                     if (set.matches(element.optional)) return false;
@@ -938,6 +994,10 @@ const UnboundedSequenceBuilder = struct {
                     // Skipping the optional would let the literal match; the
                     // flat matcher cannot backtrack into it.
                     return false;
+                } else if (next == .alternation) {
+                    for (next.alternation) |branch| {
+                        if (branch.len != 0 and branch[0] == element.optional) return false;
+                    }
                 }
             }
         }

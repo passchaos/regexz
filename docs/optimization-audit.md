@@ -754,3 +754,14 @@ separator/run disjointness so the flat walks need no backtracking. The
 comparison now covers 41 cases and all are faster, with the five-word
 alternation the thinnest at 1.19x. See
 [literal fast paths](benchmarks/literal-fast-paths.md).
+
+Two more common shapes were fixed after the expanded comparison found them
+behind. A literal alternation at the end of an unbounded chain
+(`\w+@\w+\.(?:com|org|net)`) now becomes a chain element with branches stored
+and checked in source order; the email-TLD case improves 2.6x and is 1.22x
+ahead. The anchored-run path (`(?m)\w+$`) now uses a byte table for ASCII
+anchor sets and only consults the newline mode when a run ends at a newline
+or the text end; the end-anchored word case improves 2.4x and is 2.29x
+ahead. The comparison now covers 47 cases and all are faster, with the
+semver scan the thinnest at 1.01x. See
+[literal fast paths](benchmarks/literal-fast-paths.md).

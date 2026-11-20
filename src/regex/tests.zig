@@ -942,6 +942,30 @@ fn expectFastSpans(pattern: []const u8, input: []const u8, spans: []const [2]usi
     try std.testing.expectEqual(spans.len, index);
 }
 
+test "unbounded chain handles a literal alternation element" {
+    var value = try regex.Regex.init(gpa, "\\w+@\\w+\\.(?:com|org|net)", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind == .unbounded_sequence);
+
+    try expectFastSpans("\\w+@\\w+\\.(?:com|org|net)", "user.name@example.com x a@b.org", &.{ .{ 5, 21 }, .{ 24, 31 } });
+    try expectFastSpans("\\w+@\\w+\\.(?:com|org|net)", "a@b.net", &.{.{ 0, 7 }});
+    try expectFastSpans("\\w+@\\w+\\.(?:com|org|net)", "a@b.io", &.{});
+}
+
+test "anchored run fast path matches line ends" {
+    var value = try regex.Regex.init(gpa, "(?m)\\w+$", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind == .anchored);
+
+    try expectFastSpans("(?m)\\w+$", "one two\nthree four\n", &.{ .{ 4, 7 }, .{ 14, 18 } });
+    try expectFastSpans("(?m)\\w+$", "trailing space \nnext", &.{.{ 16, 20 }});
+    try expectFastSpans("(?m)\\w+$", "abc", &.{.{ 0, 3 }});
+}
+
 test "star-literal fast path matches the last occurrence in the run" {
     var value = try regex.Regex.init(gpa, ".*test", .{});
     defer value.deinit();
