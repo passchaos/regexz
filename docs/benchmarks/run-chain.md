@@ -10,8 +10,8 @@ slowest capture searches in the suite (124–155 MiB/s).
 
 `shapes.runChain` now recognizes a chain of captured greedy runs when:
 
-- every capture group is exactly one unbounded run (`set*`, or a mandatory
-  `set{n}` prefix followed by `set*`) or an empty group,
+- every capture group is exactly one unbounded run (`set*`, a lazy `set*?`,
+  or a mandatory `set{n}` prefix followed by `set*`) or an empty group,
 - the run sets are pairwise disjoint,
 - the last non-empty run is mandatory and anchors the match end.
 
@@ -56,6 +56,31 @@ attributable. The covered cases improve in every round. The single-run capture
 path keeps precedence, so `(\p{Han}+)`-style programs neither allocate the
 run-chain state nor change their timings.
 
+## Lazy nullable runs
+
+A lazy `set*?` group compiles to a split whose exit is the group end save and
+whose body consumes the set and loops back. With disjoint sets the lazy
+capture expands to exactly the maximal run (the loop stops only where the next
+run begins), so the same shape analysis and boundary walk apply. The detector
+accepts that split form when the body loops back to the split; bounded lazy
+forms (`??`, `{0,1}?`) still reject.
+
+Measured separately against `9d7d5c9` with the same method (five interleaved
+executions; raw samples in [`run-chain-lazy.json`](run-chain-lazy.json)):
+
+| Case | Before, ns/pass | After, ns/pass | Speedup |
+| --- | ---: | ---: | ---: |
+| optional lazy control (`([a-z]+)([0-9]*?)([A-Z]+)`) | 228,332.1 | 139,357.5 | 1.64x |
+| optional ASCII captures | 138,026.7 | 140,006.3 | 0.99x |
+| nullable Unicode captures | 202,076.7 | 203,791.7 | 0.99x |
+| Unicode optional captures | 200,290.4 | 193,759.6 | 1.03x |
+| optional overlapping control | 168,810.8 | 170,061.7 | 0.99x |
+| overlap mandatory control | 418,478.8 | 401,351.3 | 1.04x |
+| Han capture control | 19,820.8 | 20,686.7 | 0.96x |
+
+The lazy case now records no choices or trails; the other cases stay within
+the host's spread.
+
 ## Validation
 
 ```sh
@@ -68,7 +93,7 @@ zig fmt --check src/regex/shapes.zig src/regex/replace.zig src/regex/run_chain_t
 ```
 
 The new tests cover detection, run and empty capture boundaries, malformed
-UTF-8, and randomized differential comparison against an equivalent lazy-loop
-pattern that stays on the interpreter. The two capture replay suites were
-updated: their disjoint-run cases now assert the run-chain path, and their
-strict-budget cases use lookahead patterns that stay on the interpreter.
+UTF-8, greedy and lazy run forms, and randomized differential comparison
+against the same program pinned to the interpreter. The two capture replay
+suites were updated: their disjoint-run cases now assert the run-chain path,
+and their strict-budget cases pin both workspaces to the interpreter.

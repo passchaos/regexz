@@ -156,6 +156,32 @@ pub fn runChain(program: Program) ?RunChain {
             plan.anchor = index;
             saw_run = true;
             pc = end.save.next;
+        } else if (std.meta.activeTag(ins[pc]) == .split and !ins[pc].split.alternation) {
+            // Lazy `set*?`: the split tries the exit (the group end save)
+            // first and the body loops back. With disjoint sets the lazy
+            // capture expands to exactly the maximal run, so it shares the
+            // run-chain boundaries.
+            const split = ins[pc].split;
+            const end_pc = split.left;
+            if (end_pc >= ins.len) return null;
+            const end = ins[end_pc];
+            if (std.meta.activeTag(end) != .save or end.save.slot != save.slot + 1) return null;
+            const body_pc = split.right;
+            if (body_pc >= ins.len) return null;
+            const body = ins[body_pc];
+            const body_set = switch (body) {
+                .consume => |consume| blk: {
+                    if (consume.next != pc) return null;
+                    break :blk consume.set;
+                },
+                else => return null,
+            };
+            if (body_set.ranges.len == 0) return null;
+            plan.sets[index] = body_set;
+            plan.minimum[index] = 0;
+            plan.anchor = index;
+            saw_run = true;
+            pc = end.save.next;
         } else {
             const run = runPrefix(ins, pc) orelse return null;
             if (!run.star or run.set.ranges.len == 0) return null;

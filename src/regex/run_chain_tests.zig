@@ -35,18 +35,22 @@ fn freeMatches(allocator: std.mem.Allocator, matches: []RunMatch) void {
     allocator.free(matches);
 }
 
-fn compare(pattern: []const u8, reference_pattern: []const u8, input: []const u8) !void {
+/// Compares the run-chain fast path with the same program pinned to the
+/// interpreter. Pinning the reference keeps the oracle independent of future
+/// shape detection.
+fn compare(pattern: []const u8, input: []const u8) !void {
     var value = try regex.Regex.init(gpa, pattern, .{});
     defer value.deinit();
     var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
     defer workspace.deinit();
-    var reference = try regex.Regex.init(gpa, reference_pattern, .{});
+    try std.testing.expect(workspace.fast_kind == .run_chain);
+    var reference = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
     defer reference.deinit();
-    var reference_workspace = try regex.ReplaceWorkspace.init(gpa, reference.program, .{});
-    defer reference_workspace.deinit();
+    reference.fast_kind = .none;
+    reference.search_dfa_ineligible = true;
     const fast = try collect(gpa, &workspace, input);
     defer freeMatches(gpa, fast);
-    const slow = try collect(gpa, &reference_workspace, input);
+    const slow = try collect(gpa, &reference, input);
     defer freeMatches(gpa, slow);
     try std.testing.expectEqual(slow.len, fast.len);
     for (fast, slow) |left, right| {
@@ -118,10 +122,10 @@ test "run chain agrees with the interpreter on mixed subjects" {
         "Σσ١٢猫狗 " ** 4,
     };
     for (inputs) |input| {
-        try compare("(\\p{Greek}*)(\\p{Nd}*)(\\p{Han}+)", "(\\p{Greek}*?)(\\p{Nd}*?)(\\p{Han}+)", input);
-        try compare("()(\\p{Greek}+)(\\p{Nd}*)(\\p{Han}+)()", "()(\\p{Greek}+?)(\\p{Nd}*?)(\\p{Han}+)()", input);
-        try compare("([a-z]+)([0-9]*)([A-Z]+)", "([a-z]+?)([0-9]*?)([A-Z]+)", input);
-        try compare("([A-Z]+)([0-9]+)([a-z]+)", "([A-Z]+?)([0-9]+?)([a-z]+)", input);
+        try compare("(\\p{Greek}*)(\\p{Nd}*)(\\p{Han}+)", input);
+        try compare("()(\\p{Greek}+)(\\p{Nd}*)(\\p{Han}+)()", input);
+        try compare("([a-z]+)([0-9]*)([A-Z]+)", input);
+        try compare("([A-Z]+)([0-9]+)([a-z]+)", input);
     }
 }
 
@@ -139,9 +143,46 @@ test "run chain agrees with the interpreter on random run sequences" {
             length += value.len;
         }
         const input = buffer[0..length];
-        try compare("(\\p{Greek}*)(\\p{Nd}*)(\\p{Han}+)", "(\\p{Greek}*?)(\\p{Nd}*?)(\\p{Han}+)", input);
-        try compare("()(\\p{Greek}+)(\\p{Nd}*)(\\p{Han}+)()", "()(\\p{Greek}+?)(\\p{Nd}*?)(\\p{Han}+)()", input);
-        try compare("([a-z]+)([0-9]*)([A-Z]+)", "([a-z]+?)([0-9]*?)([A-Z]+)", input);
-        try compare("([A-Z]+)([0-9]+)([a-z]+)", "([A-Z]+?)([0-9]+?)([a-z]+)", input);
+        try compare("(\\p{Greek}*)(\\p{Nd}*)(\\p{Han}+)", input);
+        try compare("()(\\p{Greek}+)(\\p{Nd}*)(\\p{Han}+)()", input);
+        try compare("([a-z]+)([0-9]*)([A-Z]+)", input);
+        try compare("([A-Z]+)([0-9]+)([a-z]+)", input);
+    }
+}
+
+test "lazy nullable run chains use the maximal run boundaries" {
+    const patterns = [_][]const u8{
+        "([a-z]+)([0-9]*?)([A-Z]+)",
+        "(\\p{Greek}+)(\\p{Nd}*?)(\\p{Han}+)",
+        "()(\\p{Greek}+)(\\p{Nd}*?)(\\p{Han}+)()",
+    };
+    const inputs = [_][]const u8{
+        "",
+        "hello123XYZ",
+        "helloXYZ",
+        "hello1XYZ hello12XYZ hello123xYZ",
+        "Σσ١٢猫狗 Σσ猫狗 猫狗 ",
+        "Σσ١٢猫狗 Σ١٢猫狗",
+        "Σσ\xff١٢猫狗",
+        "xΣσ١٢猫狗",
+        "Σσ١٢猫狗\nΣσ١٢猫狗",
+    };
+    for (patterns) |pattern| {
+        for (inputs) |input| try compare(pattern, input);
+    }
+    var random = std.Random.DefaultPrng.init(191);
+    const alphabet = [_][]const u8{ "a", "b", "0", "1", "A", "B", "Σ", "σ", "١", "猫", "狗", " ", "\n" };
+    var buffer: [96]u8 = undefined;
+    for (0..200) |_| {
+        var length: usize = 0;
+        const runes = random.random().uintLessThan(usize, 24);
+        for (0..runes) |_| {
+            const value = alphabet[random.random().uintLessThan(usize, alphabet.len)];
+            if (length + value.len > buffer.len) break;
+            @memcpy(buffer[length..][0..value.len], value);
+            length += value.len;
+        }
+        try compare("([a-z]+)([0-9]*?)([A-Z]+)", buffer[0..length]);
+        try compare("(\\p{Greek}+)(\\p{Nd}*?)(\\p{Han}+)", buffer[0..length]);
     }
 }
