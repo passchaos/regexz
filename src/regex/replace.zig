@@ -46,6 +46,7 @@ pub const FastKind = enum {
     capture_unicode,
     run_chain,
     zero_width,
+    literal_run,
 };
 pub const Error = model.Error;
 
@@ -136,6 +137,9 @@ pub const Workspace = struct {
     /// A captured chain of greedy runs (`(setA*)(setB*)(setC+)`) with
     /// pairwise-disjoint sets and a mandatory anchor run.
     run_chain: ?*RunChainState = null,
+    /// A fixed literal prefix, one optional literal, a fixed middle and a
+    /// trailing `set+` run (`https?://[^\s]+`).
+    literal_run: ?*LiteralRunState = null,
     /// A `set+` program ending in a line/text-end assertion scans runs and
     /// checks the assertion once at each run end.
     simple_anchored: ?AnchoredRun = null,
@@ -245,6 +249,17 @@ pub const Workspace = struct {
             break :blk state;
         };
         errdefer if (run_chain) |state| allocator.destroy(state);
+        const literal_run: ?*LiteralRunState = if (limits.longest) null else blk: {
+            const shape = shapes.literalRun(program) orelse break :blk null;
+            const state = try allocator.create(LiteralRunState);
+            state.* = .{
+                .shape = shape,
+                .run = deferred_utf8.CompactRun.init(shape.set),
+                .table = byte_table.init(256, shape.set),
+            };
+            break :blk state;
+        };
+        errdefer if (literal_run) |state| state.deinit(allocator);
         const utf8_run: ?deferred_utf8.CompactRun = if (set_run) |set|
             (if (set.ascii_only) null else deferred_utf8.CompactRun.init(set))
         else
@@ -280,6 +295,8 @@ pub const Workspace = struct {
             .utf8_run
         else if (simple_chain != null)
             .chain
+        else if (literal_run != null)
+            .literal_run
         else if (simple_anchored != null)
             .anchored
         else if (line_run)
@@ -325,6 +342,7 @@ pub const Workspace = struct {
             .simple_chain = simple_chain,
             .simple_anchored = simple_anchored,
             .run_chain = run_chain,
+            .literal_run = literal_run,
             .chain_tables = if (simple_chain) |chain| ChainTables.init(chain) else null,
             .line_run = line_run,
             .delimited_run = delimited_run,
@@ -354,6 +372,7 @@ pub const Workspace = struct {
     pub fn deinit(self: *Workspace) void {
         if (self.pair_filter) |filter| self.allocator.destroy(filter);
         if (self.run_chain) |state| self.allocator.destroy(state);
+        if (self.literal_run) |state| state.deinit(self.allocator);
         if (self.utf8_run) |*value| value.deinit(self.allocator);
         if (self.fast_branch) |*value| value.deinit(self.allocator);
         if (self.pike_workspace) |*workspace| workspace.deinit();
@@ -406,6 +425,7 @@ pub const Workspace = struct {
             .utf8_run => return self.findSetRunUtf8(&self.utf8_run.?, input, search_start),
             .utf8_run_prepared => return self.findPreparedSetRunUtf8(&self.utf8_run.?, input, search_start),
             .chain => return self.findChain(&self.simple_chain.?, input, search_start),
+            .literal_run => return self.findLiteralRun(self.literal_run.?, input, search_start),
             .anchored => return self.findAnchoredRun(self.simple_anchored.?, input, search_start),
             .line => return self.findLineRun(input, search_start),
             .delimited => return self.findDelimitedRun(self.delimited_run.?, input, search_start),
@@ -705,6 +725,7 @@ pub const Workspace = struct {
             .utf8_run => return self.findSetRunUtf8(&self.utf8_run.?, input, search_start),
             .utf8_run_prepared => return self.findPreparedSetRunUtf8(&self.utf8_run.?, input, search_start),
             .chain => return self.findChain(&self.simple_chain.?, input, search_start),
+            .literal_run => return self.findLiteralRun(self.literal_run.?, input, search_start),
             .anchored => return self.findAnchoredRun(self.simple_anchored.?, input, search_start),
             .line => return self.findLineRun(input, search_start),
             .delimited => return self.findDelimitedRun(self.delimited_run.?, input, search_start),
@@ -1331,6 +1352,37 @@ pub const Workspace = struct {
             const separator_at = indexOfLiteral(input, scan, chain.separator[0..chain.separator_len]) orelse return null;
             if (self.chainMatch(chain, input, separator_at, separator_at + chain.separator_len, search_start)) |match| return match;
             scan = separator_at + 1;
+        }
+    }
+
+    /// `literal [optional] literal set+`: anchor on the fixed prefix, verify
+    /// the optional byte and the middle, then scan the maximal run. The ASCII
+    /// membership table answers the common case; a non-ASCII byte switches to
+    /// the deferred UTF-8 run scan.
+    fn findLiteralRun(self: *Workspace, state: *LiteralRunState, input: []const u8, search_start: usize) ?Match {
+        const shape = &state.shape;
+        var search = search_start;
+        while (true) {
+            const start = indexOfLiteral(input, search, shape.prefix) orelse return null;
+            var pos = start + shape.prefix.len;
+            if (shape.optional) |byte| {
+                if (pos < input.len and input[pos] == byte) pos += 1;
+            }
+            const middle = shape.middle[0..shape.middle_len];
+            if (middle.len <= input.len - pos and std.mem.eql(u8, input[pos..][0..middle.len], middle)) {
+                pos += middle.len;
+                if (pos < input.len) {
+                    var end = pos;
+                    while (end < input.len and input[end] < 0x80 and state.table[input[end]]) end += 1;
+                    if (end < input.len and input[end] >= 0x80) end = state.run.runEnd(self.allocator, input, end);
+                    if (end > pos) {
+                        self.slots[0] = start;
+                        self.slots[1] = end;
+                        return .{ .start = start, .end = end, .slots = self.slots };
+                    }
+                }
+            }
+            search = start + 1;
         }
     }
 
@@ -2262,6 +2314,19 @@ const FastBranch = struct {
         if (self.prefix) |*prefix| prefix.deinit(allocator);
         self.run.deinit(allocator);
         self.* = undefined;
+    }
+};
+
+/// Fixed-prefix literal-run plan. Heap-allocated so workspaces without the
+/// shape stay small; the UTF-8 run table is prepared lazily.
+const LiteralRunState = struct {
+    shape: shapes.LiteralRun,
+    run: deferred_utf8.CompactRun,
+    table: [256]bool,
+
+    fn deinit(self: *LiteralRunState, allocator: std.mem.Allocator) void {
+        self.run.deinit(allocator);
+        allocator.destroy(self);
     }
 };
 

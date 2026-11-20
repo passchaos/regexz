@@ -240,6 +240,13 @@ memchr-driven workspace instead. The 9-pattern `[a-z]+<punctuation>` set
 improves 4.48x; sets with other shapes keep the combined DFA. See
 [per-pattern scans for separator sets](benchmarks/set-individual-scans.md).
 
+`https?://[^\s]+`-style programs now have a literal-prefix run shape: a fixed
+ASCII prefix, at most one optional literal, a fixed middle and a trailing
+`set+`. The search anchors on the prefix, verifies the middle and scans the
+run with a byte table (or the deferred UTF-8 run for non-ASCII bytes). URL
+search improves 2.77x; other search shapes stay within host noise. See
+[literal-prefix runs](benchmarks/literal-run-url.md).
+
 Further work on these candidates needs fresh measurements before implementation.
 Current warmed throughput does not establish their cold-start cost or the
 benefit of replacing their fallback paths.

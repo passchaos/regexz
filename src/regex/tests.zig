@@ -822,6 +822,34 @@ test "line run fast path matches line by line" {
     try std.testing.expectEqual(@as(usize, 7), mid.end);
 }
 
+test "literal-run fast path" {
+    var value = try regex.Regex.init(gpa, "https?://[^\\s]+", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.literal_run != null);
+
+    const cases = [_]struct { input: []const u8, spans: []const [2]usize }{
+        .{ .input = "", .spans = &.{} },
+        .{ .input = "see https://example.com/a and http://x.y", .spans = &.{ .{ 4, 25 }, .{ 30, 40 } } },
+        .{ .input = "http://x.y https://z", .spans = &.{ .{ 0, 10 }, .{ 11, 20 } } },
+        .{ .input = "httpX://nope https://ok", .spans = &.{.{ 13, 23 }} },
+        .{ .input = "https://", .spans = &.{} },
+        .{ .input = "https://a", .spans = &.{.{ 0, 9 }} },
+    };
+    for (cases) |case| {
+        var offset: usize = 0;
+        var index: usize = 0;
+        while (offset <= case.input.len and index < case.spans.len) : (index += 1) {
+            const m = (try workspace.find(case.input, offset)) orelse break;
+            try std.testing.expectEqual(case.spans[index][0], m.start);
+            try std.testing.expectEqual(case.spans[index][1], m.end);
+            offset = m.end;
+        }
+        try std.testing.expectEqual(case.spans.len, index);
+    }
+}
+
 test "delimited run fast path" {
     var value = try regex.Regex.init(gpa, "\"[^\"]*\"", .{});
     defer value.deinit();

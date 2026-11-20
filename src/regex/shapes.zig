@@ -709,6 +709,88 @@ fn isAllExcept(set: model.Set, excluded: u8) bool {
     return false;
 }
 
+/// `literal [optional-literal] literal set+` (`https?://[^\s]+`). The match is
+/// the next occurrence of the fixed prefix, optionally followed by one byte,
+/// then the fixed middle, then a non-empty maximal run of `set`.
+pub const LiteralRun = struct {
+    prefix: []const u8,
+    optional: ?u8,
+    middle: [16]u8 = undefined,
+    middle_len: u8,
+    set: model.Set,
+};
+
+pub fn literalRun(program: Program) ?LiteralRun {
+    if (program.capture_count != 0 or program.extended) return null;
+    const ins = program.instructions;
+    const prefix = program.literal_prefix orelse return null;
+    if (prefix.len == 0 or prefix.len > 32) return null;
+    var pc: usize = program.start;
+    if (pc >= ins.len or std.meta.activeTag(ins[pc]) != .save) return null;
+    const save0 = ins[pc].save;
+    if (save0.slot != 0 or save0.next != program.body) return null;
+    pc = save0.next;
+    // The fixed prefix must be plain ASCII bytes that match the compiler's
+    // extracted literal prefix exactly.
+    var prefix_index: usize = 0;
+    while (pc < ins.len) {
+        switch (ins[pc]) {
+            .literal_byte => |literal| {
+                if (prefix_index >= prefix.len or literal.value != prefix[prefix_index]) return null;
+                prefix_index += 1;
+                pc = literal.next;
+            },
+            else => break,
+        }
+    }
+    if (prefix_index != prefix.len) return null;
+    // One optional literal, compiled as a split whose one branch skips it.
+    var optional: ?u8 = null;
+    if (pc < ins.len and std.meta.activeTag(ins[pc]) == .split) {
+        const split = ins[pc].split;
+        if (split.left >= ins.len or split.right >= ins.len) return null;
+        if (std.meta.activeTag(ins[split.left]) == .literal_byte and ins[split.left].literal_byte.next == split.right) {
+            optional = ins[split.left].literal_byte.value;
+            pc = split.right;
+        } else if (std.meta.activeTag(ins[split.right]) == .literal_byte and ins[split.right].literal_byte.next == split.left) {
+            optional = ins[split.right].literal_byte.value;
+            pc = split.left;
+        } else return null;
+    }
+    // Fixed middle bytes.
+    var middle: [16]u8 = undefined;
+    var middle_len: usize = 0;
+    while (pc < ins.len) {
+        switch (ins[pc]) {
+            .literal_byte => |literal| {
+                if (middle_len == middle.len) return null;
+                middle[middle_len] = literal.value;
+                middle_len += 1;
+                pc = literal.next;
+            },
+            else => break,
+        }
+    }
+    // Non-empty maximal run, then the whole-match accept.
+    if (pc >= ins.len or std.meta.activeTag(ins[pc]) != .consume) return null;
+    const consume = ins[pc].consume;
+    const star_index = consume.next;
+    if (star_index >= ins.len or std.meta.activeTag(ins[star_index]) != .star) return null;
+    const star = ins[star_index].star;
+    if (star.backtrack or !sameSet(consume.set, star.set)) return null;
+    const save_index = star.next;
+    if (save_index >= ins.len or std.meta.activeTag(ins[save_index]) != .save) return null;
+    const save1 = ins[save_index].save;
+    if (save1.slot != 1 or save1.next != program.accept) return null;
+    return .{
+        .prefix = prefix,
+        .optional = optional,
+        .middle = middle,
+        .middle_len = @intCast(middle_len),
+        .set = consume.set,
+    };
+}
+
 /// `\b\w+\b`: a whole-word match. Both boundaries are ASCII word
 /// boundaries, and the run set is ASCII-only.
 pub fn wordRun(program: Program) ?model.Set {
