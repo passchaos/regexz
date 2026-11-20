@@ -61,6 +61,7 @@ pub const FastKind = enum {
     literal_pair,
     literal_bytes,
     literal_first,
+    repeated_literal,
     run_then_literal,
     fixed_sequence,
     line_start_run,
@@ -216,6 +217,8 @@ pub const Workspace = struct {
     /// Every literal-set branch is one byte, so a first-byte hit is the
     /// whole match.
     literal_set_single: bool = false,
+    /// A whole-pattern fixed literal repetition (`(?:ab)+`).
+    repeated_literal: ?RepeatedLiteralState = null,
     /// `set+ literal` with a literal first byte outside the set.
     run_then_literal: ?RunThenLiteral = null,
     /// Fixed-width concatenation of single-rune sets and literal bytes.
@@ -332,6 +335,12 @@ pub const Workspace = struct {
                 if (literal.len != 1) literal_set_single = false;
             }
         }
+        const repeated_literal: ?RepeatedLiteralState = if (limits.longest) null else blk: {
+            const bytes = program.repeated_literal orelse break :blk null;
+            var state = RepeatedLiteralState{ .literal_len = @intCast(bytes.len) };
+            @memcpy(state.literal[0..bytes.len], bytes);
+            break :blk state;
+        };
         const word_run_set = shapes.wordRun(program);
         var word_table: [256]bool = .{false} ** 256;
         if (word_run_set) |set| {
@@ -545,6 +554,8 @@ pub const Workspace = struct {
                 .literal_pair
             else
                 .literal_first)
+        else if (repeated_literal != null)
+            .repeated_literal
         else if (utf8_run != null)
             .utf8_run
         else if (simple_chain != null)
@@ -681,6 +692,7 @@ pub const Workspace = struct {
             .literal_set_multi = literal_set_multi,
             .literal_set_pair = literal_set_pair,
             .literal_set_single = literal_set_single,
+            .repeated_literal = repeated_literal,
             .run_then_literal = run_then_literal,
             .fixed_sequence = fixed_sequence,
             .line_start_run = line_start_run,
@@ -797,6 +809,7 @@ pub const Workspace = struct {
             .literal_pair => return self.findLiteralPair(input, search_start),
             .literal_bytes => return self.findLiteralBytes(input, search_start),
             .literal_first => return self.findLiteralFirst(input, search_start),
+            .repeated_literal => return self.findRepeatedLiteral(&self.repeated_literal.?, input, search_start),
             .run_then_literal => return self.findRunThenLiteral(&self.run_then_literal.?, input, search_start),
             .fixed_sequence => return self.findFixedSequence(self.fixed_sequence.?, input, search_start),
             .line_start_run => return self.findLineStartRun(&self.line_start_run.?, input, search_start),
@@ -1393,6 +1406,7 @@ pub const Workspace = struct {
             .literal_pair => return self.findLiteralPair(input, search_start),
             .literal_bytes => return self.findLiteralBytes(input, search_start),
             .literal_first => return self.findLiteralFirst(input, search_start),
+            .repeated_literal => return self.findRepeatedLiteral(&self.repeated_literal.?, input, search_start),
             .run_then_literal => return self.findRunThenLiteral(&self.run_then_literal.?, input, search_start),
             .fixed_sequence => return self.findFixedSequence(self.fixed_sequence.?, input, search_start),
             .line_start_run => return self.findLineStartRun(&self.line_start_run.?, input, search_start),
@@ -2047,6 +2061,29 @@ pub const Workspace = struct {
         return .{ .start = start, .end = start + 1, .slots = self.slots };
     }
 
+    /// `(?:literal)+`: find the literal, then consume greedy repetitions.
+    fn findRepeatedLiteral(self: *Workspace, state: *const RepeatedLiteralState, input: []const u8, search_start: usize) ?Match {
+        const literal = state.literal[0..state.literal_len];
+        const first = literal[0];
+        var start = search_start;
+        while (start < input.len) {
+            while (start < input.len and input[start] != first) start += 1;
+            if (start + literal.len > input.len) return null;
+            if (!std.mem.eql(u8, input[start..][0..literal.len], literal)) {
+                start += 1;
+                continue;
+            }
+            var end = start + literal.len;
+            while (end + literal.len <= input.len and std.mem.eql(u8, input[end..][0..literal.len], literal)) {
+                end += literal.len;
+            }
+            self.slots[0] = start;
+            self.slots[1] = end;
+            return .{ .start = start, .end = end, .slots = self.slots };
+        }
+        return null;
+    }
+
     /// The first-byte filter proposes candidates; the branches are checked in
     /// source order at that position, which is exactly leftmost-first.
     fn findLiteralFirst(self: *Workspace, input: []const u8, search_start: usize) ?Match {
@@ -2253,8 +2290,13 @@ pub const Workspace = struct {
                     },
                     .literal => {
                         const bytes = state.literal_bytes[element.value..][0..element.len];
-                        if (pos + bytes.len > input.len or !std.mem.eql(u8, input[pos..][0..bytes.len], bytes)) break;
-                        pos += bytes.len;
+                        if (bytes.len == 1) {
+                            if (pos >= input.len or input[pos] != bytes[0]) break;
+                            pos += 1;
+                        } else {
+                            if (pos + bytes.len > input.len or !std.mem.eql(u8, input[pos..][0..bytes.len], bytes)) break;
+                            pos += bytes.len;
+                        }
                     },
                     .optional => {
                         if (pos < input.len and input[pos] == element.value) pos += 1;
@@ -2492,7 +2534,10 @@ pub const Workspace = struct {
     /// line end.
     fn findLineHeading(self: *Workspace, state: *LineHeadingState, input: []const u8, search_start: usize) ?Match {
         var line = search_start;
-        if (line > 0 and input[line - 1] != '\n') {
+        if (line < input.len and input[line] == '\n' and (line == 0 or input[line - 1] != '\n')) {
+            // The previous match ended exactly at this line break.
+            line += 1;
+        } else if (line > 0 and input[line - 1] != '\n') {
             line = std.mem.indexOfScalarPos(u8, input, line, '\n') orelse return null;
             line += 1;
         }
@@ -3997,6 +4042,11 @@ const ChainLoopState = struct {
     table_b: [256]bool = undefined,
     separator: u8 = 0,
     min_groups: u8 = 0,
+};
+
+const RepeatedLiteralState = struct {
+    literal: [64]u8 = undefined,
+    literal_len: u8 = 0,
 };
 
 const PrefixRunState = struct {

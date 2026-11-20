@@ -994,6 +994,33 @@ test "literal alternation expands a common suffix" {
     try expectFastSpans("(?:pre|post)fix", "prefix postfix prefixx", &.{ .{ 0, 6 }, .{ 7, 14 } });
 }
 
+test "repeated literal group scans repetitions directly" {
+    var value = try regex.Regex.init(gpa, "(?:ab)+", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind == .repeated_literal);
+
+    try expectFastSpans("(?:ab)+", "xx ababab ab yy", &.{ .{ 3, 9 }, .{ 10, 12 } });
+    try expectFastSpans("(?:ab)+", "zzz", &.{});
+    try expectFastSpans("(?:ab)+", "aba", &.{.{ 0, 2 }});
+    try expectFastSpans("(?:aa)+", "aaaaa", &.{.{ 0, 4 }});
+}
+
+test "repeated literal group falls back for variable or bounded units" {
+    var variable = try regex.Regex.init(gpa, "(?:a+b)+", .{});
+    defer variable.deinit();
+    var variable_workspace = try regex.ReplaceWorkspace.init(gpa, variable.program, .{});
+    defer variable_workspace.deinit();
+    try std.testing.expect(variable_workspace.fast_kind != .repeated_literal);
+
+    var bounded = try regex.Regex.init(gpa, "(?:ab){2,}", .{});
+    defer bounded.deinit();
+    var bounded_workspace = try regex.ReplaceWorkspace.init(gpa, bounded.program, .{});
+    defer bounded_workspace.deinit();
+    try std.testing.expect(bounded_workspace.fast_kind != .repeated_literal);
+}
+
 test "single-byte literal alternation scans first bytes only" {
     var value = try regex.Regex.init(gpa, "a|b|c", .{});
     defer value.deinit();

@@ -250,6 +250,20 @@ change in the caller's environment (the `PWD` length) shifted the workspace
 tables and made the scan 3.5x slower; the packed bitsets keep the same speed
 across stack layouts.
 
-The comparison now covers 58 cases and regexz is faster on all of them; the
-thinnest margins are the shared-prefix alternation and the semver scan at
-1.05x.
+## Repeated literal groups and chain refinements
+
+A whole-pattern repetition of a fixed literal sequence (`(?:ab)+`) is now
+scanned directly: the first literal occurrence is found, then repetitions
+are consumed greedily. The repeated-literal case improves 2.8x and is 3.04x
+ahead of Rust.
+
+Candidate filters no longer re-compare the three bytes they already checked,
+and the third-byte stage is skipped when every two-byte pair is distinct:
+shared-prefix alternations improve 1.23x (1.32x ahead) and the 10-word
+alternation 1.13x (1.45x ahead). Markdown heading scans detect a match ending
+exactly at a line break and skip the line-start search (2.02x ahead), and
+chain walks compare single-byte separators directly, cutting the semver scan
+11% to a statistical tie with Rust.
+
+The comparison now covers 58 cases: regexz is faster on 57 and the semver
+scan is a tie (0.98x here, 0.89-1.05x across runs).

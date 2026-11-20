@@ -95,6 +95,9 @@ pub const Program = struct {
     /// order. The match is the first alternative that matches at the
     /// leftmost candidate. Not serialized.
     literal_set: ?[]const []const u8 = null,
+    /// Whole-pattern repetition of a fixed literal sequence (`(?:ab)+`).
+    /// Not serialized.
+    repeated_literal: ?[]const u8 = null,
     /// Whole-pattern concatenation of bounded ASCII set runs
     /// (`\d{1,3}(?:\.\d{1,3}){3}`), at least one of which is variable
     /// width. Not serialized.
@@ -851,6 +854,38 @@ fn detectOptionalRun(root: *const model.Node) ?model.Set {
     const set = run_node.set;
     if (!set.matches(byte)) return null;
     return set;
+}
+
+/// A whole-pattern repetition of a fixed literal sequence (`(?:ab)+`). The
+/// unit must be at least two bytes; a single-byte unit is a plain set run.
+fn detectRepeatedLiteral(allocator: std.mem.Allocator, root: *const model.Node) model.Error!?[]const u8 {
+    var node = root;
+    while (node.* == .group) node = node.group;
+    if (node.* != .repeat) return null;
+    const repeat = node.repeat;
+    if (repeat.lazy or repeat.possessive or repeat.maximum != null or repeat.minimum != 1) return null;
+    var bytes: [64]u8 = undefined;
+    var len: usize = 0;
+    if (!literalBytes(repeat.child, &bytes, &len) or len < 2) return null;
+    return try allocator.dupe(u8, bytes[0..len]);
+}
+
+fn literalBytes(node: *const model.Node, out: *[64]u8, len: *usize) bool {
+    var current = node;
+    while (current.* == .group) current = current.group;
+    return switch (current.*) {
+        .empty => true,
+        .pair => |pair| literalBytes(pair.left, out, len) and literalBytes(pair.right, out, len),
+        .set => |set| blk: {
+            if (set.ranges.len != 1 or set.ranges[0].first != set.ranges[0].last) break :blk false;
+            if (set.ranges[0].first >= 0x80) break :blk false;
+            if (len.* == out.len) break :blk false;
+            out[len.*] = @intCast(set.ranges[0].first);
+            len.* += 1;
+            break :blk true;
+        },
+        else => false,
+    };
 }
 
 fn nodeSet(node: *const model.Node) ?model.Set {
@@ -1713,6 +1748,11 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         null;
     const literal_set: ?[]const []const u8 = if (literal == null and caseless_literal == null and
         !limits.auto_callout) try expandLiteralSet(allocator, parsed.root) else null;
+    const repeated_literal: ?[]const u8 = if (literal == null and caseless_literal == null and
+        literal_set == null and !limits.auto_callout)
+        try detectRepeatedLiteral(allocator, parsed.root)
+    else
+        null;
     const unbounded_storage = try allocator.alloc(u8, UnboundedSequenceBuilder.max_literal_bytes);
     const prefix_run: ?PrefixRunShape = if (literal == null and caseless_literal == null and
         literal_set == null and !limits.auto_callout) detectPrefixRun(parsed.root) else null;
@@ -1783,6 +1823,7 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         .literal_prefix = literal_prefix,
         .caseless_literal = caseless_literal,
         .literal_set = literal_set,
+        .repeated_literal = repeated_literal,
         .bounded_sequence = bounded_sequence,
         .unbounded_sequence = unbounded_sequence,
         .prefix_run = prefix_run,

@@ -95,11 +95,27 @@ pub const PairSet = struct {
         var first = model.FirstSet{ .nonascii = false };
         var ascii_count: usize = 0;
         var nonascii = false;
+        var seen_pairs: [32]u16 = undefined;
+        var seen_count: usize = 0;
+        var shared_pair = false;
         set.use_third = true;
         for (literals) |literal| {
             if (literal.len < 2) return null;
             const pair = (@as(u16, literal[0]) << 8) | literal[1];
             set.bits[pair >> 3] |= @as(u8, 1) << @intCast(pair & 7);
+            var duplicate = false;
+            for (seen_pairs[0..seen_count]) |existing| {
+                if (existing == pair) {
+                    duplicate = true;
+                    break;
+                }
+            }
+            if (duplicate) {
+                shared_pair = true;
+            } else if (seen_count < seen_pairs.len) {
+                seen_pairs[seen_count] = pair;
+                seen_count += 1;
+            }
             const byte = literal[0];
             if (byte < 0x80) {
                 const word = &first.ascii[byte >> 6];
@@ -127,6 +143,9 @@ pub const PairSet = struct {
                 }
             }
         }
+        // Distinct pairs already pin the branch; the third byte only helps
+        // when literals share a pair.
+        set.use_third = set.use_third and shared_pair;
         // Sparse sets skip most chunks; dense sets keep the plain byte loop.
         if (!nonascii and ascii_count <= max_simd_bytes) {
             set.first = FirstFilter.init(first);
@@ -175,9 +194,12 @@ pub const PairSet = struct {
             if (literal.len > input.len - offset) continue;
             if (literal[0] != first or literal[1] != second) continue;
             // Most shared-prefix candidates diverge at the third byte; check
-            // it before the full comparison.
+            // it before the remaining comparison.
             if (literal.len > 2 and literal[2] != input[offset + 2]) continue;
-            if (std.mem.eql(u8, input[offset..][0..literal.len], literal)) return index;
+            // The first three bytes are verified above; only the tail needs
+            // a comparison.
+            if (literal.len <= 3 or
+                std.mem.eql(u8, input[offset + 3 ..][0 .. literal.len - 3], literal[3..])) return index;
         }
         return no_literal;
     }
@@ -626,6 +648,9 @@ pub const MultiFilter = struct {
             }
         }
         if (filter.pair_count == 0) return null;
+        // The third byte only disambiguates literals that share a pair or
+        // rejects pair collisions; distinct pairs already pin the branch.
+        filter.use_third = filter.use_third and filter.pair_count < literals.len;
         filter.first = @splat(@intCast(filter.pairs[0] >> 8));
         var index: usize = 0;
         while (index < filter.pair_count) : (index += 1) {
@@ -642,9 +667,13 @@ pub const MultiFilter = struct {
             if (offset + literal.len > input.len) continue;
             if (literal[1] != second) continue;
             // Candidates already share the first byte; most diverge at the
-            // third, so check it before the full comparison.
+            // third, so check it before the remaining comparison.
             if (literal.len > 2 and literal[2] != input[offset + 2]) continue;
-            if (std.mem.eql(u8, input[offset..][0..literal.len], literal)) return index;
+            if (literal[0] != input[offset]) continue;
+            // The first three bytes are verified above; only the tail needs
+            // a comparison.
+            if (literal.len <= 3 or
+                std.mem.eql(u8, input[offset + 3 ..][0 .. literal.len - 3], literal[3..])) return index;
         }
         return no_literal;
     }
