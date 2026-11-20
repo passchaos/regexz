@@ -201,6 +201,13 @@ and the word-boundary replacements 1.10–1.16x with unchanged allocation counts
 literal and single-append controls stay within host noise. See
 [inline reserved appends](benchmarks/inline-list-writer.md).
 
+Case-fold expansion now binary-searches the sorted fold table per class range
+instead of rescanning all 482 entries per range, and normalization skips the
+comparison sort when the range list already arrives in order. Compiling the
+Qwen tokenizer pattern improves 4.85–5.32x, with the compiled sets, runtime
+paths and allocation counts unchanged; see
+[targeted case-fold expansion](benchmarks/case-fold-scan.md).
+
 Further work on these candidates needs fresh measurements before implementation.
 Current warmed throughput does not establish their cold-start cost or the
 benefit of replacing their fallback paths.

@@ -10,28 +10,54 @@ fn lessThan(_: void, a: m.Range, b: m.Range) bool {
     return a.first < b.first or (a.first == b.first and a.last < b.last);
 }
 
+/// Whether the ranges are already in `lessThan` order. Property groups and
+/// most parsed classes arrive sorted, so the full sort only runs for unions
+/// that concatenate them out of order.
+fn sorted(ranges: []const m.Range) bool {
+    for (ranges[1..], 1..) |range, index| {
+        if (lessThan({}, range, ranges[index - 1])) return false;
+    }
+    return true;
+}
+
 /// Add every simple case-fold peer of the runes already in `ranges`.
 /// Only runes covered by the fold table can produce peers, so the work is
 /// bounded by the size of that table rather than by the input range width.
 fn appendFolded(gpa: std.mem.Allocator, ranges: *std.ArrayList(m.Range)) m.Error!void {
     const original_len = ranges.items.len;
-    for (0..m.unicode.fold_range_count) |index| {
-        const folded = m.unicode.foldRange(index);
-        // A fold entry is self-contained when every peer stays inside it.
-        // That is only true for some EvenOdd/OddEven entries; entries with a
-        // non-trivial delta (for example A-Z -> a-z) must still be expanded.
-        const first_peer = m.unicode.foldNext(folded.first);
-        const last_peer = m.unicode.foldNext(folded.last);
-        const self_contained = first_peer >= folded.first and first_peer <= folded.last and
-            last_peer >= folded.first and last_peer <= folded.last;
-        for (0..original_len) |range_index| {
-            const range = ranges.items[range_index];
+    const fold_count = m.unicode.fold_range_count;
+    for (0..original_len) |range_index| {
+        const range = ranges.items[range_index];
+        // Fold entries are sorted, so binary-search the first entry that can
+        // intersect this class range and walk only the overlapping entries.
+        // Small classes such as case-insensitive literals then touch one or
+        // two entries instead of the whole table.
+        var low: usize = 0;
+        var high: usize = fold_count;
+        while (low < high) {
+            const middle = low + (high - low) / 2;
+            if (m.unicode.foldRange(middle).last < range.first) {
+                low = middle + 1;
+            } else {
+                high = middle;
+            }
+        }
+        while (low < fold_count) : (low += 1) {
+            const folded = m.unicode.foldRange(low);
+            if (folded.first > range.last) break;
+            // A fold entry is self-contained when every peer stays inside it.
+            // That is only true for some EvenOdd/OddEven entries; entries with
+            // a non-trivial delta (for example A-Z -> a-z) must still be
+            // expanded.
+            const first_peer = m.unicode.foldNext(folded.first);
+            const last_peer = m.unicode.foldNext(folded.last);
+            const self_contained = first_peer >= folded.first and first_peer <= folded.last and
+                last_peer >= folded.first and last_peer <= folded.last;
             if (self_contained and range.first <= folded.first and range.last >= folded.last) continue;
-            const low = @max(range.first, folded.first);
-            const high = @min(range.last, folded.last);
-            if (low > high) continue;
-            var rune: u32 = low;
-            while (rune <= high) : (rune += 1) {
+            const intersect_first = @max(range.first, folded.first);
+            const intersect_last = @min(range.last, folded.last);
+            var rune: u32 = intersect_first;
+            while (rune <= intersect_last) : (rune += 1) {
                 var peer: u32 = m.unicode.foldNext(@intCast(rune));
                 while (peer != rune) : (peer = m.unicode.foldNext(@intCast(peer))) {
                     try ranges.append(gpa, .{ .first = @intCast(peer), .last = @intCast(peer) });
@@ -137,7 +163,7 @@ pub fn normalize(gpa: std.mem.Allocator, raw: []const m.Range, negate: bool, fol
             else => try appendFolded(gpa, &ranges),
         }
     }
-    std.mem.sort(m.Range, ranges.items, {}, lessThan);
+    if (!sorted(ranges.items)) std.mem.sort(m.Range, ranges.items, {}, lessThan);
     var count: usize = 0;
     for (ranges.items) |range| {
         if (range.first > range.last) return error.InvalidRegex;
