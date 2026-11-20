@@ -14,42 +14,43 @@ optional prefix plus run plus optional tail (`set? set+ set*`). The chain stops
 at the first branch that is not one of those shapes, so Qwen's whitespace
 branches (including the `\s+(?!\S)` backtracking lookahead) stay on the DFA.
 `findFastBranch` tries the later plans only after the dominant branch fails
-and the prior first-byte guard has ruled out every earlier branch; the
-workspace allocates one `LaterRun` per plan with the existing deferred UTF-8
-run scans.
+and the prior first-byte guard has ruled out every earlier branch; a
+256-byte first-byte bitmap skips the plans for bytes they cannot start, so
+non-ASCII punctuation and whitespace tokens go straight to the DFA.
 
 ## Measurements
 
 `bench` runs the Qwen tokenizer over the 22 KiB mixed text. Each executable
-reports its own medians; seven executions were interleaved before/after,
+reports its own medians; five executions were interleaved before/after,
 after/before, alternating. The table reports medians across those executions;
 raw samples and executable SHA-256 identities are in
 [`fast-branch-later-plans.json`](fast-branch-later-plans.json).
 
 | Case | Before, ns/iter | After, ns/iter | Speedup |
 | --- | ---: | ---: | ---: |
-| find Qwen tokenizer | 63,424.2 | 49,075.0 | 1.29x |
-| findAll Qwen, borrowed | 63,381.7 | 52,676.7 | 1.20x |
-| findAll Qwen, owning | 71,345.8 | 52,010.0 | 1.37x |
-| find capture email control | 15,572.5 | 15,737.9 | 0.99x |
-| find CJK control | 206,464.2 | 221,553.3 | 0.93x |
-| find Han class control | 153,405.0 | 156,960.8 | 0.98x |
-| fullmatch Han class control | 72,127.5 | 78,334.2 | 0.92x |
-| compile Qwen, page control | 74,967.3 | 78,473.7 | 0.96x |
-| compile Qwen, SMP control | 62,820.8 | 67,889.7 | 0.93x |
-| split whitespace control | 22,585.2 | 22,191.9 | 1.02x |
-| split commas control | 36,954.2 | 35,480.4 | 1.04x |
-| stream `[a-z]+` control | 203,437.5 | 213,927.1 | 0.95x |
-| stream `[a-z]*` control | 252,910.4 | 263,068.8 | 0.96x |
-| stream `[a-z]+ [a-z]+` control | 226,633.4 | 229,975.0 | 0.99x |
-| stream Han chain control | 217,891.7 | 229,404.2 | 0.95x |
+| find Qwen tokenizer | 64,046.7 | 49,056.7 | 1.31x |
+| findAll Qwen, borrowed | 64,066.7 | 54,765.0 | 1.17x |
+| findAll Qwen, owning | 65,755.0 | 55,284.2 | 1.19x |
+| find capture email control | 15,685.0 | 15,896.3 | 0.99x |
+| find CJK control | 213,029.2 | 220,455.8 | 0.97x |
+| find CJK no-lookahead control | 203,211.7 | 218,334.2 | 0.93x |
+| find Han class control | 152,824.2 | 149,885.8 | 1.02x |
+| fullmatch Han class control | 69,690.8 | 73,285.0 | 0.95x |
+| compile Qwen, page control | 74,305.7 | 73,873.4 | 1.01x |
+| compile Qwen, SMP control | 66,831.4 | 66,693.5 | 1.00x |
+| split whitespace control | 22,536.5 | 24,614.6 | 0.92x |
+| split commas control | 39,101.9 | 37,946.9 | 1.03x |
+| stream `[a-z]+` control | 212,506.3 | 215,941.7 | 0.98x |
+| stream `[a-z]*` control | 282,597.9 | 260,597.9 | 1.08x |
+| stream `[a-z]+ [a-z]+` control | 241,366.7 | 234,516.7 | 1.03x |
+| stream Han chain control | 215,577.1 | 219,277.1 | 0.98x |
 
-The tokenizer cases improve in every round. The controls do not use the
-later-plan scan (the CJK, fullmatch and streaming paths never enter
-`findFastBranch`); their 0.92–1.04x spread is the shared host's run-to-run
-noise, which has shown the same range on unchanged binaries. The compile
-controls include the one-time plan analysis and its small later-plan
-allocation.
+The tokenizer cases improve in every round. The CJK tokenizer pays one
+first-byte bitmap check on its non-letter tokens (its punctuation is
+non-ASCII and its newlines are not later-plan firsts), which is the visible
+0.93–0.97x. The remaining controls do not enter `findFastBranch` and span
+0.92–1.08x, the shared host's run-to-run noise. The compile controls include
+the one-time plan analysis and its small later-plan allocation.
 
 ## Validation
 

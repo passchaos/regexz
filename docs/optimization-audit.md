@@ -255,12 +255,12 @@ substitutions with syntax and other patterns keep the general path. See
 
 A reproducible comparison harness now runs the same workloads through regexz
 and Rust's `regex` crate (`tools/compare`). On this host regexz is faster on
-all 20 measured cases: 8.03x on tokenizer compilation, 5.17x on a
-small-pattern compile, 1.24–1.53x on tokenizer scans and match iteration,
-2.25–2.76x on search scans, 1.70–4.39x on splits, 3.17–6.69x on full-match
-calls, 4.14x on a set-run replacement, 1.49x on a zero-width replacement and
-4.18x on the nine-pattern set. The owning `findAll` iterator reuses a process
-workspace pool and is 1.53x ahead of Rust's `find_iter`. See
+all 20 measured cases: 7.52x on tokenizer compilation, 5.13x on a
+small-pattern compile, 1.42–1.56x on tokenizer scans and match iteration,
+2.04–2.66x on search scans, 1.65–3.99x on splits, 2.62–5.71x on full-match
+calls, 3.94x on a set-run replacement, 1.29x on a zero-width replacement and
+3.75x on the nine-pattern set. The owning `findAll` iterator reuses a process
+workspace pool and is 1.52x ahead of Rust's `find_iter`. See
 [comparison with Rust's regex](benchmarks/rust-comparison.md).
 
 The fast-branch deferred run now counts Unicode probes and materializes its
@@ -286,9 +286,11 @@ The tokenizer fast branch now also scans the following digit (`\p{N}`) and
 punctuation (` ?[^\s\p{L}\p{M}\p{N}]+[\r\n]*`) branches directly after the
 dominant branch fails. The analysis stops at the first branch it cannot scan,
 so Qwen's whitespace branches, including the `\s+(?!\S)` backtracking
-lookahead, stay on the DFA. Qwen find improves 1.29x and the owning/borrowed
-iterators 1.20–1.37x; a differential test compares every byte offset against
-the DFA. See
+lookahead, stay on the DFA; a first-byte bitmap skips the plans for bytes they
+cannot start. Qwen find improves 1.31x in the microbenchmark (1.56x against
+Rust), the owning/borrowed iterators 1.17–1.19x, and the CJK cases pay a small
+first-byte check (0.93–0.97x relative) while staying 1.42x ahead of Rust. A
+differential test compares every byte offset against the DFA. See
 [fast-branch later plans](benchmarks/fast-branch-later-plans.md).
 
 `split` and `splitn` now scan pure literal patterns (`,` or a fixed

@@ -337,6 +337,16 @@ pub const Workspace = struct {
                     };
                     initialized += 1;
                 }
+                for (list) |*later| {
+                    if (later.prefix) |*prefix| {
+                        for (0..128) |byte| {
+                            if (prefix.ascii[byte]) value.later_first[byte] = true;
+                        }
+                    }
+                    for (0..128) |byte| {
+                        if (later.run.ascii[byte]) value.later_first[byte] = true;
+                    }
+                }
                 value.later = list;
             }
             break :blk value;
@@ -1518,9 +1528,13 @@ pub const Workspace = struct {
         // The dominant branch failed and every earlier branch is ruled out;
         // try the following branches that have a direct scan.
         if (branch.later) |later_list| {
+            if (!branch.later_first[input[search_start]]) return null;
             for (later_list) |*later| {
                 switch (later.kind) {
                     .single => {
+                        // The direct scans use the ASCII tables; non-ASCII
+                        // tokens stay on the DFA, which is faster for them.
+                        if (input[search_start] >= 0x80) continue;
                         const len = later.run.runeAt(self.allocator, input, search_start) orelse continue;
                         const end = search_start + len;
                         self.slots[0] = search_start;
@@ -1528,6 +1542,7 @@ pub const Workspace = struct {
                         return .{ .start = search_start, .end = end, .slots = self.slots };
                     },
                     .run => {
+                        if (input[search_start] >= 0x80) continue;
                         if (later.run.runeAt(self.allocator, input, search_start) == null) continue;
                         const end = later.run.runEnd(self.allocator, input, search_start);
                         self.slots[0] = search_start;
@@ -1539,6 +1554,7 @@ pub const Workspace = struct {
                         if (later.prefix) |*prefix| {
                             if (prefix.runeAt(self.allocator, input, pos)) |len| pos += len;
                         }
+                        if (pos >= input.len or input[pos] >= 0x80) continue;
                         if (later.run.runeAt(self.allocator, input, pos) == null) continue;
                         var end = later.run.runEnd(self.allocator, input, pos);
                         if (later.tail) |*tail| end = tail.runEnd(self.allocator, input, end);
@@ -2551,6 +2567,8 @@ const FastBranch = struct {
     run: deferred_utf8.Run,
     /// Branches after the dominant one, scanned directly when it fails.
     later: ?[]LaterRun = null,
+    /// ASCII first bytes of the later plans; other bytes skip the scan.
+    later_first: [256]bool = .{false} ** 256,
 
     fn deinit(self: *FastBranch, allocator: std.mem.Allocator) void {
         if (self.prefix) |*prefix| prefix.deinit(allocator);
