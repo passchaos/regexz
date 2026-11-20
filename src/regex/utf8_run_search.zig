@@ -12,13 +12,13 @@ pub inline fn findDeferred(
     run: *deferred.CompactRun,
     allocator: std.mem.Allocator,
     ascii: *const [256]bool,
-    first: *const prefilter.FirstFilter,
+    first: *prefilter.FirstFilter,
     input: []const u8,
     from: usize,
 ) Result {
     std.debug.assert(run.table == null);
     if (from >= input.len) return .{ .span = null };
-    const start = first.indexOf(input, from) orelse return .{ .span = null };
+    const start = if (ascii[input[from]]) from else first.indexOfRuneCandidates(input, from) orelse return .{ .span = null };
     if (ascii[input[start]]) {
         var end = start + 1;
         while (end < input.len and ascii[input[end]]) end += 1;
@@ -32,13 +32,13 @@ noinline fn findUnprepared(
     run: *deferred.CompactRun,
     allocator: std.mem.Allocator,
     ascii: *const [256]bool,
-    first: *const prefilter.FirstFilter,
+    first: *prefilter.FirstFilter,
     input: []const u8,
     from: usize,
 ) ?Span {
     var start = from;
     while (start < input.len) {
-        start = first.indexOf(input, start) orelse return null;
+        start = first.indexOfRuneCandidates(input, start) orelse return null;
         if (input[start] < 0x80) {
             if (!ascii[input[start]]) {
                 start += 1;
@@ -46,20 +46,28 @@ noinline fn findUnprepared(
             }
             var end = start + 1;
             while (end < input.len and ascii[input[end]]) end += 1;
-            if (end < input.len and input[end] >= 0x80 and run.runeAt(allocator, input, end) != null) {
-                end = run.runEnd(allocator, input, end);
+            if (end < input.len and input[end] >= 0x80) {
+                if (probe(run, allocator, first, input, end)) |found| {
+                    if (found.matched) end = run.runEnd(allocator, input, end);
+                }
             }
             return .{ .start = start, .end = end };
         }
-        if (run.runeAt(allocator, input, start) != null) {
-            return .{ .start = start, .end = run.runEnd(allocator, input, start) };
-        }
-        // Advance by a byte after a malformed probe so the next valid rune
-        // remains a candidate, including searches starting within a rune.
-        start += 1;
+        if (probe(run, allocator, first, input, start)) |found| {
+            if (found.matched) return .{ .start = start, .end = run.runEnd(allocator, input, start) };
+            start += found.length;
+        } else start += 1;
         if (run.table) |*table| return findPrepared(table, first, input, start);
     }
     return null;
+}
+
+fn probe(run: *deferred.CompactRun, allocator: std.mem.Allocator, first: *prefilter.FirstFilter, input: []const u8, offset: usize) ?deferred.CompactRun.SearchProbe {
+    const found = run.probeForSearch(allocator, input, offset, first.prefix_state == .disabled) orelse return null;
+    if (!found.matched and first.noteRuneMiss(run.set, @max(1, 4 -| run.unicode_probes)) and first.prefix_state == .disabled) {
+        run.restoreSearchMisses(allocator, first.prefix_probes);
+    }
+    return found;
 }
 
 /// Byte automaton scan once its storage is prepared.
@@ -68,7 +76,7 @@ pub inline fn findPrepared(run: *const utf8_run.Utf8Run, first: *const prefilter
     var offset = from;
     var rune_start = from;
     search: while (offset < input.len) {
-        offset = first.indexOf(input, offset) orelse return null;
+        offset = first.indexOfRuneCandidates(input, offset) orelse return null;
         rune_start = offset;
         var prefix_state = table[input[offset]];
         offset += 1;

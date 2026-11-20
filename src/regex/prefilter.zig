@@ -195,6 +195,8 @@ pub const FirstFilter = struct {
     range_count: u8 = 0,
     /// Selective rune sets prepare exact lead ranges after rejected probes.
     prefix_state: enum { unprepared, ready, disabled } = .unprepared,
+    /// Valid misses across ordinary searches; fits the filter's padding.
+    prefix_probes: u8 = 0,
 
     pub fn init(first: model.FirstSet) FirstFilter {
         var result = FirstFilter{ .first = first };
@@ -251,6 +253,15 @@ pub const FirstFilter = struct {
             self.range_hi[index] = @splat(prefix.values[index][1]);
         }
         self.prefix_state = .ready;
+    }
+
+    /// Returns true only when this valid miss attempts prefix preparation.
+    pub fn noteRuneMiss(self: *FirstFilter, set: model.Set, needed: u8) bool {
+        if (self.prefix_state != .unprepared) return false;
+        self.prefix_probes +|= 1;
+        if (self.prefix_probes < needed) return false;
+        self.prepareRunePrefixes(set);
+        return true;
     }
 
     /// Single-set capture scans use selective prefixes once prepared.

@@ -76,14 +76,15 @@ test "deferred search matches interpreter at every byte offset before and after 
     }
 }
 
-test "deferred search miss warming enables prepared find and replacement" {
+test "deferred search miss warming enables prefix find without byte tables" {
     var value = try regex.Regex.init(gpa, "\\p{Greek}+", .{});
     defer value.deinit();
     var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
     defer workspace.deinit();
     for (0..4) |_| try std.testing.expect((try workspace.find("猫", 0)) == null);
-    try std.testing.expect(workspace.utf8_run.?.table != null);
-    try std.testing.expect(workspace.fast_kind == .utf8_run_prepared);
+    try std.testing.expect(workspace.utf8_run.?.table == null);
+    try std.testing.expect(workspace.first_filter.prefix_state == .ready);
+    try std.testing.expect(workspace.fast_kind == .utf8_run);
     const found = (try workspace.find("猫Σ", 0)).?;
     try std.testing.expectEqual(@as(usize, 3), found.start);
     try std.testing.expectEqual(@as(usize, 5), found.end);
@@ -184,4 +185,70 @@ test "deferred search replacement and iterator reuse preserve run boundaries" {
         try std.testing.expectEqual(end, found.end);
     }
     try std.testing.expect((try iterator.next()) == null);
+}
+
+test "deferred search selective misses and first hit need only mandatory storage" {
+    const cases = [_]struct { pattern: []const u8, miss: []const u8, hit: []const u8 }{
+        .{ .pattern = "\\p{Greek}+", .miss = "猫狗😀𐐀" ** 16, .hit = "Σ" },
+        .{ .pattern = "\\p{Han}+", .miss = "Ελληνικά café ١٢٣ 😀𐐀 " ** 16, .hit = "𠀀" },
+    };
+    for (cases) |case| {
+        var value = try regex.Regex.init(gpa, case.pattern, .{});
+        defer value.deinit();
+        var failing = std.testing.FailingAllocator.init(gpa, .{ .fail_index = 1 });
+        var workspace = try regex.ReplaceWorkspace.init(failing.allocator(), value.program, .{});
+        defer workspace.deinit();
+        for (0..8) |_| try std.testing.expect((try workspace.find(case.miss, 0)) == null);
+        try std.testing.expect(workspace.first_filter.prefix_state == .ready);
+        try std.testing.expect(workspace.utf8_run.?.table == null);
+        try std.testing.expectEqual(@as(u8, 0), workspace.utf8_run.?.unicode_probes);
+        const found = (try workspace.find(case.hit, 0)).?;
+        try std.testing.expectEqual(@as(usize, 0), found.start);
+        try std.testing.expectEqual(case.hit.len, found.end);
+        try std.testing.expectEqual(@as(u8, 1), workspace.utf8_run.?.unicode_probes);
+        try std.testing.expect(workspace.utf8_run.?.table == null);
+        try std.testing.expectEqual(@as(usize, 1), failing.allocations);
+        try std.testing.expect(!failing.has_induced_failure);
+    }
+}
+
+test "deferred search wide misses restore previous matching probe counts" {
+    var value = try regex.Regex.init(gpa, "\\p{L}+", .{});
+    defer value.deinit();
+    var failing = std.testing.FailingAllocator.init(gpa, .{ .fail_index = 1 });
+    var workspace = try regex.ReplaceWorkspace.init(failing.allocator(), value.program, .{});
+    defer workspace.deinit();
+    _ = (try workspace.find("猫", 0)).?;
+    try std.testing.expectEqual(@as(u8, 1), workspace.utf8_run.?.unicode_probes);
+    for (0..2) |_| try std.testing.expect((try workspace.find("。", 0)) == null);
+    try std.testing.expect(!failing.has_induced_failure);
+    try std.testing.expect((try workspace.find("。", 0)) == null);
+    try std.testing.expect(workspace.first_filter.prefix_state == .disabled);
+    try std.testing.expectEqual(@as(u8, 4), workspace.utf8_run.?.unicode_probes);
+    try std.testing.expect(failing.has_induced_failure);
+    try std.testing.expect(workspace.utf8_run.?.failed);
+    const found = (try workspace.find("。猫", 0)).?;
+    try std.testing.expectEqual(@as(usize, 3), found.start);
+    try std.testing.expectEqual(@as(usize, 6), found.end);
+}
+
+test "deferred search prefix readiness survives malformed probes and byte storage failure" {
+    var value = try regex.Regex.init(gpa, "\\p{Han}+", .{});
+    defer value.deinit();
+    var failing = std.testing.FailingAllocator.init(gpa, .{ .fail_index = 1 });
+    var workspace = try regex.ReplaceWorkspace.init(failing.allocator(), value.program, .{});
+    defer workspace.deinit();
+    for (0..4) |_| try std.testing.expect((try workspace.find("Σ", 0)) == null);
+    try std.testing.expect(workspace.first_filter.prefix_state == .ready);
+    var reference = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer reference.deinit();
+    reference.fast_kind = .none;
+    reference.search_dfa_ineligible = true;
+    for ([_][]const u8{ "", "Σ😀𠀀猫", "\xf0猫", "\xe0\x80\x80\xed\xa0\x80猫", "\xf4\x90\x80\x80𠀀", "Σ\x80猫\xe7\x8c" }) |input| {
+        for (0..input.len + 2) |from| try compare(&workspace, &reference, input, from);
+    }
+    try std.testing.expect(failing.has_induced_failure);
+    try std.testing.expect(workspace.utf8_run.?.failed);
+    try std.testing.expect(workspace.utf8_run.?.table == null);
+    try std.testing.expect(workspace.first_filter.prefix_state == .ready);
 }

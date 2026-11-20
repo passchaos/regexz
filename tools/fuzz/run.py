@@ -145,7 +145,10 @@ def generate(case_count: int, seed: int) -> list[dict]:
         if case["pattern"] in replay_runs and case["flags"] == "u":
             case["inputs"] = case["inputs"] + ["a1A", "hello123XYZ", "Σσ١٢猫狗", "Ω1𠀀", "abc12XYZ", "123ABC"]
         if case["pattern"] in deferred_runs and case["flags"] == "u":
-            case["inputs"] = case["inputs"] + ["abcdefghijklmnop", "猫Σé", "Ελληνικά", "猫\n世界\n", "猫\n世界", "猫" * 24, "猫" * 24 + "\n世界\n"]
+            case["inputs"] = case["inputs"] + [
+                "abcdefghijklmnop", "猫Σé", "Ελληνικά", "猫\n世界\n", "猫\n世界", "猫" * 24, "猫" * 24 + "\n世界\n",
+                "你好世界😀𠀀" * 16 + "Σ", "Ελληνικά café ١٢٣ 😀𐐀 " * 16 + "𠀀猫", "😀" * 16 + "abc",
+            ]
         if case["flags"] == "iu" and case["pattern"].startswith("(?:'s|'t|'re|'ve|'m|'ll|'d)|"):
             case["inputs"] = case["inputs"] + ["'ſ café 猫。\n"]
     return cases

@@ -87,6 +87,31 @@ pub const CompactRun = struct {
         return self.unicodeRuneAt(allocator, input, offset);
     }
 
+    pub const SearchProbe = struct { length: u3, matched: bool };
+
+    /// Search can route selective misses to a lightweight first filter.
+    /// Other callers retain unicodeProbe's original preparation policy.
+    pub fn probeForSearch(self: *CompactRun, allocator: std.mem.Allocator, input: []const u8, offset: usize, prepare_misses: bool) ?SearchProbe {
+        std.debug.assert(self.table == null);
+        const length = std.unicode.utf8ByteSequenceLength(input[offset]) catch return null;
+        if (length > input.len - offset) return null;
+        const rune = std.unicode.utf8Decode(input[offset..][0..length]) catch return null;
+        const matched = self.set.matches(rune);
+        if (!self.failed and (matched or prepare_misses)) {
+            self.unicode_probes +|= 1;
+            if (self.unicode_probes >= 4) self.prepare(allocator);
+        }
+        return .{ .length = length, .matched = matched };
+    }
+
+    /// A wide set declined the lightweight filter: restore the preceding
+    /// valid-miss count once and prepare the original byte table.
+    pub noinline fn restoreSearchMisses(self: *CompactRun, allocator: std.mem.Allocator, count: u8) void {
+        if (self.failed) return;
+        self.unicode_probes +|= count;
+        if (self.unicode_probes >= 4) self.prepare(allocator);
+    }
+
     noinline fn unicodeRuneAt(self: *CompactRun, allocator: std.mem.Allocator, input: []const u8, offset: usize) ?usize {
         return unicodeProbe(self, allocator, input, offset);
     }
