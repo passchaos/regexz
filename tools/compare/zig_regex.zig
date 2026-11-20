@@ -88,6 +88,35 @@ fn benchFindAll(
     try out.print("{s:<40} {d:>10.1} ns/iter\n", .{ name, ns });
 }
 
+fn benchSplit(
+    io: std.Io,
+    out: *std.Io.Writer,
+    name: []const u8,
+    pattern: []const u8,
+    input: []const u8,
+    iterations: usize,
+) !void {
+    var value = try regexz.Regex.init(gpa, pattern, .{});
+    defer value.deinit();
+    for (0..20) |_| {
+        const parts = try value.split(gpa, input);
+        gpa.free(parts);
+    }
+    var samples: [5]i96 = undefined;
+    for (&samples) |*sample| {
+        const start = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds;
+        for (0..iterations) |_| {
+            const parts = try value.split(gpa, input);
+            std.mem.doNotOptimizeAway(parts.len);
+            gpa.free(parts);
+        }
+        sample.* = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds - start;
+    }
+    std.mem.sort(i96, &samples, {}, std.sort.asc(i96));
+    const ns = @as(f64, @floatFromInt(samples[2])) / @as(f64, @floatFromInt(iterations));
+    try out.print("{s:<40} {d:>10.1} ns/iter\n", .{ name, ns });
+}
+
 fn benchMatches(
     io: std.Io,
     out: *std.Io.Writer,
@@ -229,6 +258,10 @@ pub fn main() !void {
     defer number_text.deinit(gpa);
     for (0..2000) |_| try number_text.appendSlice(gpa, "x=-12.5 y=3 z=0.25 ");
 
+    var csv_text: std.ArrayList(u8) = .empty;
+    defer csv_text.deinit(gpa);
+    for (0..1000) |_| try csv_text.appendSlice(gpa, "alpha,beta,gamma,delta,epsilon,");
+
     var word_text: std.ArrayList(u8) = .empty;
     defer word_text.deinit(gpa);
     for (0..3000) |_| try word_text.appendSlice(gpa, "alpha beta gamma delta epsilon ");
@@ -251,6 +284,8 @@ pub fn main() !void {
     try benchFind(io, out, "find JSON string literal", "\"[^\"]*\"", json_text.items, 200, .{});
     try benchFind(io, out, "find JSON number", "-?\\d+(?:\\.\\d+)?", number_text.items, 200, .{});
     try benchFind(io, out, "find word boundary", "\\b\\w+\\b", word_text.items, 200, .{});
+    try benchSplit(io, out, "split whitespace (22 KiB)", "\\s+", ascii_text.items, 200);
+    try benchSplit(io, out, "split commas (29 KiB)", ",", csv_text.items, 200);
     try benchMatches(io, out, "fullmatch literal", "hello, world!", "hello, world!", 200000, .{});
     try benchMatches(io, out, "fullmatch class", "[A-Za-z0-9._-]+", "User.Name_42", 200000, .{});
     try benchMatches(io, out, "fullmatch xDS-like", "/(?:demo|test)\\.[A-Z][A-Za-z]+/(Get|List)", "/demo.Service/Get", 200000, .{});

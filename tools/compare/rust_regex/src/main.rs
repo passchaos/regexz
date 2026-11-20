@@ -28,6 +28,25 @@ fn bench_find(name: &str, pattern: &str, input: &str, iterations: usize) {
     println!("{name:<40} {:>10.1} ns/iter", median(&mut samples));
 }
 
+fn bench_split(name: &str, pattern: &str, input: &str, iterations: usize) {
+    let re = Regex::new(pattern).unwrap();
+    for _ in 0..20 {
+        black_box(re.split(input).collect::<Vec<_>>().len());
+    }
+    let mut samples = Vec::new();
+    for _ in 0..5 {
+        let start = Instant::now();
+        let mut pieces = 0usize;
+        for _ in 0..iterations {
+            pieces += re.split(input).collect::<Vec<_>>().len();
+        }
+        let ns = start.elapsed().as_nanos() as f64 / iterations as f64;
+        black_box(pieces);
+        samples.push(ns);
+    }
+    println!("{name:<40} {:>10.1} ns/iter", median(&mut samples));
+}
+
 fn bench_fullmatch(name: &str, pattern: &str, input: &str, iterations: usize) {
     let re = Regex::new(pattern).unwrap();
     for _ in 0..1000 {
@@ -109,6 +128,7 @@ fn main() {
     let url_text = "see https://example.com/a/b?c=1 and http://x.y ".repeat(1500);
     let json_text = "{\"name\": \"value\", \"id\": 12345} ".repeat(400);
     let number_text = "x=-12.5 y=3 z=0.25 ".repeat(2000);
+    let csv_text = "alpha,beta,gamma,delta,epsilon,".repeat(1000);
     let word_text = "alpha beta gamma delta epsilon ".repeat(3000);
     let replace_text = "aaa bbb aaa bbb ".repeat(2000);
 
@@ -129,6 +149,8 @@ fn main() {
     bench_find("find JSON string literal", "\"[^\"]*\"", &json_text, 200);
     bench_find("find JSON number", "-?\\d+(?:\\.\\d+)?", &number_text, 200);
     bench_find("find word boundary", "(?-u:\\b\\w+\\b)", &word_text, 200);
+    bench_split("split whitespace (22 KiB)", "\\s+", &ascii_text, 200);
+    bench_split("split commas (29 KiB)", ",", &csv_text, 200);
     bench_fullmatch(
         "fullmatch literal",
         "hello, world!",

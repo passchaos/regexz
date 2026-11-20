@@ -255,13 +255,14 @@ substitutions with syntax and other patterns keep the general path. See
 
 A reproducible comparison harness now runs the same workloads through regexz
 and Rust's `regex` crate (`tools/compare`). On this host regexz is faster on
-17 of the 18 measured cases: 7.95x on tokenizer compilation, 5.01x on a
-small-pattern compile, 1.28–1.56x on tokenizer scans, 2.23–3.09x on search
-scans, 2.42–6.49x on full-match calls, 4.25x on a set-run replacement, 1.81x
-on a zero-width replacement and 3.67x on the nine-pattern set. The exception
-is a fresh `findAll` per call (0.26x), where Rust's thread-local cache pool
-stays warm; `findAllWith` with a caller workspace restores the lead (1.28x).
-See [comparison with Rust's regex](benchmarks/rust-comparison.md).
+19 of the 20 measured cases: 7.98x on tokenizer compilation, 5.24x on a
+small-pattern compile, 1.12–1.35x on tokenizer scans, 2.13–2.69x on search
+scans, 1.76–4.48x on splits, 3.22–6.22x on full-match calls, 4.26x on a
+set-run replacement, 1.79x on a zero-width replacement and 4.25x on the
+nine-pattern set. The exception is a fresh `findAll` per call (0.25x), where
+Rust's thread-local cache pool stays warm; `findAllWith` with a caller
+workspace restores the lead (1.12x). See
+[comparison with Rust's regex](benchmarks/rust-comparison.md).
 
 `Matches` now supports a caller-owned workspace: `Regex.findAllWith` iterates
 on warmed search-DFA caches without copying or freeing the workspace, while
