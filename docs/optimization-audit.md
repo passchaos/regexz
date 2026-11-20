@@ -607,3 +607,18 @@ program used to deinit it but leave the slot pointing at it, so a later take
 could return freed memory; the slot is now cleared and a `findAll` eviction
 test covers it. See
 [pooled replacement workspaces](benchmarks/replace-workspace-pool.md).
+
+Three CJK tokenizer scanner candidates were screened and reverted. A dense
+3-byte range fast path (an arithmetic decode for covered ranges such as
+`\u{4E00}`-`\u{9FFF}` instead of three dependent automaton loads) lowered
+`find CJK tokenizer` from 166 us to 213-269 us depending on where the check
+sat: the byte automaton already overlaps the independent loads of consecutive
+runes, and the extra per-rune branch plus the larger `Utf8Run` struct cost
+more than the saved loads. Removing the `runeAt` gate before `runEnd` also
+lost, because `runeAt` is the cheaper rejection at non-member starts
+(no-punctuation CJK text 128 -> 142 us). Reordering the dominant branch to
+scan the run before the optional prefix for disjoint ASCII sets regressed
+`find Qwen tokenizer` from 42.5-47.0 us to 49.7-60.5 us over five alternating
+rounds. The prepared byte automaton and the greedy prefix probe stay as they
+are; the remaining CJK time is mostly the run scan and the per-token prefix
+probe, and both resist these micro-reorders.
