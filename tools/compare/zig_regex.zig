@@ -51,6 +51,43 @@ fn benchFind(
     try out.print("{s:<40} {d:>10.1} ns/iter\n", .{ name, ns });
 }
 
+fn benchFindAll(
+    io: std.Io,
+    out: *std.Io.Writer,
+    name: []const u8,
+    pattern: []const u8,
+    input: []const u8,
+    iterations: usize,
+    limits: regexz.Limits,
+    borrowed: bool,
+) !void {
+    var value = try regexz.Regex.init(gpa, pattern, limits);
+    defer value.deinit();
+    var workspace: regexz.ReplaceWorkspace = undefined;
+    if (borrowed) workspace = try regexz.ReplaceWorkspace.init(gpa, value.program, limits);
+    defer if (borrowed) workspace.deinit();
+    for (0..3) |_| {
+        var iterator = if (borrowed) value.findAllWith(&workspace, input) else try value.findAll(gpa, input);
+        defer iterator.deinit();
+        while (try iterator.next()) |_| {}
+    }
+    var samples: [5]i96 = undefined;
+    for (&samples) |*sample| {
+        var pieces: usize = 0;
+        const start = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds;
+        for (0..iterations) |_| {
+            var iterator = if (borrowed) value.findAllWith(&workspace, input) else try value.findAll(gpa, input);
+            defer iterator.deinit();
+            while (try iterator.next()) |_| pieces += 1;
+        }
+        sample.* = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds - start;
+        std.mem.doNotOptimizeAway(pieces);
+    }
+    std.mem.sort(i96, &samples, {}, std.sort.asc(i96));
+    const ns = @as(f64, @floatFromInt(samples[2])) / @as(f64, @floatFromInt(iterations));
+    try out.print("{s:<40} {d:>10.1} ns/iter\n", .{ name, ns });
+}
+
 fn benchMatches(
     io: std.Io,
     out: *std.Io.Writer,
@@ -206,6 +243,8 @@ pub fn main() !void {
     try benchCompile(io, out, "compile Qwen tokenizer", qwen, 500, ucp);
     try benchCompile(io, out, "compile xDS-like", "/(?:demo|test)\\.[A-Z][A-Za-z]+/(Get|List)", 20000, .{});
     try benchFind(io, out, "find Qwen tokenizer", qwen, ascii_text.items, 50, ucp);
+    try benchFindAll(io, out, "findAll Qwen (borrowed)", qwen, ascii_text.items, 50, ucp, true);
+    try benchFindAll(io, out, "findAll Qwen (fresh)", qwen, ascii_text.items, 50, ucp, false);
     try benchFind(io, out, "find CJK tokenizer", qwen, cjk_text.items, 50, ucp);
     try benchFind(io, out, "find HTML tag", "<[^>]+>", html_text.items, 200, .{});
     try benchFind(io, out, "find URL", "https?://[^\\s]+", url_text.items, 200, .{});

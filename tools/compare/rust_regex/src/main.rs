@@ -121,6 +121,8 @@ fn main() {
         20000,
     );
     bench_find("find Qwen tokenizer", qwen, &ascii_text, 50);
+    bench_find("findAll Qwen (borrowed)", qwen, &ascii_text, 50);
+    bench_find("findAll Qwen (fresh)", qwen, &ascii_text, 50);
     bench_find("find CJK tokenizer", qwen, &cjk_text, 50);
     bench_find("find HTML tag", "<[^>]+>", &html_text, 200);
     bench_find("find URL", "https?://[^\\s]+", &url_text, 200);
