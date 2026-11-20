@@ -386,3 +386,16 @@ serves all three sizes under a 512 KiB cap. The Qwen tokenizer compile
 improves 1.36x (55.1 → 40.5 us) and a 100-byte literal 1.68x (18.3 → 10.9 us);
 the SMP Qwen path is neutral and xDS keeps its 16 KiB block. See
 [compile block tiers](benchmarks/compile-block-tiers.md).
+
+`RegexSet` now scans all simple chain separators (`set+ sep` with a
+single-byte literal separator) in one vector pass instead of once per
+pattern. A nibble-table candidate filter finds the separator bytes 64 bytes
+at a time, and each candidate checks the `set_a` run before it. The
+nine-pattern set improves 4.77x (9.5 → 2.0 us); the other 66 benchmark cases
+are neutral (median 1.00x). See
+[combined separator scan](benchmarks/set-combined-separators.md).
+
+Prefiltering each separator candidate by a vectorized "predecessor in
+`set_a`" test was screened and reverted: the extra lookups per chunk cost
+more than the rejected scalar candidates saved (2.57 us versus 1.99 us on
+the nine-pattern set).

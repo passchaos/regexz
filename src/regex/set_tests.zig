@@ -218,6 +218,89 @@ test "regex set exposes its patterns" {
     try std.testing.expectEqualStrings("abc", sources[1]);
 }
 
+test "regex set scans chain separators in one pass" {
+    const allocator = std.testing.allocator;
+    const patterns = [_][]const u8{ "[a-z]+@", "[a-z]+#", "[a-z]+%" };
+    var set = try regex.RegexSet.init(allocator, &patterns, .{});
+    defer set.deinit();
+    try std.testing.expect(set.chain_filter != null);
+    var matched: [3]bool = undefined;
+    try set.matches("abc@ def# ghi", &matched);
+    try std.testing.expectEqualSlices(bool, &.{ true, true, false }, &matched);
+    // A separator directly after a non-letter cannot start a run.
+    try set.matches("@#%", &matched);
+    try std.testing.expectEqualSlices(bool, &.{ false, false, false }, &matched);
+    // Runs are floored at the search offset.
+    try set.matchesAt("abc@ def#", 4, &matched);
+    try std.testing.expectEqualSlices(bool, &.{ false, true, false }, &matched);
+    try set.matchesAt("abc@ def#", 9, &matched);
+    try std.testing.expectEqualSlices(bool, &.{ false, false, false }, &matched);
+    try set.matches("x%", &matched);
+    try std.testing.expectEqualSlices(bool, &.{ false, false, true }, &matched);
+    // A short result buffer reports only the leading patterns.
+    var short: [2]bool = undefined;
+    try set.matches("abc@ def# ghi%", &short);
+    try std.testing.expectEqualSlices(bool, &.{ true, true }, &short);
+}
+
+test "regex set falls back when chain separators are not simple" {
+    const allocator = std.testing.allocator;
+    // A set-run separator and duplicate literal separators both keep the
+    // per-pattern searches.
+    const patterns = [_][]const u8{ "[a-z]+@", "[a-z]+\\s+[a-z]+", "[a-z]+#" };
+    var set = try regex.RegexSet.init(allocator, &patterns, .{});
+    defer set.deinit();
+    try std.testing.expect(set.chain_filter == null);
+    var matched: [3]bool = undefined;
+    try set.matches("ab@ cd ef#", &matched);
+    try std.testing.expectEqualSlices(bool, &.{ true, true, true }, &matched);
+
+    const duplicates = [_][]const u8{ "[a-z]+@", "[a-z]{2,}@" };
+    var dup_set = try regex.RegexSet.init(allocator, &duplicates, .{});
+    defer dup_set.deinit();
+    try std.testing.expect(dup_set.chain_filter == null);
+    var dup_matched: [2]bool = undefined;
+    try dup_set.matches("ab@", &dup_matched);
+    try std.testing.expectEqualSlices(bool, &.{ true, true }, &dup_matched);
+}
+
+test "regex set chain filter agrees with per-pattern search" {
+    const allocator = std.testing.allocator;
+    const patterns = [_][]const u8{ "[a-z]+@", "[a-z]{2,}#", "[a-z]+%", "[a-z]+&" };
+    var set = try regex.RegexSet.init(allocator, &patterns, .{});
+    defer set.deinit();
+    try std.testing.expect(set.chain_filter != null);
+    var workspaces: [patterns.len]regex.ReplaceWorkspace = undefined;
+    var initialized: usize = 0;
+    defer for (workspaces[0..initialized]) |*workspace| workspace.deinit();
+    for (set.programs, 0..) |program, index| {
+        workspaces[index] = try regex.ReplaceWorkspace.init(allocator, program, .{});
+        initialized += 1;
+    }
+    var prng = std.Random.DefaultPrng.init(0x5e7_c0de);
+    const random = prng.random();
+    const alphabet = [_][]const u8{ "a", "z", "@", "#", "%", "&", "1", " ", "\n", "\u{e9}" };
+    var input_buf: [64]u8 = undefined;
+    var round: usize = 0;
+    while (round < 200) : (round += 1) {
+        var input_len: usize = 0;
+        const pieces = random.intRangeAtMost(usize, 0, 16);
+        for (0..pieces) |_| {
+            const piece = alphabet[random.uintLessThan(usize, alphabet.len)];
+            @memcpy(input_buf[input_len..][0..piece.len], piece);
+            input_len += piece.len;
+        }
+        const input = input_buf[0..input_len];
+        const start = random.intRangeAtMost(usize, 0, input.len);
+        var matched: [patterns.len]bool = undefined;
+        try set.matchesAt(input, start, &matched);
+        for (0..patterns.len) |index| {
+            const expected = (try workspaces[index].find(input, start)) != null;
+            try std.testing.expectEqual(expected, matched[index]);
+        }
+    }
+}
+
 test "regex set match indices handles more than 64 patterns" {
     const allocator = std.testing.allocator;
     var patterns: [70][]const u8 = undefined;

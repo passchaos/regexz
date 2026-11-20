@@ -38,6 +38,40 @@ pub const Filter = struct {
     }
 };
 
+/// Single-byte candidate filter: two nibble tables over eight bucket bits.
+/// A byte is a candidate when its high and low nibble tables share a bucket.
+/// Buckets are assigned per high nibble, so the filter is exact while the
+/// bytes span at most eight distinct high nibbles; beyond that buckets are
+/// shared and collisions stay conservative.
+pub const ByteFilter = struct {
+    low: Vec,
+    high: Vec,
+
+    pub fn init(bytes: []const u8) ByteFilter {
+        var buckets = [_]u8{0xFF} ** 16;
+        var bucket_count: usize = 0;
+        var low = [_]u8{0} ** 16;
+        var high = [_]u8{0} ** 16;
+        for (bytes) |byte| {
+            const hi = byte >> 4;
+            if (buckets[hi] == 0xFF) {
+                buckets[hi] = @intCast(bucket_count % 8);
+                bucket_count += 1;
+            }
+            const bit = @as(u8, 1) << @intCast(buckets[hi]);
+            low[byte & 15] |= bit;
+            high[hi] |= bit;
+        }
+        return .{ .low = low, .high = high };
+    }
+
+    pub fn candidates(self: *const ByteFilter, chunk: Vec) @Vector(16, bool) {
+        const low_indices = chunk & @as(Vec, @splat(15));
+        const high_indices = chunk >> @as(@Vector(16, u3), @splat(4));
+        return (lookup(self.low, low_indices) & lookup(self.high, high_indices)) != @as(Vec, @splat(0));
+    }
+};
+
 /// Relative English text byte frequencies (per mille), used only to rank
 /// bucket assignments. Uppercase folds to lowercase; bytes outside the table
 /// keep a small default so digit and punctuation literals still participate.
