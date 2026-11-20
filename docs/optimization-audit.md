@@ -156,11 +156,15 @@ to place every capture boundary without DFA state, choices or trails. Lazy
 the greedy boundaries are forced, and a chain with no mandatory run matches at
 the search offset. Overlapping sets use a forward scan when the first run is
 mandatory and every mandatory run's set is disjoint from all preceding sets,
-which makes the greedy maxima complete. Starts inside a run, malformed UTF-8
-and failed mandatory prefixes fall back to the general engine. Covered capture
+which makes the greedy maxima complete. Plans with non-ASCII run sets carry a
+64-entry rune membership cache (rune → set bitmask) so repeated boundary
+probes skip the range binary search; all-ASCII plans keep the direct calls
+through a comptime specialization. Starts inside a run, malformed UTF-8 and
+failed mandatory prefixes fall back to the general engine. Covered capture
 searches improve 1.32–2.43x, the lazy case 1.64x, the nullable chains
-1.42–2.03x and the overlapping case 1.67x; controls stay within host noise.
-See [captured run chains](benchmarks/run-chain.md).
+1.42–2.03x, the overlapping case 1.67x and the cached Unicode chains another
+1.18–1.21x; controls stay within host noise. See
+[captured run chains](benchmarks/run-chain.md).
 
 The `RegexSet` combined DFA now stores pre-multiplied row offsets in its
 packed ASCII transition entries, so the hot scan indexes `row + byte` without

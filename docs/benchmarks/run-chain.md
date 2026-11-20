@@ -144,6 +144,41 @@ The overlapping case improves in every round. The mandatory-overlap control
 is rejected by the detector and keeps the interpreter; its 0.92x median comes
 from a single slow round and stays within the host's spread.
 
+## Rune membership cache
+
+Every run-chain boundary probe tests a rune against one of the plan's sets.
+For non-ASCII sets that is a range binary search, and tokenizer-like text
+repeats the same few runes thousands of times. Plans with at least one
+non-ASCII run set now carry a 64-entry direct-mapped cache mapping a rune to a
+bitmask of the plan's sets that contain it: one miss computes the mask with the
+original `Set.matches` calls, and later probes are a hash, a compare and a bit
+test. Plans whose sets are all ASCII keep direct `Set.matches` calls through a
+comptime specialization, so the ASCII scans pay no per-probe branch. The cache
+lives in the heap-allocated plan state, adds no workspace bytes, and needs no
+invalidation because the program's sets are immutable.
+
+Measured separately against `86e028d` with the same method (five interleaved
+executions; raw samples in
+[`run-chain-rune-cache.json`](run-chain-rune-cache.json)):
+
+| Case | Before, ns/pass | After, ns/pass | Speedup |
+| --- | ---: | ---: | ---: |
+| disjoint Unicode captures | 94,717.9 | 78,013.8 | 1.21x |
+| Unicode empty captures | 97,737.9 | 81,311.3 | 1.20x |
+| Unicode optional captures | 224,326.3 | 187,880.4 | 1.19x |
+| nullable Unicode captures | 233,963.8 | 197,692.1 | 1.18x |
+| sandwiched nullable captures | 56,645.0 | 54,662.5 | 1.04x |
+| nullable greedy captures | 61,539.2 | 59,952.1 | 1.03x |
+| optional overlapping run | 108,843.8 | 108,169.2 | 1.01x |
+| Han capture control | 21,245.8 | 21,355.4 | 0.99x |
+| optional ASCII captures | 148,275.0 | 155,005.8 | 0.96x |
+| trailing nullable capture | 38,077.9 | 40,765.4 | 0.93x |
+
+The Unicode chains improve in every round. The ASCII chains keep the direct
+membership path; their 0.93–1.04x spread is the host's run-to-run noise. The
+heap plan grows by 320 bytes of cache, which shows in the first-find
+allocation counters but not in the workspace size.
+
 ## Validation
 
 ```sh

@@ -209,6 +209,12 @@ pub const Workspace = struct {
             const plan = shapes.runChain(program) orelse break :blk null;
             const state = try allocator.create(RunChainState);
             state.plan = plan;
+            for (plan.sets[0..plan.count], 0..) |set, index| {
+                if (!plan.empty[index] and !set.ascii_only) {
+                    state.use_cache = true;
+                    break;
+                }
+            }
             if (plan.forward) {
                 const first = plan.sets[0];
                 state.filter = prefilter.FirstFilter.init(.{ .ascii = first.ascii, .nonascii = !first.ascii_only });
@@ -852,18 +858,24 @@ pub const Workspace = struct {
     /// offset and extends greedily. A start inside a run or malformed UTF-8
     /// falls back to the general engine.
     fn findRunChain(self: *Workspace, state: *RunChainState, input: []const u8, search_start: usize) ?Match {
+        return if (state.use_cache)
+            self.findRunChainInner(true, state, input, search_start)
+        else
+            self.findRunChainInner(false, state, input, search_start);
+    }
+
+    inline fn findRunChainInner(self: *Workspace, comptime cached: bool, state: *RunChainState, input: []const u8, search_start: usize) ?Match {
         const plan = &state.plan;
         if (plan.forward) {
             // Overlapping sets: the first run is mandatory and every
             // mandatory run is separated from its predecessors, so the
             // greedy maxima are complete. A failed mandatory run cannot be
             // rescued by backtracking, so the general engine decides.
-            const first_set = plan.sets[0];
             var scan = search_start;
             while (scan < input.len) {
                 const candidate = state.filter.indexOfRuneCandidates(input, scan) orelse return null;
                 const rune = runeAt(input, candidate) orelse return null;
-                if (!first_set.matches(rune.value)) {
+                if (!state.member(cached, rune.value, 0)) {
                     scan = candidate + rune.len;
                     continue;
                 }
@@ -875,7 +887,7 @@ pub const Workspace = struct {
                         pos[item + 1] = pos[item];
                         continue;
                     }
-                    const end = runEnd(input, pos[item], plan.sets[item]) orelse return null;
+                    const end = state.runEndCached(cached, input, pos[item], item) orelse return null;
                     if (end == pos[item] and plan.minimum[item] != 0) return null;
                     pos[item + 1] = end;
                 }
@@ -896,18 +908,17 @@ pub const Workspace = struct {
                     pos[item + 1] = pos[item];
                     continue;
                 }
-                pos[item + 1] = runEnd(input, pos[item], plan.sets[item]) orelse return null;
+                pos[item + 1] = state.runEndCached(cached, input, pos[item], item) orelse return null;
             }
             self.fillRunChainSlots(plan, &pos, search_start, pos[plan.count]);
             return .{ .start = search_start, .end = pos[plan.count], .slots = self.slots };
         }
         const anchor = plan.anchor;
-        const anchor_set = plan.sets[anchor];
         var scan = search_start;
         while (scan < input.len) {
             const candidate = state.filter.indexOfRuneCandidates(input, scan) orelse return null;
             const rune = runeAt(input, candidate) orelse return null;
-            if (!anchor_set.matches(rune.value)) {
+            if (!state.member(cached, rune.value, anchor)) {
                 scan = candidate + rune.len;
                 continue;
             }
@@ -915,7 +926,7 @@ pub const Workspace = struct {
             var members: usize = 1;
             while (end < input.len) {
                 const next = runeAt(input, end) orelse return null;
-                if (!anchor_set.matches(next.value)) break;
+                if (!state.member(cached, next.value, anchor)) break;
                 end += next.len;
                 members += 1;
             }
@@ -934,12 +945,11 @@ pub const Workspace = struct {
                     pos[index] = pos[index + 1];
                     continue;
                 }
-                const set = plan.sets[index];
                 var start = pos[index + 1];
                 var count: usize = 0;
                 while (start > 0) {
                     const previous = runeBefore(input, start) orelse return null;
-                    if (!set.matches(previous.value)) break;
+                    if (!state.member(cached, previous.value, index)) break;
                     start = previous.start;
                     count += 1;
                 }
@@ -961,7 +971,7 @@ pub const Workspace = struct {
             while (trailing < plan.count) : (trailing += 1) {
                 pos[trailing] = cursor;
                 if (!plan.empty[trailing]) {
-                    cursor = runEnd(input, cursor, plan.sets[trailing]) orelse return null;
+                    cursor = state.runEndCached(cached, input, cursor, trailing) orelse return null;
                 }
                 pos[trailing + 1] = cursor;
             }
@@ -1977,18 +1987,6 @@ fn runeBefore(input: []const u8, end: usize) ?struct { value: u21, start: usize 
     return .{ .value = value, .start = start };
 }
 
-/// End of the maximal run of `set` members at `start`. Null for malformed
-/// UTF-8, which makes the caller fall back to the general engine.
-fn runEnd(input: []const u8, start: usize, set: model.Set) ?usize {
-    var end = start;
-    while (end < input.len) {
-        const rune = runeAt(input, end) orelse return null;
-        if (!set.matches(rune.value)) break;
-        end += rune.len;
-    }
-    return end;
-}
-
 fn runeLenAt(input: []const u8, offset: usize) usize {
     if (offset >= input.len) return 1;
     if (input[offset] < 0x80) return 1;
@@ -2018,7 +2016,41 @@ const FastBranch = struct {
 const RunChainState = struct {
     plan: shapes.RunChain,
     filter: prefilter.FirstFilter,
+    /// Rune -> set membership bitmask cache. The plan's sets are immutable,
+    /// so entries never need invalidation. Used only when a run set has
+    /// non-ASCII members, where `Set.matches` is a range binary search.
+    cache_keys: [64]u32 = [_]u32{no_rune} ** 64,
+    cache_masks: [64]u8 = [_]u8{0} ** 64,
+    use_cache: bool = false,
+
+    inline fn member(self: *RunChainState, comptime cached: bool, rune: u21, index: usize) bool {
+        if (!cached) return self.plan.sets[index].matches(rune);
+        const slot: usize = @intCast((@as(u32, rune) *% 0x9E3779B1) >> 26);
+        const key: u32 = rune;
+        var mask = self.cache_masks[slot];
+        if (self.cache_keys[slot] != key) {
+            mask = 0;
+            for (self.plan.sets[0..self.plan.count], 0..) |set, set_index| {
+                if (self.plan.empty[set_index]) continue;
+                if (set.matches(rune)) mask |= @as(u8, 1) << @intCast(set_index);
+            }
+            self.cache_keys[slot] = key;
+            self.cache_masks[slot] = mask;
+        }
+        return mask & (@as(u8, 1) << @intCast(index)) != 0;
+    }
+
+    inline fn runEndCached(self: *RunChainState, comptime cached: bool, input: []const u8, start: usize, index: usize) ?usize {
+        var end = start;
+        while (end < input.len) {
+            const rune = runeAt(input, end) orelse return null;
+            if (!self.member(cached, rune.value, index)) break;
+            end += rune.len;
+        }
+        return end;
+    }
 };
+const no_rune: u32 = std.math.maxInt(u32);
 
 /// Byte membership tables and a SIMD separator filter for the chain fast
 /// path. Table lookups replace `Set.matches` calls in the per-byte scans;
