@@ -416,10 +416,8 @@ pub fn setLoop(program: Program) ?SetLoop {
     if (!sameSet(a.set, star.set)) return null;
     if (a.set.ranges.len == 0 or b.set.ranges.len == 0) return null;
     if (!a.set.ascii_only or !b.set.ascii_only) return null;
-    var byte: usize = 0;
-    while (byte < 128) : (byte += 1) {
-        if (a.set.matches(@intCast(byte)) and b.set.matches(@intCast(byte))) return null;
-    }
+    // The ASCII bitmap is authoritative, so two word ANDs replace 256 probes.
+    if (a.set.ascii[0] & b.set.ascii[0] != 0 or a.set.ascii[1] & b.set.ascii[1] != 0) return null;
     return .{ .a = a.set, .b = b.set };
 }
 
@@ -481,13 +479,20 @@ pub fn lineRun(program: Program) bool {
     return isDotExceptNewline(star.set);
 }
 
+/// ASCII bitmap of every byte except `except` (all values below 0x80).
+fn asciiExcept(except: []const u8) [2]u64 {
+    var words = [2]u64{ std.math.maxInt(u64), std.math.maxInt(u64) };
+    for (except) |byte| {
+        std.debug.assert(byte < 0x80);
+        words[byte >> 6] &= ~(@as(u64, 1) << @intCast(byte & 63));
+    }
+    return words;
+}
+
 /// Whether `set` is the dot set: every rune except `\n`.
 fn isDotExceptNewline(set: model.Set) bool {
-    var byte: u32 = 0;
-    while (byte < 128) : (byte += 1) {
-        const expected = byte != '\n';
-        if (set.matches(@intCast(byte)) != expected) return false;
-    }
+    const expected = asciiExcept("\n");
+    if (set.ascii[0] != expected[0] or set.ascii[1] != expected[1]) return false;
     // All non-ASCII runes must be members.
     for (set.ranges) |range| {
         if (range.first <= 0x80 and range.last >= 0x10FFFF) return true;
@@ -540,11 +545,8 @@ pub fn delimitedRun(program: Program) ?Delimited {
 
 /// Whether `set` matches every rune except `excluded` (which is ASCII).
 fn isAllExcept(set: model.Set, excluded: u8) bool {
-    var byte: u32 = 0;
-    while (byte < 128) : (byte += 1) {
-        const expected = byte != excluded;
-        if (set.matches(@intCast(byte)) != expected) return false;
-    }
+    const expected = asciiExcept(&.{excluded});
+    if (set.ascii[0] != expected[0] or set.ascii[1] != expected[1]) return false;
     for (set.ranges) |range| {
         if (range.first <= 0x80 and range.last >= 0x10FFFF) return true;
     }
@@ -637,11 +639,8 @@ pub fn lineDelimitedRun(program: Program) ?LineDelimited {
 
 /// Whether `set` matches every rune except `a` and `b` (both ASCII).
 fn isAllExceptTwo(set: model.Set, a: u8, b: u8) bool {
-    var byte: u32 = 0;
-    while (byte < 128) : (byte += 1) {
-        const expected = byte != a and byte != b;
-        if (set.matches(@intCast(byte)) != expected) return false;
-    }
+    const expected = asciiExcept(&.{ a, b });
+    if (set.ascii[0] != expected[0] or set.ascii[1] != expected[1]) return false;
     for (set.ranges) |range| {
         if (range.first <= 0x80 and range.last >= 0x10FFFF) return true;
     }

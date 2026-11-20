@@ -130,6 +130,14 @@ Varied Han first matches improve 1.76–2.35x and direct-mapped slot-collision
 warm scans 2.86x; ASCII controls stay within host noise. See
 [DFA transition masks](benchmarks/dfa-mask-cache.md).
 
+Shape detection now compares ASCII bitmap words instead of probing 128
+memberships per set. The `(?:setA+ setB)+` disjointness check and the
+dot/except predicates use the authoritative ASCII bitmap directly; the
+non-ASCII range checks are unchanged. Workspace initialization for the ASCII
+loop shape improves 6.47x, its cold first match 6.34x and its fresh-DFA
+three-match mode 5.76x; other shapes are unchanged. See
+[shape detection from ASCII bitmaps](benchmarks/shape-init.md).
+
 Further work on these candidates needs fresh measurements before implementation.
 Current warmed throughput does not establish their cold-start cost or the
 benefit of replacing their fallback paths.
