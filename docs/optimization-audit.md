@@ -633,3 +633,14 @@ owning `findAll` 1.06x (45.3 -> 42.7 us) while the borrowed control stays at
 cases at a 1.00x median. Owning `findAll` now matches the borrowed form
 (1.52x ahead of Rust) and the zero-width replacement reaches 2.66x. See
 [pooled replacement workspaces](benchmarks/replace-workspace-pool.md).
+
+The fast branch's dominant run now scans ASCII members with the byte table
+before handing the rest of the run to the prepared UTF-8 automaton. Once the
+automaton table is prepared, ASCII letters were paying its state-indexed
+dependency chain even though the ASCII table answers the same question with
+independent loads. The new `Run.runEndAsciiFirst` is used only by the fast
+branch, and its first-byte check keeps non-ASCII run starts (CJK) at the old
+cost. `find Qwen tokenizer` improves 1.04x in a focused seven-round harness
+and 1.05x in the full 67-case interleave with the 67-case median at 1.00x;
+the comparison against Rust moves from 1.52x to 1.67x. See
+[ASCII-first run scan](benchmarks/ascii-first-run-scan.md).

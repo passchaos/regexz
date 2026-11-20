@@ -50,6 +50,20 @@ pub const Run = struct {
         return self.unicodeRunEnd(allocator, input, end);
     }
 
+    /// Fast-branch run scan: ASCII members use the byte table even when the
+    /// UTF-8 table is prepared, and the automaton continues at the first
+    /// non-ASCII byte. ASCII loads are independent, so this beats the
+    /// state-indexed table for the mostly-ASCII tokenizer text.
+    pub fn runEndAsciiFirst(self: *Run, allocator: std.mem.Allocator, input: []const u8, offset: usize) usize {
+        var end = offset;
+        if (end < input.len and input[end] < 0x80) {
+            while (end < input.len and self.ascii[input[end]]) end += 1;
+            if (end >= input.len or input[end] < 0x80) return end;
+        }
+        if (self.table) |*table| return table.runEnd(input, end);
+        return self.unicodeRunEnd(allocator, input, end);
+    }
+
     noinline fn unicodeRunEnd(self: *Run, allocator: std.mem.Allocator, input: []const u8, offset: usize) usize {
         var end = offset;
         while (end < input.len) {
