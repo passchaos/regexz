@@ -123,8 +123,23 @@ test "capture run reconstructs captures from serialized programs" {
 }
 
 test "Unicode capture runs agree with general search at every byte offset" {
-    const patterns = [_][]const u8{ "(猫+)", "(\\p{L}+)", "((\\p{Greek}+))", "()(\\p{Han}+)()", "(?i)(k+)", "([^0-9]+)" };
-    const inputs = [_][]const u8{ "", "abc 你好 Ελληνικά", "猫猫 x 猫", "123 ΔσΩ 123", "kKK kk", "\xffa\x80猫", "\xe4a", "猫\xe4\xb8", "x\xed\xa0\x80a" };
+    const patterns = [_][]const u8{ "(猫+)", "(\\p{L}+)", "((\\p{Greek}+))", "()(\\p{Han}+)()", "(?i)(k+)", "([^0-9]+)", "(\\p{Nd}+)", "(\\P{L}+)" };
+    const inputs = [_][]const u8{
+        "",
+        "abc 你好 Ελληνικά",
+        "猫猫 x 猫",
+        "123 ΔσΩ 123",
+        "kKK kk",
+        "\xffa\x80猫",
+        "\xe4a",
+        "猫\xe4\xb8",
+        "x\xed\xa0\x80a",
+        "Ελληνικά café ١٢٣ 😀𐐀 𠀀猫猫",
+        "你好世界😀𠀀１２３ Σσ",
+        "😀𠀀猫\xef\xbf",
+        "\xf0\x90\x80\x80",
+        "\xe0\x80\x80\xed\xa0\x80\xf4\x90\x80\x80Σ猫",
+    };
     for (patterns) |pattern| {
         var value = try regex.Regex.init(gpa, pattern, .{});
         defer value.deinit();
@@ -133,8 +148,29 @@ test "Unicode capture runs agree with general search at every byte offset" {
         var reference = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
         defer reference.deinit();
         reference.fast_kind = .none;
+        reference.search_dfa_ineligible = true;
         for (inputs) |input| for (0..input.len + 2) |from| try compare(input, from, &direct, &reference);
     }
+}
+
+test "Unicode capture run rejected prefixes retain allocation-free search" {
+    var value = try regex.Regex.init(gpa, "()(\\p{Han}+)()", .{});
+    defer value.deinit();
+    var counter = std.testing.FailingAllocator.init(gpa, .{ .fail_index = 1 });
+    var workspace = try regex.ReplaceWorkspace.init(counter.allocator(), value.program, .{});
+    defer workspace.deinit();
+    const input = "Ελληνικά😀𐐀 " ** 32 ++ "𠀀猫";
+    for ([_]usize{ 0, 1, 2, 3 }) |from| {
+        const match = (try workspace.find(input, from)).?;
+        try std.testing.expectEqualStrings("", match.group(input, 1).?);
+        try std.testing.expectEqualStrings("𠀀猫", match.group(input, 2).?);
+        try std.testing.expectEqualStrings("", match.group(input, 3).?);
+    }
+    try std.testing.expectEqual(@as(usize, 1), counter.allocations);
+    try std.testing.expect(!counter.has_induced_failure);
+    try std.testing.expect(workspace.search_dfa_workspace == null);
+    try std.testing.expectEqual(@as(usize, 0), workspace.trail.capacity);
+    try std.testing.expectEqual(@as(usize, 0), workspace.choices.capacity);
 }
 
 test "Unicode capture run budgets count runes rather than bytes" {
@@ -148,7 +184,7 @@ test "Unicode capture run budgets count runes rather than bytes" {
             var reference = try regex.ReplaceWorkspace.init(gpa, value.program, limits);
             defer reference.deinit();
             reference.fast_kind = .none;
-            for ([_][]const u8{ "猫", "猫猫", "ΔσΩ", "abc", "123", "x\xff猫" }) |input| try compare(input, 0, &direct, &reference);
+            for ([_][]const u8{ "猫", "猫猫", "ΔσΩ", "abc", "123", "x\xff猫", "😀𐐀𠀀猫", "\xe0\x80\x80😀𠀀猫" }) |input| try compare(input, 0, &direct, &reference);
         }
     }
 }

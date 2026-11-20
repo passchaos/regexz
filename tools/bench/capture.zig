@@ -41,8 +41,8 @@ fn bench(io: std.Io, out: *std.Io.Writer, name: []const u8, pattern: []const u8,
     std.mem.doNotOptimizeAway(try cold.find(input, 0));
     const first_allocations = counter.allocations - init_allocations;
     const ns = @as(f64, @floatFromInt(samples[samples.len / 2])) / iterations;
-    try out.print("{s:<24} {d:>12.1} ns/pass first_find_allocations={d} first_requested_bytes={d} init_allocations={d} init_bytes={d} trail_capacity={d} choice_capacity={d}\n", .{
-        name, ns, first_allocations, counter.allocated_bytes - init_bytes, init_allocations, init_bytes, cold.trail.capacity, cold.choices.capacity,
+    try out.print("{s:<24} {d:>12.1} ns/pass input_bytes={d} first_find_allocations={d} first_requested_bytes={d} init_allocations={d} init_bytes={d} trail_capacity={d} choice_capacity={d}\n", .{
+        name, ns, input.len, first_allocations, counter.allocated_bytes - init_bytes, init_allocations, init_bytes, cold.trail.capacity, cold.choices.capacity,
     });
 }
 
@@ -63,6 +63,14 @@ pub fn main() !void {
     defer runs.deinit(gpa);
     var unicode_runs: std.ArrayList(u8) = .empty;
     defer unicode_runs.deinit(gpa);
+    var han_misses: std.ArrayList(u8) = .empty;
+    defer han_misses.deinit(gpa);
+    var greek_misses: std.ArrayList(u8) = .empty;
+    defer greek_misses.deinit(gpa);
+    var sparse_han: std.ArrayList(u8) = .empty;
+    defer sparse_han.deinit(gpa);
+    var long_han: std.ArrayList(u8) = .empty;
+    defer long_han.deinit(gpa);
     for (0..4000) |_| {
         try words.appendSlice(gpa, "aaa bbb ");
         try digits.appendSlice(gpa, "12345 x ");
@@ -71,6 +79,10 @@ pub fn main() !void {
     for (0..2000) |_| {
         try runs.appendSlice(gpa, "hello123XYZ ");
         try unicode_runs.appendSlice(gpa, "Σσ١٢猫狗 ");
+        try han_misses.appendSlice(gpa, "Ελληνικά café ١٢٣ 😀𐐀 ");
+        try greek_misses.appendSlice(gpa, "你好世界😀𠀀１２３ ");
+        try sparse_han.appendSlice(gpa, "Ελληνικά😀𐐀𠀀猫 ");
+        try long_han.appendSlice(gpa, "猫𠀀");
     }
     try bench(io, out, "word capture", "(\\w+)", words.items);
     try bench(io, out, "literal capture", "(a+)", words.items);
@@ -89,5 +101,14 @@ pub fn main() !void {
     try bench(io, out, "Unicode empty captures", "()(\\p{Greek}+)(\\p{Nd}+)(\\p{Han}+)()", unicode_runs.items);
     try bench(io, out, "overlapping run control", "([a-z0-9]+)([0-9]+)([A-Z]+)", runs.items);
     try bench(io, out, "no-match control", "([A-Z]+)", words.items);
+    try bench(io, out, "Han mixed-script miss", "(\\p{Han}+)", han_misses.items);
+    try bench(io, out, "Greek mixed-script miss", "(\\p{Greek}+)", greek_misses.items);
+    try bench(io, out, "Han sparse captures", "()(\\p{Han}+)()", sparse_han.items);
+    try bench(io, out, "Han long capture", "(\\p{Han}+)", long_han.items);
+    try bench(io, out, "Han ASCII miss", "(\\p{Han}+)", words.items);
+    try han_misses.appendSlice(gpa, "𠀀猫猫");
+    try greek_misses.appendSlice(gpa, "Σσ");
+    try bench(io, out, "Han after long prefix", "(\\p{Han}+)", han_misses.items);
+    try bench(io, out, "Greek after long prefix", "((\\p{Greek}+))", greek_misses.items);
     try out.flush();
 }

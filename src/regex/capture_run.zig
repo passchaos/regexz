@@ -99,17 +99,26 @@ pub const Plan = struct {
         var start = from;
         while (start < input.len) {
             start = first.indexOf(input, start) orelse return null;
-            const first_end = self.set.matchAdvance(input, start) orelse {
-                const length = std.unicode.utf8ByteSequenceLength(input[start]) catch 1;
-                var advance: usize = 1;
-                if (length <= input.len - start) {
-                    if (std.unicode.utf8Decode(input[start..][0..length])) |_| {
-                        advance = length;
-                    } else |_| {}
-                }
-                start += advance;
+            // Decode a candidate once. Its width advances rejected valid
+            // runes as well as matches; malformed input advances one byte.
+            const byte = input[start];
+            const length = if (byte < 0x80) 1 else std.unicode.utf8ByteSequenceLength(byte) catch {
+                start += 1;
                 continue;
             };
+            if (length > input.len - start) {
+                start += 1;
+                continue;
+            }
+            const rune: u21 = if (byte < 0x80) byte else std.unicode.utf8Decode(input[start..][0..length]) catch {
+                start += 1;
+                continue;
+            };
+            const first_end = start + length;
+            if (!self.set.matches(rune)) {
+                start = first_end;
+                continue;
+            }
             if (!linear_fallback and max_steps < self.instruction_steps) {
                 steps.* = max_steps +| 1;
                 return error.RegexLimitExceeded;
