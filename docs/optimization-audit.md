@@ -622,3 +622,14 @@ scan the run before the optional prefix for disjoint ASCII sets regressed
 rounds. The prepared byte automaton and the greedy prefix probe stay as they
 are; the remaining CJK time is mostly the run scan and the per-token prefix
 probe, and both resist these micro-reorders.
+
+The replacement workspace pool now holds a pointer instead of a value.
+`ReplaceWorkspace` is 7.8 KiB because it inlines the byte tables and search
+state, so every owning `findAll` and every pooled `replaceAll` moved it into
+and out of the iterator. The pool allocates the workspace once per program,
+`Matches` shrinks from 7,856 to 56 bytes, and the comparison harness improves
+owning `findAll` 1.06x (45.3 -> 42.7 us) while the borrowed control stays at
+1.00x; `replaceAll a+` improves 1.08x and `\A|\z` 1.29x with the other 15
+cases at a 1.00x median. Owning `findAll` now matches the borrowed form
+(1.52x ahead of Rust) and the zero-width replacement reaches 2.66x. See
+[pooled replacement workspaces](benchmarks/replace-workspace-pool.md).

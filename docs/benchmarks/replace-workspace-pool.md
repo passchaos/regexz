@@ -57,3 +57,26 @@ zig fmt --check src/root.zig
 Five fuzzer seeds (400 cases each) pass. New tests cover repeated pooled
 calls, switching between page and smp allocators, eviction when another
 program replaces the slot, and the `findAll` stale-slot path.
+
+## Pointer pool
+
+The pool used to hold a `ReplaceWorkspace` value. That struct is 7,808 bytes
+because it inlines four 256-entry byte tables and the prepared search state,
+so every owning `findAll` and every pooled `replaceAll` moved it into and out
+of the iterator. The pool now stores a `*ReplaceWorkspace` allocated once per
+program: `Matches` drops from 7,856 to 56 bytes and no call copies the struct.
+
+The comparison harness ran seven alternating rounds; raw samples and
+executable identities are in
+[`pointer-workspace-pool.json`](pointer-workspace-pool.json):
+
+| Case | Before, ns/iter | After, ns/iter | Speedup |
+| --- | ---: | ---: | ---: |
+| findAll Qwen (owning) | 45,254.2 | 42,690.0 | 1.06x |
+| findAll Qwen (borrowed) control | 42,944.2 | 43,105.0 | 1.00x |
+| replaceAll `a+` -> `x` | 22,876.5 | 21,208.3 | 1.08x |
+| replaceAll `\A|\z` -> `X` | 3,372.3 | 2,613.8 | 1.29x |
+
+The 15 other cases keep a 1.00x median. Owning `findAll` now matches the
+borrowed form, and the zero-width replacement reaches 2.66x ahead of Rust
+(see the [comparison](rust-comparison.md)).

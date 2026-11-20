@@ -143,7 +143,7 @@ inline fn findLiteral(input: []const u8, from: usize, literal: []const u8) ?usiz
 pub const Matches = struct {
     input: []const u8,
     /// Owned workspace for `Regex.findAll`; unused when `borrowed` is set.
-    owned: ReplaceWorkspace = undefined,
+    owned: ?*ReplaceWorkspace = null,
     /// Caller workspace for `Regex.findAllWith`.
     borrowed: ?*ReplaceWorkspace = null,
     /// Program id when the owned workspace came from the process pool.
@@ -152,7 +152,7 @@ pub const Matches = struct {
     done: bool = false,
     pub fn next(self: *Matches) Error!?Match {
         if (self.done) return null;
-        const workspace = self.borrowed orelse &self.owned;
+        const workspace = self.borrowed orelse self.owned.?;
         const found = try workspace.find(self.input, self.offset) orelse {
             self.done = true;
             return null;
@@ -168,10 +168,12 @@ pub const Matches = struct {
     }
     pub fn deinit(self: *Matches) void {
         if (self.borrowed == null) {
-            if (self.pool_id != 0) {
-                returnPooledWorkspace(self.pool_id, self.owned);
-            } else {
-                self.owned.deinit();
+            if (self.owned) |workspace| {
+                if (self.pool_id != 0) {
+                    returnPooledWorkspace(self.pool_id, workspace);
+                } else {
+                    destroyWorkspace(workspace);
+                }
             }
         }
         self.* = undefined;
@@ -254,7 +256,7 @@ fn nextProgramId() u64 {
 /// Single process-wide pooled workspace for `Regex.findAll` when the caller
 /// uses a process-lifetime allocator. The owning iterator returns its
 /// workspace here so the next call starts with warmed search caches.
-const PooledWorkspace = struct { program_id: u64, workspace: ReplaceWorkspace };
+const PooledWorkspace = struct { program_id: u64, workspace: *ReplaceWorkspace };
 var pooled_mutex: std.atomic.Mutex = .unlocked;
 var pooled_workspace: ?PooledWorkspace = null;
 
@@ -280,12 +282,21 @@ fn sameAllocator(a: std.mem.Allocator, b: std.mem.Allocator) bool {
 /// is allocated with the workspace's allocator and freed by the caller, so
 /// callers that return allocations pass their allocator as `required` and
 /// never receive a workspace whose allocations belong to another one.
-fn takePooledWorkspace(id: u64, required: ?std.mem.Allocator) ?ReplaceWorkspace {
+/// Release a workspace allocated with its own allocator. The struct is large
+/// (the inline byte tables), so the pool stores pointers instead of copying
+/// it through every take and return.
+fn destroyWorkspace(workspace: *ReplaceWorkspace) void {
+    const allocator = workspace.allocator;
+    workspace.deinit();
+    allocator.destroy(workspace);
+}
+
+fn takePooledWorkspace(id: u64, required: ?std.mem.Allocator) ?*ReplaceWorkspace {
     if (id == 0) return null;
     poolLock();
     const entry = pooled_workspace;
     var taken = false;
-    var stale: ?ReplaceWorkspace = null;
+    var stale: ?*ReplaceWorkspace = null;
     if (entry) |value| {
         if (value.program_id == id) {
             if (required == null or sameAllocator(value.workspace.allocator, required.?)) {
@@ -301,17 +312,13 @@ fn takePooledWorkspace(id: u64, required: ?std.mem.Allocator) ?ReplaceWorkspace 
     }
     poolUnlock();
     if (taken) return entry.?.workspace;
-    if (stale) |value| {
-        var copy = value;
-        copy.deinit();
-    }
+    if (stale) |value| destroyWorkspace(value);
     return null;
 }
 
-fn returnPooledWorkspace(id: u64, workspace: ReplaceWorkspace) void {
+fn returnPooledWorkspace(id: u64, workspace: *ReplaceWorkspace) void {
     if (id == 0) {
-        var copy = workspace;
-        copy.deinit();
+        destroyWorkspace(workspace);
         return;
     }
     poolLock();
@@ -321,8 +328,7 @@ fn returnPooledWorkspace(id: u64, workspace: ReplaceWorkspace) void {
         return;
     }
     poolUnlock();
-    var copy = workspace;
-    copy.deinit();
+    destroyWorkspace(workspace);
 }
 
 fn clearPooledWorkspace(id: u64) void {
@@ -333,8 +339,7 @@ fn clearPooledWorkspace(id: u64) void {
     poolUnlock();
     const value = entry orelse return;
     if (value.program_id != id) return;
-    var stale = value.workspace;
-    stale.deinit();
+    destroyWorkspace(value.workspace);
 }
 
 const CompileBlock = struct { allocator: std.mem.Allocator, bytes: []u8 };
@@ -566,11 +571,10 @@ pub const Regex = struct {
                 return .{ .input = input, .owned = workspace, .pool_id = pool_id };
             }
         }
-        return .{
-            .input = input,
-            .owned = try ReplaceWorkspace.init(gpa, self.program, self.limits),
-            .pool_id = pool_id,
-        };
+        const workspace = try gpa.create(ReplaceWorkspace);
+        errdefer gpa.destroy(workspace);
+        workspace.* = try ReplaceWorkspace.init(gpa, self.program, self.limits);
+        return .{ .input = input, .owned = workspace, .pool_id = pool_id };
     }
     /// Iterate with a caller-owned workspace. The workspace must have been
     /// initialized from this regex's program and limits; the iterator does not
@@ -639,11 +643,12 @@ pub const Regex = struct {
     pub fn replaceAll(self: *const Regex, gpa: std.mem.Allocator, input: []const u8, substitution: []const u8) Error![]u8 {
         const pool_id: u64 = if (poolable(gpa)) self.program_id else 0;
         if (takePooledWorkspace(pool_id, gpa)) |workspace| {
-            var pooled = workspace;
-            defer returnPooledWorkspace(pool_id, pooled);
-            return pooled.replaceAll(input, substitution);
+            defer returnPooledWorkspace(pool_id, workspace);
+            return workspace.replaceAll(input, substitution);
         }
-        var workspace = try ReplaceWorkspace.init(gpa, self.program, self.limits);
+        const workspace = try gpa.create(ReplaceWorkspace);
+        errdefer gpa.destroy(workspace);
+        workspace.* = try ReplaceWorkspace.init(gpa, self.program, self.limits);
         defer returnPooledWorkspace(pool_id, workspace);
         return workspace.replaceAll(input, substitution);
     }
@@ -651,11 +656,12 @@ pub const Regex = struct {
     pub fn replacen(self: *const Regex, gpa: std.mem.Allocator, input: []const u8, limit: usize, substitution: []const u8) Error![]u8 {
         const pool_id: u64 = if (poolable(gpa)) self.program_id else 0;
         if (takePooledWorkspace(pool_id, gpa)) |workspace| {
-            var pooled = workspace;
-            defer returnPooledWorkspace(pool_id, pooled);
-            return pooled.replacen(input, limit, substitution);
+            defer returnPooledWorkspace(pool_id, workspace);
+            return workspace.replacen(input, limit, substitution);
         }
-        var workspace = try ReplaceWorkspace.init(gpa, self.program, self.limits);
+        const workspace = try gpa.create(ReplaceWorkspace);
+        errdefer gpa.destroy(workspace);
+        workspace.* = try ReplaceWorkspace.init(gpa, self.program, self.limits);
         defer returnPooledWorkspace(pool_id, workspace);
         return workspace.replacen(input, limit, substitution);
     }
