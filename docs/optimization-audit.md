@@ -228,6 +228,12 @@ building a workspace and searching once per part. The 22 KiB whitespace split
 improves 2.20x; other patterns keep the general `findAll` path. See
 [split over set runs](benchmarks/split-set-runs.md).
 
+ASCII streaming chains now consume the bytes of each phase in a tight loop and
+switch phase once per boundary instead of once per byte. The 216 KiB
+`[a-z]+ [a-z]+` stream improves 1.58x; single-set streams, the Han chain and
+the search controls stay within host noise. See
+[tight streaming chain phase loops](benchmarks/stream-chain-ascii-loops.md).
+
 Further work on these candidates needs fresh measurements before implementation.
 Current warmed throughput does not establish their cold-start cost or the
 benefit of replacing their fallback paths.

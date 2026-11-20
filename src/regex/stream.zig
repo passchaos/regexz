@@ -534,6 +534,25 @@ pub const Scanner = struct {
         const chain = self.simple_chain.?;
         while (true) {
             if (self.scan >= self.buffer.items.len) break;
+            if (self.chain_ascii) {
+                // Consume the bytes that keep the current phase, so the phase
+                // switch runs once per boundary instead of once per byte.
+                const items = self.buffer.items;
+                var scan = self.scan;
+                switch (self.chain_phase) {
+                    .idle => {
+                        while (scan < items.len and items[scan] < 0x80 and !self.chain_a_table[items[scan]]) scan += 1;
+                    },
+                    .run_a => {
+                        while (scan < items.len and items[scan] < 0x80 and self.chain_a_table[items[scan]]) scan += 1;
+                    },
+                    .run_b => {
+                        while (scan < items.len and items[scan] < 0x80 and self.chain_b_table[items[scan]]) scan += 1;
+                    },
+                }
+                self.scan = scan;
+                if (scan >= items.len) break;
+            }
             const abs = self.buffer_base + self.scan;
             if (self.chain_ascii and self.buffer.items[self.scan] < 0x80) {
                 const byte = self.buffer.items[self.scan];
