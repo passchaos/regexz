@@ -92,6 +92,19 @@ fn indexOfLiteral(input: []const u8, start: usize, needle: []const u8) ?usize {
     return null;
 }
 
+/// Find `byte` at or after `start`. Delimiter pairs in tags and quoted
+/// strings are short, where a scalar scan beats the vector search's setup;
+/// long gaps still use the vector scan.
+inline fn indexOfDelimiter(input: []const u8, start: usize, byte: u8) ?usize {
+    const limit = @min(input.len, start + 32);
+    var offset = start;
+    while (offset < limit) : (offset += 1) {
+        if (input[offset] == byte) return offset;
+    }
+    if (limit >= input.len) return null;
+    return std.mem.indexOfScalarPos(u8, input, limit, byte);
+}
+
 pub const Workspace = struct {
     allocator: std.mem.Allocator,
     program: Program,
@@ -1168,8 +1181,8 @@ pub const Workspace = struct {
     fn findDelimitedRun(self: *Workspace, delimited: shapes.Delimited, input: []const u8, search_start: usize) ?Match {
         var search = search_start;
         while (true) {
-            const open = std.mem.indexOfScalarPos(u8, input, search, delimited.open) orelse return null;
-            const close = std.mem.indexOfScalarPos(u8, input, open + 1, delimited.close) orelse return null;
+            const open = indexOfDelimiter(input, search, delimited.open) orelse return null;
+            const close = indexOfDelimiter(input, open + 1, delimited.close) orelse return null;
             if (!delimited.non_empty or close > open + 1) {
                 self.slots[0] = open;
                 self.slots[1] = close + 1;

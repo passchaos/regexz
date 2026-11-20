@@ -215,6 +215,13 @@ across chunk boundaries. The 191 KiB Han chain improves 2.40x; ASCII chains
 and the search controls stay within host noise. See
 [streaming chain runs](benchmarks/stream-chain-runs.md).
 
+The delimited fast path (`"[^"]*"`, `<[^>]+>`) now scans the first 32 bytes of
+each delimiter search scalar-ly and falls back to the vector scan only for
+longer gaps, where the SIMD setup no longer dominates. Short-span HTML tag
+searches improve 2.57x and JSON string literals 2.50x; other fast-path
+controls stay within host noise. See
+[short-span delimiter scans](benchmarks/delimited-short-spans.md).
+
 Further work on these candidates needs fresh measurements before implementation.
 Current warmed throughput does not establish their cold-start cost or the
 benefit of replacing their fallback paths.
