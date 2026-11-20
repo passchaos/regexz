@@ -78,6 +78,11 @@ pub const PairSet = struct {
     first: FirstFilter = undefined,
     use_first: bool = false,
     candidates: ?nibble_filter.Filter = null,
+    /// Distinct third-byte splats, applied only when every literal has a
+    /// third byte. Candidate pairs usually diverge there.
+    third_splats: [32]Vec = undefined,
+    third_count: u8 = 0,
+    use_third: bool = false,
 
     /// Returns null unless every literal is at least two bytes (a shorter
     /// literal could occur without a pair hit).
@@ -87,6 +92,7 @@ pub const PairSet = struct {
         var first = model.FirstSet{ .nonascii = false };
         var ascii_count: usize = 0;
         var nonascii = false;
+        set.use_third = true;
         for (literals) |literal| {
             if (literal.len < 2) return null;
             const pair = (@as(u16, literal[0]) << 8) | literal[1];
@@ -101,6 +107,21 @@ pub const PairSet = struct {
                 }
             } else {
                 nonascii = true;
+            }
+            if (literal.len < 3) {
+                set.use_third = false;
+            } else if (set.use_third) {
+                var seen = false;
+                for (set.third_splats[0..set.third_count]) |splat| {
+                    if (splat[0] == literal[2]) {
+                        seen = true;
+                        break;
+                    }
+                }
+                if (!seen) {
+                    set.third_splats[set.third_count] = @splat(literal[2]);
+                    set.third_count += 1;
+                }
             }
         }
         // Sparse sets skip most chunks; dense sets keep the plain byte loop.
@@ -130,11 +151,16 @@ pub const PairSet = struct {
 
     fn matchesAt(self: *const PairSet, input: []const u8, offset: usize) bool {
         const first = input[offset];
-        const pair = (@as(u16, first) << 8) | input[offset + 1];
+        const second = input[offset + 1];
+        const pair = (@as(u16, first) << 8) | second;
         if (self.bits[pair >> 3] & (@as(u8, 1) << @intCast(pair & 7)) == 0) return false;
         for (self.literals) |literal| {
-            if (literal[0] != first or literal[1] != input[offset + 1]) continue;
-            if (literal.len <= input.len - offset and std.mem.eql(u8, input[offset..][0..literal.len], literal)) return true;
+            if (literal.len > input.len - offset) continue;
+            if (literal[0] != first or literal[1] != second) continue;
+            // Most shared-prefix candidates diverge at the third byte; check
+            // it before the full comparison.
+            if (literal.len > 2 and literal[2] != input[offset + 2]) continue;
+            if (std.mem.eql(u8, input[offset..][0..literal.len], literal)) return true;
         }
         return false;
     }
@@ -142,10 +168,22 @@ pub const PairSet = struct {
     fn indexOfAnyVector(self: *const PairSet, filter: *const nibble_filter.Filter, input: []const u8, start: usize) ?usize {
         var offset = start;
         while (offset + 17 <= input.len) : (offset += 16) {
-            const mask = filter.candidates(input[offset..][0..16].*, input[offset + 1 ..][0..16].*);
+            var mask = filter.candidates(input[offset..][0..16].*, input[offset + 1 ..][0..16].*);
             // The absence case is the common one; a reduce avoids packing the
             // lane mask when no position can start a literal.
             if (!@reduce(.Or, mask)) continue;
+            // The last block has no third-byte lane; skipping the filter
+            // there only leaves more candidates for exact verification.
+            if (self.use_third and offset + 18 <= input.len) {
+                const third: Vec = input[offset + 2 ..][0..16].*;
+                var allowed = third == self.third_splats[0];
+                var third_index: usize = 1;
+                while (third_index < self.third_count) : (third_index += 1) {
+                    allowed = allowed | (third == self.third_splats[third_index]);
+                }
+                mask = mask & allowed;
+                if (!@reduce(.Or, mask)) continue;
+            }
             const bits = laneMask(mask);
             if (bits == 0xFFFF) {
                 // Every position needs an exact probe. Avoid repeated SIMD
@@ -176,8 +214,10 @@ pub const PairSet = struct {
                 continue;
             }
             for (self.literals) |literal| {
+                if (literal.len > input.len - offset) continue;
                 if (literal[0] != first or literal[1] != input[offset + 1]) continue;
-                if (literal.len <= input.len - offset and std.mem.eql(u8, input[offset..][0..literal.len], literal)) return offset;
+                if (literal.len > 2 and literal[2] != input[offset + 2]) continue;
+                if (std.mem.eql(u8, input[offset..][0..literal.len], literal)) return offset;
             }
             offset += 1;
         }
@@ -479,6 +519,11 @@ pub const MultiFilter = struct {
     literals: []const []const u8,
     pairs: [max_pairs]u16 = undefined,
     pair_count: u8 = 0,
+    /// Third-byte splats, applied only when every literal has a third byte.
+    /// Shared-prefix candidates usually diverge there.
+    third_splats: [max_pairs]Vec = undefined,
+    third_count: u8 = 0,
+    use_third: bool = false,
 
     const max_pairs = 16;
 
@@ -487,6 +532,7 @@ pub const MultiFilter = struct {
         if (literals[0].len < 2) return null;
         var filter = MultiFilter{ .literals = literals };
         const shared_first = literals[0][0];
+        filter.use_third = true;
         for (literals) |literal| {
             // The pair filter pays off when the first byte is shared (and thus
             // useless as a prefilter); otherwise the cheaper first-byte SIMD
@@ -505,14 +551,34 @@ pub const MultiFilter = struct {
                 filter.pairs[filter.pair_count] = pair;
                 filter.pair_count += 1;
             }
+            if (literal.len < 3) {
+                filter.use_third = false;
+            } else if (filter.use_third) {
+                var seen = false;
+                for (filter.third_splats[0..filter.third_count]) |splat| {
+                    if (splat[0] == literal[2]) {
+                        seen = true;
+                        break;
+                    }
+                }
+                if (!seen) {
+                    filter.third_splats[filter.third_count] = @splat(literal[2]);
+                    filter.third_count += 1;
+                }
+            }
         }
         if (filter.pair_count == 0) return null;
         return filter;
     }
 
     fn matchesAt(self: *const MultiFilter, input: []const u8, offset: usize) bool {
+        const second = input[offset + 1];
         for (self.literals) |literal| {
             if (offset + literal.len > input.len) continue;
+            if (literal[1] != second) continue;
+            // Candidates already share the first byte; most diverge at the
+            // third, so check it before the full comparison.
+            if (literal.len > 2 and literal[2] != input[offset + 2]) continue;
             if (std.mem.eql(u8, input[offset..][0..literal.len], literal)) return true;
         }
         return false;
@@ -541,7 +607,19 @@ pub const MultiFilter = struct {
             while (pair_index < count) : (pair_index += 1) {
                 seconds = seconds | (next == second_splats[pair_index]);
             }
-            const mask = first_mask & seconds;
+            var mask = first_mask & seconds;
+            // The last block has no third-byte lane; skipping the filter
+            // there only leaves more candidates for exact verification.
+            if (self.use_third and offset + 18 <= input.len and @reduce(.Or, mask)) {
+                const third_raw: [16]u8 = input[offset + 2 ..][0..16].*;
+                const third: Vec = @bitCast(third_raw);
+                var allowed = third == self.third_splats[0];
+                var third_index: usize = 1;
+                while (third_index < self.third_count) : (third_index += 1) {
+                    allowed = allowed | (third == self.third_splats[third_index]);
+                }
+                mask = mask & allowed;
+            }
             const bits = laneMask(mask);
             if (bits == 0) continue;
             if (bits == 0xFFFF) {
