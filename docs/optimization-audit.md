@@ -253,6 +253,12 @@ and the fixed replacement. The 24 KiB `a+` → `x` replacement improves 1.34x;
 substitutions with syntax and other patterns keep the general path. See
 [replacement over set runs](benchmarks/replace-set-runs.md).
 
+A reproducible comparison harness now runs the same workloads through regexz
+and Rust's `regex` crate (`tools/compare`). On this host regexz is faster on
+every measured case: 7.43x on tokenizer compilation, 1.26–1.52x on tokenizer
+scans, and 2.46–2.91x on HTML, URL, JSON string and number scans. See
+[comparison with Rust's regex](benchmarks/rust-comparison.md).
+
 Further work on these candidates needs fresh measurements before implementation.
 Current warmed throughput does not establish their cold-start cost or the
 benefit of replacing their fallback paths.
