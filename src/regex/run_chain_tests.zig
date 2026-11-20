@@ -240,3 +240,69 @@ test "nullable and trailing-nullable run chains agree with the interpreter" {
         try compare("(\\p{Greek}+)(\\p{Nd}*)", buffer[0..length]);
     }
 }
+
+test "overlapping run chains use the forward scan only when complete" {
+    const accepted = [_][]const u8{
+        "([a-z]+)([a-z0-9]*)([A-Z]+)",
+        "(\\p{Greek}+)([\\p{Greek}\\p{Nd}]*)(\\p{Han}+)",
+        "(a+)(a*)(b+)",
+        "([a-z]+)([0-9]*)([A-Z]+)",
+    };
+    const rejected = [_][]const u8{
+        "([a-z]+)([a-z]*)([a-z]+)",
+        "([a-z]+)([a-z]+)([A-Z]+)",
+        "(a*)(b*)",
+    };
+    for (accepted) |pattern| {
+        var value = try regex.Regex.init(gpa, pattern, .{});
+        defer value.deinit();
+        var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+        defer workspace.deinit();
+        try std.testing.expect(workspace.fast_kind == .run_chain);
+    }
+    for (rejected) |pattern| {
+        var value = try regex.Regex.init(gpa, pattern, .{});
+        defer value.deinit();
+        var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+        defer workspace.deinit();
+        // `(a*)(b*)` is a valid nullable chain, the other two need
+        // backtracking and must stay on the general engine.
+        if (std.mem.eql(u8, pattern, "(a*)(b*)")) {
+            try std.testing.expect(workspace.fast_kind == .run_chain);
+        } else {
+            try std.testing.expect(workspace.fast_kind != .run_chain);
+        }
+    }
+    const inputs = [_][]const u8{
+        "",
+        "hello123XYZ",
+        "helloXYZ",
+        "hello1XYZ hello12XYZ hello123xYZ",
+        "123ABC",
+        "aaa111ZZ",
+        "a1A b2B",
+        "Σσ١٢猫狗 Σσ猫狗 猫狗 ",
+        "Σ١٢猫狗",
+        "Σσ\xff١٢猫狗",
+    };
+    for (inputs) |input| {
+        try compare("([a-z]+)([a-z0-9]*)([A-Z]+)", input);
+        try compare("(\\p{Greek}+)([\\p{Greek}\\p{Nd}]*)(\\p{Han}+)", input);
+        try compare("(a+)(a*)(b+)", input);
+    }
+    var random = std.Random.DefaultPrng.init(191);
+    const alphabet = [_][]const u8{ "a", "b", "0", "1", "A", "B", "Σ", "σ", "١", "猫", "狗", " ", "\n" };
+    var buffer: [96]u8 = undefined;
+    for (0..200) |_| {
+        var length: usize = 0;
+        const runes = random.random().uintLessThan(usize, 24);
+        for (0..runes) |_| {
+            const value = alphabet[random.random().uintLessThan(usize, alphabet.len)];
+            if (length + value.len > buffer.len) break;
+            @memcpy(buffer[length..][0..value.len], value);
+            length += value.len;
+        }
+        try compare("([a-z]+)([a-z0-9]*)([A-Z]+)", buffer[0..length]);
+        try compare("(a+)(a*)(b+)", buffer[0..length]);
+    }
+}

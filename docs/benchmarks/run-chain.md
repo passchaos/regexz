@@ -113,6 +113,37 @@ The nullable chains record no choices or trails; the remaining cases stay
 within the host's spread. The fully nullable shape requires the benchmark
 loop to advance one rune per empty match, which the capture tests mirror.
 
+## Forward overlapping runs
+
+Overlapping sets defeat the backward walk because the greedy order assigns
+the overlap to the earlier run. They are accepted in a forward mode instead
+when the first run is mandatory and every mandatory run's set is disjoint from
+all preceding sets. Then the greedy maxima are complete: backtracking an
+earlier run can only start a later run inside a set it cannot match, so a
+failed mandatory run cannot be rescued by backtracking and the scan returns to
+the general engine. The scan starts at the first first-run member and extends
+every run forward; the control shapes that need backtracking
+(`([a-z]+)([a-z]*)([a-z]+)`) reject the shape.
+
+Measured separately against `7effba4` with the same method (five interleaved
+executions; raw samples in
+[`run-chain-forward.json`](run-chain-forward.json)):
+
+| Case | Before, ns/pass | After, ns/pass | Speedup |
+| --- | ---: | ---: | ---: |
+| optional overlapping run (`([a-z]+)([a-z0-9]*)([A-Z]+)`) | 191,650.8 | 114,621.7 | 1.67x |
+| overlap mandatory control (`([a-z]+)([a-z]*)([a-z]+)`) | 433,220.4 | 468,859.2 | 0.92x |
+| optional ASCII captures | 153,247.1 | 163,688.3 | 0.94x |
+| nullable greedy captures | 61,364.6 | 64,625.8 | 0.95x |
+| overlap nullable control (`(a*)(a*)`) | 124,562.9 | 130,166.7 | 0.96x |
+| Han capture control | 21,568.3 | 22,029.6 | 0.98x |
+| trailing nullable capture | 42,014.6 | 40,801.3 | 1.03x |
+| sandwiched nullable captures | 59,564.2 | 56,335.0 | 1.06x |
+
+The overlapping case improves in every round. The mandatory-overlap control
+is rejected by the detector and keeps the interpreter; its 0.92x median comes
+from a single slow round and stays within the host's spread.
+
 ## Validation
 
 ```sh
@@ -125,8 +156,8 @@ zig fmt --check src/regex/shapes.zig src/regex/replace.zig src/regex/run_chain_t
 ```
 
 The new tests cover detection, run and empty capture boundaries, malformed
-UTF-8, greedy, lazy, fully nullable and trailing-nullable run forms (including
-empty-match iteration), and randomized differential comparison against the
-same program pinned to the interpreter. The two capture replay suites were
-updated: their disjoint-run cases now assert the run-chain path, and their
-strict-budget cases pin both workspaces to the interpreter.
+UTF-8, greedy, lazy, fully nullable, trailing-nullable and forward overlapping
+run forms (including empty-match iteration), and randomized differential
+comparison against the same program pinned to the interpreter. The two capture
+replay suites were updated: their disjoint-run cases now assert the run-chain
+path, and their strict-budget cases pin both workspaces to the interpreter.

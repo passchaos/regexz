@@ -209,7 +209,11 @@ pub const Workspace = struct {
             const plan = shapes.runChain(program) orelse break :blk null;
             const state = try allocator.create(RunChainState);
             state.plan = plan;
-            if (plan.anchor != shapes.RunChain.no_anchor) {
+            if (plan.forward) {
+                const first = plan.sets[0];
+                state.filter = prefilter.FirstFilter.init(.{ .ascii = first.ascii, .nonascii = !first.ascii_only });
+                state.filter.prepareRunePrefixes(first);
+            } else if (plan.anchor != shapes.RunChain.no_anchor) {
                 const anchor = plan.sets[plan.anchor];
                 state.filter = prefilter.FirstFilter.init(.{ .ascii = anchor.ascii, .nonascii = !anchor.ascii_only });
                 state.filter.prepareRunePrefixes(anchor);
@@ -849,6 +853,37 @@ pub const Workspace = struct {
     /// falls back to the general engine.
     fn findRunChain(self: *Workspace, state: *RunChainState, input: []const u8, search_start: usize) ?Match {
         const plan = &state.plan;
+        if (plan.forward) {
+            // Overlapping sets: the first run is mandatory and every
+            // mandatory run is separated from its predecessors, so the
+            // greedy maxima are complete. A failed mandatory run cannot be
+            // rescued by backtracking, so the general engine decides.
+            const first_set = plan.sets[0];
+            var scan = search_start;
+            while (scan < input.len) {
+                const candidate = state.filter.indexOfRuneCandidates(input, scan) orelse return null;
+                const rune = runeAt(input, candidate) orelse return null;
+                if (!first_set.matches(rune.value)) {
+                    scan = candidate + rune.len;
+                    continue;
+                }
+                var pos: [shapes.RunChain.max_items + 1]usize = undefined;
+                pos[0] = candidate;
+                var item: usize = 0;
+                while (item < plan.count) : (item += 1) {
+                    if (plan.empty[item]) {
+                        pos[item + 1] = pos[item];
+                        continue;
+                    }
+                    const end = runEnd(input, pos[item], plan.sets[item]) orelse return null;
+                    if (end == pos[item] and plan.minimum[item] != 0) return null;
+                    pos[item + 1] = end;
+                }
+                self.fillRunChainSlots(plan, &pos, candidate, pos[plan.count]);
+                return .{ .start = candidate, .end = pos[plan.count], .slots = self.slots };
+            }
+            return null;
+        }
         if (plan.anchor == shapes.RunChain.no_anchor) {
             // Every run is nullable: the leftmost match starts at the search
             // offset and the greedy runs extend from there.

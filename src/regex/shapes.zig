@@ -87,10 +87,12 @@ pub const Chain = struct {
 
 const max_literal_bytes = 8;
 
-/// `(setA*)(setB*)...(setZ*)`: captured greedy runs whose sets are pairwise
-/// disjoint. The last mandatory run anchors the match end; a chain with no
-/// mandatory run matches at the search offset and extends greedily from
-/// there. Every capture boundary is a run boundary, and each run is maximal.
+/// `(setA*)(setB*)...(setZ*)`: captured greedy runs. When the sets are
+/// pairwise disjoint the last mandatory run anchors the match end and a chain
+/// with no mandatory run matches at the search offset. Overlapping sets are
+/// accepted only in `forward` mode: the first run is mandatory and every
+/// mandatory run's set is disjoint from all preceding runs, so the greedy
+/// maxima are complete and a failed scan cannot be rescued by backtracking.
 pub const RunChain = struct {
     pub const max_items = 5;
     /// `anchor` value when every run is nullable.
@@ -106,12 +108,16 @@ pub const RunChain = struct {
     count: u8 = 0,
     /// Index of the last mandatory run; runs after it are nullable.
     anchor: u8 = no_anchor,
+    /// Scan forward from the first run's members instead of anchoring on the
+    /// last mandatory run. Used when the sets overlap but the mandatory runs
+    /// are separated from their predecessors.
+    forward: bool = false,
     match_start_slot: u16 = 0,
     match_end_slot: u16 = 1,
 };
 
 /// Recognizes a captured run chain. Conservative: any other instruction,
-/// a fixed-count run or an overlapping pair of sets rejects the shape.
+/// a fixed-count run or an unsupported overlap rejects the shape.
 pub fn runChain(program: Program) ?RunChain {
     if (program.extended or program.capture_count == 0 or program.capture_count > 15) return null;
     const ins = program.instructions;
@@ -201,16 +207,39 @@ pub fn runChain(program: Program) ?RunChain {
     // Every capture group must be one of the walked items, so the plan's
     // slot writes cover the whole slot array.
     if (plan.count != program.capture_count) return null;
-    // A chain with no mandatory run matches empty at every offset; the
-    // empty-match restrictions need the general engine's retry loop.
-    if (plan.anchor == RunChain.no_anchor and (program.notempty or program.notempty_atstart)) return null;
+    var disjoint = true;
     for (0..plan.count) |i| {
         if (plan.empty[i]) continue;
         for (i + 1..plan.count) |j| {
             if (plan.empty[j]) continue;
+            if (setsOverlap(plan.sets[i], plan.sets[j])) {
+                disjoint = false;
+                break;
+            }
+        }
+        if (!disjoint) break;
+    }
+    if (disjoint) {
+        // A chain with no mandatory run matches empty at every offset; the
+        // empty-match restrictions need the general engine's retry loop.
+        if (plan.anchor == RunChain.no_anchor and (program.notempty or program.notempty_atstart)) return null;
+        return plan;
+    }
+    // Overlapping sets are only complete with a forward scan: the first run
+    // is mandatory and every mandatory run's set is disjoint from all
+    // preceding sets, so backtracking an earlier run can never make a
+    // mandatory run match that the greedy maxima missed.
+    if (plan.empty[0] or plan.minimum[0] != 1) return null;
+    for (0..plan.count) |i| {
+        if (plan.empty[i] or plan.minimum[i] == 0) continue;
+        if (plan.minimum[i] != 1) return null;
+        for (0..i) |j| {
+            if (plan.empty[j]) continue;
             if (setsOverlap(plan.sets[i], plan.sets[j])) return null;
         }
     }
+    plan.forward = true;
+    plan.anchor = RunChain.no_anchor;
     return plan;
 }
 
