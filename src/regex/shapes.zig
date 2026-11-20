@@ -782,6 +782,17 @@ pub fn literalRun(program: Program) ?LiteralRun {
     if (save_index >= ins.len or std.meta.activeTag(ins[save_index]) != .save) return null;
     const save1 = ins[save_index].save;
     if (save1.slot != 1 or save1.next != program.accept) return null;
+    // The scanner consumes the optional literal greedily and never retries
+    // without it. Skipping can only succeed when the middle starts with that
+    // same byte, or when the middle is empty and the byte is a run member
+    // (`b{1,2}[a-c]+`); those shapes must use the general search.
+    if (optional) |byte| {
+        const retry = if (middle_len == 0)
+            consume.set.matches(byte)
+        else
+            middle[0] == byte;
+        if (retry) return null;
+    }
     return .{
         .prefix = prefix,
         .optional = optional,

@@ -583,3 +583,14 @@ member-run loop was included: a focused ten-round harness improves
 untouched `[a-z]*` path at 0.88x, which identifies that row in those binaries
 as layout noise rather than a code effect. See
 [high-byte checks in stream loops](benchmarks/stream-high-byte-checks.md).
+
+Replacement fuzzing (seed 20261121) exposed a wrong match in the literal-run
+fast path: `b{1,2}[a-c]+` on ` 1abb2bbc` reported only `[6..9]`, missing
+`[3..5]`, because the scanner consumes the optional literal greedily and
+never retries without it while the optional `b` is also the first byte of the
+trailing `[a-c]+` run. The detector now rejects a shape when the optional
+literal is a run member with an empty middle, or when the optional byte
+repeats the first middle byte; those programs use the general search. A
+focused URL harness for the other literal-run shape (`https?://[^\s]+`)
+stays at 0.99-1.01x, the replacement fuzzer passes on five seeds, and
+regression tests cover both overlapping shapes.
