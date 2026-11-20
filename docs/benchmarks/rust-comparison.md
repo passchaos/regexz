@@ -14,47 +14,49 @@ text and small full-match subjects.
 
 | Case | regexz, ns/iter | Rust, ns/iter | Rust / regexz |
 | --- | ---: | ---: | ---: |
-| compile Qwen tokenizer | 38,263.7 | 472,730.8 | 12.35x |
-| compile xDS-like | 2,576.0 | 22,689.5 | 8.81x |
-| find Qwen tokenizer | 44,383.3 | 68,410.8 | 1.54x |
-| findAll Qwen, borrowed workspace | 44,340.0 | 67,263.3 | 1.52x |
-| findAll Qwen, owning iterator | 45,666.7 | 70,973.3 | 1.55x |
-| find CJK tokenizer | 182,100.0 | 251,277.5 | 1.38x |
-| find HTML tag | 48,653.8 | 127,847.3 | 2.63x |
-| find URL | 35,961.3 | 92,186.7 | 2.56x |
-| find JSON string literal | 7,579.6 | 18,234.2 | 2.41x |
-| find JSON number | 28,531.9 | 64,954.6 | 2.28x |
-| find word boundary | 65,742.7 | 152,074.6 | 2.31x |
-| split whitespace (22 KiB) | 22,190.8 | 82,348.8 | 3.71x |
-| split commas (29 KiB) | 21,928.5 | 56,490.8 | 2.58x |
-| fullmatch literal | 1.8 | 9.6 | 5.33x |
-| fullmatch class | 5.5 | 34.0 | 6.18x |
-| fullmatch xDS-like | 10.9 | 32.3 | 2.96x |
-| replaceAll `a+` → `x` | 28,359.8 | 109,363.1 | 3.86x |
-| replaceAll `\A|\z` → `X` | 6,970.0 | 8,884.8 | 1.27x |
-| RegexSet 9 no-match patterns | 1,976.7 | 40,598.5 | 20.54x |
+| compile Qwen tokenizer | 38,657.8 | 468,293.2 | 12.11x |
+| compile xDS-like | 2,600.6 | 21,445.0 | 8.25x |
+| find Qwen tokenizer | 43,050.8 | 64,995.0 | 1.51x |
+| findAll Qwen, borrowed workspace | 43,101.7 | 65,169.2 | 1.51x |
+| findAll Qwen, owning iterator | 45,323.3 | 66,326.7 | 1.46x |
+| find CJK tokenizer | 163,905.0 | 227,400.0 | 1.39x |
+| find HTML tag | 48,073.3 | 120,332.1 | 2.50x |
+| find URL | 34,216.0 | 84,839.4 | 2.48x |
+| find JSON string literal | 7,078.5 | 17,150.8 | 2.42x |
+| find JSON number | 27,588.1 | 61,468.8 | 2.23x |
+| find word boundary | 64,136.0 | 134,567.5 | 2.10x |
+| split whitespace (22 KiB) | 21,303.8 | 80,988.1 | 3.80x |
+| split commas (29 KiB) | 22,529.0 | 55,773.5 | 2.48x |
+| fullmatch literal | 1.8 | 9.4 | 5.22x |
+| fullmatch class | 5.1 | 33.7 | 6.61x |
+| fullmatch xDS-like | 9.5 | 32.0 | 3.37x |
+| replaceAll `a+` → `x` | 29,140.0 | 106,529.6 | 3.66x |
+| replaceAll `\A|\z` → `X` | 6,855.6 | 7,921.9 | 1.16x |
+| RegexSet 9 no-match patterns | 1,934.2 | 40,189.6 | 20.78x |
 
-regexz is faster on all 19 measured cases: 12.35x on tokenizer compilation,
-8.81x on a small-pattern compile, 1.38–1.55x on tokenizer scans and match
-iteration, 2.28–2.63x on search scans, 2.58–3.71x on splits, 2.96–6.18x on
-full-match calls, 3.86x on a set-run replacement, 1.27x on a zero-width
-replacement and 20.54x on the nine-pattern set.
+regexz is faster on all 19 measured cases: 12.11x on tokenizer compilation,
+8.25x on a small-pattern compile, 1.39–1.51x on tokenizer scans and match
+iteration, 2.10–2.50x on search scans, 2.48–3.80x on splits, 3.37–6.61x on
+full-match calls, 3.66x on a set-run replacement, 1.16x on a zero-width
+replacement and 20.78x on the nine-pattern set.
 
 Compilation now selects a 16 KiB, 64 KiB or 256 KiB block by pattern shape,
 reuses page-allocator blocks from a process pool, and falls back to the arena
 for very large patterns (see
 [compile block tiers](compile-block-tiers.md)), which lifted the Qwen
-compile to 12.35x and the xDS-like compile to 8.81x. The tokenizer fast branch
+compile to 12.11x and the xDS-like compile to 8.25x. The tokenizer fast branch
 scans the following digit and punctuation branches directly (see
 [fast-branch later plans](fast-branch-later-plans.md)); the owning
 `Regex.findAll` iterator returns its workspace to a process pool for page/smp
 allocators (see [match iteration workspaces](find-all-workspace.md)).
 `RegexSet` scans all simple chain separators in one vector pass (see
 [combined separator scan](set-combined-separators.md)), which lifted the
-nine-pattern set from 4.21x to 20.54x. Single-byte literal replacement and
+nine-pattern set from 4.21x to 20.78x. Single-byte literal replacement and
 splitting translate in vectors (see
 [literal byte paths](literal-byte-paths.md)), which lifted the comma split
-from 1.64x to 2.58x.
+from 1.64x to 2.48x. Non-ASCII fast-branch runs are scanned once (see
+[direct non-ASCII run starts](nonascii-run-start.md)), which kept the CJK
+tokenizer at 1.39x as both sides got faster.
 
 Caveats: the iteration APIs are the natural ones for each library
 (`Workspace.find` in a loop versus `Regex::find_iter`), full match is
