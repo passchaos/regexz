@@ -51,6 +51,91 @@ fn benchFind(
     try out.print("{s:<40} {d:>10.1} ns/iter\n", .{ name, ns });
 }
 
+fn benchMatches(
+    io: std.Io,
+    out: *std.Io.Writer,
+    name: []const u8,
+    pattern: []const u8,
+    input: []const u8,
+    iterations: usize,
+    limits: regexz.Limits,
+) !void {
+    var value = try regexz.Regex.init(gpa, pattern, limits);
+    defer value.deinit();
+    for (0..1000) |_| std.mem.doNotOptimizeAway(try value.matches(gpa, input));
+    var samples: [5]i96 = undefined;
+    for (&samples) |*sample| {
+        var hits: usize = 0;
+        const start = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds;
+        for (0..iterations) |_| {
+            hits += @intFromBool(try value.matches(gpa, input));
+        }
+        sample.* = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds - start;
+        std.mem.doNotOptimizeAway(hits);
+    }
+    std.mem.sort(i96, &samples, {}, std.sort.asc(i96));
+    const ns = @as(f64, @floatFromInt(samples[2])) / @as(f64, @floatFromInt(iterations));
+    try out.print("{s:<40} {d:>10.1} ns/iter\n", .{ name, ns });
+}
+
+fn benchReplace(
+    io: std.Io,
+    out: *std.Io.Writer,
+    name: []const u8,
+    pattern: []const u8,
+    input: []const u8,
+    substitution: []const u8,
+    iterations: usize,
+) !void {
+    var value = try regexz.Regex.init(gpa, pattern, .{});
+    defer value.deinit();
+    for (0..100) |_| {
+        const output = try value.replaceAll(gpa, input, substitution);
+        gpa.free(output);
+    }
+    var samples: [5]i96 = undefined;
+    for (&samples) |*sample| {
+        const start = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds;
+        for (0..iterations) |_| {
+            const output = try value.replaceAll(gpa, input, substitution);
+            std.mem.doNotOptimizeAway(output);
+            gpa.free(output);
+        }
+        sample.* = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds - start;
+    }
+    std.mem.sort(i96, &samples, {}, std.sort.asc(i96));
+    const ns = @as(f64, @floatFromInt(samples[2])) / @as(f64, @floatFromInt(iterations));
+    try out.print("{s:<40} {d:>10.1} ns/iter\n", .{ name, ns });
+}
+
+fn benchSet(
+    io: std.Io,
+    out: *std.Io.Writer,
+    name: []const u8,
+    patterns: []const []const u8,
+    input: []const u8,
+    iterations: usize,
+) !void {
+    var set = try regexz.RegexSet.init(gpa, patterns, .{});
+    defer set.deinit();
+    var matched: [16]bool = undefined;
+    for (0..10) |_| try set.matches(input, matched[0..patterns.len]);
+    var samples: [5]i96 = undefined;
+    for (&samples) |*sample| {
+        var hits: usize = 0;
+        const start = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds;
+        for (0..iterations) |_| {
+            try set.matches(input, matched[0..patterns.len]);
+            for (matched[0..patterns.len]) |value| hits += @intFromBool(value);
+        }
+        sample.* = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds - start;
+        std.mem.doNotOptimizeAway(hits);
+    }
+    std.mem.sort(i96, &samples, {}, std.sort.asc(i96));
+    const ns = @as(f64, @floatFromInt(samples[2])) / @as(f64, @floatFromInt(iterations));
+    try out.print("{s:<40} {d:>10.1} ns/iter\n", .{ name, ns });
+}
+
 fn benchCompile(
     io: std.Io,
     out: *std.Io.Writer,
@@ -107,6 +192,14 @@ pub fn main() !void {
     defer number_text.deinit(gpa);
     for (0..2000) |_| try number_text.appendSlice(gpa, "x=-12.5 y=3 z=0.25 ");
 
+    var word_text: std.ArrayList(u8) = .empty;
+    defer word_text.deinit(gpa);
+    for (0..3000) |_| try word_text.appendSlice(gpa, "alpha beta gamma delta epsilon ");
+
+    var replace_text: std.ArrayList(u8) = .empty;
+    defer replace_text.deinit(gpa);
+    for (0..2000) |_| try replace_text.appendSlice(gpa, "aaa bbb aaa bbb ");
+
     const qwen = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+";
     const ucp = regexz.Limits{ .unicode_perl_space = true, .max_execution_steps = 16_000_000 };
 
@@ -117,5 +210,17 @@ pub fn main() !void {
     try benchFind(io, out, "find URL", "https?://[^\\s]+", url_text.items, 200, .{});
     try benchFind(io, out, "find JSON string literal", "\"[^\"]*\"", json_text.items, 200, .{});
     try benchFind(io, out, "find JSON number", "-?\\d+(?:\\.\\d+)?", number_text.items, 200, .{});
+    try benchFind(io, out, "find word boundary", "\\b\\w+\\b", word_text.items, 200, .{});
+    try benchMatches(io, out, "fullmatch literal", "hello, world!", "hello, world!", 200000, .{});
+    try benchMatches(io, out, "fullmatch class", "[A-Za-z0-9._-]+", "User.Name_42", 200000, .{});
+    try benchMatches(io, out, "fullmatch xDS-like", "/(?:demo|test)\\.[A-Z][A-Za-z]+/(Get|List)", "/demo.Service/Get", 200000, .{});
+    try benchReplace(io, out, "replaceAll a+ -> x", "a+", replace_text.items, "x", 200);
+    try benchReplace(io, out, "replaceAll \\A|\\z -> X", "\\A|\\z", ascii_text.items, "X", 200);
+
+    const set_patterns = [_][]const u8{
+        "[a-z]+@", "[a-z]+#", "[a-z]+%", "[a-z]+&", "[a-z]+!",
+        "[a-z]+~", "[a-z]+`", "[a-z]+;", "[a-z]+:",
+    };
+    try benchSet(io, out, "RegexSet 9 no-match patterns", &set_patterns, ascii_text.items, 200);
     try out.flush();
 }
