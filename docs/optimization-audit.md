@@ -255,12 +255,12 @@ substitutions with syntax and other patterns keep the general path. See
 
 A reproducible comparison harness now runs the same workloads through regexz
 and Rust's `regex` crate (`tools/compare`). On this host regexz is faster on
-all 20 measured cases: 7.98x on tokenizer compilation, 8.93x on a
-small-pattern compile, 1.37–1.48x on tokenizer scans and match iteration,
-2.05–2.65x on search scans, 1.65–3.78x on splits, 2.73–5.92x on full-match
-calls, 3.55x on a set-run replacement, 1.07x on a zero-width replacement and
-3.97x on the nine-pattern set. The owning `findAll` iterator reuses a process
-workspace pool and is 1.46x ahead of Rust's `find_iter`. See
+all 20 measured cases: 11.62x on tokenizer compilation, 8.46x on a
+small-pattern compile, 1.30–1.51x on tokenizer scans and match iteration,
+2.13–2.63x on search scans, 1.66–3.93x on splits, 3.11–6.32x on full-match
+calls, 3.69x on a set-run replacement, 1.50x on a zero-width replacement and
+4.21x on the nine-pattern set. The owning `findAll` iterator reuses a process
+workspace pool and is 1.51x ahead of Rust's `find_iter`. See
 [comparison with Rust's regex](benchmarks/rust-comparison.md).
 
 The fast-branch deferred run now counts Unicode probes and materializes its
