@@ -561,3 +561,11 @@ the Qwen smp block from staying pooled once the xDS and long-literal blocks
 were present. Compile Qwen (smp) improves 1.31x (44.1 -> 33.5 us) with the
 page path and other compile controls at 0.98-0.99x. Tracking allocators stay
 excluded. See [SMP compile-block pooling](benchmarks/smp-compile-pool.md).
+
+Two more compile/stream candidates were screened and reverted. The pairwise
+merge of class-union runs was retested after the property cache with
+instrumentation confirming it ran (runs of 2-4 per union): it stayed about 5%
+slower than the comparison sort (33.5-33.9 -> 35.1-35.5 us), so the sort
+remains. Inlining `emitStarEmpty` into the streaming star loop to hoist the
+empty-match suppression flags was neutral against the unchanged `[a-z]+`
+control (0.94x versus 0.96x under the same host drift).
