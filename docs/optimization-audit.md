@@ -799,5 +799,10 @@ ahead). The UTF-8 run search skips short ASCII gaps with the state-0 row,
 lifting the case-insensitive class scan 1.9x (1.66x ahead). The
 literal-alternation extractor distributes literal prefixes and suffixes over
 branches, so `(?:pre|post)fix` uses the literal-set filter (1.24x, 1.27x
-ahead). The comparison covers 58 cases: 57 are faster and the semver scan is
-a statistical tie. See [literal fast paths](benchmarks/literal-fast-paths.md).
+ahead). Literal-alternation searches now return the matching branch from the
+candidate filter, single-byte sets accept the first-byte hit directly, and
+the prefix-run scan packs its membership sets into 64 bytes of bits, removing
+a cache-set aliasing cliff that could make `[A-Za-z_]\w*` 3.5x slower. The
+alternation cases improve 1.05-1.22x. The comparison covers 58 cases and all
+of them are faster. See
+[literal fast paths](benchmarks/literal-fast-paths.md).

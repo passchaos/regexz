@@ -57,7 +57,10 @@ pub const FastKind = enum {
     zero_width,
     literal_run,
     caseless_literal,
-    literal_set,
+    literal_multi,
+    literal_pair,
+    literal_bytes,
+    literal_first,
     run_then_literal,
     fixed_sequence,
     line_start_run,
@@ -206,8 +209,13 @@ pub const Workspace = struct {
     pair_filter: ?*prefilter.PairSet = null,
     /// Absence filter for a whole-pattern case-folded literal (`(?i)STRASSE`).
     fold_filter: ?prefilter.FoldFilter = null,
-    /// Pair-set SIMD filter for a whole-pattern literal alternation.
-    literal_set_filter: ?prefilter.MultiFilter = null,
+    /// Splat candidate filter for a small whole-pattern literal alternation.
+    literal_set_multi: ?prefilter.MultiFilter = null,
+    /// Nibble candidate filter for a wide whole-pattern literal alternation.
+    literal_set_pair: ?*prefilter.PairSet = null,
+    /// Every literal-set branch is one byte, so a first-byte hit is the
+    /// whole match.
+    literal_set_single: bool = false,
     /// `set+ literal` with a literal first byte outside the set.
     run_then_literal: ?RunThenLiteral = null,
     /// Fixed-width concatenation of single-rune sets and literal bytes.
@@ -297,7 +305,33 @@ pub const Workspace = struct {
         errdefer allocator.free(slot_storage);
         const slots = slot_storage[0..slot_count];
         const best_slots = slot_storage[slot_count..];
-        const pair_filter = try buildPairFilter(allocator, program);
+        const literal_set = program.literal_set;
+        const literal_set_fast = literal_set != null and program.capture_count == 0 and !limits.longest;
+        var pair_filter = try buildPairFilter(allocator, program);
+        var literal_set_multi: ?prefilter.MultiFilter = null;
+        var literal_set_pair: ?*prefilter.PairSet = null;
+        if (literal_set_fast) {
+            if (prefilter.literalSetMulti(literal_set.?)) |filter| {
+                literal_set_multi = filter;
+            } else if (pair_filter != null and sameLiterals(program.start_literals.?, literal_set.?)) {
+                // The generic start-literal filter scans the same branches;
+                // reuse it instead of allocating a second pair set.
+                literal_set_pair = pair_filter;
+                pair_filter = null;
+            } else if (prefilter.PairSet.init(literal_set.?)) |set| {
+                const filter = try allocator.create(prefilter.PairSet);
+                filter.* = set;
+                literal_set_pair = filter;
+            }
+        }
+        errdefer if (literal_set_pair) |filter| allocator.destroy(filter);
+        var literal_set_single = false;
+        if (literal_set_fast) {
+            literal_set_single = true;
+            for (literal_set.?) |literal| {
+                if (literal.len != 1) literal_set_single = false;
+            }
+        }
         const word_run_set = shapes.wordRun(program);
         var word_table: [256]bool = .{false} ** 256;
         if (word_run_set) |set| {
@@ -465,8 +499,8 @@ pub const Workspace = struct {
         const prefix_run: ?PrefixRunState = if (limits.longest) null else blk: {
             const shape = program.prefix_run orelse break :blk null;
             break :blk .{
-                .table_a = byte_table.init(256, shape.set_a),
-                .table_b = byte_table.init(256, shape.set_b),
+                .table_a = byte_table.bits(shape.set_a),
+                .table_b = byte_table.bits(shape.set_b),
                 .min_b = shape.min_b,
             };
         };
@@ -503,7 +537,14 @@ pub const Workspace = struct {
         else if (program.caseless_literal != null and program.capture_count == 0 and !limits.longest)
             .caseless_literal
         else if (program.literal_set != null and program.capture_count == 0 and !limits.longest)
-            .literal_set
+            (if (literal_set_single)
+                .literal_bytes
+            else if (literal_set_multi != null)
+                .literal_multi
+            else if (literal_set_pair != null)
+                .literal_pair
+            else
+                .literal_first)
         else if (utf8_run != null)
             .utf8_run
         else if (simple_chain != null)
@@ -637,7 +678,9 @@ pub const Workspace = struct {
                 program.first),
             .pair_filter = pair_filter,
             .fold_filter = if (program.caseless_literal) |literal| prefilter.FoldFilter.init(literal) else null,
-            .literal_set_filter = if (program.literal_set) |literals| literalSetFilter(literals) else null,
+            .literal_set_multi = literal_set_multi,
+            .literal_set_pair = literal_set_pair,
+            .literal_set_single = literal_set_single,
             .run_then_literal = run_then_literal,
             .fixed_sequence = fixed_sequence,
             .line_start_run = line_start_run,
@@ -657,6 +700,7 @@ pub const Workspace = struct {
 
     pub fn deinit(self: *Workspace) void {
         if (self.pair_filter) |filter| self.allocator.destroy(filter);
+        if (self.literal_set_pair) |filter| self.allocator.destroy(filter);
         if (self.run_chain) |state| self.allocator.destroy(state);
         if (self.literal_run) |state| state.deinit(self.allocator);
         if (self.fixed_sequence) |state| self.allocator.destroy(state);
@@ -749,7 +793,10 @@ pub const Workspace = struct {
             .caseless_literal => {
                 if (self.findCaselessLiteral(input, search_start)) |match| return match;
             },
-            .literal_set => return self.findLiteralSet(input, search_start),
+            .literal_multi => return self.findLiteralMulti(input, search_start),
+            .literal_pair => return self.findLiteralPair(input, search_start),
+            .literal_bytes => return self.findLiteralBytes(input, search_start),
+            .literal_first => return self.findLiteralFirst(input, search_start),
             .run_then_literal => return self.findRunThenLiteral(&self.run_then_literal.?, input, search_start),
             .fixed_sequence => return self.findFixedSequence(self.fixed_sequence.?, input, search_start),
             .line_start_run => return self.findLineStartRun(&self.line_start_run.?, input, search_start),
@@ -1342,7 +1389,10 @@ pub const Workspace = struct {
             .caseless_literal => {
                 if (self.findCaselessLiteral(input, search_start)) |match| return match;
             },
-            .literal_set => return self.findLiteralSet(input, search_start),
+            .literal_multi => return self.findLiteralMulti(input, search_start),
+            .literal_pair => return self.findLiteralPair(input, search_start),
+            .literal_bytes => return self.findLiteralBytes(input, search_start),
+            .literal_first => return self.findLiteralFirst(input, search_start),
             .run_then_literal => return self.findRunThenLiteral(&self.run_then_literal.?, input, search_start),
             .fixed_sequence => return self.findFixedSequence(self.fixed_sequence.?, input, search_start),
             .line_start_run => return self.findLineStartRun(&self.line_start_run.?, input, search_start),
@@ -1947,19 +1997,63 @@ pub const Workspace = struct {
         }
     }
 
-    /// A pure alternation of exact literals. The pair/first filter proposes
-    /// the earliest candidate; the alternatives are checked in source order
-    /// at that position, which is exactly leftmost-first for literals.
-    fn findLiteralSet(self: *Workspace, input: []const u8, search_start: usize) ?Match {
+    /// A small pure literal alternation. The splat filter reports the matching
+    /// branch, so the span is returned without a second verification pass.
+    inline fn findLiteralMulti(self: *Workspace, input: []const u8, search_start: usize) ?Match {
+        const filter = &self.literal_set_multi.?;
+        if (filter.shared_first) {
+            // Shared-prefix candidates pin the first byte, so the few
+            // branches verify cheaply at the candidate.
+            const literals = self.program.literal_set.?;
+            var search = search_start;
+            while (search < input.len) {
+                const start = filter.indexOf(input, search) orelse return null;
+                for (literals) |literal| {
+                    if (start + literal.len <= input.len and std.mem.eql(u8, input[start..][0..literal.len], literal)) {
+                        self.slots[0] = start;
+                        self.slots[1] = start + literal.len;
+                        return .{ .start = start, .end = start + literal.len, .slots = self.slots };
+                    }
+                }
+                search = start + 1;
+            }
+            return null;
+        }
+        var literal_index: usize = undefined;
+        const start = filter.indexOfMatch(input, search_start, &literal_index) orelse return null;
+        const literal = filter.literals[literal_index];
+        self.slots[0] = start;
+        self.slots[1] = start + literal.len;
+        return .{ .start = start, .end = start + literal.len, .slots = self.slots };
+    }
+
+    /// A wide pure literal alternation. The nibble filter reports the matching
+    /// branch, so the span is returned without a second verification pass.
+    inline fn findLiteralPair(self: *Workspace, input: []const u8, search_start: usize) ?Match {
+        const filter = self.literal_set_pair.?;
+        var literal_index: usize = undefined;
+        const start = filter.indexOfAnyMatch(input, search_start, &literal_index) orelse return null;
+        const literal = filter.literals[literal_index];
+        self.slots[0] = start;
+        self.slots[1] = start + literal.len;
+        return .{ .start = start, .end = start + literal.len, .slots = self.slots };
+    }
+
+    /// Every branch is one byte, so the first-byte scan is the match.
+    inline fn findLiteralBytes(self: *Workspace, input: []const u8, search_start: usize) ?Match {
+        const start = self.first_filter.indexOf(input, search_start) orelse return null;
+        self.slots[0] = start;
+        self.slots[1] = start + 1;
+        return .{ .start = start, .end = start + 1, .slots = self.slots };
+    }
+
+    /// The first-byte filter proposes candidates; the branches are checked in
+    /// source order at that position, which is exactly leftmost-first.
+    fn findLiteralFirst(self: *Workspace, input: []const u8, search_start: usize) ?Match {
         const literals = self.program.literal_set.?;
         var search = search_start;
         while (search < input.len) {
-            const start = if (self.literal_set_filter) |*filter|
-                filter.indexOf(input, search) orelse return null
-            else if (self.pair_filter) |filter|
-                filter.indexOfAny(input, search) orelse return null
-            else
-                self.first_filter.indexOf(input, search) orelse return null;
+            const start = self.first_filter.indexOf(input, search) orelse return null;
             for (literals) |literal| {
                 if (start + literal.len <= input.len and std.mem.eql(u8, input[start..][0..literal.len], literal)) {
                     self.slots[0] = start;
@@ -2243,10 +2337,10 @@ pub const Workspace = struct {
         const rest = &state.table_b;
         var start = search_start;
         while (start < input.len) {
-            while (start < input.len and !first[input[start]]) start += 1;
+            while (start < input.len and !byte_table.has(first, input[start])) start += 1;
             if (start >= input.len) return null;
             var end = start + 1;
-            while (end < input.len and rest[input[end]]) end += 1;
+            while (end < input.len and byte_table.has(rest, input[end])) end += 1;
             if (state.min_b == 1 and end == start + 1) {
                 start += 1;
                 continue;
@@ -3255,6 +3349,15 @@ fn position(input: []const u8, offset: usize, newline_mode: model.Newline) Posit
     };
 }
 
+/// Whether two literal lists hold the same bytes in the same order.
+fn sameLiterals(a: []const []const u8, b: []const []const u8) bool {
+    if (a.len != b.len) return false;
+    for (a, b) |left, right| {
+        if (!std.mem.eql(u8, left, right)) return false;
+    }
+    return true;
+}
+
 /// Build the multi-literal absence filter for wide start-literal
 /// alternations whose literals do not share a first byte (the multi-literal
 /// start filter handles the shared case).
@@ -3532,22 +3635,6 @@ const LaterRun = struct {
         if (self.tail) |*tail| tail.deinit(allocator);
     }
 };
-
-/// The multi-literal pair filter is best for sparse first-byte sets; wider
-/// sets use the nibble-table candidate filter from `PairSet` instead.
-fn literalSetFilter(literals: []const []const u8) ?prefilter.MultiFilter {
-    var seen = [_]bool{false} ** 256;
-    var distinct: usize = 0;
-    for (literals) |literal| {
-        const byte = literal[0];
-        if (!seen[byte]) {
-            seen[byte] = true;
-            distinct += 1;
-            if (distinct > 8) return null;
-        }
-    }
-    return prefilter.MultiFilter.initAny(literals);
-}
 
 /// `save0 -> consume(set) -> star(set) -> literal bytes -> save1 -> accept`
 /// where the literal is non-empty, the set is ASCII-only, and the literal's
@@ -3913,8 +4000,8 @@ const ChainLoopState = struct {
 };
 
 const PrefixRunState = struct {
-    table_a: [256]bool = undefined,
-    table_b: [256]bool = undefined,
+    table_a: [4]u64 = undefined,
+    table_b: [4]u64 = undefined,
     min_b: u8 = 0,
 };
 

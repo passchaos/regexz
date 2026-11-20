@@ -233,5 +233,23 @@ search DFA:
   such patterns use the literal-set filter. It improves 1.24x and is 1.27x
   ahead.
 
-The comparison now covers 58 cases: regexz is faster on 57; the remaining
-semver scan is a statistical tie (0.97-1.15x across runs on this host).
+## Literal-alternation verification and packed prefix runs
+
+The candidate filter for a whole-pattern literal alternation now reports
+which branch matched, so the search returns the span without a second
+verification pass. Single-byte branches accept the first-byte hit directly,
+and wide alternations reuse the existing start-literal pair set instead of
+allocating a second filter. The one-char alternation improves 1.22x and is
+1.44x ahead; the five-word, 10-word and 20-word alternations improve 1.05x,
+1.06x and 1.12x and are 1.20x, 1.29x and 1.57x ahead.
+
+The prefix-run scan (`[A-Za-z_]\w*`) packs both membership sets into 64
+bytes of bits instead of two 256-byte byte tables. Besides being smaller,
+this removes a cache-set aliasing cliff: with the byte tables, a 30-byte
+change in the caller's environment (the `PWD` length) shifted the workspace
+tables and made the scan 3.5x slower; the packed bitsets keep the same speed
+across stack layouts.
+
+The comparison now covers 58 cases and regexz is faster on all of them; the
+thinnest margins are the shared-prefix alternation and the semver scan at
+1.05x.

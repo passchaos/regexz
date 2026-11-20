@@ -15,6 +15,9 @@ const max_simd_bytes = 8;
 const max_simd_ranges = utf8_prefix.max_ranges;
 const Vec = @Vector(16, u8);
 
+/// Sentinel returned by literal probes when no literal matches.
+const no_literal = std.math.maxInt(usize);
+
 /// Bit-packed lane mask: bit N is set when lane N matched. Iterating set bits
 /// with `@ctz` avoids `std.simd.firstTrue`, whose select plus reduce-min
 /// lowering costs a full vector round trip per candidate lane.
@@ -134,38 +137,52 @@ pub const PairSet = struct {
     }
 
     /// First offset at or after `start` where a literal occurs, or null.
-    pub fn indexOfAny(self: *const PairSet, input: []const u8, start: usize) ?usize {
-        if (start >= input.len or input.len - start < 2) return null;
-        if (self.use_first) return self.indexOfAnySparse(input, start);
-        if (self.candidates) |*filter| return self.indexOfAnyVector(filter, input, start);
-        return self.indexOfAnyScalar(input, start);
+    pub inline fn indexOfAny(self: *const PairSet, input: []const u8, start: usize) ?usize {
+        var ignored: usize = undefined;
+        return self.scanAny(input, start, &ignored);
     }
 
-    fn indexOfAnyScalar(self: *const PairSet, input: []const u8, start: usize) ?usize {
+    /// Like `indexOfAny`, but also reports which literal matched.
+    pub inline fn indexOfAnyMatch(self: *const PairSet, input: []const u8, start: usize, literal_index: *usize) ?usize {
+        return self.scanAny(input, start, literal_index);
+    }
+
+    inline fn scanAny(self: *const PairSet, input: []const u8, start: usize, literal_index: *usize) ?usize {
+        if (start >= input.len or input.len - start < 2) return null;
+        if (self.use_first) return self.indexOfAnySparse(input, start, literal_index);
+        if (self.candidates) |*filter| return self.indexOfAnyVector(filter, input, start, literal_index);
+        return self.indexOfAnyScalar(input, start, literal_index);
+    }
+
+    fn indexOfAnyScalar(self: *const PairSet, input: []const u8, start: usize, literal_index: *usize) ?usize {
         var offset = start;
         while (offset < input.len - 1) : (offset += 1) {
-            if (self.matchesAt(input, offset)) return offset;
+            const found = self.matchesAt(input, offset);
+            if (found != no_literal) {
+                literal_index.* = found;
+                return offset;
+            }
         }
         return null;
     }
 
-    fn matchesAt(self: *const PairSet, input: []const u8, offset: usize) bool {
+    fn matchesAt(self: *const PairSet, input: []const u8, offset: usize) usize {
         const first = input[offset];
         const second = input[offset + 1];
         const pair = (@as(u16, first) << 8) | second;
-        if (self.bits[pair >> 3] & (@as(u8, 1) << @intCast(pair & 7)) == 0) return false;
-        for (self.literals) |literal| {
+        if (self.bits[pair >> 3] & (@as(u8, 1) << @intCast(pair & 7)) == 0) return no_literal;
+        for (self.literals, 0..) |literal, index| {
             if (literal.len > input.len - offset) continue;
             if (literal[0] != first or literal[1] != second) continue;
             // Most shared-prefix candidates diverge at the third byte; check
             // it before the full comparison.
             if (literal.len > 2 and literal[2] != input[offset + 2]) continue;
-            if (std.mem.eql(u8, input[offset..][0..literal.len], literal)) return true;
+            if (std.mem.eql(u8, input[offset..][0..literal.len], literal)) return index;
         }
-        return false;
+        return no_literal;
     }
 
-    fn indexOfAnyVector(self: *const PairSet, filter: *const nibble_filter.Filter, input: []const u8, start: usize) ?usize {
+    fn indexOfAnyVector(self: *const PairSet, filter: *const nibble_filter.Filter, input: []const u8, start: usize, literal_index: *usize) ?usize {
         var offset = start;
         while (offset + 17 <= input.len) : (offset += 16) {
             var mask = filter.candidates(input[offset..][0..16].*, input[offset + 1 ..][0..16].*);
@@ -188,36 +205,33 @@ pub const PairSet = struct {
             if (bits == 0xFFFF) {
                 // Every position needs an exact probe. Avoid repeated SIMD
                 // setup on collision-dense input and keep the scalar tail.
-                return self.indexOfAnyScalar(input, offset);
+                return self.indexOfAnyScalar(input, offset, literal_index);
             }
             var pending = bits;
             while (pending != 0) {
                 const index: usize = @ctz(pending);
                 pending &= pending - 1;
-                if (self.matchesAt(input, offset + index)) return offset + index;
+                const found = self.matchesAt(input, offset + index);
+                if (found != no_literal) {
+                    literal_index.* = found;
+                    return offset + index;
+                }
             }
         }
-        return self.indexOfAnyScalar(input, offset);
+        return self.indexOfAnyScalar(input, offset, literal_index);
     }
 
     /// Sparse first-byte variant: the SIMD filter jumps between candidate
     /// bytes, so the pair table is read only at plausible starts.
-    fn indexOfAnySparse(self: *const PairSet, input: []const u8, start: usize) ?usize {
+    fn indexOfAnySparse(self: *const PairSet, input: []const u8, start: usize, literal_index: *usize) ?usize {
         var offset = start;
         while (offset + 1 < input.len) {
             offset = self.first.indexOf(input, offset) orelse return null;
             if (offset + 1 >= input.len) return null;
-            const first = input[offset];
-            const pair = (@as(u16, first) << 8) | input[offset + 1];
-            if (self.bits[pair >> 3] & (@as(u8, 1) << @intCast(pair & 7)) == 0) {
-                offset += 1;
-                continue;
-            }
-            for (self.literals) |literal| {
-                if (literal.len > input.len - offset) continue;
-                if (literal[0] != first or literal[1] != input[offset + 1]) continue;
-                if (literal.len > 2 and literal[2] != input[offset + 2]) continue;
-                if (std.mem.eql(u8, input[offset..][0..literal.len], literal)) return offset;
+            const found = self.matchesAt(input, offset);
+            if (found != no_literal) {
+                literal_index.* = found;
+                return offset;
             }
             offset += 1;
         }
@@ -622,20 +636,32 @@ pub const MultiFilter = struct {
         return filter;
     }
 
-    fn matchesAt(self: *const MultiFilter, input: []const u8, offset: usize) bool {
+    fn matchesAt(self: *const MultiFilter, input: []const u8, offset: usize) usize {
         const second = input[offset + 1];
-        for (self.literals) |literal| {
+        for (self.literals, 0..) |literal, index| {
             if (offset + literal.len > input.len) continue;
             if (literal[1] != second) continue;
             // Candidates already share the first byte; most diverge at the
             // third, so check it before the full comparison.
             if (literal.len > 2 and literal[2] != input[offset + 2]) continue;
-            if (std.mem.eql(u8, input[offset..][0..literal.len], literal)) return true;
+            if (std.mem.eql(u8, input[offset..][0..literal.len], literal)) return index;
         }
-        return false;
+        return no_literal;
     }
 
-    pub fn indexOf(self: *const MultiFilter, input: []const u8, start: usize) ?usize {
+    pub inline fn indexOf(self: *const MultiFilter, input: []const u8, start: usize) ?usize {
+        var ignored: usize = undefined;
+        return self.scan(false, input, start, &ignored);
+    }
+
+    /// Like `indexOf`, but also reports which literal matched. The index is
+    /// the first exact match in source order, so a caller can return the
+    /// span without verifying the literals again.
+    pub inline fn indexOfMatch(self: *const MultiFilter, input: []const u8, start: usize, literal_index: *usize) ?usize {
+        return self.scan(true, input, start, literal_index);
+    }
+
+    fn scan(self: *const MultiFilter, comptime want_index: bool, input: []const u8, start: usize, literal_index: *usize) ?usize {
         if (start >= input.len or input.len - start < 2) return null;
         const count: usize = self.pair_count;
         var offset = start;
@@ -677,24 +703,54 @@ pub const MultiFilter = struct {
                 // a scalar pass avoids extracting the same 16 candidates.
                 var index: usize = 0;
                 while (index < 16) : (index += 1) {
-                    if (self.matchesAt(input, offset + index)) return offset + index;
+                    const found = self.matchesAt(input, offset + index);
+                    if (found != no_literal) {
+                        if (want_index) literal_index.* = found;
+                        return offset + index;
+                    }
                 }
             } else {
                 var pending = bits;
                 while (pending != 0) {
                     const index: usize = @ctz(pending);
                     pending &= pending - 1;
-                    if (self.matchesAt(input, offset + index)) return offset + index;
+                    const found = self.matchesAt(input, offset + index);
+                    if (found != no_literal) {
+                        if (want_index) literal_index.* = found;
+                        return offset + index;
+                    }
                 }
             }
         }
         while (offset < input.len - 1) : (offset += 1) {
             if (self.shared_first and input[offset] != @as(u8, @intCast(self.pairs[0] >> 8))) continue;
-            if (self.matchesAt(input, offset)) return offset;
+            const found = self.matchesAt(input, offset);
+            if (found != no_literal) {
+                if (want_index) literal_index.* = found;
+                return offset;
+            }
         }
         return null;
     }
 };
+
+/// Candidate scan for a whole-pattern literal alternation. Small literal
+/// sets use the splat filter; larger sets use the nibble pair filter. Both
+/// report the matching literal so the caller can skip a second verification.
+pub fn literalSetMulti(literals: []const []const u8) ?MultiFilter {
+    var seen = [_]bool{false} ** 256;
+    var distinct: usize = 0;
+    for (literals) |literal| {
+        if (literal.len < 2) return null;
+        const byte = literal[0];
+        if (!seen[byte]) {
+            seen[byte] = true;
+            distinct += 1;
+            if (distinct > 8) return null;
+        }
+    }
+    return MultiFilter.initAny(literals);
+}
 
 /// One-shot variant for callers that do not keep a workspace. Hot paths
 /// should cache `FirstFilter` instead.

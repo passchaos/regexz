@@ -26,3 +26,23 @@ pub fn init(comptime length: usize, set: model.Set) [length]bool {
     }
     return table;
 }
+
+/// Packed 256-bit membership. Two sets fit in one cache line, so scans that
+/// probe many bytes keep their tables resident instead of thrashing against
+/// the input stream.
+pub fn bits(set: model.Set) [4]u64 {
+    var result = [4]u64{ set.ascii[0], set.ascii[1], 0, 0 };
+    if (!set.ascii_only) {
+        for (set.ranges) |range| {
+            if (range.first >= 256) break;
+            const start = @max(@as(usize, range.first), 128);
+            const end = @min(@as(usize, range.last) + 1, 256);
+            for (start..end) |byte| result[byte >> 6] |= @as(u64, 1) << @intCast(byte & 63);
+        }
+    }
+    return result;
+}
+
+pub inline fn has(bitset: *const [4]u64, byte: u8) bool {
+    return (bitset[byte >> 6] >> @as(u6, @intCast(byte & 63))) & 1 != 0;
+}

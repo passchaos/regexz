@@ -569,7 +569,7 @@ test "wide start alternation absence filter" {
     try std.testing.expectEqual(@as(usize, 24), value.program.start_literals.?.len);
     var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
     defer workspace.deinit();
-    try std.testing.expect(workspace.pair_filter != null);
+    try std.testing.expect(workspace.literal_set_pair != null);
     try std.testing.expect((try workspace.find("xx yy zz xyzzy", 0)) == null);
     try std.testing.expect((try workspace.find("a brav hote", 0)) == null);
     const found = (try workspace.find("yy charlie zz", 0)).?;
@@ -989,9 +989,36 @@ test "literal alternation expands a common suffix" {
     defer value.deinit();
     var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
     defer workspace.deinit();
-    try std.testing.expect(workspace.fast_kind == .literal_set);
+    try std.testing.expect(workspace.fast_kind == .literal_multi);
 
     try expectFastSpans("(?:pre|post)fix", "prefix postfix prefixx", &.{ .{ 0, 6 }, .{ 7, 14 } });
+}
+
+test "single-byte literal alternation scans first bytes only" {
+    var value = try regex.Regex.init(gpa, "a|b|c", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind == .literal_bytes);
+    try std.testing.expect(workspace.literal_set_single);
+
+    try expectFastSpans("a|b|c", "xx a b c yy", &.{ .{ 3, 4 }, .{ 5, 6 }, .{ 7, 8 } });
+    try expectFastSpans("a|b|c", "zzz", &.{});
+    try expectFastSpans("a|b|c", "cab", &.{ .{ 0, 1 }, .{ 1, 2 }, .{ 2, 3 } });
+}
+
+test "wide literal alternation reports the matching branch" {
+    var value = try regex.Regex.init(gpa, "alpha|bravo|charlie|delta|echo|foxtrot|golf|hotel|india|juliet", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind == .literal_pair);
+
+    try expectFastSpans(
+        "alpha|bravo|charlie|delta|echo|foxtrot|golf|hotel|india|juliet",
+        "xx charlie echo bravo yy",
+        &.{ .{ 3, 10 }, .{ 11, 15 }, .{ 16, 21 } },
+    );
 }
 
 test "bounded sequence handles a trailing optional group" {
@@ -1351,7 +1378,7 @@ test "literal alternation fast path matches leftmost-first" {
     try std.testing.expect(value.program.literal_set != null);
     var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
     defer workspace.deinit();
-    try std.testing.expect(workspace.literal_set_filter != null);
+    try std.testing.expect(workspace.literal_set_multi != null);
 
     const cases = [_]struct { pattern: []const u8, input: []const u8, spans: []const [2]usize }{
         .{ .pattern = "alpha|gamma|epsilon", .input = "", .spans = &.{} },
