@@ -942,6 +942,36 @@ fn expectFastSpans(pattern: []const u8, input: []const u8, spans: []const [2]usi
     try std.testing.expectEqual(spans.len, index);
 }
 
+test "optional prefix run matches the plain run spans" {
+    var value = try regex.Regex.init(gpa, "v?\\w+", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind == .set_run);
+
+    try expectFastSpans("v?\\w+", "v1 2 vv3", &.{ .{ 0, 2 }, .{ 3, 4 }, .{ 5, 8 } });
+    try expectFastSpans("v?\\w+", "v v", &.{ .{ 0, 1 }, .{ 2, 3 } });
+}
+
+test "unbounded chain handles star runs and single-set elements" {
+    var camel = try regex.Regex.init(gpa, "[a-z]+[A-Z][a-z]+", .{});
+    defer camel.deinit();
+    var camel_workspace = try regex.ReplaceWorkspace.init(gpa, camel.program, .{});
+    defer camel_workspace.deinit();
+    try std.testing.expect(camel_workspace.fast_kind == .unbounded_sequence);
+    try expectFastSpans("[a-z]+[A-Z][a-z]+", "fooBar bazQux x", &.{ .{ 0, 6 }, .{ 7, 13 } });
+    try expectFastSpans("[a-z]+[A-Z][a-z]+", "fooB", &.{});
+    try expectFastSpans("[a-z]+[A-Z][a-z]+", "aBc", &.{.{ 0, 3 }});
+
+    var kv = try regex.Regex.init(gpa, "\\w+\\s*=\\s*\\w+", .{});
+    defer kv.deinit();
+    var kv_workspace = try regex.ReplaceWorkspace.init(gpa, kv.program, .{});
+    defer kv_workspace.deinit();
+    try std.testing.expect(kv_workspace.fast_kind == .unbounded_sequence);
+    try expectFastSpans("\\w+\\s*=\\s*\\w+", "name = value key=value a  =  b", &.{ .{ 0, 12 }, .{ 13, 22 }, .{ 23, 30 } });
+    try expectFastSpans("\\w+\\s*=\\s*\\w+", "name value", &.{});
+}
+
 test "unbounded chain handles a literal alternation element" {
     var value = try regex.Regex.init(gpa, "\\w+@\\w+\\.(?:com|org|net)", .{});
     defer value.deinit();

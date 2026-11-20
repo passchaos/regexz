@@ -146,6 +146,11 @@ fn main() {
     let time_text = "12:34 23:59:59 07:08 ".repeat(2000);
     let uuid_text = "550e8400-e29b-41d4-a716-446655440000 123e4567-e89b-12d3-a456-426614174000 ".repeat(1000);
     let semver_text = "1.2.3-beta.1 10.0.0-rc.2 2.11.5 ".repeat(2000);
+    let opt_text = "v1.2 2.3 v4.5 6.7 ".repeat(3000);
+    let ab_text = "ababab abab ".repeat(4000);
+    let camel_text = "fooBar bazQux helloWorld x ".repeat(3000);
+    let kv_text = "name = value key=value a  =  b ".repeat(3000);
+    let ipport_text = "192.168.1.1:8080 10.0.0.1:443 ".repeat(3000);
 
     let qwen = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+";
 
@@ -248,6 +253,16 @@ fn main() {
         200,
     );
     bench_find("find line full", "(?m)^.*$", &ascii_text, 200);
+    bench_find("find optional prefix run", "v?\\w+", &opt_text, 200);
+    bench_find("find repeated literal group", "(?:ab)+", &ab_text, 200);
+    bench_find("find camelCase", "[a-z]+[A-Z][a-z]+", &camel_text, 200);
+    bench_find("find key-value", "\\w+\\s*=\\s*\\w+", &kv_text, 200);
+    bench_find(
+        "find IP port",
+        "\\d+\\.\\d+\\.\\d+\\.\\d+:\\d+",
+        &ipport_text,
+        200,
+    );
     bench_split("split whitespace (22 KiB)", "\\s+", &ascii_text, 200);
     bench_split("split commas (29 KiB)", ",", &csv_text, 200);
     bench_fullmatch(

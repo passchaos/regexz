@@ -293,7 +293,7 @@ pub const Workspace = struct {
         }
         errdefer if (pair_filter) |filter| allocator.destroy(filter);
         const simple_chain = if (limits.longest) null else shapes.chain(program);
-        const set_run = if (limits.longest) null else shapes.setRun(program);
+        const set_run = if (limits.longest) null else (shapes.setRun(program) orelse program.optional_run);
         const capture_run = if (limits.longest) null else capture_run_mod.Plan.init(program);
         // Captured run chains allocate their plan and anchor filter out of
         // line: the shape is uncommon and the state is larger than the
@@ -2051,7 +2051,7 @@ pub const Workspace = struct {
                         const table = &state.tables[element.value];
                         const begin = pos;
                         while (pos < input.len and table[input[pos]]) pos += 1;
-                        if (pos == begin) break;
+                        if (pos - begin < element.len) break;
                     },
                     .literal => {
                         const bytes = state.literal_bytes[element.value..][0..element.len];
@@ -2060,6 +2060,11 @@ pub const Workspace = struct {
                     },
                     .optional => {
                         if (pos < input.len and input[pos] == element.value) pos += 1;
+                    },
+                    .single_set => {
+                        if (pos < input.len and state.tables[element.value][input[pos]]) {
+                            pos += 1;
+                        } else break;
                     },
                     .alternation => {
                         var matched = false;
@@ -3508,7 +3513,7 @@ const UnboundedSequenceState = struct {
     const max_elements = 32;
     const max_sets = 8;
     const max_literal_bytes = 64;
-    const Kind = enum(u8) { run, literal, optional, alternation };
+    const Kind = enum(u8) { run, literal, optional, alternation, single_set };
     const Element = struct { kind: Kind, value: u8, len: u8 };
     const Alternative = struct { offset: u8, len: u8 };
 
@@ -3527,18 +3532,18 @@ const UnboundedSequenceState = struct {
         var sets: [max_sets]model.Set = undefined;
         for (source) |element| {
             switch (element) {
-                .run => |set| {
+                .run => |run| {
                     var set_index: u8 = 0;
                     while (set_index < self.set_count) : (set_index += 1) {
-                        if (shapes.sameSet(sets[set_index], set)) break;
+                        if (shapes.sameSet(sets[set_index], run.set)) break;
                     }
                     if (set_index == self.set_count) {
                         if (self.set_count == sets.len) return false;
-                        sets[self.set_count] = set;
-                        self.tables[self.set_count] = byte_table.init(256, set);
+                        sets[self.set_count] = run.set;
+                        self.tables[self.set_count] = byte_table.init(256, run.set);
                         self.set_count += 1;
                     }
-                    self.elements[self.len] = .{ .kind = .run, .value = set_index, .len = 0 };
+                    self.elements[self.len] = .{ .kind = .run, .value = set_index, .len = run.min };
                 },
                 .literal => |bytes| {
                     if (bytes.len == 0 or bytes.len > std.math.maxInt(u8)) return false;
@@ -3553,6 +3558,19 @@ const UnboundedSequenceState = struct {
                 },
                 .optional => |byte| {
                     self.elements[self.len] = .{ .kind = .optional, .value = byte, .len = 0 };
+                },
+                .single_set => |set| {
+                    var set_index: u8 = 0;
+                    while (set_index < self.set_count) : (set_index += 1) {
+                        if (shapes.sameSet(sets[set_index], set)) break;
+                    }
+                    if (set_index == self.set_count) {
+                        if (self.set_count == sets.len) return false;
+                        sets[self.set_count] = set;
+                        self.tables[self.set_count] = byte_table.init(256, set);
+                        self.set_count += 1;
+                    }
+                    self.elements[self.len] = .{ .kind = .single_set, .value = set_index, .len = 0 };
                 },
                 .alternation => |branches| {
                     if (branches.len == 0 or branches.len > std.math.maxInt(u8)) return false;
@@ -3579,31 +3597,32 @@ const UnboundedSequenceState = struct {
             self.len += 1;
         }
         if (self.len == 0) return false;
-        switch (self.elements[0].kind) {
-            .run => self.first_table = self.tables[self.elements[0].value],
-            .literal => self.first_table[self.literal_bytes[self.elements[0].value]] = true,
-            .alternation => {
-                const first = self.elements[0];
-                for (self.alternatives[first.value..][0..first.len]) |alternative| {
-                    self.first_table[self.literal_bytes[alternative.offset]] = true;
-                }
-            },
-            .optional => {
-                self.first_table[self.elements[0].value] = true;
-                if (self.len > 1) {
-                    const next = self.elements[1];
-                    switch (next.kind) {
-                        .run => self.first_table = mergeTables(self.first_table, self.tables[next.value]),
-                        .literal => self.first_table[self.literal_bytes[next.value]] = true,
-                        .alternation => {
-                            for (self.alternatives[next.value..][0..next.len]) |alternative| {
-                                self.first_table[self.literal_bytes[alternative.offset]] = true;
-                            }
-                        },
-                        .optional => return false,
+        // Leading min-0 runs and optional literals may consume nothing, so
+        // the match can start at the next element's first bytes too.
+        var index: usize = 0;
+        while (index < self.len) : (index += 1) {
+            const element = self.elements[index];
+            switch (element.kind) {
+                .run => {
+                    self.first_table = mergeTables(self.first_table, self.tables[element.value]);
+                    if (element.len != 0) return true;
+                },
+                .literal => {
+                    self.first_table[self.literal_bytes[element.value]] = true;
+                    return true;
+                },
+                .alternation => {
+                    for (self.alternatives[element.value..][0..element.len]) |alternative| {
+                        self.first_table[self.literal_bytes[alternative.offset]] = true;
                     }
-                }
-            },
+                    return true;
+                },
+                .optional => self.first_table[element.value] = true,
+                .single_set => {
+                    self.first_table = mergeTables(self.first_table, self.tables[element.value]);
+                    return true;
+                },
+            }
         }
         return true;
     }

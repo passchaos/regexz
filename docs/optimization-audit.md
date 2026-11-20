@@ -765,3 +765,14 @@ or the text end; the end-anchored word case improves 2.4x and is 2.29x
 ahead. The comparison now covers 47 cases and all are faster, with the
 semver scan the thinnest at 1.01x. See
 [literal fast paths](benchmarks/literal-fast-paths.md).
+
+Three sequence shapes were added after the expanded comparison found them
+behind. `x? set+` with `x` in the set (`v?\w+`) matches the same spans as
+`set+` and now takes the plain set-run path (2.7x, 1.83x ahead). The
+unbounded chain now accepts adjacent runs with disjoint sets and `set*` runs
+with a zero minimum, covering key-value scans (`\w+\s*=\s*\w+`, 3.5x, 2.48x
+ahead), and a single member of a multi-member ASCII set is a chain element,
+covering camelCase (`[a-z]+[A-Z][a-z]+`, 4.0x, 1.37x ahead). Overlapping
+adjacent runs, ambiguous optionals and non-ASCII sets fall back. The
+comparison now covers 52 cases and all are faster, with the semver scan the
+thinnest at 1.01x. See [literal fast paths](benchmarks/literal-fast-paths.md).

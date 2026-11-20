@@ -330,6 +330,26 @@ pub fn main() !void {
     defer semver_text.deinit(gpa);
     for (0..2000) |_| try semver_text.appendSlice(gpa, "1.2.3-beta.1 10.0.0-rc.2 2.11.5 ");
 
+    var opt_text: std.ArrayList(u8) = .empty;
+    defer opt_text.deinit(gpa);
+    for (0..3000) |_| try opt_text.appendSlice(gpa, "v1.2 2.3 v4.5 6.7 ");
+
+    var ab_text: std.ArrayList(u8) = .empty;
+    defer ab_text.deinit(gpa);
+    for (0..4000) |_| try ab_text.appendSlice(gpa, "ababab abab ");
+
+    var camel_text: std.ArrayList(u8) = .empty;
+    defer camel_text.deinit(gpa);
+    for (0..3000) |_| try camel_text.appendSlice(gpa, "fooBar bazQux helloWorld x ");
+
+    var kv_text: std.ArrayList(u8) = .empty;
+    defer kv_text.deinit(gpa);
+    for (0..3000) |_| try kv_text.appendSlice(gpa, "name = value key=value a  =  b ");
+
+    var ipport_text: std.ArrayList(u8) = .empty;
+    defer ipport_text.deinit(gpa);
+    for (0..3000) |_| try ipport_text.appendSlice(gpa, "192.168.1.1:8080 10.0.0.1:443 ");
+
     const qwen = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+";
     const ucp = regexz.Limits{ .unicode_perl_space = true, .max_execution_steps = 16_000_000 };
 
@@ -372,6 +392,11 @@ pub fn main() !void {
     try benchFind(io, out, "find email TLD", "\\w+@\\w+\\.(?:com|org|net)", email_text.items, 200, .{});
     try benchFind(io, out, "find CIDR", "\\d{1,3}(?:\\.\\d{1,3}){3}(?:/\\d{1,2})?", ip_text.items, 200, .{});
     try benchFind(io, out, "find line full", "(?m)^.*$", ascii_text.items, 200, .{});
+    try benchFind(io, out, "find optional prefix run", "v?\\w+", opt_text.items, 200, .{});
+    try benchFind(io, out, "find repeated literal group", "(?:ab)+", ab_text.items, 200, .{});
+    try benchFind(io, out, "find camelCase", "[a-z]+[A-Z][a-z]+", camel_text.items, 200, .{});
+    try benchFind(io, out, "find key-value", "\\w+\\s*=\\s*\\w+", kv_text.items, 200, .{});
+    try benchFind(io, out, "find IP port", "\\d+\\.\\d+\\.\\d+\\.\\d+:\\d+", ipport_text.items, 200, .{});
     try benchSplit(io, out, "split whitespace (22 KiB)", "\\s+", ascii_text.items, 200);
     try benchSplit(io, out, "split commas (29 KiB)", ",", csv_text.items, 200);
     try benchMatches(io, out, "fullmatch literal", "hello, world!", "hello, world!", 200000, .{});

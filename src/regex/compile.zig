@@ -14,8 +14,10 @@ const zero_width_mod = @import("zero_width.zig");
 pub const BoundedElement = struct { set: model.Set, min: u8, max: u8 };
 
 pub const UnboundedElement = union(enum) {
-    run: model.Set,
+    run: struct { set: model.Set, min: u8 },
     literal: []const u8,
+    /// One member of a multi-member ASCII set.
+    single_set: model.Set,
     optional: u8,
     alternation: []const []const u8,
 };
@@ -78,6 +80,9 @@ pub const Program = struct {
     /// A run followed by an optional `separator run` group and a literal
     /// (`\d+(?:\.\d+)?%`). Not serialized.
     optional_tail: ?OptionalTailShape = null,
+    /// `x? set+` where `x` is a member of the set, which matches exactly the
+    /// same spans as `set+`. Not serialized.
+    optional_run: ?model.Set = null,
     /// A dominant alternation branch (`set? setB+`) that decides the match
     /// when no earlier branch can start at the current byte. Not serialized.
     fast_branch: ?fast_branch_mod.Plan = null,
@@ -684,6 +689,38 @@ const BoundedSequenceBuilder = struct {
     }
 };
 
+/// `x? set+` where the optional byte is a member of the run set: the optional
+/// never changes the match span, so the program behaves as `set+`.
+fn detectOptionalRun(root: *const model.Node) ?model.Set {
+    var node = root;
+    while (node.* == .group) node = node.group;
+    if (node.* != .pair) return null;
+    var left = node.pair.left;
+    while (left.* == .group) left = left.group;
+    if (left.* != .repeat) return null;
+    const optional = left.repeat;
+    if (optional.lazy or optional.possessive or optional.minimum != 0 or optional.maximum == null or optional.maximum.? != 1) return null;
+    var byte_node = optional.child;
+    while (byte_node.* == .group) byte_node = byte_node.group;
+    if (byte_node.* != .set or byte_node.set.ranges.len != 1 or
+        byte_node.set.ranges[0].first != byte_node.set.ranges[0].last)
+    {
+        return null;
+    }
+    const byte = byte_node.set.ranges[0].first;
+    var right = node.pair.right;
+    while (right.* == .group) right = right.group;
+    if (right.* != .repeat) return null;
+    const run = right.repeat;
+    if (run.lazy or run.possessive or run.maximum != null or run.minimum < 1) return null;
+    var run_node = run.child;
+    while (run_node.* == .group) run_node = run_node.group;
+    if (run_node.* != .set) return null;
+    const set = run_node.set;
+    if (!set.matches(byte)) return null;
+    return set;
+}
+
 /// A run, an optional `separator run` group, then a literal byte, for
 /// example `\d+(?:\.\d+)?%`.
 fn detectOptionalTail(root: *const model.Node) ?OptionalTailShape {
@@ -832,10 +869,29 @@ fn detectPrefixRun(root: *const model.Node) ?PrefixRunShape {
 /// bytes, with an optional leading literal. Adjacent runs and literal bytes
 /// inside a following run set would need backtracking, so they reject the
 /// shape.
+/// Whether two materialized sets share a rune.
+fn setOverlaps(a: model.Set, b: model.Set) bool {
+    var left: usize = 0;
+    var right: usize = 0;
+    while (left < a.ranges.len and right < b.ranges.len) {
+        const x = a.ranges[left];
+        const y = b.ranges[right];
+        if (x.last < y.first) {
+            left += 1;
+        } else if (y.last < x.first) {
+            right += 1;
+        } else {
+            return true;
+        }
+    }
+    return false;
+}
+
 const UnboundedSequenceBuilder = struct {
     const max_elements = 32;
     const max_literal_bytes = 64;
     const max_alternatives = 8;
+    const max_run_min = 8;
 
     allocator: std.mem.Allocator,
     elements: std.ArrayList(UnboundedElement) = .empty,
@@ -873,15 +929,17 @@ const UnboundedSequenceBuilder = struct {
         return true;
     }
 
-    fn appendRun(self: *UnboundedSequenceBuilder, set: model.Set) model.Error!bool {
+    fn appendRun(self: *UnboundedSequenceBuilder, set: model.Set, min: u8) model.Error!bool {
         if (!set.ascii_only or set.ranges.len == 0) return false;
         if (self.elements.items.len == max_elements) return false;
         if (self.elements.items.len != 0) {
             const last = self.elements.items[self.elements.items.len - 1];
-            // Adjacent runs need backtracking when their sets overlap.
-            if (last == .run) return false;
+            // Disjoint adjacent runs are exact: the first run ends at the
+            // first byte the second can consume. Overlapping sets would need
+            // backtracking.
+            if (last == .run and setOverlaps(last.run.set, set)) return false;
         }
-        try self.elements.append(self.allocator, .{ .run = set });
+        try self.elements.append(self.allocator, .{ .run = .{ .set = set, .min = min } });
         self.run_count += 1;
         return true;
     }
@@ -940,15 +998,24 @@ const UnboundedSequenceBuilder = struct {
             .pair => |pair| (try self.add(pair.left)) and (try self.add(pair.right)),
             .alternate => self.addAlternation(value),
             .set => |set| blk: {
-                if (set.ranges.len != 1 or set.ranges[0].first != set.ranges[0].last) break :blk false;
-                if (set.ranges[0].first >= 0x80) break :blk false;
-                break :blk self.appendLiteral(@intCast(set.ranges[0].first));
+                if (set.ranges.len == 1 and set.ranges[0].first == set.ranges[0].last) {
+                    if (set.ranges[0].first >= 0x80) break :blk false;
+                    break :blk self.appendLiteral(@intCast(set.ranges[0].first));
+                }
+                if (!set.ascii_only or set.ranges.len == 0) break :blk false;
+                if (self.elements.items.len == max_elements) break :blk false;
+                if (self.elements.items.len != 0) {
+                    const last = self.elements.items[self.elements.items.len - 1];
+                    if (last == .run and setOverlaps(last.run.set, set)) break :blk false;
+                }
+                try self.elements.append(self.allocator, .{ .single_set = set });
+                break :blk true;
             },
             .repeat => |repeat| blk: {
                 if (repeat.lazy or repeat.possessive) break :blk false;
                 const set = setOf(repeat.child) orelse break :blk false;
-                if (repeat.minimum >= 1 and repeat.maximum == null) {
-                    break :blk self.appendRun(set);
+                if (repeat.maximum == null and repeat.minimum <= max_run_min) {
+                    break :blk self.appendRun(set, @intCast(repeat.minimum));
                 }
                 // A leading `x?` literal prefix, for example `v?`.
                 if (repeat.minimum == 0 and repeat.maximum == 1 and self.elements.items.len == 0) {
@@ -966,27 +1033,40 @@ const UnboundedSequenceBuilder = struct {
 
     fn validate(self: *UnboundedSequenceBuilder) bool {
         if (self.run_count < 2) return false;
+        var mandatory = false;
+        for (self.elements.items) |element| {
+            switch (element) {
+                .run => |run| mandatory = mandatory or run.min != 0,
+                .literal => mandatory = true,
+                .single_set => mandatory = true,
+                .optional => {},
+                .alternation => mandatory = true,
+            }
+        }
+        if (!mandatory) return false;
         var index: usize = 0;
         while (index < self.elements.items.len) : (index += 1) {
             const element = self.elements.items[index];
             if (element == .run and index + 1 < self.elements.items.len) {
                 const next = self.elements.items[index + 1];
-                if (next == .run) return false;
-                if (next == .literal and next.literal.len != 0 and element.run.matches(next.literal[0])) return false;
+                if (next == .run and setOverlaps(element.run.set, next.run.set)) return false;
+                if (next == .literal and next.literal.len != 0 and element.run.set.matches(next.literal[0])) return false;
                 if (next == .alternation) {
                     for (next.alternation) |branch| {
-                        if (branch.len != 0 and element.run.matches(branch[0])) return false;
+                        if (branch.len != 0 and element.run.set.matches(branch[0])) return false;
                     }
                 }
+                if (next == .single_set and setOverlaps(element.run.set, next.single_set)) return false;
             }
             if (element == .optional) {
                 if (index + 1 >= self.elements.items.len) return false;
                 const next = self.elements.items[index + 1];
                 const next_set = switch (next) {
-                    .run => |set| set,
+                    .run => |run| run.set,
                     .literal => |bytes| if (bytes.len == 0) return false else null,
                     .optional => return false,
                     .alternation => null,
+                    .single_set => |set| set,
                 };
                 if (next_set) |set| {
                     if (set.matches(element.optional)) return false;
@@ -1309,6 +1389,8 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         literal_set == null and !limits.auto_callout) detectChainLoop(parsed.root) else null;
     const optional_tail: ?OptionalTailShape = if (literal == null and caseless_literal == null and
         literal_set == null and !limits.auto_callout) detectOptionalTail(parsed.root) else null;
+    const optional_run: ?model.Set = if (literal == null and caseless_literal == null and
+        literal_set == null and !limits.auto_callout) detectOptionalRun(parsed.root) else null;
     var unbounded_builder = UnboundedSequenceBuilder{ .allocator = allocator, .literal_bytes = unbounded_storage };
     defer unbounded_builder.elements.deinit(allocator);
     const unbounded_sequence: ?[]const UnboundedElement = if (literal == null and caseless_literal == null and
@@ -1365,6 +1447,7 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         .prefix_run = prefix_run,
         .chain_loop = chain_loop,
         .optional_tail = optional_tail,
+        .optional_run = optional_run,
         .dfa_eligible = dfa_eligible,
         .extended = extended,
         .newline = parsed.newline,

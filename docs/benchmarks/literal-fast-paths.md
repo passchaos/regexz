@@ -175,3 +175,21 @@ set bitmap and built a `Position` for every run. ASCII-only anchor sets now
 use a byte table, and only runs ending at a newline or the text end consult
 the newline mode. The end-anchored word case improves 2.4x
 (33,525.4 -> 14,100.2 ns) and is 2.29x ahead.
+
+## Optional prefixes, star runs and single-set elements
+
+Three more sequence shapes were added to the unbounded chain walker:
+
+- `x? set+` where `x` is a member of the set (`v?\w+`) matches exactly the
+  same spans as `set+`, so the program takes the plain set-run path. The
+  optional-prefix case improves 2.7x and is 1.83x ahead.
+- Adjacent runs are accepted when their sets are disjoint (the first run ends
+  at the first byte the second can consume), and `set*` runs with a minimum of
+  zero are allowed. This covers `\w+\s*=\s*\w+`: 3.5x faster and 2.48x ahead.
+- A single member of a multi-member ASCII set is a chain element
+  (`[a-z]+[A-Z][a-z]+`): the run must be disjoint from the set, then one
+  member is consumed and the next run continues. CamelCase scanning improves
+  4.0x and is 1.37x ahead.
+
+Overlapping adjacent runs, ambiguous optionals and non-ASCII sets still fall
+back to the general engine.
