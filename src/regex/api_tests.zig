@@ -100,6 +100,53 @@ test "findAll reuses a pooled workspace for process allocators" {
     try std.testing.expectEqual(@as(usize, 4), count);
 }
 
+test "replaceAll reuses a pooled workspace for process allocators" {
+    const page = std.heap.page_allocator;
+    var value = try regex.Regex.init(page, "\\s+", .{});
+    defer value.deinit();
+
+    const first = try value.replaceAll(page, "a  b\tc", "_");
+    defer page.free(first);
+    try std.testing.expectEqualStrings("a_b_c", first);
+    const second = try value.replaceAll(page, "a  b\tc", "_");
+    defer page.free(second);
+    try std.testing.expectEqualStrings("a_b_c", second);
+
+    // A workspace belongs to one allocator; another poolable allocator gets
+    // its own workspace and owns the returned buffer.
+    const smp = try value.replaceAll(std.heap.smp_allocator, "a  b\tc", "-");
+    defer std.heap.smp_allocator.free(smp);
+    try std.testing.expectEqualStrings("a-b-c", smp);
+
+    // A different program evicts the pooled workspace instead of reusing it.
+    var other = try regex.Regex.init(page, "\\A|\\z", .{});
+    defer other.deinit();
+    const wrapped = try other.replaceAll(page, "abc", "X");
+    defer page.free(wrapped);
+    try std.testing.expectEqualStrings("XabcX", wrapped);
+    const wrapped_again = try other.replaceAll(page, "abc", "X");
+    defer page.free(wrapped_again);
+    try std.testing.expectEqualStrings("XabcX", wrapped_again);
+}
+
+test "findAll evicts a pooled workspace from another program" {
+    const page = std.heap.page_allocator;
+    var first = try regex.Regex.init(page, "\\s+", .{});
+    defer first.deinit();
+    var second = try regex.Regex.init(page, "\\d+", .{});
+    defer second.deinit();
+    for (0..2) |_| {
+        var a = try first.findAll(page, "a b");
+        var count: usize = 0;
+        while (try a.next()) |_| count += 1;
+        a.deinit();
+        var b = try second.findAll(page, "1 2");
+        while (try b.next()) |_| count += 1;
+        b.deinit();
+        try std.testing.expectEqual(@as(usize, 3), count);
+    }
+}
+
 test "split returns slices of the input" {
     var value = try regex.Regex.init(gpa, ",", .{});
     defer value.deinit();

@@ -14,31 +14,31 @@ text and small full-match subjects.
 
 | Case | regexz, ns/iter | Rust, ns/iter | Rust / regexz |
 | --- | ---: | ---: | ---: |
-| compile Qwen tokenizer | 32,700.3 | 461,767.6 | 14.12x |
-| compile xDS-like | 2,539.8 | 22,201.0 | 8.74x |
-| find Qwen tokenizer | 41,205.0 | 64,575.0 | 1.57x |
-| findAll Qwen (borrowed) | 42,610.8 | 63,321.7 | 1.49x |
-| findAll Qwen (owning) | 44,361.7 | 66,505.8 | 1.50x |
-| find CJK tokenizer | 162,888.3 | 234,632.5 | 1.44x |
-| find HTML tag | 48,089.2 | 120,827.7 | 2.51x |
-| find URL | 33,571.5 | 88,766.7 | 2.64x |
-| find JSON string literal | 8,401.5 | 17,291.9 | 2.06x |
-| find JSON number | 27,969.8 | 64,080.8 | 2.29x |
-| find word boundary | 65,542.9 | 142,159.2 | 2.17x |
-| split whitespace (22 KiB) | 20,134.0 | 78,911.2 | 3.92x |
-| split commas (29 KiB) | 19,018.8 | 56,157.9 | 2.95x |
-| fullmatch literal | 1.7 | 9.7 | 5.71x |
-| fullmatch class | 5.2 | 34.2 | 6.58x |
-| fullmatch xDS-like | 10.1 | 32.5 | 3.22x |
-| replaceAll a+ -> x | 27,111.5 | 107,794.8 | 3.98x |
-| replaceAll \A|\z -> X | 7,383.1 | 9,183.8 | 1.24x |
-| RegexSet 9 no-match patterns | 1,949.4 | 39,712.7 | 20.37x |
+| compile Qwen tokenizer | 31,056.4 | 430,830.1 | 13.87x |
+| compile xDS-like | 2,482.1 | 20,698.9 | 8.34x |
+| find Qwen tokenizer | 40,954.2 | 64,150.0 | 1.57x |
+| findAll Qwen (borrowed) | 42,305.0 | 69,917.5 | 1.65x |
+| findAll Qwen (owning) | 43,235.8 | 62,387.5 | 1.44x |
+| find CJK tokenizer | 166,830.8 | 224,045.0 | 1.34x |
+| find HTML tag | 46,952.5 | 121,882.7 | 2.60x |
+| find URL | 33,305.8 | 82,652.1 | 2.48x |
+| find JSON string literal | 7,131.9 | 17,074.4 | 2.39x |
+| find JSON number | 27,312.3 | 60,208.1 | 2.20x |
+| find word boundary | 62,793.1 | 131,606.7 | 2.10x |
+| split whitespace (22 KiB) | 18,679.0 | 74,767.7 | 4.00x |
+| split commas (29 KiB) | 17,520.2 | 54,734.4 | 3.12x |
+| fullmatch literal | 1.8 | 9.3 | 5.17x |
+| fullmatch class | 5.1 | 31.3 | 6.14x |
+| fullmatch xDS-like | 9.8 | 29.0 | 2.96x |
+| replaceAll a+ -> x | 22,254.2 | 100,201.5 | 4.50x |
+| replaceAll \A|\z -> X | 3,504.2 | 7,802.1 | 2.23x |
+| RegexSet 9 no-match patterns | 1,817.5 | 38,040.0 | 20.93x |
 
-regexz is faster on all 19 measured cases: 14.12x on tokenizer compilation,
-8.74x on a small-pattern compile, 1.44–1.57x on tokenizer scans and match
-iteration, 2.06–2.64x on search scans, 2.95–3.92x on splits, 3.22–6.58x on
-full-match calls, 3.98x on a set-run replacement, 1.24x on a zero-width
-replacement and 20.37x on the nine-pattern set.
+regexz is faster on all 19 measured cases: 13.87x on tokenizer compilation,
+8.34x on a small-pattern compile, 1.34–1.65x on tokenizer scans and match
+iteration, 2.10–2.60x on search scans, 3.12–4.00x on splits, 2.96–6.14x on
+full-match calls, 4.50x on a set-run replacement, 2.23x on a zero-width
+replacement and 20.93x on the nine-pattern set.
 
 Compilation now selects a 16 KiB, 64 KiB or 256 KiB block by pattern shape,
 reuses page-allocator blocks from a process pool, and falls back to the arena
@@ -63,7 +63,10 @@ replacement appends without capacity checks (see
 [capacity-guaranteed appends](set-run-append.md)), lifting the `a+`
 replacement from 3.66x to 3.98x. Split parts append without capacity checks
 (see [capacity-guaranteed split appends](split-appends.md)), keeping the
-whitespace split at 3.92x and the comma split at 2.95x.
+whitespace split at 4.00x and the comma split at 3.12x. `Regex.replaceAll`
+and `replacen` reuse a pooled replacement workspace for page/smp allocators
+(see [pooled replacement workspaces](replace-workspace-pool.md)), lifting the
+zero-width replacement from 1.24x to 2.23x.
 
 Caveats: the iteration APIs are the natural ones for each library
 (`Workspace.find` in a loop versus `Regex::find_iter`), full match is

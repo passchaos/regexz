@@ -1,0 +1,1548 @@
+{
+  "baseline": "0723b71",
+  "method": "alternating before/after executions; suites run sequentially",
+  "executables": {
+    "compare": {
+      "before": {
+        "path": "/private/tmp/cmp_base",
+        "sha256": "0398355f05f98a4af13f295101ea7dbdf57401e2ca4388c46d3bc49fdf2baf31"
+      },
+      "after": {
+        "path": "/private/tmp/cmp_final",
+        "sha256": "363458b80a96d4f5ad073406b73c8f663e4d4d5da6615905eea75f6ebfa02b01"
+      }
+    }
+  },
+  "rounds": [
+    {
+      "order": [
+        "before",
+        "after"
+      ],
+      "runs": {
+        "before": {
+          "compare/compile Qwen tokenizer": {
+            "ns": 29686.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/compile xDS-like": {
+            "ns": 2396.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find Qwen tokenizer": {
+            "ns": 40406.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (borrowed)": {
+            "ns": 40235.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (owning)": {
+            "ns": 40110.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find CJK tokenizer": {
+            "ns": 158417.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find HTML tag": {
+            "ns": 47336.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find URL": {
+            "ns": 34408.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON string literal": {
+            "ns": 8086.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON number": {
+            "ns": 27037.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find word boundary": {
+            "ns": 63631.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split whitespace (22 KiB)": {
+            "ns": 19159.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split commas (29 KiB)": {
+            "ns": 18151.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch literal": {
+            "ns": 1.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch class": {
+            "ns": 5.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch xDS-like": {
+            "ns": 9.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll a+ -> x": {
+            "ns": 24474.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll \\A|\\z -> X": {
+            "ns": 7133.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/RegexSet 9 no-match patterns": {
+            "ns": 1891.3,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        },
+        "after": {
+          "compare/compile Qwen tokenizer": {
+            "ns": 31786.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/compile xDS-like": {
+            "ns": 2418.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find Qwen tokenizer": {
+            "ns": 39465.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (borrowed)": {
+            "ns": 41060.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (owning)": {
+            "ns": 41812.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find CJK tokenizer": {
+            "ns": 155643.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find HTML tag": {
+            "ns": 46950.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find URL": {
+            "ns": 32890.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON string literal": {
+            "ns": 7037.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON number": {
+            "ns": 26784.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find word boundary": {
+            "ns": 61420.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split whitespace (22 KiB)": {
+            "ns": 17887.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split commas (29 KiB)": {
+            "ns": 17139.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch literal": {
+            "ns": 2.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch class": {
+            "ns": 6.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch xDS-like": {
+            "ns": 9.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll a+ -> x": {
+            "ns": 23472.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll \\A|\\z -> X": {
+            "ns": 5091.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/RegexSet 9 no-match patterns": {
+            "ns": 3041.3,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        }
+      }
+    },
+    {
+      "order": [
+        "after",
+        "before"
+      ],
+      "runs": {
+        "after": {
+          "compare/compile Qwen tokenizer": {
+            "ns": 32872.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/compile xDS-like": {
+            "ns": 2405.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find Qwen tokenizer": {
+            "ns": 40545.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (borrowed)": {
+            "ns": 41261.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (owning)": {
+            "ns": 42995.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find CJK tokenizer": {
+            "ns": 155503.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find HTML tag": {
+            "ns": 47739.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find URL": {
+            "ns": 33301.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON string literal": {
+            "ns": 7106.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON number": {
+            "ns": 26898.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find word boundary": {
+            "ns": 60870.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split whitespace (22 KiB)": {
+            "ns": 17082.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split commas (29 KiB)": {
+            "ns": 16142.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch literal": {
+            "ns": 1.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch class": {
+            "ns": 5.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch xDS-like": {
+            "ns": 10.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll a+ -> x": {
+            "ns": 23407.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll \\A|\\z -> X": {
+            "ns": 3679.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/RegexSet 9 no-match patterns": {
+            "ns": 1764.0,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        },
+        "before": {
+          "compare/compile Qwen tokenizer": {
+            "ns": 32513.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/compile xDS-like": {
+            "ns": 2397.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find Qwen tokenizer": {
+            "ns": 40972.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (borrowed)": {
+            "ns": 40105.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (owning)": {
+            "ns": 40110.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find CJK tokenizer": {
+            "ns": 159377.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find HTML tag": {
+            "ns": 47494.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find URL": {
+            "ns": 34085.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON string literal": {
+            "ns": 8020.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON number": {
+            "ns": 27267.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find word boundary": {
+            "ns": 62955.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split whitespace (22 KiB)": {
+            "ns": 19081.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split commas (29 KiB)": {
+            "ns": 18695.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch literal": {
+            "ns": 1.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch class": {
+            "ns": 5.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch xDS-like": {
+            "ns": 9.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll a+ -> x": {
+            "ns": 25404.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll \\A|\\z -> X": {
+            "ns": 6711.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/RegexSet 9 no-match patterns": {
+            "ns": 2046.3,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        }
+      }
+    },
+    {
+      "order": [
+        "before",
+        "after"
+      ],
+      "runs": {
+        "before": {
+          "compare/compile Qwen tokenizer": {
+            "ns": 29293.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/compile xDS-like": {
+            "ns": 2442.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find Qwen tokenizer": {
+            "ns": 39915.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (borrowed)": {
+            "ns": 40923.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (owning)": {
+            "ns": 41345.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find CJK tokenizer": {
+            "ns": 159806.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find HTML tag": {
+            "ns": 46744.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find URL": {
+            "ns": 33219.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON string literal": {
+            "ns": 8113.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON number": {
+            "ns": 27123.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find word boundary": {
+            "ns": 62705.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split whitespace (22 KiB)": {
+            "ns": 17196.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split commas (29 KiB)": {
+            "ns": 16692.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch literal": {
+            "ns": 1.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch class": {
+            "ns": 5.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch xDS-like": {
+            "ns": 9.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll a+ -> x": {
+            "ns": 23681.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll \\A|\\z -> X": {
+            "ns": 4466.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/RegexSet 9 no-match patterns": {
+            "ns": 1912.5,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        },
+        "after": {
+          "compare/compile Qwen tokenizer": {
+            "ns": 30541.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/compile xDS-like": {
+            "ns": 2577.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find Qwen tokenizer": {
+            "ns": 40646.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (borrowed)": {
+            "ns": 40871.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (owning)": {
+            "ns": 42595.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find CJK tokenizer": {
+            "ns": 158944.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find HTML tag": {
+            "ns": 47127.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find URL": {
+            "ns": 32782.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON string literal": {
+            "ns": 7063.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON number": {
+            "ns": 26594.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find word boundary": {
+            "ns": 60994.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split whitespace (22 KiB)": {
+            "ns": 19348.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split commas (29 KiB)": {
+            "ns": 18593.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch literal": {
+            "ns": 1.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch class": {
+            "ns": 5.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch xDS-like": {
+            "ns": 9.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll a+ -> x": {
+            "ns": 21306.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll \\A|\\z -> X": {
+            "ns": 3461.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/RegexSet 9 no-match patterns": {
+            "ns": 1811.3,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        }
+      }
+    },
+    {
+      "order": [
+        "after",
+        "before"
+      ],
+      "runs": {
+        "after": {
+          "compare/compile Qwen tokenizer": {
+            "ns": 30087.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/compile xDS-like": {
+            "ns": 2426.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find Qwen tokenizer": {
+            "ns": 41524.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (borrowed)": {
+            "ns": 40987.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (owning)": {
+            "ns": 42310.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find CJK tokenizer": {
+            "ns": 155581.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find HTML tag": {
+            "ns": 46930.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find URL": {
+            "ns": 34431.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON string literal": {
+            "ns": 7029.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON number": {
+            "ns": 27947.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find word boundary": {
+            "ns": 60937.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split whitespace (22 KiB)": {
+            "ns": 16522.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split commas (29 KiB)": {
+            "ns": 16027.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch literal": {
+            "ns": 1.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch class": {
+            "ns": 5.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch xDS-like": {
+            "ns": 9.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll a+ -> x": {
+            "ns": 22621.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll \\A|\\z -> X": {
+            "ns": 4265.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/RegexSet 9 no-match patterns": {
+            "ns": 1839.8,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        },
+        "before": {
+          "compare/compile Qwen tokenizer": {
+            "ns": 29579.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/compile xDS-like": {
+            "ns": 2436.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find Qwen tokenizer": {
+            "ns": 40162.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (borrowed)": {
+            "ns": 42416.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (owning)": {
+            "ns": 40869.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find CJK tokenizer": {
+            "ns": 161767.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find HTML tag": {
+            "ns": 46897.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find URL": {
+            "ns": 34397.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON string literal": {
+            "ns": 8147.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON number": {
+            "ns": 27600.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find word boundary": {
+            "ns": 62490.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split whitespace (22 KiB)": {
+            "ns": 20841.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split commas (29 KiB)": {
+            "ns": 19619.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch literal": {
+            "ns": 1.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch class": {
+            "ns": 5.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch xDS-like": {
+            "ns": 9.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll a+ -> x": {
+            "ns": 26614.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll \\A|\\z -> X": {
+            "ns": 7239.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/RegexSet 9 no-match patterns": {
+            "ns": 1960.4,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        }
+      }
+    },
+    {
+      "order": [
+        "before",
+        "after"
+      ],
+      "runs": {
+        "before": {
+          "compare/compile Qwen tokenizer": {
+            "ns": 29581.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/compile xDS-like": {
+            "ns": 2547.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find Qwen tokenizer": {
+            "ns": 41640.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (borrowed)": {
+            "ns": 40807.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (owning)": {
+            "ns": 40677.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find CJK tokenizer": {
+            "ns": 176501.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find HTML tag": {
+            "ns": 48280.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find URL": {
+            "ns": 34123.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON string literal": {
+            "ns": 8518.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON number": {
+            "ns": 28551.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find word boundary": {
+            "ns": 61697.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split whitespace (22 KiB)": {
+            "ns": 20189.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split commas (29 KiB)": {
+            "ns": 17865.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch literal": {
+            "ns": 1.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch class": {
+            "ns": 5.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch xDS-like": {
+            "ns": 9.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll a+ -> x": {
+            "ns": 25441.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll \\A|\\z -> X": {
+            "ns": 6614.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/RegexSet 9 no-match patterns": {
+            "ns": 1889.0,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        },
+        "after": {
+          "compare/compile Qwen tokenizer": {
+            "ns": 29568.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/compile xDS-like": {
+            "ns": 2408.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find Qwen tokenizer": {
+            "ns": 40786.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (borrowed)": {
+            "ns": 41089.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (owning)": {
+            "ns": 45956.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find CJK tokenizer": {
+            "ns": 158505.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find HTML tag": {
+            "ns": 46698.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find URL": {
+            "ns": 33456.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON string literal": {
+            "ns": 7148.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON number": {
+            "ns": 26904.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find word boundary": {
+            "ns": 61475.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split whitespace (22 KiB)": {
+            "ns": 20847.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split commas (29 KiB)": {
+            "ns": 18407.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch literal": {
+            "ns": 1.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch class": {
+            "ns": 5.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch xDS-like": {
+            "ns": 8.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll a+ -> x": {
+            "ns": 22631.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll \\A|\\z -> X": {
+            "ns": 3343.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/RegexSet 9 no-match patterns": {
+            "ns": 1737.1,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        }
+      }
+    },
+    {
+      "order": [
+        "after",
+        "before"
+      ],
+      "runs": {
+        "after": {
+          "compare/compile Qwen tokenizer": {
+            "ns": 30308.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/compile xDS-like": {
+            "ns": 2360.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find Qwen tokenizer": {
+            "ns": 39222.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (borrowed)": {
+            "ns": 40642.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (owning)": {
+            "ns": 42801.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find CJK tokenizer": {
+            "ns": 163741.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find HTML tag": {
+            "ns": 47725.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find URL": {
+            "ns": 33060.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON string literal": {
+            "ns": 6910.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON number": {
+            "ns": 27148.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find word boundary": {
+            "ns": 61289.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split whitespace (22 KiB)": {
+            "ns": 15668.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split commas (29 KiB)": {
+            "ns": 15540.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch literal": {
+            "ns": 1.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch class": {
+            "ns": 5.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch xDS-like": {
+            "ns": 9.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll a+ -> x": {
+            "ns": 22796.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll \\A|\\z -> X": {
+            "ns": 3384.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/RegexSet 9 no-match patterns": {
+            "ns": 1814.6,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        },
+        "before": {
+          "compare/compile Qwen tokenizer": {
+            "ns": 29905.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/compile xDS-like": {
+            "ns": 2390.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find Qwen tokenizer": {
+            "ns": 41315.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (borrowed)": {
+            "ns": 40389.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (owning)": {
+            "ns": 43820.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find CJK tokenizer": {
+            "ns": 159837.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find HTML tag": {
+            "ns": 47399.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find URL": {
+            "ns": 32896.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON string literal": {
+            "ns": 7995.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON number": {
+            "ns": 28737.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find word boundary": {
+            "ns": 63028.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split whitespace (22 KiB)": {
+            "ns": 20383.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split commas (29 KiB)": {
+            "ns": 20970.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch literal": {
+            "ns": 1.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch class": {
+            "ns": 5.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch xDS-like": {
+            "ns": 9.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll a+ -> x": {
+            "ns": 26746.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll \\A|\\z -> X": {
+            "ns": 7891.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/RegexSet 9 no-match patterns": {
+            "ns": 1901.0,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        }
+      }
+    },
+    {
+      "order": [
+        "before",
+        "after"
+      ],
+      "runs": {
+        "before": {
+          "compare/compile Qwen tokenizer": {
+            "ns": 30431.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/compile xDS-like": {
+            "ns": 2416.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find Qwen tokenizer": {
+            "ns": 41673.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (borrowed)": {
+            "ns": 41570.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (owning)": {
+            "ns": 42746.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find CJK tokenizer": {
+            "ns": 165085.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find HTML tag": {
+            "ns": 48082.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find URL": {
+            "ns": 32781.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON string literal": {
+            "ns": 8116.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON number": {
+            "ns": 27947.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find word boundary": {
+            "ns": 61986.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split whitespace (22 KiB)": {
+            "ns": 16289.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split commas (29 KiB)": {
+            "ns": 15883.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch literal": {
+            "ns": 1.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch class": {
+            "ns": 5.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch xDS-like": {
+            "ns": 9.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll a+ -> x": {
+            "ns": 23147.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll \\A|\\z -> X": {
+            "ns": 4534.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/RegexSet 9 no-match patterns": {
+            "ns": 3139.4,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        },
+        "after": {
+          "compare/compile Qwen tokenizer": {
+            "ns": 30842.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/compile xDS-like": {
+            "ns": 2363.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find Qwen tokenizer": {
+            "ns": 40585.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (borrowed)": {
+            "ns": 40684.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (owning)": {
+            "ns": 42560.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find CJK tokenizer": {
+            "ns": 154794.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find HTML tag": {
+            "ns": 46927.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find URL": {
+            "ns": 33046.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON string literal": {
+            "ns": 6974.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON number": {
+            "ns": 26641.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find word boundary": {
+            "ns": 61591.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split whitespace (22 KiB)": {
+            "ns": 17307.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split commas (29 KiB)": {
+            "ns": 16347.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch literal": {
+            "ns": 1.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch class": {
+            "ns": 5.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch xDS-like": {
+            "ns": 10.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll a+ -> x": {
+            "ns": 23083.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll \\A|\\z -> X": {
+            "ns": 3615.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/RegexSet 9 no-match patterns": {
+            "ns": 1778.5,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        }
+      }
+    }
+  ],
+  "medians": {
+    "compare/compile Qwen tokenizer": {
+      "before": 29686.8,
+      "after": 30541.1,
+      "unit": "ns/iter",
+      "speedup": 0.9720278575427866
+    },
+    "compare/compile xDS-like": {
+      "before": 2416.8,
+      "after": 2408.9,
+      "unit": "ns/iter",
+      "speedup": 1.003279505168334
+    },
+    "compare/find Qwen tokenizer": {
+      "before": 40972.5,
+      "after": 40585.8,
+      "unit": "ns/iter",
+      "speedup": 1.0095279629821268
+    },
+    "compare/findAll Qwen (borrowed)": {
+      "before": 40807.5,
+      "after": 40987.5,
+      "unit": "ns/iter",
+      "speedup": 0.995608417200366
+    },
+    "compare/findAll Qwen (owning)": {
+      "before": 40869.2,
+      "after": 42595.0,
+      "unit": "ns/iter",
+      "speedup": 0.9594835074539264
+    },
+    "compare/find CJK tokenizer": {
+      "before": 159837.5,
+      "after": 155643.3,
+      "unit": "ns/iter",
+      "speedup": 1.0269475139630169
+    },
+    "compare/find HTML tag": {
+      "before": 47399.0,
+      "after": 46950.2,
+      "unit": "ns/iter",
+      "speedup": 1.0095590647111194
+    },
+    "compare/find URL": {
+      "before": 34085.8,
+      "after": 33060.6,
+      "unit": "ns/iter",
+      "speedup": 1.031009721541654
+    },
+    "compare/find JSON string literal": {
+      "before": 8113.3,
+      "after": 7037.9,
+      "unit": "ns/iter",
+      "speedup": 1.1528012617400079
+    },
+    "compare/find JSON number": {
+      "before": 27600.0,
+      "after": 26898.5,
+      "unit": "ns/iter",
+      "speedup": 1.0260795211628901
+    },
+    "compare/find word boundary": {
+      "before": 62705.0,
+      "after": 61289.4,
+      "unit": "ns/iter",
+      "speedup": 1.0230969792492666
+    },
+    "compare/split whitespace (22 KiB)": {
+      "before": 19159.4,
+      "after": 17307.5,
+      "unit": "ns/iter",
+      "speedup": 1.1069998555539506
+    },
+    "compare/split commas (29 KiB)": {
+      "before": 18151.7,
+      "after": 16347.5,
+      "unit": "ns/iter",
+      "speedup": 1.1103654993118215
+    },
+    "compare/fullmatch literal": {
+      "before": 1.7,
+      "after": 1.8,
+      "unit": "ns/iter",
+      "speedup": 0.9444444444444444
+    },
+    "compare/fullmatch class": {
+      "before": 5.2,
+      "after": 5.1,
+      "unit": "ns/iter",
+      "speedup": 1.019607843137255
+    },
+    "compare/fullmatch xDS-like": {
+      "before": 9.4,
+      "after": 9.4,
+      "unit": "ns/iter",
+      "speedup": 1.0
+    },
+    "compare/replaceAll a+ -> x": {
+      "before": 25404.0,
+      "after": 22796.3,
+      "unit": "ns/iter",
+      "speedup": 1.1143913705294282
+    },
+    "compare/replaceAll \\A|\\z -> X": {
+      "before": 6711.0,
+      "after": 3615.0,
+      "unit": "ns/iter",
+      "speedup": 1.8564315352697096
+    },
+    "compare/RegexSet 9 no-match patterns": {
+      "before": 1912.5,
+      "after": 1811.3,
+      "unit": "ns/iter",
+      "speedup": 1.055871473527301
+    }
+  }
+}

@@ -270,16 +270,41 @@ fn poolable(gpa: std.mem.Allocator) bool {
     return gpa.vtable == std.heap.page_allocator.vtable or gpa.vtable == std.heap.smp_allocator.vtable;
 }
 
-fn takePooledWorkspace(id: u64) ?ReplaceWorkspace {
+fn sameAllocator(a: std.mem.Allocator, b: std.mem.Allocator) bool {
+    // Pooling is limited to the stateless page/smp allocators, where the
+    // vtable identifies the allocator; their `ptr` field is undefined.
+    return a.vtable == b.vtable;
+}
+
+/// Take the pooled workspace when it belongs to `id`. A replacement result
+/// is allocated with the workspace's allocator and freed by the caller, so
+/// callers that return allocations pass their allocator as `required` and
+/// never receive a workspace whose allocations belong to another one.
+fn takePooledWorkspace(id: u64, required: ?std.mem.Allocator) ?ReplaceWorkspace {
     if (id == 0) return null;
     poolLock();
     const entry = pooled_workspace;
-    if (entry != null and entry.?.program_id == id) pooled_workspace = null;
+    var taken = false;
+    var stale: ?ReplaceWorkspace = null;
+    if (entry) |value| {
+        if (value.program_id == id) {
+            if (required == null or sameAllocator(value.workspace.allocator, required.?)) {
+                pooled_workspace = null;
+                taken = true;
+            }
+        } else {
+            // The workspace belongs to a program that is no longer using the
+            // slot; drop it instead of leaving a dangling entry behind.
+            pooled_workspace = null;
+            stale = value.workspace;
+        }
+    }
     poolUnlock();
-    const value = entry orelse return null;
-    if (value.program_id == id) return value.workspace;
-    var stale = value.workspace;
-    stale.deinit();
+    if (taken) return entry.?.workspace;
+    if (stale) |value| {
+        var copy = value;
+        copy.deinit();
+    }
     return null;
 }
 
@@ -537,7 +562,7 @@ pub const Regex = struct {
     pub fn findAll(self: *const Regex, gpa: std.mem.Allocator, input: []const u8) Error!Matches {
         const pool_id: u64 = if (poolable(gpa)) self.program_id else 0;
         if (pool_id != 0) {
-            if (takePooledWorkspace(pool_id)) |workspace| {
+            if (takePooledWorkspace(pool_id, null)) |workspace| {
                 return .{ .input = input, .owned = workspace, .pool_id = pool_id };
             }
         }
@@ -612,14 +637,26 @@ pub const Regex = struct {
         return substitution_mod.expandMatch(gpa, self.program, input, match.slots, substitution, self.limits.full_case_mapping);
     }
     pub fn replaceAll(self: *const Regex, gpa: std.mem.Allocator, input: []const u8, substitution: []const u8) Error![]u8 {
+        const pool_id: u64 = if (poolable(gpa)) self.program_id else 0;
+        if (takePooledWorkspace(pool_id, gpa)) |workspace| {
+            var pooled = workspace;
+            defer returnPooledWorkspace(pool_id, pooled);
+            return pooled.replaceAll(input, substitution);
+        }
         var workspace = try ReplaceWorkspace.init(gpa, self.program, self.limits);
-        defer workspace.deinit();
+        defer returnPooledWorkspace(pool_id, workspace);
         return workspace.replaceAll(input, substitution);
     }
     /// Replace at most `limit` matches.
     pub fn replacen(self: *const Regex, gpa: std.mem.Allocator, input: []const u8, limit: usize, substitution: []const u8) Error![]u8 {
+        const pool_id: u64 = if (poolable(gpa)) self.program_id else 0;
+        if (takePooledWorkspace(pool_id, gpa)) |workspace| {
+            var pooled = workspace;
+            defer returnPooledWorkspace(pool_id, pooled);
+            return pooled.replacen(input, limit, substitution);
+        }
         var workspace = try ReplaceWorkspace.init(gpa, self.program, self.limits);
-        defer workspace.deinit();
+        defer returnPooledWorkspace(pool_id, workspace);
         return workspace.replacen(input, limit, substitution);
     }
 

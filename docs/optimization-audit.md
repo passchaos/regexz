@@ -594,3 +594,16 @@ repeats the first middle byte; those programs use the general search. A
 focused URL harness for the other literal-run shape (`https?://[^\s]+`)
 stays at 0.99-1.01x, the replacement fuzzer passes on five seeds, and
 regression tests cover both overlapping shapes.
+
+`Regex.replaceAll` and `Regex.replacen` now take their workspace from the
+same process slot that `Regex.findAll` already uses. The workspace is only
+taken when the program id and the allocator vtable match (page and smp are
+stateless, their `ptr` is undefined), and fresh workspaces are returned too,
+so the pool warms after the first call. A focused harness improves
+`Regex.replaceAll` 1.48x (5.3 -> 3.6 us) while the warm-workspace control is
+0.99x; the comparison harness reads 1.11x on `a+` and 1.86x on `\A|\z` with
+the 17 other cases at a 1.02x median. Evicting a workspace from another
+program used to deinit it but leave the slot pointing at it, so a later take
+could return freed memory; the slot is now cleared and a `findAll` eviction
+test covers it. See
+[pooled replacement workspaces](benchmarks/replace-workspace-pool.md).
