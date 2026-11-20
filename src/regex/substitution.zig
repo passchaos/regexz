@@ -312,10 +312,24 @@ pub fn expandMatch(
 pub const ListWriter = struct {
     list: *std.ArrayList(u8),
     allocator: std.mem.Allocator,
-    pub fn append(self: *ListWriter, byte: u8) Error!void {
-        try self.list.append(self.allocator, byte);
+
+    /// The replacement pass reserves the output capacity up front, so the
+    /// common append only needs the inline capacity check and copy; growth
+    /// falls back to the list's own policy.
+    pub inline fn append(self: *ListWriter, byte: u8) Error!void {
+        const len = self.list.items.len;
+        if (len == self.list.capacity) return self.list.append(self.allocator, byte);
+        self.list.items.len = len + 1;
+        self.list.items.ptr[len] = byte;
     }
-    pub fn appendSlice(self: *ListWriter, bytes: []const u8) Error!void {
+
+    pub inline fn appendSlice(self: *ListWriter, bytes: []const u8) Error!void {
+        const len = self.list.items.len;
+        if (bytes.len <= self.list.capacity - len) {
+            self.list.items.len = len + bytes.len;
+            @memcpy(self.list.items.ptr[len..][0..bytes.len], bytes);
+            return;
+        }
         try self.list.appendSlice(self.allocator, bytes);
     }
 };
