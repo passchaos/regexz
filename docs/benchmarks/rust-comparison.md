@@ -14,31 +14,35 @@ text and small full-match subjects.
 
 | Case | regexz, ns/iter | Rust, ns/iter | Rust / regexz |
 | --- | ---: | ---: | ---: |
-| compile Qwen tokenizer | 30,611.7 | 440,586.8 | 14.39x |
-| compile xDS-like | 2,288.7 | 20,186.6 | 8.82x |
-| find Qwen tokenizer | 38,897.5 | 64,896.7 | 1.67x |
-| findAll Qwen (borrowed) | 38,873.3 | 63,091.7 | 1.62x |
-| findAll Qwen (owning) | 38,323.3 | 60,745.8 | 1.59x |
-| find CJK tokenizer | 163,339.2 | 214,377.5 | 1.31x |
-| find HTML tag | 47,728.5 | 117,373.5 | 2.46x |
-| find URL | 33,958.5 | 80,440.6 | 2.37x |
-| find JSON string literal | 7,500.4 | 16,253.5 | 2.17x |
-| find JSON number | 28,390.8 | 58,133.5 | 2.05x |
-| find word boundary | 64,232.1 | 127,515.6 | 1.99x |
-| split whitespace (22 KiB) | 18,815.6 | 72,850.8 | 3.87x |
-| split commas (29 KiB) | 17,622.5 | 54,407.7 | 3.09x |
-| fullmatch literal | 1.8 | 9.4 | 5.22x |
-| fullmatch class | 5.0 | 31.4 | 6.28x |
-| fullmatch xDS-like | 9.0 | 29.5 | 3.28x |
-| replaceAll a+ -> x | 21,009.2 | 99,317.9 | 4.73x |
-| replaceAll \A|\z -> X | 2,755.4 | 7,797.9 | 2.83x |
-| RegexSet 9 no-match patterns | 1,856.9 | 37,246.7 | 20.06x |
+| compile Qwen tokenizer | 32,353.3 | 457,466.9 | 14.14x |
+| compile xDS-like | 2,479.6 | 21,157.9 | 8.53x |
+| find Qwen tokenizer | 42,089.2 | 66,018.3 | 1.57x |
+| findAll Qwen (borrowed) | 40,300.0 | 66,011.7 | 1.64x |
+| findAll Qwen (owning) | 38,760.0 | 65,442.5 | 1.69x |
+| find CJK tokenizer | 166,493.3 | 227,533.3 | 1.37x |
+| find HTML tag | 48,939.8 | 124,264.4 | 2.54x |
+| find URL | 34,986.7 | 88,185.6 | 2.52x |
+| find JSON string literal | 7,601.5 | 17,578.3 | 2.31x |
+| find JSON number | 29,084.8 | 61,968.3 | 2.13x |
+| find word boundary | 69,181.5 | 135,906.9 | 1.96x |
+| find (?i) literal | 43,408.8 | 80,518.3 | 1.85x |
+| find alternation (5 words) | 149,139.2 | 167,154.6 | 1.12x |
+| split whitespace (22 KiB) | 20,045.6 | 76,365.2 | 3.81x |
+| split commas (29 KiB) | 19,763.1 | 54,811.2 | 2.77x |
+| fullmatch literal | 1.9 | 9.5 | 5.00x |
+| fullmatch class | 5.3 | 33.3 | 6.28x |
+| fullmatch xDS-like | 10.2 | 31.4 | 3.08x |
+| replaceAll a+ -> x | 21,735.2 | 104,967.3 | 4.83x |
+| replaceAll \A|\z -> X | 3,142.7 | 8,413.5 | 2.68x |
+| RegexSet 9 no-match patterns | 1,891.0 | 38,673.3 | 20.45x |
 
-regexz is faster on all 19 measured cases: 14.39x on tokenizer compilation,
-8.82x on a small-pattern compile, 1.31–1.67x on tokenizer scans and match
-iteration, 1.99–2.46x on search scans, 3.09–3.87x on splits, 3.28–6.28x on
-full-match calls, 4.73x on a set-run replacement, 2.83x on a zero-width
-replacement and 20.06x on the nine-pattern set.
+regexz is faster on all 21 measured cases: 14.14x on tokenizer compilation,
+8.53x on a small-pattern compile, 1.37–1.69x on tokenizer scans and match
+iteration, 1.12–2.54x on search scans, 2.77–3.81x on splits, 3.08–6.28x on
+full-match calls, 4.83x on a set-run replacement, 2.68x on a zero-width
+replacement and 20.45x on the nine-pattern set. The thinnest margin is the
+five-word alternation at 1.12x, which was 1.53x slower before the direct
+literal scan.
 
 Compilation now selects a 16 KiB, 64 KiB or 256 KiB block by pattern shape,
 reuses page-allocator blocks from a process pool, and falls back to the arena
@@ -69,10 +73,13 @@ and the pool holds the workspace by pointer so the owning `findAll` iterator
 no longer copies a 7.8 KiB struct (see
 [pooled replacement workspaces](replace-workspace-pool.md)); the zero-width
 replacement rose from 1.24x to 2.83x and owning `findAll` now matches the
-borrowed form at 1.59x. The tokenizer fast branch scans ASCII runs with the
+borrowed form at 1.69x. The tokenizer fast branch scans ASCII runs with the
 byte table before the prepared UTF-8 automaton (see
-[ASCII-first run scan](ascii-first-run-scan.md)), lifting `find Qwen
-tokenizer` from 1.52x to 1.67x.
+[ASCII-first run scan](ascii-first-run-scan.md)). Caseless literals and
+whole-pattern literal alternations are now verified directly instead of
+through the DFA (see [literal fast paths](literal-fast-paths.md)); the new
+`(?i)alpha` and five-word alternation cases moved from 1.47x and 1.53x behind
+to 1.85x and 1.12x ahead.
 
 Caveats: the iteration APIs are the natural ones for each library
 (`Workspace.find` in a loop versus `Regex::find_iter`), full match is

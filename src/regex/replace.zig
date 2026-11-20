@@ -48,6 +48,8 @@ pub const FastKind = enum {
     run_chain,
     zero_width,
     literal_run,
+    caseless_literal,
+    literal_set,
 };
 pub const Error = model.Error;
 
@@ -184,6 +186,8 @@ pub const Workspace = struct {
     pair_filter: ?*prefilter.PairSet = null,
     /// Absence filter for a whole-pattern case-folded literal (`(?i)STRASSE`).
     fold_filter: ?prefilter.FoldFilter = null,
+    /// Pair-set SIMD filter for a whole-pattern literal alternation.
+    literal_set_filter: ?prefilter.MultiFilter = null,
     /// Byte membership tables for the chain fast path. `Set.matches` is a
     /// binary search over rune ranges; the per-byte chain scans run several
     /// lookups per input byte, so cache the answers once per workspace.
@@ -327,6 +331,10 @@ pub const Workspace = struct {
             .run_chain
         else if (zero_width_plan != null)
             .zero_width
+        else if (program.caseless_literal != null and program.capture_count == 0 and !limits.longest)
+            .caseless_literal
+        else if (program.literal_set != null and program.capture_count == 0 and !limits.longest)
+            .literal_set
         else if (utf8_run != null)
             .utf8_run
         else if (simple_chain != null)
@@ -436,6 +444,7 @@ pub const Workspace = struct {
                 program.first),
             .pair_filter = pair_filter,
             .fold_filter = if (program.caseless_literal) |literal| prefilter.FoldFilter.init(literal) else null,
+            .literal_set_filter = if (program.literal_set) |literals| prefilter.MultiFilter.initAny(literals) else null,
         };
     }
 
@@ -513,6 +522,10 @@ pub const Workspace = struct {
             .zero_width => {
                 if (self.findZeroWidth(&self.program.zero_width.?, input, search_start)) |match| return match;
             },
+            .caseless_literal => {
+                if (self.findCaselessLiteral(input, search_start)) |match| return match;
+            },
+            .literal_set => return self.findLiteralSet(input, search_start),
         }
         // Every match must start at a start-literal occurrence, so the first
         // occurrence bounds the leftmost match start and the DFA can skip
@@ -1087,6 +1100,10 @@ pub const Workspace = struct {
             .zero_width => {
                 if (self.findZeroWidth(&self.program.zero_width.?, input, search_start)) |match| return match;
             },
+            .caseless_literal => {
+                if (self.findCaselessLiteral(input, search_start)) |match| return match;
+            },
+            .literal_set => return self.findLiteralSet(input, search_start),
         }
         var from = search_start;
         if (self.pair_filter) |filter| {
@@ -1641,6 +1658,65 @@ pub const Workspace = struct {
             self.slots[0] = start;
             self.slots[1] = end;
             return .{ .start = start, .end = end, .slots = self.slots };
+        }
+        return null;
+    }
+
+    inline fn foldAsciiByte(byte: u8) u8 {
+        return if (byte >= 'A' and byte <= 'Z') byte + 32 else byte;
+    }
+
+    /// A pure `(?i)` literal. The folded pair filter proposes the earliest
+    /// possible start; ASCII windows are verified here instead of entering
+    /// the DFA, and windows with a non-ASCII byte fall back to it for
+    /// Unicode simple folding.
+    fn findCaselessLiteral(self: *Workspace, input: []const u8, search_start: usize) ?Match {
+        const literal = self.program.caseless_literal.?;
+        for (literal) |byte| if (byte >= 0x80) return null;
+        const filter = self.fold_filter orelse return null;
+        var search = search_start;
+        while (true) {
+            const start = filter.indexOf(input, search) orelse return null;
+            if (start + literal.len > input.len) return null;
+            var matched = true;
+            for (literal, 0..) |literal_byte, index| {
+                const byte = input[start + index];
+                if (byte >= 0x80) return null;
+                if (foldAsciiByte(byte) != foldAsciiByte(literal_byte)) {
+                    matched = false;
+                    break;
+                }
+            }
+            if (matched) {
+                self.slots[0] = start;
+                self.slots[1] = start + literal.len;
+                return .{ .start = start, .end = start + literal.len, .slots = self.slots };
+            }
+            search = start + 1;
+        }
+    }
+
+    /// A pure alternation of exact literals. The pair/first filter proposes
+    /// the earliest candidate; the alternatives are checked in source order
+    /// at that position, which is exactly leftmost-first for literals.
+    fn findLiteralSet(self: *Workspace, input: []const u8, search_start: usize) ?Match {
+        const literals = self.program.literal_set.?;
+        var search = search_start;
+        while (search < input.len) {
+            const start = if (self.literal_set_filter) |*filter|
+                filter.indexOf(input, search) orelse return null
+            else if (self.pair_filter) |filter|
+                filter.indexOfAny(input, search) orelse return null
+            else
+                self.first_filter.indexOf(input, search) orelse return null;
+            for (literals) |literal| {
+                if (start + literal.len <= input.len and std.mem.eql(u8, input[start..][0..literal.len], literal)) {
+                    self.slots[0] = start;
+                    self.slots[1] = start + literal.len;
+                    return .{ .start = start, .end = start + literal.len, .slots = self.slots };
+                }
+            }
+            search = start + 1;
         }
         return null;
     }

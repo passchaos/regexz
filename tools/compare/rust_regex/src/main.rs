@@ -149,6 +149,13 @@ fn main() {
     bench_find("find JSON string literal", "\"[^\"]*\"", &json_text, 200);
     bench_find("find JSON number", "-?\\d+(?:\\.\\d+)?", &number_text, 200);
     bench_find("find word boundary", "(?-u:\\b\\w+\\b)", &word_text, 200);
+    bench_find("find (?i) literal", "(?i)alpha", &word_text, 200);
+    bench_find(
+        "find alternation (5 words)",
+        "alpha|gamma|epsilon|zeta|theta",
+        &word_text,
+        200,
+    );
     bench_split("split whitespace (22 KiB)", "\\s+", &ascii_text, 200);
     bench_split("split commas (29 KiB)", ",", &csv_text, 200);
     bench_fullmatch(

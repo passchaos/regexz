@@ -32,6 +32,10 @@ pub const Program = struct {
     /// folding (`(?i)STRASSE` -> `strasse`). Not serialized; deserialized
     /// programs simply skip the optimization.
     caseless_literal: ?[]const u8 = null,
+    /// Whole-pattern alternation of exact literals (`alpha|gamma`), in source
+    /// order. The match is the first alternative that matches at the
+    /// leftmost candidate. Not serialized.
+    literal_set: ?[]const []const u8 = null,
     /// A dominant alternation branch (`set? setB+`) that decides the match
     /// when no earlier branch can start at the current byte. Not serialized.
     fast_branch: ?fast_branch_mod.Plan = null,
@@ -541,6 +545,46 @@ const CaselessLiteralBuilder = struct {
     }
 };
 
+/// Whole-pattern alternation of exact literals. Each alternative must be a
+/// non-empty sequence of singleton sets; groups are transparent, while
+/// captures, assertions, repeats and nested non-literal nodes reject the
+/// shape so the general engine keeps its semantics.
+const LiteralSetBuilder = struct {
+    allocator: std.mem.Allocator,
+    literals: std.ArrayList([]const u8) = .empty,
+
+    fn sequence(self: *LiteralSetBuilder, value: *const model.Node, out: *std.ArrayList(u8)) model.Error!bool {
+        return switch (value.*) {
+            .empty, .flag_change => true,
+            .group => |child| self.sequence(child, out),
+            .pair => |pair| (try self.sequence(pair.left, out)) and (try self.sequence(pair.right, out)),
+            .set => |set| blk: {
+                if (set.ranges.len != 1 or set.ranges[0].first != set.ranges[0].last) break :blk false;
+                var encoded: [4]u8 = undefined;
+                const len = std.unicode.utf8Encode(set.ranges[0].first, &encoded) catch break :blk false;
+                try out.appendSlice(self.allocator, encoded[0..len]);
+                break :blk true;
+            },
+            else => false,
+        };
+    }
+
+    fn collect(self: *LiteralSetBuilder, value: *const model.Node) model.Error!bool {
+        return switch (value.*) {
+            .alternate => |pair| (try self.collect(pair.left)) and (try self.collect(pair.right)),
+            .group => |child| self.collect(child),
+            else => blk: {
+                var bytes: std.ArrayList(u8) = .empty;
+                defer bytes.deinit(self.allocator);
+                if (!try self.sequence(value, &bytes)) break :blk false;
+                if (bytes.items.len == 0) break :blk false;
+                try self.literals.append(self.allocator, try bytes.toOwnedSlice(self.allocator));
+                break :blk true;
+            },
+        };
+    }
+};
+
 const PrefixBuilder = struct {
     allocator: std.mem.Allocator,
     bytes: std.ArrayList(u8) = .empty,
@@ -830,6 +874,14 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         try caseless_builder.bytes.toOwnedSlice(allocator)
     else
         null;
+    var literal_set_builder = LiteralSetBuilder{ .allocator = allocator };
+    defer literal_set_builder.literals.deinit(allocator);
+    const literal_set: ?[]const []const u8 = if (literal == null and caseless_literal == null and
+        !limits.auto_callout and try literal_set_builder.collect(parsed.root) and
+        literal_set_builder.literals.items.len >= 2)
+        try literal_set_builder.literals.toOwnedSlice(allocator)
+    else
+        null;
     var dfa_eligible = true;
     var needs_ucp_word = false;
     for (instructions) |instruction| switch (instruction) {
@@ -864,6 +916,7 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         .literal = literal,
         .literal_prefix = literal_prefix,
         .caseless_literal = caseless_literal,
+        .literal_set = literal_set,
         .dfa_eligible = dfa_eligible,
         .extended = extended,
         .newline = parsed.newline,

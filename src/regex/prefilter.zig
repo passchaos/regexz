@@ -544,6 +544,14 @@ pub const MultiFilter = struct {
     literals: []const []const u8,
     pairs: [max_pairs]u16 = undefined,
     pair_count: u8 = 0,
+    /// Every literal starts with the same byte, so one splat answers the
+    /// first-byte lane test. Distinct first bytes OR one splat per pair.
+    shared_first: bool = true,
+    /// Precomputed lane splats; rebuilding them per search call dominated
+    /// short candidate gaps.
+    first: Vec = undefined,
+    first_splats: [max_pairs]Vec = undefined,
+    second_splats: [max_pairs]Vec = undefined,
     /// Third-byte splats, applied only when every literal has a third byte.
     /// Shared-prefix candidates usually diverge there.
     third_splats: [max_pairs]Vec = undefined,
@@ -553,16 +561,27 @@ pub const MultiFilter = struct {
     const max_pairs = 16;
 
     pub fn init(literals: []const []const u8) ?MultiFilter {
+        return build(literals, true);
+    }
+
+    /// Like `init`, but accepts literals with distinct first bytes; the lane
+    /// test then ORs one first-byte splat per pair.
+    pub fn initAny(literals: []const []const u8) ?MultiFilter {
+        return build(literals, false);
+    }
+
+    fn build(literals: []const []const u8, require_shared: bool) ?MultiFilter {
         if (literals.len == 0 or literals.len > max_pairs) return null;
         if (literals[0].len < 2) return null;
         var filter = MultiFilter{ .literals = literals };
         const shared_first = literals[0][0];
         filter.use_third = true;
         for (literals) |literal| {
-            // The pair filter pays off when the first byte is shared (and thus
-            // useless as a prefilter); otherwise the cheaper first-byte SIMD
-            // filter is already selective.
-            if (literal.len < 2 or literal[0] != shared_first) return null;
+            // A shared-first set uses one splat; distinct firsts add a splat
+            // per pair in `indexOf`.
+            if (literal.len < 2) return null;
+            if (require_shared and literal[0] != shared_first) return null;
+            if (literal[0] != shared_first) filter.shared_first = false;
             const pair = (@as(u16, literal[0]) << 8) | literal[1];
             var exists = false;
             for (filter.pairs[0..filter.pair_count]) |existing| {
@@ -593,6 +612,13 @@ pub const MultiFilter = struct {
             }
         }
         if (filter.pair_count == 0) return null;
+        filter.first = @splat(@intCast(filter.pairs[0] >> 8));
+        var index: usize = 0;
+        while (index < filter.pair_count) : (index += 1) {
+            const pair = filter.pairs[index];
+            filter.first_splats[index] = @splat(@intCast(pair >> 8));
+            filter.second_splats[index] = @splat(@intCast(pair & 0xFF));
+        }
         return filter;
     }
 
@@ -611,26 +637,25 @@ pub const MultiFilter = struct {
 
     pub fn indexOf(self: *const MultiFilter, input: []const u8, start: usize) ?usize {
         if (start >= input.len or input.len - start < 2) return null;
-        const first: Vec = @splat(@intCast(self.pairs[0] >> 8));
-        var second_splats: [max_pairs]Vec = undefined;
-        var pair_index: usize = 0;
-        while (pair_index < self.pair_count) : (pair_index += 1) {
-            const pair = self.pairs[pair_index];
-            second_splats[pair_index] = @splat(@intCast(pair & 0xFF));
-        }
         const count: usize = self.pair_count;
         var offset = start;
         while (offset + 17 <= input.len) : (offset += 16) {
             const raw: [16]u8 = input[offset..][0..16].*;
             const chunk: Vec = @bitCast(raw);
-            const first_mask = chunk == first;
+            var first_mask = chunk == self.first;
+            if (!self.shared_first) {
+                var pair_index: usize = 0;
+                while (pair_index < count) : (pair_index += 1) {
+                    first_mask = first_mask | (chunk == self.first_splats[pair_index]);
+                }
+            }
             if (!@reduce(.Or, first_mask)) continue;
             const next_raw: [16]u8 = input[offset + 1 ..][0..16].*;
             const next: Vec = @bitCast(next_raw);
             var seconds = @as(@Vector(16, bool), @splat(false));
-            pair_index = 0;
+            var pair_index: usize = 0;
             while (pair_index < count) : (pair_index += 1) {
-                seconds = seconds | (next == second_splats[pair_index]);
+                seconds = seconds | (next == self.second_splats[pair_index]);
             }
             var mask = first_mask & seconds;
             // The last block has no third-byte lane; skipping the filter
@@ -664,7 +689,8 @@ pub const MultiFilter = struct {
             }
         }
         while (offset < input.len - 1) : (offset += 1) {
-            if (input[offset] == @as(u8, @intCast(self.pairs[0] >> 8)) and self.matchesAt(input, offset)) return offset;
+            if (self.shared_first and input[offset] != @as(u8, @intCast(self.pairs[0] >> 8))) continue;
+            if (self.matchesAt(input, offset)) return offset;
         }
         return null;
     }

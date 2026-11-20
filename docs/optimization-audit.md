@@ -658,3 +658,15 @@ regressed `find word boundary` 0.97x and `find word space word` 0.92x,
 because the extra start comparison cost more than the load it saved. The CJK
 time stays split between the run scan (about half, at the automaton's
 throughput limit) and the per-token prefix probe plus DFA fallback.
+
+Two whole-pattern literal shapes now bypass the search DFA. A `(?i)` literal
+verifies ASCII candidate windows with a byte-wise fold and falls back to the
+DFA only when a window contains a non-ASCII byte (Unicode simple folding);
+a whole-pattern alternation of exact literals is recorded at compile time and
+verified in source order at the first candidate. The multi-literal pair
+filter was generalized to distinct first bytes and precomputes its lane
+splats. The two new comparison cases, `(?i)alpha` and a five-word alternation
+over the 96 KiB word text, had been 1.47x and 1.53x slower than Rust; they are
+now 1.85x and 1.12x faster (2.83x and 1.77x internal speedups), and all 21
+comparison cases are ahead. See
+[literal fast paths](benchmarks/literal-fast-paths.md).

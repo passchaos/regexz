@@ -926,6 +926,55 @@ test "literal-run detection rejects an optional literal that overlaps the run" {
     }
 }
 
+test "literal alternation fast path matches leftmost-first" {
+    var value = try regex.Regex.init(gpa, "alpha|gamma|epsilon", .{});
+    defer value.deinit();
+    try std.testing.expect(value.program.literal_set != null);
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.literal_set_filter != null);
+
+    const cases = [_]struct { pattern: []const u8, input: []const u8, spans: []const [2]usize }{
+        .{ .pattern = "alpha|gamma|epsilon", .input = "", .spans = &.{} },
+        .{ .pattern = "alpha|gamma|epsilon", .input = "xx gamma alpha epsilon yy", .spans = &.{ .{ 3, 8 }, .{ 9, 14 }, .{ 15, 22 } } },
+        .{ .pattern = "alpha|gamma|epsilon", .input = "alphabet", .spans = &.{.{ 0, 5 }} },
+        .{ .pattern = "alpha|gamma|epsilon", .input = "alga", .spans = &.{} },
+        // Leftmost-first: the first alternative wins at the same start.
+        .{ .pattern = "ab|abc", .input = "xx abc ab", .spans = &.{ .{ 3, 5 }, .{ 7, 9 } } },
+        // Single-byte alternatives skip the pair filter.
+        .{ .pattern = "a|b", .input = "xxaab", .spans = &.{ .{ 2, 3 }, .{ 3, 4 }, .{ 4, 5 } } },
+        // Non-ASCII literals compare as bytes.
+        .{ .pattern = "\u{732b}|\u{72ac}", .input = "x\u{732b}y\u{72ac}", .spans = &.{ .{ 1, 4 }, .{ 5, 8 } } },
+    };
+    for (cases) |case| {
+        var compiled = try regex.Regex.init(gpa, case.pattern, .{});
+        defer compiled.deinit();
+        var ws = try regex.ReplaceWorkspace.init(gpa, compiled.program, .{});
+        defer ws.deinit();
+        var offset: usize = 0;
+        var index: usize = 0;
+        while (offset <= case.input.len and index < case.spans.len) : (index += 1) {
+            const m = (try ws.find(case.input, offset)) orelse break;
+            try std.testing.expectEqual(case.spans[index][0], m.start);
+            try std.testing.expectEqual(case.spans[index][1], m.end);
+            offset = m.end;
+        }
+        try std.testing.expectEqual(case.spans.len, index);
+    }
+}
+
+test "literal alternation detection requires a whole-pattern alternation" {
+    var trailing = try regex.Regex.init(gpa, "(?:ab|ac)d", .{});
+    defer trailing.deinit();
+    try std.testing.expect(trailing.program.literal_set == null);
+    var captures = try regex.Regex.init(gpa, "(ab|ac)", .{});
+    defer captures.deinit();
+    try std.testing.expect(captures.program.literal_set == null);
+    var caseless = try regex.Regex.init(gpa, "(?i)ab|cd", .{});
+    defer caseless.deinit();
+    try std.testing.expect(caseless.program.literal_set == null);
+}
+
 test "literal-run detection rejects an optional literal that overlaps the middle" {
     // The optional literal repeats the first middle byte, so the greedy
     // scanner consumes the byte the skipped branch needs.

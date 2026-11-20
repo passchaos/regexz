@@ -284,6 +284,8 @@ pub fn main() !void {
     try benchFind(io, out, "find JSON string literal", "\"[^\"]*\"", json_text.items, 200, .{});
     try benchFind(io, out, "find JSON number", "-?\\d+(?:\\.\\d+)?", number_text.items, 200, .{});
     try benchFind(io, out, "find word boundary", "\\b\\w+\\b", word_text.items, 200, .{});
+    try benchFind(io, out, "find (?i) literal", "(?i)alpha", word_text.items, 200, .{});
+    try benchFind(io, out, "find alternation (5 words)", "alpha|gamma|epsilon|zeta|theta", word_text.items, 200, .{});
     try benchSplit(io, out, "split whitespace (22 KiB)", "\\s+", ascii_text.items, 200);
     try benchSplit(io, out, "split commas (29 KiB)", ",", csv_text.items, 200);
     try benchMatches(io, out, "fullmatch literal", "hello, world!", "hello, world!", 200000, .{});
