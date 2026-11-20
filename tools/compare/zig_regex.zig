@@ -270,6 +270,14 @@ pub fn main() !void {
     defer replace_text.deinit(gpa);
     for (0..2000) |_| try replace_text.appendSlice(gpa, "aaa bbb aaa bbb ");
 
+    var greek_text: std.ArrayList(u8) = .empty;
+    defer greek_text.deinit(gpa);
+    for (0..2000) |_| try greek_text.appendSlice(gpa, "αβγδε ζηθικ λμνξο ");
+
+    var email_text: std.ArrayList(u8) = .empty;
+    defer email_text.deinit(gpa);
+    for (0..800) |_| try email_text.appendSlice(gpa, "user.name@example.com ");
+
     const qwen = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+";
     const ucp = regexz.Limits{ .unicode_perl_space = true, .max_execution_steps = 16_000_000 };
 
@@ -286,6 +294,11 @@ pub fn main() !void {
     try benchFind(io, out, "find word boundary", "\\b\\w+\\b", word_text.items, 200, .{});
     try benchFind(io, out, "find (?i) literal", "(?i)alpha", word_text.items, 200, .{});
     try benchFind(io, out, "find alternation (5 words)", "alpha|gamma|epsilon|zeta|theta", word_text.items, 200, .{});
+    try benchFind(io, out, "find (?i) alternation", "(?i)alpha|gamma", word_text.items, 200, .{});
+    try benchFind(io, out, "find 10-word alternation", "alpha|beta|gamma|delta|epsilon|zeta|eta|theta|iota|kappa", word_text.items, 200, .{});
+    try benchFind(io, out, "find Greek class", "\\p{Script=Greek}+", greek_text.items, 200, .{});
+    try benchFind(io, out, "find prefix+suffix", "\\w+@example\\.com", email_text.items, 200, .{});
+    try benchReplace(io, out, "replaceAll email captures", "(\\w+)@(\\w+)\\.com", email_text.items, "$2@$1", 200);
     try benchSplit(io, out, "split whitespace (22 KiB)", "\\s+", ascii_text.items, 200);
     try benchSplit(io, out, "split commas (29 KiB)", ",", csv_text.items, 200);
     try benchMatches(io, out, "fullmatch literal", "hello, world!", "hello, world!", 200000, .{});

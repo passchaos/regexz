@@ -131,6 +131,8 @@ fn main() {
     let csv_text = "alpha,beta,gamma,delta,epsilon,".repeat(1000);
     let word_text = "alpha beta gamma delta epsilon ".repeat(3000);
     let replace_text = "aaa bbb aaa bbb ".repeat(2000);
+    let greek_text = "αβγδε ζηθικ λμνξο ".repeat(2000);
+    let email_text = "user.name@example.com ".repeat(800);
 
     let qwen = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+";
 
@@ -154,6 +156,22 @@ fn main() {
         "find alternation (5 words)",
         "alpha|gamma|epsilon|zeta|theta",
         &word_text,
+        200,
+    );
+    bench_find("find (?i) alternation", "(?i)alpha|gamma", &word_text, 200);
+    bench_find(
+        "find 10-word alternation",
+        "alpha|beta|gamma|delta|epsilon|zeta|eta|theta|iota|kappa",
+        &word_text,
+        200,
+    );
+    bench_find("find Greek class", "\\p{Script=Greek}+", &greek_text, 200);
+    bench_find("find prefix+suffix", "\\w+@example\\.com", &email_text, 200);
+    bench_replace(
+        "replaceAll email captures",
+        "(\\w+)@(\\w+)\\.com",
+        &email_text,
+        "$2@$1",
         200,
     );
     bench_split("split whitespace (22 KiB)", "\\s+", &ascii_text, 200);

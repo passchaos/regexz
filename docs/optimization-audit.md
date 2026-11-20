@@ -670,3 +670,18 @@ over the 96 KiB word text, had been 1.47x and 1.53x slower than Rust; they are
 now 1.85x and 1.12x faster (2.83x and 1.77x internal speedups), and all 21
 comparison cases are ahead. See
 [literal fast paths](benchmarks/literal-fast-paths.md).
+
+Two more literal shapes gained direct paths after the expanded comparison
+found them behind Rust. `set+ literal` with the literal's first byte outside
+the set (`\w+@example\.com`) now searches the required literal and scans back
+the maximal ASCII run; the chain detector rejects this shape because the
+separator is too long, so it had been on the DFA. It is selected only when no
+chain applies, so `[a-z]+@` keeps the chain path and the `RegexSet` separator
+filter. The email case improves 5.6x internally and 3.43x ahead of Rust. For
+literal alternations, the multi-literal filter is now built only for sets
+with at most eight distinct first bytes; wider sets use the `PairSet`
+nibble-table candidate filter, improving the 10-word alternation 1.17x
+(1.20x ahead). The comparison now covers 26 cases: caseless literal and
+alternation, 10-word alternation, Greek class, prefix+suffix and capture
+replacement were added, and all 26 are faster than Rust. See
+[literal fast paths](benchmarks/literal-fast-paths.md).

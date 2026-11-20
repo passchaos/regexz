@@ -14,35 +14,40 @@ text and small full-match subjects.
 
 | Case | regexz, ns/iter | Rust, ns/iter | Rust / regexz |
 | --- | ---: | ---: | ---: |
-| compile Qwen tokenizer | 32,353.3 | 457,466.9 | 14.14x |
-| compile xDS-like | 2,479.6 | 21,157.9 | 8.53x |
-| find Qwen tokenizer | 42,089.2 | 66,018.3 | 1.57x |
-| findAll Qwen (borrowed) | 40,300.0 | 66,011.7 | 1.64x |
-| findAll Qwen (owning) | 38,760.0 | 65,442.5 | 1.69x |
-| find CJK tokenizer | 166,493.3 | 227,533.3 | 1.37x |
-| find HTML tag | 48,939.8 | 124,264.4 | 2.54x |
-| find URL | 34,986.7 | 88,185.6 | 2.52x |
-| find JSON string literal | 7,601.5 | 17,578.3 | 2.31x |
-| find JSON number | 29,084.8 | 61,968.3 | 2.13x |
-| find word boundary | 69,181.5 | 135,906.9 | 1.96x |
-| find (?i) literal | 43,408.8 | 80,518.3 | 1.85x |
-| find alternation (5 words) | 149,139.2 | 167,154.6 | 1.12x |
-| split whitespace (22 KiB) | 20,045.6 | 76,365.2 | 3.81x |
-| split commas (29 KiB) | 19,763.1 | 54,811.2 | 2.77x |
+| compile Qwen tokenizer | 31,741.1 | 448,304.1 | 14.12x |
+| compile xDS-like | 2,520.3 | 21,290.2 | 8.45x |
+| find Qwen tokenizer | 40,016.7 | 64,217.5 | 1.60x |
+| findAll Qwen (borrowed) | 39,340.0 | 64,142.5 | 1.63x |
+| findAll Qwen (owning) | 40,167.5 | 67,283.3 | 1.68x |
+| find CJK tokenizer | 165,586.7 | 224,001.7 | 1.35x |
+| find HTML tag | 47,755.2 | 126,353.5 | 2.65x |
+| find URL | 33,406.5 | 86,155.8 | 2.58x |
+| find JSON string literal | 7,443.5 | 18,424.2 | 2.48x |
+| find JSON number | 32,150.0 | 61,467.9 | 1.91x |
+| find word boundary | 64,974.0 | 132,712.3 | 2.04x |
+| find (?i) literal | 42,465.0 | 80,594.4 | 1.90x |
+| find (?i) alternation | 130,893.1 | 183,955.2 | 1.41x |
+| find alternation (5 words) | 145,595.0 | 164,544.0 | 1.13x |
+| find 10-word alternation | 248,625.6 | 298,758.3 | 1.20x |
+| find Greek class | 48,529.2 | 92,655.2 | 1.91x |
+| find prefix+suffix | 8,578.3 | 29,424.4 | 3.43x |
+| replaceAll email captures | 24,489.0 | 84,778.5 | 3.46x |
+| split whitespace (22 KiB) | 17,432.9 | 75,300.2 | 4.32x |
+| split commas (29 KiB) | 16,007.5 | 54,610.2 | 3.41x |
 | fullmatch literal | 1.9 | 9.5 | 5.00x |
-| fullmatch class | 5.3 | 33.3 | 6.28x |
-| fullmatch xDS-like | 10.2 | 31.4 | 3.08x |
-| replaceAll a+ -> x | 21,735.2 | 104,967.3 | 4.83x |
-| replaceAll \A|\z -> X | 3,142.7 | 8,413.5 | 2.68x |
-| RegexSet 9 no-match patterns | 1,891.0 | 38,673.3 | 20.45x |
+| fullmatch class | 5.2 | 31.6 | 6.08x |
+| fullmatch xDS-like | 9.6 | 29.1 | 3.03x |
+| replaceAll a+ -> x | 21,463.8 | 104,556.7 | 4.87x |
+| replaceAll \A|\z -> X | 2,812.1 | 8,003.1 | 2.85x |
+| RegexSet 9 no-match patterns | 1,993.1 | 38,605.2 | 19.37x |
 
-regexz is faster on all 21 measured cases: 14.14x on tokenizer compilation,
-8.53x on a small-pattern compile, 1.37–1.69x on tokenizer scans and match
-iteration, 1.12–2.54x on search scans, 2.77–3.81x on splits, 3.08–6.28x on
-full-match calls, 4.83x on a set-run replacement, 2.68x on a zero-width
-replacement and 20.45x on the nine-pattern set. The thinnest margin is the
-five-word alternation at 1.12x, which was 1.53x slower before the direct
-literal scan.
+regexz is faster on all 26 measured cases: 14.12x on tokenizer compilation,
+8.45x on a small-pattern compile, 1.35–1.68x on tokenizer scans and match
+iteration, 1.13–3.43x on search scans, 3.41–4.32x on splits, 3.03–6.08x on
+full-match calls, 4.87x on a set-run replacement, 3.46x on a capture
+replacement, 2.85x on a zero-width replacement and 19.37x on the nine-pattern
+set. The thinnest margin is the five-word alternation at 1.13x, which was
+1.53x slower before the direct literal scan.
 
 Compilation now selects a 16 KiB, 64 KiB or 256 KiB block by pattern shape,
 reuses page-allocator blocks from a process pool, and falls back to the arena
@@ -78,8 +83,11 @@ byte table before the prepared UTF-8 automaton (see
 [ASCII-first run scan](ascii-first-run-scan.md)). Caseless literals and
 whole-pattern literal alternations are now verified directly instead of
 through the DFA (see [literal fast paths](literal-fast-paths.md)); the new
-`(?i)alpha` and five-word alternation cases moved from 1.47x and 1.53x behind
-to 1.85x and 1.12x ahead.
+`(?i)alpha` and five-word alternation cases moved from 1.47x and 1.53x
+behind to 1.90x and 1.13x ahead. A `set+ literal` suffix is now searched
+directly (see the same page): `\w+@example\.com` had been 1.54x slower and
+is 3.43x ahead, and the 10-word alternation moved to 1.20x with the
+nibble-table candidate filter.
 
 Caveats: the iteration APIs are the natural ones for each library
 (`Workspace.find` in a loop versus `Regex::find_iter`), full match is

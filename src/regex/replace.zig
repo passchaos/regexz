@@ -50,6 +50,7 @@ pub const FastKind = enum {
     literal_run,
     caseless_literal,
     literal_set,
+    run_then_literal,
 };
 pub const Error = model.Error;
 
@@ -188,6 +189,8 @@ pub const Workspace = struct {
     fold_filter: ?prefilter.FoldFilter = null,
     /// Pair-set SIMD filter for a whole-pattern literal alternation.
     literal_set_filter: ?prefilter.MultiFilter = null,
+    /// `set+ literal` with a literal first byte outside the set.
+    run_then_literal: ?RunThenLiteral = null,
     /// Byte membership tables for the chain fast path. `Set.matches` is a
     /// binary search over rune ranges; the per-byte chain scans run several
     /// lookups per input byte, so cache the answers once per workspace.
@@ -323,6 +326,7 @@ pub const Workspace = struct {
             null
         else
             program.zero_width;
+        const run_then_literal: ?RunThenLiteral = if (limits.longest) null else detectRunThenLiteral(program);
         const fast_kind: FastKind = if (simple_set != null)
             .set_run
         else if (capture_run) |plan|
@@ -339,6 +343,8 @@ pub const Workspace = struct {
             .utf8_run
         else if (simple_chain != null)
             .chain
+        else if (run_then_literal != null)
+            .run_then_literal
         else if (literal_run != null)
             .literal_run
         else if (simple_anchored != null)
@@ -444,7 +450,8 @@ pub const Workspace = struct {
                 program.first),
             .pair_filter = pair_filter,
             .fold_filter = if (program.caseless_literal) |literal| prefilter.FoldFilter.init(literal) else null,
-            .literal_set_filter = if (program.literal_set) |literals| prefilter.MultiFilter.initAny(literals) else null,
+            .literal_set_filter = if (program.literal_set) |literals| literalSetFilter(literals) else null,
+            .run_then_literal = run_then_literal,
         };
     }
 
@@ -526,6 +533,7 @@ pub const Workspace = struct {
                 if (self.findCaselessLiteral(input, search_start)) |match| return match;
             },
             .literal_set => return self.findLiteralSet(input, search_start),
+            .run_then_literal => return self.findRunThenLiteral(&self.run_then_literal.?, input, search_start),
         }
         // Every match must start at a start-literal occurrence, so the first
         // occurrence bounds the leftmost match start and the DFA can skip
@@ -1104,6 +1112,7 @@ pub const Workspace = struct {
                 if (self.findCaselessLiteral(input, search_start)) |match| return match;
             },
             .literal_set => return self.findLiteralSet(input, search_start),
+            .run_then_literal => return self.findRunThenLiteral(&self.run_then_literal.?, input, search_start),
         }
         var from = search_start;
         if (self.pair_filter) |filter| {
@@ -1719,6 +1728,32 @@ pub const Workspace = struct {
             search = start + 1;
         }
         return null;
+    }
+
+    /// `set+ literal` where the literal's first byte is not a member, so the
+    /// run ends exactly at the literal. The required literal is searched
+    /// directly and the match start is the maximal run before it.
+    fn findRunThenLiteral(self: *Workspace, state: *const RunThenLiteral, input: []const u8, search_start: usize) ?Match {
+        const literal = state.literal[0..state.literal_len];
+        const set = state.set;
+        var search = search_start;
+        while (true) {
+            const found = indexOfLiteral(input, search, literal) orelse return null;
+            if (found == search_start or found == 0) {
+                search = found + 1;
+                continue;
+            }
+            if (!set.matches(@as(u21, input[found - 1]))) {
+                search = found + 1;
+                continue;
+            }
+            var start = found - 1;
+            while (start > 0 and set.matches(@as(u21, input[start - 1]))) start -= 1;
+            if (start < search_start) start = search_start;
+            self.slots[0] = start;
+            self.slots[1] = found + literal.len;
+            return .{ .start = start, .end = found + literal.len, .slots = self.slots };
+        }
     }
 
     fn findFastBranch(self: *Workspace, branch: *FastBranch, input: []const u8, search_start: usize) ?Match {
@@ -2814,6 +2849,65 @@ const LaterRun = struct {
         if (self.tail) |*tail| tail.deinit(allocator);
     }
 };
+
+/// The multi-literal pair filter is best for sparse first-byte sets; wider
+/// sets use the nibble-table candidate filter from `PairSet` instead.
+fn literalSetFilter(literals: []const []const u8) ?prefilter.MultiFilter {
+    var seen = [_]bool{false} ** 256;
+    var distinct: usize = 0;
+    for (literals) |literal| {
+        const byte = literal[0];
+        if (!seen[byte]) {
+            seen[byte] = true;
+            distinct += 1;
+            if (distinct > 8) return null;
+        }
+    }
+    return prefilter.MultiFilter.initAny(literals);
+}
+
+/// `save0 -> consume(set) -> star(set) -> literal bytes -> save1 -> accept`
+/// where the literal is non-empty, the set is ASCII-only, and the literal's
+/// first byte is not a member.
+const RunThenLiteral = struct {
+    set: model.Set,
+    literal: [64]u8 = undefined,
+    literal_len: u8 = 0,
+};
+
+fn detectRunThenLiteral(program: Program) ?RunThenLiteral {
+    if (program.capture_count != 0 or program.extended) return null;
+    const ins = program.instructions;
+    if (ins.len < 7 or program.accept != 0) return null;
+    if (std.meta.activeTag(ins[0]) != .accept or std.meta.activeTag(ins[1]) != .sub_accept or
+        std.meta.activeTag(ins[2]) != .ret) return null;
+    if (program.start >= ins.len) return null;
+    const whole = ins[program.start];
+    if (std.meta.activeTag(whole) != .save or whole.save.slot != 0 or whole.save.next != program.body) return null;
+    if (program.body >= ins.len) return null;
+    const consume = ins[program.body];
+    if (std.meta.activeTag(consume) != .consume) return null;
+    const set = consume.consume.set;
+    if (!set.ascii_only or set.ranges.len == 0) return null;
+    const star_index = consume.consume.next;
+    if (star_index >= ins.len) return null;
+    const star_ins = ins[star_index];
+    if (std.meta.activeTag(star_ins) != .star) return null;
+    if (!shapes.sameSet(set, star_ins.star.set)) return null;
+    var state = RunThenLiteral{ .set = set };
+    var pc = star_ins.star.next;
+    while (pc < ins.len and std.meta.activeTag(ins[pc]) == .literal_byte) {
+        if (state.literal_len == state.literal.len) return null;
+        state.literal[state.literal_len] = ins[pc].literal_byte.value;
+        state.literal_len += 1;
+        pc = ins[pc].literal_byte.next;
+    }
+    if (state.literal_len == 0 or pc >= ins.len) return null;
+    const save1 = ins[pc];
+    if (std.meta.activeTag(save1) != .save or save1.save.slot != 1 or save1.save.next != program.accept) return null;
+    if (set.matches(@as(u21, state.literal[0]))) return null;
+    return state;
+}
 
 const FastBranch = struct {
     prior: prefilter.FirstFilter,

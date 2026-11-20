@@ -51,3 +51,26 @@ Four engine-fuzzer seeds (500 patterns, 44,052 comparisons each) and five
 replacement-fuzzer seeds pass. New tests cover leftmost-first order, shared
 prefixes, single-byte alternatives, non-ASCII literals, and rejection of
 trailing context, captures and case-folded alternatives.
+
+## Prefix + literal suffix
+
+`\w+@example\.com` compiles to `consume(\w) -> star(\w) -> literal bytes`,
+but the chain detector rejects it because the literal separator is longer
+than its shape allows, so every position went through the search DFA. The new
+`run_then_literal` kind searches the required literal directly and scans back
+the maximal ASCII run. It is selected only when no chain applies, the run set
+is ASCII-only, and the literal's first byte is outside the set, so the run
+ends exactly at the literal. A search offset inside a run clamps the start,
+which matches the engine's leftmost-first result.
+
+The email-text case improves 5.6x internally (47,377.1 -> 8,578.3 ns) and is
+3.43x ahead of Rust.
+
+## Wider literal sets
+
+The multi-literal pair filter handles sparse first-byte sets well, but for
+wider sets its conservative pair mask produces many candidates. The
+literal-set fast path now builds the multi-literal filter only when the
+alternatives have at most eight distinct first bytes; wider sets use the
+`PairSet` nibble-table candidate filter. The 10-word alternation improves
+1.17x (289.1 -> 247.5 us) and is 1.20x ahead of Rust.

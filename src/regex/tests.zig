@@ -926,6 +926,42 @@ test "literal-run detection rejects an optional literal that overlaps the run" {
     }
 }
 
+test "run-then-literal fast path anchors on the required literal" {
+    var value = try regex.Regex.init(gpa, "\\w+@example\\.com", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind == .run_then_literal);
+
+    const cases = [_]struct { input: []const u8, from: usize, span: ?[2]usize }{
+        .{ .input = "user.name@example.com", .from = 0, .span = .{ 5, 21 } },
+        .{ .input = "user.name@example.com", .from = 2, .span = .{ 5, 21 } },
+        .{ .input = "abc@example.com", .from = 1, .span = .{ 1, 15 } },
+        .{ .input = "x@example.com", .from = 0, .span = .{ 0, 13 } },
+        .{ .input = "@example.com", .from = 0, .span = null },
+        .{ .input = "\u{00e9}@example.com", .from = 0, .span = null },
+        .{ .input = "a@example.com b@example.com", .from = 0, .span = .{ 0, 13 } },
+        .{ .input = "a@example.com b@example.com", .from = 14, .span = .{ 14, 27 } },
+    };
+    for (cases) |case| {
+        const found = try workspace.find(case.input, case.from);
+        if (case.span) |span| {
+            const match = found.?;
+            try std.testing.expectEqual(span[0], match.start);
+            try std.testing.expectEqual(span[1], match.end);
+        } else {
+            try std.testing.expect(found == null);
+        }
+    }
+
+    // A literal whose first byte is a run member stays on the chain path.
+    var chain = try regex.Regex.init(gpa, "\\w+abc", .{});
+    defer chain.deinit();
+    var chain_workspace = try regex.ReplaceWorkspace.init(gpa, chain.program, .{});
+    defer chain_workspace.deinit();
+    try std.testing.expect(chain_workspace.fast_kind != .run_then_literal);
+}
+
 test "literal alternation fast path matches leftmost-first" {
     var value = try regex.Regex.init(gpa, "alpha|gamma|epsilon", .{});
     defer value.deinit();
