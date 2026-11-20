@@ -532,8 +532,13 @@ pub const Workspace = struct {
     ) Error!void {
         try subst.validateSubstitutionFor(self.program, substitution);
         // A substitution with no `$` or `\` expands to itself; skip the
-        // per-match parse in that common case.
+        // per-match parse in that common case. Otherwise parse the
+        // substitution into segments once so each match only appends slices.
         const literal_substitution = std.mem.indexOfAny(u8, substitution, "\\$") == null;
+        var template: ?subst.Template = if (literal_substitution)
+            null
+        else
+            try subst.parseTemplate(substitution, self.program);
         self.steps = 0;
         var search_start: usize = 0;
         var replaced: usize = 0;
@@ -551,6 +556,8 @@ pub const Workspace = struct {
             try writer.appendSlice(input[search_start..match.start]);
             if (literal_substitution) {
                 try writer.appendSlice(substitution);
+            } else if (template) |*value| {
+                try subst.appendTemplate(writer, input, value, match.slots, self.program);
             } else {
                 try subst.appendSubstitution(writer, input, substitution, match.slots, self.program, self.limits.full_case_mapping);
             }

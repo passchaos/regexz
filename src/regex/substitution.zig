@@ -346,3 +346,85 @@ pub const BufferWriter = struct {
         self.len += bytes.len;
     }
 };
+
+/// One precomputed substitution piece. Literal slices borrow the caller's
+/// substitution string; group references resolve against the match slots.
+pub const Segment = union(enum) {
+    literal: []const u8,
+    group: u16,
+    whole_start,
+    whole_end,
+    highest,
+    input,
+};
+
+pub const Template = struct {
+    pub const max_segments = 16;
+    segments: [max_segments]Segment = undefined,
+    count: u8 = 0,
+};
+
+/// Parse a substitution into segments once per replacement pass. Returns null
+/// when the substitution uses backslash escapes or case transforms, or when it
+/// needs more pieces than the stack template holds; those keep the general
+/// expansion path.
+pub fn parseTemplate(substitution: []const u8, program: Program) Error!?Template {
+    if (std.mem.indexOfScalar(u8, substitution, '\\') != null) return null;
+    var template = Template{};
+    var index: usize = 0;
+    while (index < substitution.len) {
+        if (template.count == Template.max_segments) return null;
+        if (substitution[index] != '$') {
+            var end = index;
+            while (end < substitution.len and substitution[end] != '$') end += 1;
+            template.segments[template.count] = .{ .literal = substitution[index..end] };
+            template.count += 1;
+            index = end;
+            continue;
+        }
+        if (index + 1 < substitution.len) {
+            const special = substitution[index + 1];
+            const kind: ?Segment = switch (special) {
+                '`' => .whole_start,
+                '\'' => .whole_end,
+                '+' => .highest,
+                '_' => .input,
+                else => null,
+            };
+            if (kind) |segment| {
+                template.segments[template.count] = segment;
+                template.count += 1;
+                index += 2;
+                continue;
+            }
+        }
+        const start = index;
+        if (try parseSubstitutionGroup(substitution, &index, program, program.capture_count)) |group| {
+            template.segments[template.count] = .{ .group = group };
+            template.count += 1;
+            index += 1;
+        } else {
+            template.segments[template.count] = .{ .literal = substitution[start..][0..1] };
+            template.count += 1;
+            // `parseSubstitutionGroup` advances to the last consumed
+            // character (the second `$` for `$$`); the next piece starts
+            // after it.
+            index += 1;
+        }
+    }
+    return template;
+}
+
+/// Expand a parsed template for one match.
+pub fn appendTemplate(writer: anytype, input: []const u8, template: *const Template, slots: []const usize, program: Program) Error!void {
+    for (template.segments[0..template.count]) |segment| {
+        switch (segment) {
+            .literal => |bytes| try writer.appendSlice(bytes),
+            .group => |group| if (groupText(input, slots, group)) |text| try writer.appendSlice(text),
+            .whole_start => try writer.appendSlice(input[0..slots[0]]),
+            .whole_end => try writer.appendSlice(input[slots[1]..]),
+            .highest => if (highestGroup(input, slots, program.capture_count)) |text| try writer.appendSlice(text),
+            .input => try writer.appendSlice(input),
+        }
+    }
+}

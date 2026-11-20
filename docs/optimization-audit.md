@@ -187,6 +187,13 @@ and `Limits.longest` keep the general engine. The `^|$` replacement over
 reference; `\b`/`\B`/`\b|$` replacements improve 1.64–1.95x and are ahead of
 Rust as well. See [zero-width edge assertions](benchmarks/zero-width.md).
 
+Replacement now parses the substitution once per pass into a fixed 16-segment
+stack template (literal slices, resolved groups, whole-input specials).
+Substitutions with backslash escapes or case transforms, and those needing
+more segments, keep the general per-match expansion. The 32 KiB `(\w+)` →
+`[$1]` capture replacement improves 1.85–1.88x with unchanged allocation
+counts; see [parsed substitution templates](benchmarks/substitution-template.md).
+
 Further work on these candidates needs fresh measurements before implementation.
 Current warmed throughput does not establish their cold-start cost or the
 benefit of replacing their fallback paths.
