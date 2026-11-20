@@ -556,11 +556,33 @@ pub const Workspace = struct {
                 return self.replaceAllLiteral(input, literal, substitution);
             }
         }
+        // An edge-only zero-width plan matches at a handful of text edges, so
+        // a length pass is cheap and one exact allocation replaces the
+        // ArrayList's growth and shrink copies.
+        if (self.program.zero_width) |plan| {
+            if (edgeOnlyPlan(plan)) {
+                const length = try self.replaceAllLen(input, substitution);
+                const exact = try self.allocator.alloc(u8, length);
+                errdefer self.allocator.free(exact);
+                const written = try self.replaceAllInto(input, substitution, exact);
+                if (written.len == length) return exact;
+                self.allocator.free(exact);
+            }
+        }
         var out: std.ArrayList(u8) = .empty;
         errdefer out.deinit(self.allocator);
         var writer = subst.ListWriter{ .list = &out, .allocator = self.allocator };
         try self.replaceAllWith(&writer, input, substitution, std.math.maxInt(usize));
         return out.toOwnedSlice(self.allocator);
+    }
+
+    /// Every path asserts only text edges, so the match set is bounded by the
+    /// text start, the final newline and the text end.
+    fn edgeOnlyPlan(plan: zero_width.Plan) bool {
+        for (plan.paths[0..plan.count]) |path| {
+            if (!path.edge_fast) return false;
+        }
+        return true;
     }
 
     /// A one-byte literal and a one-byte substitution keep the output the

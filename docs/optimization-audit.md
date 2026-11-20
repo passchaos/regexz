@@ -450,3 +450,10 @@ Direct single-byte stores in the set-run replacement writers, and dropping
 the redundant `runeAt` check before `runEnd` in the fast branch, were both
 screened and reverted: the replacement writers were neutral across the four
 `a+` cases, and Qwen find/findAll measured 1.01x/0.99x.
+
+`replaceAll` for an edge-only zero-width plan (`\A|\z`, `$`) now computes the
+exact output length and writes into one allocation instead of growing an
+ArrayList through several reallocations. The comparison harness's
+`replaceAll \A|\z` case improves 1.44x (8.8 -> 6.1 us) with a 1.06x control
+median. Plans that include line edges keep the general writer. See
+[edge-only zero-width replacement](benchmarks/edge-zero-replace.md).
