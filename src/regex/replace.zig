@@ -13,6 +13,8 @@ const Program = @import("compile.zig").Program;
 const BoundedElement = @import("compile.zig").BoundedElement;
 const UnboundedElement = @import("compile.zig").UnboundedElement;
 const RunShape = @import("compile.zig").RunShape;
+const LineMarkerShape = @import("compile.zig").LineMarkerShape;
+const EscapedDelimitedShape = @import("compile.zig").EscapedDelimitedShape;
 const PrefixRunShape = @import("compile.zig").PrefixRunShape;
 const ChainLoopShape = @import("compile.zig").ChainLoopShape;
 const OptionalTailShape = @import("compile.zig").OptionalTailShape;
@@ -79,6 +81,8 @@ pub const FastKind = enum {
     bounded_loop,
     signed_number,
     line_heading,
+    line_marker,
+    escaped_delimited,
 };
 pub const Error = model.Error;
 
@@ -256,6 +260,10 @@ pub const Workspace = struct {
     signed_number: ?SignedNumberState = null,
     /// `(?m)^X{min,max} Y.*$` in LF newline mode.
     line_heading: ?*LineHeadingState = null,
+    /// `(?m)^space* marker literal` (`(?m)^\s*[-*+] `).
+    line_marker: ?*LineMarkerState = null,
+    /// `quote (?: escape any | [^quote escape])* quote`.
+    escaped_delimited: ?EscapedDelimitedState = null,
     /// Byte membership tables for the chain fast path. `Set.matches` is a
     /// binary search over rune ranges; the per-byte chain scans run several
     /// lookups per input byte, so cache the answers once per workspace.
@@ -454,6 +462,24 @@ pub const Workspace = struct {
             state.run.deinit(allocator);
             allocator.destroy(state);
         };
+        const line_marker: ?*LineMarkerState = if (limits.longest) null else blk: {
+            const shape = program.line_marker orelse break :blk null;
+            const state = try allocator.create(LineMarkerState);
+            errdefer allocator.destroy(state);
+            state.* = .{
+                .space = byte_table.init(256, shape.space),
+                .marker = byte_table.init(256, shape.marker),
+                .literal = shape.literal,
+            };
+            break :blk state;
+        };
+        errdefer if (line_marker) |state| allocator.destroy(state);
+        const escaped_delimited: ?EscapedDelimitedState = if (limits.longest)
+            null
+        else if (program.escaped_delimited) |shape|
+            .{ .quote = shape.quote, .escape = shape.escape }
+        else
+            null;
         const anchored_table: [256]bool = if (simple_anchored) |anchored|
             (if (anchored.set.ascii_only) byte_table.init(256, anchored.set) else .{false} ** 256)
         else
@@ -594,6 +620,10 @@ pub const Workspace = struct {
             .line_start_run
         else if (line_heading != null)
             .line_heading
+        else if (line_marker != null)
+            .line_marker
+        else if (escaped_delimited != null)
+            .escaped_delimited
         else if (bounded_sequence != null)
             .bounded_sequence
         else if (unbounded_sequence) |state|
@@ -737,6 +767,8 @@ pub const Workspace = struct {
             .bounded_loop = bounded_loop,
             .signed_number = signed_number,
             .line_heading = line_heading,
+            .line_marker = line_marker,
+            .escaped_delimited = escaped_delimited,
         };
     }
 
@@ -755,6 +787,7 @@ pub const Workspace = struct {
             state.run.deinit(self.allocator);
             self.allocator.destroy(state);
         }
+        if (self.line_marker) |state| self.allocator.destroy(state);
         if (self.line_heading) |state| {
             state.run.deinit(self.allocator);
             self.allocator.destroy(state);
@@ -884,6 +917,8 @@ pub const Workspace = struct {
             .bounded_loop => return self.findBoundedLoop(&self.bounded_loop.?, input, search_start),
             .signed_number => return self.findSignedNumber(&self.signed_number.?, input, search_start),
             .line_heading => return self.findLineHeading(self.line_heading.?, input, search_start),
+            .line_marker => return self.findLineMarker(self.line_marker.?, input, search_start),
+            .escaped_delimited => return self.findEscapedDelimited(&self.escaped_delimited.?, input, search_start),
         }
         // Every match must start at a start-literal occurrence, so the first
         // occurrence bounds the leftmost match start and the DFA can skip
@@ -1499,6 +1534,8 @@ pub const Workspace = struct {
             .bounded_loop => return self.findBoundedLoop(&self.bounded_loop.?, input, search_start),
             .signed_number => return self.findSignedNumber(&self.signed_number.?, input, search_start),
             .line_heading => return self.findLineHeading(self.line_heading.?, input, search_start),
+            .line_marker => return self.findLineMarker(self.line_marker.?, input, search_start),
+            .escaped_delimited => return self.findEscapedDelimited(&self.escaped_delimited.?, input, search_start),
         }
         var from = search_start;
         if (self.pair_filter) |filter| {
@@ -1974,6 +2011,97 @@ pub const Workspace = struct {
     /// Try the dominant alternation branch at `search_start`. Returns null
     /// when an earlier branch could start here or this branch does not match;
     /// the general engine then decides.
+    /// `quote (?: escape any | [^quote escape])* quote`: the body set is
+    /// exactly the complement of the quote and escape bytes, so scanning for
+    /// the closing quote only has to honor escape sequences and valid UTF-8.
+    fn findEscapedDelimited(self: *Workspace, state: *const EscapedDelimitedState, input: []const u8, search_start: usize) ?Match {
+        var search = search_start;
+        while (search < input.len) {
+            const open = prefilter.indexOfByte(input, search, state.quote) orelse return null;
+            var pos = open + 1;
+            var failed = false;
+            while (pos < input.len) {
+                const byte = input[pos];
+                if (byte == state.quote) {
+                    self.slots[0] = open;
+                    self.slots[1] = pos + 1;
+                    return .{ .start = open, .end = pos + 1, .slots = self.slots };
+                }
+                if (byte == state.escape) {
+                    if (pos + 1 >= input.len) {
+                        failed = true;
+                        break;
+                    }
+                    const next = input[pos + 1];
+                    if (next < 0x80) {
+                        // `.` excludes the LF newline.
+                        if (next == '\n') {
+                            failed = true;
+                            break;
+                        }
+                        pos += 2;
+                    } else {
+                        const length = std.unicode.utf8ByteSequenceLength(next) catch {
+                            failed = true;
+                            break;
+                        };
+                        if (pos + 1 + length > input.len) {
+                            failed = true;
+                            break;
+                        }
+                        _ = std.unicode.utf8Decode(input[pos + 1 ..][0..length]) catch {
+                            failed = true;
+                            break;
+                        };
+                        pos += 1 + length;
+                    }
+                    continue;
+                }
+                if (byte < 0x80) {
+                    pos += 1;
+                    continue;
+                }
+                const length = std.unicode.utf8ByteSequenceLength(byte) catch {
+                    failed = true;
+                    break;
+                };
+                if (pos + length > input.len) {
+                    failed = true;
+                    break;
+                }
+                _ = std.unicode.utf8Decode(input[pos..][0..length]) catch {
+                    failed = true;
+                    break;
+                };
+                pos += length;
+            }
+            if (!failed) return null;
+            search = open + 1;
+        }
+        return null;
+    }
+
+    /// `(?m)^space* marker literal`: the whitespace run is maximal, so the
+    /// marker must follow it directly. Line starts whose run reaches the same
+    /// failure point are skipped together.
+    fn findLineMarker(self: *Workspace, state: *const LineMarkerState, input: []const u8, search_start: usize) ?Match {
+        if (search_start > input.len) return null;
+        var line = search_start;
+        if (line > 0 and input[line - 1] != '\n') line = nextLineStart(input, line) orelse return null;
+        while (line < input.len) {
+            var pos = line;
+            while (pos < input.len and state.space[input[pos]]) pos += 1;
+            if (pos + 1 < input.len and state.marker[input[pos]] and input[pos + 1] == state.literal) {
+                self.slots[0] = line;
+                self.slots[1] = pos + 2;
+                return .{ .start = line, .end = pos + 2, .slots = self.slots };
+            }
+            if (pos >= input.len) return null;
+            line = nextLineStart(input, pos) orelse return null;
+        }
+        return null;
+    }
+
     /// `(?m)^.*$`: the match is the whole line at the next line start.
     fn findLineRun(self: *Workspace, input: []const u8, search_start: usize) ?Match {
         if (search_start > input.len) return null;
@@ -4345,6 +4473,14 @@ const UnboundedSequenceState = struct {
         for (&result, b) |*slot, byte| slot.* = slot.* or byte;
         return result;
     }
+};
+
+const EscapedDelimitedState = struct { quote: u8, escape: u8 };
+
+const LineMarkerState = struct {
+    space: [256]bool,
+    marker: [256]bool,
+    literal: u8,
 };
 
 const LineHeadingState = struct {

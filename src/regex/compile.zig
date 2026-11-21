@@ -53,6 +53,10 @@ pub const LineHeadingShape = struct {
     set: model.Set,
 };
 
+pub const LineMarkerShape = struct { space: model.Set, marker: model.Set, literal: u8 };
+
+pub const EscapedDelimitedShape = struct { quote: u8, escape: u8 };
+
 pub const BoundedLoopShape = struct {
     set_a: model.Set,
     min_a: u8,
@@ -132,6 +136,12 @@ pub const Program = struct {
     /// `(?m)^X{min,max} Y.*$` with a literal heading byte and space. Not
     /// serialized.
     line_heading: ?LineHeadingShape = null,
+    /// `(?m)^space* marker literal` with a marker set and a trailing literal
+    /// (`(?m)^\s*[-*+] `). Not serialized.
+    line_marker: ?LineMarkerShape = null,
+    /// `quote (?: escape any | [^quote escape] )* quote` with a single-byte
+    /// quote and escape (`"(?:\\.|[^"\\])*"`). Not serialized.
+    escaped_delimited: ?EscapedDelimitedShape = null,
     /// `x? set+` where `x` is a member of the set, which matches exactly the
     /// same spans as `set+`. Not serialized.
     optional_run: ?model.Set = null,
@@ -1066,6 +1076,142 @@ fn detectLineHeading(root: *const model.Node) ?LineHeadingShape {
     };
 }
 
+fn literalByteOf(node: *const model.Node) ?u8 {
+    var current = node;
+    while (current.* == .group) current = current.group;
+    if (current.* != .set) return null;
+    const set = current.set;
+    if (set.ranges.len != 1) return null;
+    const range = set.ranges[0];
+    if (range.first != range.last or range.first >= 0x80) return null;
+    return @intCast(range.first);
+}
+
+const RangeBound = struct { first: u21, last: u21 };
+
+fn rangesEqual(set: model.Set, expected: []const RangeBound) bool {
+    if (set.ranges.len != expected.len) return false;
+    for (set.ranges, expected) |range, want| {
+        if (range.first != want.first or range.last != want.last) return false;
+    }
+    return true;
+}
+
+/// Whether `set` is exactly every rune except `byte`.
+fn isComplementOfByte(set: model.Set, byte: u21) bool {
+    var expected: [2]RangeBound = undefined;
+    var count: usize = 0;
+    if (byte > 0) {
+        expected[count] = .{ .first = 0, .last = byte - 1 };
+        count += 1;
+    }
+    if (byte < 0x10FFFF) {
+        expected[count] = .{ .first = byte + 1, .last = 0x10FFFF };
+        count += 1;
+    }
+    return rangesEqual(set, expected[0..count]);
+}
+
+/// Whether `set` is exactly every rune except the two single-byte values.
+fn isComplementOfBytes(set: model.Set, a: u8, b: u8) bool {
+    var lo: u21 = a;
+    var hi: u21 = b;
+    if (lo > hi) {
+        const swap = lo;
+        lo = hi;
+        hi = swap;
+    }
+    if (lo == hi) return false;
+    var expected: [3]RangeBound = undefined;
+    var count: usize = 0;
+    if (lo > 0) {
+        expected[count] = .{ .first = 0, .last = lo - 1 };
+        count += 1;
+    }
+    if (hi > lo + 1) {
+        expected[count] = .{ .first = lo + 1, .last = hi - 1 };
+        count += 1;
+    }
+    if (hi < 0x10FFFF) {
+        expected[count] = .{ .first = hi + 1, .last = 0x10FFFF };
+        count += 1;
+    }
+    return rangesEqual(set, expected[0..count]);
+}
+
+/// `quote (?: escape any | [^quote escape] )* quote` in LF mode. The body set
+/// is exactly the complement of the quote and escape bytes, and the escaped
+/// branch accepts any rune except the newline.
+fn detectEscapedDelimited(root: *const model.Node) ?EscapedDelimitedShape {
+    var nodes: [3]*const model.Node = undefined;
+    var count: usize = 0;
+    if (!flattenUpTo(root, &nodes, &count) or count != 3) return null;
+    const quote = literalByteOf(nodes[0]) orelse return null;
+    const close = literalByteOf(nodes[2]) orelse return null;
+    if (quote != close) return null;
+    const star_node = repeatOf(nodes[1]) orelse return null;
+    const star = star_node.repeat;
+    if (star.lazy or star.possessive or star.maximum != null or star.minimum != 0) return null;
+    var alt = star.child;
+    while (alt.* == .group) alt = alt.group;
+    if (alt.* != .alternate) return null;
+    var escape: ?u8 = null;
+    var body: ?model.Set = null;
+    const branches = [_]*const model.Node{ alt.alternate.left, alt.alternate.right };
+    for (branches) |branch| {
+        var node = branch;
+        while (node.* == .group) node = node.group;
+        switch (node.*) {
+            .pair => |pair| {
+                if (escape != null) return null;
+                const esc = literalByteOf(pair.left) orelse return null;
+                const any = nodeSet(pair.right) orelse return null;
+                if (!isComplementOfByte(any, '\n')) return null;
+                escape = esc;
+            },
+            .set => |set| {
+                if (body != null) return null;
+                body = set;
+            },
+            else => return null,
+        }
+    }
+    const esc = escape orelse return null;
+    const set = body orelse return null;
+    if (!isComplementOfBytes(set, quote, esc)) return null;
+    return .{ .quote = quote, .escape = esc };
+}
+
+/// `(?m)^space* marker literal` in LF mode: a line-start assertion, a
+/// greedy zero-or-more whitespace run, a non-empty ASCII marker set and one
+/// literal byte. The whitespace run is maximal, so the scan is exact.
+fn detectLineMarker(root: *const model.Node) ?LineMarkerShape {
+    var nodes: [4]*const model.Node = undefined;
+    var count: usize = 0;
+    if (!flattenUpTo(root, &nodes, &count) or count != 4) return null;
+    var first = nodes[0];
+    while (first.* == .group) first = first.group;
+    if (first.* != .assertion or first.assertion != .start_line) return null;
+    const space_repeat = (repeatOf(nodes[1]) orelse return null).repeat;
+    if (space_repeat.lazy or space_repeat.possessive or space_repeat.maximum != null or
+        space_repeat.minimum != 0) return null;
+    const space_set = nodeSet(space_repeat.child) orelse return null;
+    if (!space_set.ascii_only or space_set.ranges.len == 0) return null;
+    const marker_set = nodeSet(nodes[2]) orelse return null;
+    if (!marker_set.ascii_only or marker_set.ranges.len == 0) return null;
+    const literal_set = nodeSet(nodes[3]) orelse return null;
+    if (literal_set.ranges.len != 1 or literal_set.ranges[0].first != literal_set.ranges[0].last or
+        literal_set.ranges[0].first >= 0x80)
+    {
+        return null;
+    }
+    return .{
+        .space = space_set,
+        .marker = marker_set,
+        .literal = @intCast(literal_set.ranges[0].first),
+    };
+}
+
 /// A bounded run followed by a greedy repetition of a bounded
 /// `separator run` group, for example `\d{1,3}(?:,\d{3})+`.
 fn detectBoundedLoop(root: *const model.Node) ?BoundedLoopShape {
@@ -1829,6 +1975,16 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         detectLineHeading(parsed.root)
     else
         null;
+    const escaped_delimited: ?EscapedDelimitedShape = if (literal == null and caseless_literal == null and
+        literal_set == null and !limits.auto_callout and parsed.newline == .lf)
+        detectEscapedDelimited(parsed.root)
+    else
+        null;
+    const line_marker: ?LineMarkerShape = if (literal == null and caseless_literal == null and
+        literal_set == null and !limits.auto_callout and parsed.newline == .lf)
+        detectLineMarker(parsed.root)
+    else
+        null;
     const optional_run: ?model.Set = if (literal == null and caseless_literal == null and
         literal_set == null and !limits.auto_callout) detectOptionalRun(parsed.root) else null;
     var unbounded_builder = UnboundedSequenceBuilder{ .allocator = allocator, .literal_bytes = unbounded_storage };
@@ -1894,6 +2050,8 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         .bounded_loop = bounded_loop,
         .signed_number = signed_number,
         .line_heading = line_heading,
+        .line_marker = line_marker,
+        .escaped_delimited = escaped_delimited,
         .optional_run = optional_run,
         .dfa_eligible = dfa_eligible,
         .extended = extended,

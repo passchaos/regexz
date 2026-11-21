@@ -661,7 +661,7 @@ pub const MultiFilter = struct {
             filter.first_splats[index] = @splat(@intCast(pair >> 8));
             filter.second_splats[index] = @splat(@intCast(pair & 0xFF));
         }
-        if (!filter.shared_first and nibble_filter.supported and filter.pair_count >= 4) {
+        if (!filter.shared_first and nibble_filter.supported and filter.pair_count >= 3) {
             filter.pair_nibble = nibble_filter.Filter.init(literals);
         }
         return filter;

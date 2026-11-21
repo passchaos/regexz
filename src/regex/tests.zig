@@ -1207,6 +1207,38 @@ test "bounded loop fast path repeats bounded groups" {
     try expectFastSpans("\\d{1,3}(?:,\\d{3})+", "1,234,56", &.{.{ 0, 5 }});
 }
 
+test "escaped delimited fast path honors escapes" {
+    const pattern = "\"(?:\\\\.|[^\"\\\\])*\"";
+    var value = try regex.Regex.init(gpa, pattern, .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind == .escaped_delimited);
+
+    try expectFastSpans(pattern, "\"abc\" \"a\\\"b\" \"a\\\\\" x", &.{ .{ 0, 5 }, .{ 6, 12 }, .{ 13, 18 } });
+    try expectFastSpans(pattern, "\"abc", &.{});
+    try expectFastSpans(pattern, "\"a\\\"", &.{});
+    try expectFastSpans(pattern, "\"a\\\nbc", &.{});
+    try expectFastSpans(pattern, "\"猫\"", &.{.{ 0, 5 }});
+    try expectFastSpans(pattern, "\"a\\\"b\"", &.{.{ 0, 6 }});
+    try expectFastSpans(pattern, "x\"a\"y\"b\"", &.{ .{ 1, 4 }, .{ 5, 8 } });
+}
+
+test "line marker fast path scans list prefixes" {
+    var value = try regex.Regex.init(gpa, "(?m)^\\s*[-*+] ", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind == .line_marker);
+
+    try expectFastSpans("(?m)^\\s*[-*+] ", "- a\n  * b\n\t+ c\nx", &.{ .{ 0, 2 }, .{ 4, 8 }, .{ 10, 13 } });
+    try expectFastSpans("(?m)^\\s*[-*+] ", "text\n# heading\n", &.{});
+    try expectFastSpans("(?m)^\\s*[-*+] ", "  - x", &.{.{ 0, 4 }});
+    try expectFastSpans("(?m)^\\s*[-*+] ", "a\n\n- x", &.{.{ 2, 5 }});
+    try expectFastSpans("(?m)^\\s*[-*+] ", "-", &.{});
+    try expectFastSpans("(?m)^\\s*[-*+] ", "-x", &.{});
+}
+
 test "bounded-minimum set run scans maximal runs" {
     var value = try regex.Regex.init(gpa, "\\s{2,}", .{});
     defer value.deinit();
