@@ -132,6 +132,11 @@ fn complement(gpa: std.mem.Allocator, ranges: []const m.Range, limit: usize) m.E
     return inverted.toOwnedSlice(gpa);
 }
 
+/// Complement an already-normalized set without copying and re-merging it.
+pub fn complementSet(gpa: std.mem.Allocator, set: m.Set, limit: usize) m.Error!m.Set {
+    return fromRanges(try complement(gpa, set.ranges, limit));
+}
+
 /// Build a materialized set, including its 128-bit ASCII membership bitmap.
 pub fn fromRanges(ranges: []const m.Range) m.Set {
     var bitmap = [2]u64{ 0, 0 };

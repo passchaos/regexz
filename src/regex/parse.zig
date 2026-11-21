@@ -1115,7 +1115,8 @@ pub const Parser = struct {
                     try classes.combine(self.allocator, left, pending, right, self.limits.max_ranges)
                 else
                     right;
-                return self.node(.{ .set = try classes.normalize(self.allocator, combined.ranges, negate, .none, self.limits.max_ranges) });
+                if (negate) return self.node(.{ .set = try classes.complementSet(self.allocator, combined, self.limits.max_ranges) });
+                return self.node(.{ .set = combined });
             }
             if (!first) {
                 if (self.takeClassOp()) |op| {
