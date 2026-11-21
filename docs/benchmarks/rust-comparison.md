@@ -27,7 +27,7 @@ text, and small full-match subjects.
 
 | Case | regexz, ns/iter | Rust, ns/iter | Rust / regexz |
 | --- | ---: | ---: | ---: |
-| compile Qwen tokenizer | 27,000.0 | 714,453.8 | 26.46x |
+| compile Qwen tokenizer | 23,800.0 | 714,453.8 | 30.02x |
 | compile xDS-like | 5,900.0 | 31,649.2 | 5.36x |
 | find Qwen tokenizer | 49,760.6 | 106,195.8 | 2.13x |
 | findAll Qwen (borrowed) | 58,364.1 | 105,801.2 | 1.81x |
@@ -134,17 +134,17 @@ losses are the one-character alternation (`a|b|c`, 0.88x), currency
 (`\$\d+(?:\.\d{2})?`, 0.92x) and HTML tags (`<[^>]+>`, 0.92x); IPv6 is at
 parity (1.01x). The largest leads are `replaceAll` with edge assertions
 (39.00x), blank-line scans (33.15x), capitalized-word scans (28.39x),
-`RegexSet` no-match scans (16.22x) and compile time (26.46x); the tokenizer
+`RegexSet` no-match scans (16.22x) and compile time (30.02x); the tokenizer
 searches are 2.13x and 2.16x ahead. The geometric-mean ratio is 2.30x. The
 currency and HTML-tag rows are small absolute gaps (about 26 ns and 15 us
 respectively); the one-character alternation is dominated by the per-match
 dispatch call.
 
 The compile rows were re-measured after the class-sort, workspace-pointer,
-complement-fill, in-place-operand, precomputed-union and direct-negation
-changes, and the `find log level` and `find (?i) alternation` rows after the
-32-lane caseless scan; the materialized sets are identical, so the other
-search rows are unchanged.
+complement-fill, in-place-operand, precomputed-union, direct-negation and
+direct-union-append changes, and the `find log level` and `find (?i)
+alternation` rows after the 32-lane caseless scan; the materialized sets are
+identical, so the other search rows are unchanged.
 
 ## What changed in this round
 
@@ -198,8 +198,9 @@ widens the hot scans:
   `\p{...}` atoms use precomputed sorted unions (L+M, L+N, L+M+N), so the
   operand stays sorted and `normalize` skips its sort. Non-negated classes
   return the already-normalized set directly, and negated classes complement
-  the normalized ranges without a copy. Qwen compile improves about 45%
-  across these class-normalization changes.
+  the normalized ranges without a copy. Precomputed unions are merged
+  directly from the generated table without an intermediate set. Qwen
+  compile improves about 50% across these class-normalization changes.
 - Caseless literal alternations use the same 32-lane nibble scan as word
   alternations, with `vzeroupper` before returning. `(?i)error|warn|info`
   improves about 1.9x in the comparison harness.
