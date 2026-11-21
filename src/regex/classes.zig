@@ -347,9 +347,9 @@ pub fn unicodeWordRanges(gpa: std.mem.Allocator, limit: usize) m.Error![]const m
 /// Union of several Unicode property groups.
 pub fn unicodePropertyUnion(gpa: std.mem.Allocator, names: []const []const u8, limit: usize) m.Error![]const m.Range {
     if (m.unicode.lookupUnion(names)) |table| {
-        if (table.count > limit) return error.RegexLimitExceeded;
-        const ranges = try gpa.alloc(m.Range, table.count);
-        for (ranges, 0..) |*range, index| range.* = table.range(index);
+        if (table.ranges.len > limit) return error.RegexLimitExceeded;
+        const ranges = try gpa.alloc(m.Range, table.ranges.len);
+        @memcpy(ranges, table.ranges);
         return ranges;
     }
     var ranges: std.ArrayList(m.Range) = .empty;
@@ -414,29 +414,26 @@ pub fn appendSorted(list: *std.ArrayList(m.Range), gpa: std.mem.Allocator, set: 
 /// ranges are read from the generated table directly, avoiding an
 /// intermediate set allocation.
 pub fn appendUnionSorted(list: *std.ArrayList(m.Range), gpa: std.mem.Allocator, table: m.unicode.Union, limit: usize) m.Error!void {
-    if (list.items.len + table.count > limit) return error.RegexLimitExceeded;
-    if (table.count == 0) return;
+    const count = table.ranges.len;
+    if (list.items.len + count > limit) return error.RegexLimitExceeded;
+    if (count == 0) return;
     if (list.items.len == 0) {
-        try list.ensureTotalCapacity(gpa, table.count);
-        var index: usize = 0;
-        while (index < table.count) : (index += 1) list.appendAssumeCapacity(table.range(index));
+        try list.appendSlice(gpa, table.ranges);
         return;
     }
     const old_len = list.items.len;
-    if (list.items[old_len - 1].first <= table.range(0).first) {
-        try list.ensureUnusedCapacity(gpa, table.count);
-        var index: usize = 0;
-        while (index < table.count) : (index += 1) list.appendAssumeCapacity(table.range(index));
+    if (list.items[old_len - 1].first <= table.ranges[0].first) {
+        try list.appendSlice(gpa, table.ranges);
         return;
     }
-    const total = old_len + table.count;
+    const total = old_len + count;
     try list.ensureTotalCapacity(gpa, total);
     list.items.len = total;
     var i = old_len;
-    var j = table.count;
+    var j = count;
     var k = total;
     while (i > 0 and j > 0) {
-        const range = table.range(j - 1);
+        const range = table.ranges[j - 1];
         if (list.items[i - 1].first > range.first) {
             k -= 1;
             list.items[k] = list.items[i - 1];
@@ -454,7 +451,7 @@ pub fn appendUnionSorted(list: *std.ArrayList(m.Range), gpa: std.mem.Allocator, 
     }
     while (j > 0) {
         k -= 1;
-        list.items[k] = table.range(j - 1);
+        list.items[k] = table.ranges[j - 1];
         j -= 1;
     }
 }
@@ -464,35 +461,32 @@ pub fn appendUnionSorted(list: *std.ArrayList(m.Range), gpa: std.mem.Allocator, 
 /// directly, so the union never becomes an intermediate range list.
 /// `prefix` must be sorted by `first`.
 pub fn setFromUnion(gpa: std.mem.Allocator, prefix: []const m.Range, table: m.unicode.Union, negate: bool, limit: usize) m.Error!m.Set {
-    if (prefix.len + table.count > limit) return error.RegexLimitExceeded;
+    const count = table.ranges.len;
+    if (prefix.len + count > limit) return error.RegexLimitExceeded;
     for (prefix) |range| {
         if (range.first > range.last) return error.InvalidRegex;
     }
     if (!negate) {
+        // The union table is already canonical and lives in static data.
+        if (prefix.len == 0) return fromSortedRanges(table.ranges);
         var list: std.ArrayList(m.Range) = .empty;
         errdefer list.deinit(gpa);
-        try list.ensureTotalCapacity(gpa, prefix.len + table.count);
-        if (prefix.len == 0) {
-            // The union table is already canonical; copy it as is.
-            var index: usize = 0;
-            while (index < table.count) : (index += 1) list.appendAssumeCapacity(table.range(index));
-            return fromSortedRanges(list.items);
-        }
+        try list.ensureTotalCapacity(gpa, prefix.len + count);
         var i: usize = 0;
         var j: usize = 0;
-        while (i < prefix.len or j < table.count) {
+        while (i < prefix.len or j < count) {
             appendCoalesced(&list, nextUnionRange(prefix, table, &i, &j));
         }
         return fromSortedRanges(list.items);
     }
     var out: std.ArrayList(m.Range) = .empty;
     errdefer out.deinit(gpa);
-    try out.ensureTotalCapacity(gpa, prefix.len + table.count + 1);
+    try out.ensureTotalCapacity(gpa, prefix.len + count + 1);
     var next: u32 = 0;
     var i: usize = 0;
     var j: usize = 0;
     var pending: ?m.Range = null;
-    while (i < prefix.len or j < table.count) {
+    while (i < prefix.len or j < count) {
         const range = nextUnionRange(prefix, table, &i, &j);
         if (pending) |*current| {
             if (@as(u32, range.first) <= @as(u32, current.last) + 1) {
@@ -519,12 +513,12 @@ pub fn setFromUnion(gpa: std.mem.Allocator, prefix: []const m.Range, table: m.un
 
 fn nextUnionRange(prefix: []const m.Range, table: m.unicode.Union, i: *usize, j: *usize) m.Range {
     if (i.* < prefix.len) {
-        if (j.* >= table.count) {
+        if (j.* >= table.ranges.len) {
             const range = prefix[i.*];
             i.* += 1;
             return range;
         }
-        const table_range = table.range(j.*);
+        const table_range = table.ranges[j.*];
         if (prefix[i.*].first <= table_range.first) {
             const range = prefix[i.*];
             i.* += 1;
@@ -533,7 +527,7 @@ fn nextUnionRange(prefix: []const m.Range, table: m.unicode.Union, i: *usize, j:
         j.* += 1;
         return table_range;
     }
-    const range = table.range(j.*);
+    const range = table.ranges[j.*];
     j.* += 1;
     return range;
 }
@@ -558,10 +552,8 @@ fn emitComplementGap(out: *std.ArrayList(m.Range), next: *u32, first: u21, limit
 
 /// Append a precomputed union to an unsorted operand.
 pub fn appendUnion(list: *std.ArrayList(m.Range), gpa: std.mem.Allocator, table: m.unicode.Union, limit: usize) m.Error!void {
-    if (list.items.len + table.count > limit) return error.RegexLimitExceeded;
-    try list.ensureUnusedCapacity(gpa, table.count);
-    var index: usize = 0;
-    while (index < table.count) : (index += 1) list.appendAssumeCapacity(table.range(index));
+    if (list.items.len + table.ranges.len > limit) return error.RegexLimitExceeded;
+    try list.appendSlice(gpa, table.ranges);
 }
 
 pub fn ascii(name: []const u8) ?[]const m.Range {

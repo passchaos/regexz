@@ -62,17 +62,13 @@ pub fn lookup(name: []const u8) ?Group {
     return null;
 }
 
-/// Precomputed sorted, disjoint union of several property groups.
-pub const UnionEntry = struct { names: []const []const u8, offset: usize, count: usize };
+/// Precomputed sorted, disjoint union of several property groups. The ranges
+/// live in static data, so a class made only of the union can reference them
+/// without copying.
+pub const UnionEntry = struct { names: []const []const u8, ranges: []const Range };
 const union_entries = @import("unicode/unions.zig").entries;
-const union_data = @embedFile("unicode/unions.bin");
 pub const Union = struct {
-    offset: usize,
-    count: usize,
-    pub fn range(self: Union, index: usize) Range {
-        const bytes = union_data[self.offset + index * 8 ..];
-        return .{ .first = @intCast(std.mem.readInt(u32, bytes[0..4], .little)), .last = @intCast(std.mem.readInt(u32, bytes[4..8], .little)) };
-    }
+    ranges: []const Range,
 };
 /// Look up a precomputed union by its property names, ignoring order.
 pub fn lookupUnion(names: []const []const u8) ?Union {
@@ -92,7 +88,7 @@ pub fn lookupUnion(names: []const []const u8) ?Union {
                 break;
             }
         }
-        if (matched) return .{ .offset = entry.offset, .count = entry.count };
+        if (matched) return .{ .ranges = entry.ranges };
     }
     return null;
 }
