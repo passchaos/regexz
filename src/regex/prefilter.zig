@@ -25,10 +25,46 @@ inline fn laneMask(mask: @Vector(16, bool)) u16 {
     return @bitCast(mask);
 }
 
-/// First offset at or after `start` holding `byte`, scanned 128 bytes at a
-/// time. Returns null when the byte is absent.
-pub fn indexOfByte(input: []const u8, start: usize, byte: u8) ?usize {
+/// First offset at or after `start` holding `byte`. Long scans use a
+/// 128-byte unroll for throughput; short gaps keep the 64-byte loop, which
+/// is faster per call for line walks and quote scans.
+pub inline fn indexOfByte(input: []const u8, start: usize, byte: u8) ?usize {
     if (start >= input.len) return null;
+    if (input.len - start >= 1024) return indexOfByteLong(input, start, byte);
+    return indexOfByteShort(input, start, byte);
+}
+
+/// Short-gap variant without the width dispatch, so line walks can inline a
+/// single small loop.
+pub fn indexOfByteShort(input: []const u8, start: usize, byte: u8) ?usize {
+    if (start >= input.len) return null;
+    const needle: Vec = @splat(byte);
+    var offset = start;
+    while (offset + 64 <= input.len) : (offset += 64) {
+        const a: Vec = input[offset..][0..16].*;
+        const b: Vec = input[offset + 16 ..][0..16].*;
+        const c: Vec = input[offset + 32 ..][0..16].*;
+        const d: Vec = input[offset + 48 ..][0..16].*;
+        const hits = ((a == needle) | (b == needle)) | ((c == needle) | (d == needle));
+        if (@reduce(.Or, hits)) {
+            while (input[offset] != byte) offset += 1;
+            return offset;
+        }
+    }
+    while (offset + 16 <= input.len) : (offset += 16) {
+        const chunk: Vec = input[offset..][0..16].*;
+        if (@reduce(.Or, chunk == needle)) {
+            while (input[offset] != byte) offset += 1;
+            return offset;
+        }
+    }
+    while (offset < input.len) : (offset += 1) {
+        if (input[offset] == byte) return offset;
+    }
+    return null;
+}
+
+fn indexOfByteLong(input: []const u8, start: usize, byte: u8) ?usize {
     const needle: Vec = @splat(byte);
     var offset = start;
     while (offset + 128 <= input.len) : (offset += 128) {
@@ -47,6 +83,23 @@ pub fn indexOfByte(input: []const u8, start: usize, byte: u8) ?usize {
             return offset;
         }
     }
+    while (offset + 64 <= input.len) : (offset += 64) {
+        const a: Vec = input[offset..][0..16].*;
+        const b: Vec = input[offset + 16 ..][0..16].*;
+        const c: Vec = input[offset + 32 ..][0..16].*;
+        const d: Vec = input[offset + 48 ..][0..16].*;
+        const hits = ((a == needle) | (b == needle)) | ((c == needle) | (d == needle));
+        if (@reduce(.Or, hits)) {
+            while (input[offset] != byte) offset += 1;
+            return offset;
+        }
+    }
+    return indexOfByteTail(input, offset, byte);
+}
+
+fn indexOfByteTail(input: []const u8, start: usize, byte: u8) ?usize {
+    const needle: Vec = @splat(byte);
+    var offset = start;
     while (offset + 16 <= input.len) : (offset += 16) {
         const chunk: Vec = input[offset..][0..16].*;
         if (@reduce(.Or, chunk == needle)) {

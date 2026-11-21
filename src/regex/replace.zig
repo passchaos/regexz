@@ -2637,50 +2637,51 @@ pub const Workspace = struct {
         return null;
     }
 
-    /// `(?m)^space* run+ literal`: each line start skips the space run, then
-    /// the key run must be followed directly by the literal.
+    /// `(?m)^space* run+ literal`: scan for the literal, walk back over the
+    /// key run and the space run, then require a line start. The space run
+    /// may cross line breaks, so the match starts at the first line start
+    /// inside it that is not before `search_start`.
     fn findLineKey(self: *Workspace, state: *const LineKeyState, input: []const u8, search_start: usize) ?Match {
-        if (search_start > input.len) return null;
-        var line = search_start;
-        if (line > 0 and input[line - 1] != '\n') line = nextLineStart(input, line) orelse return null;
-        while (line < input.len) {
-            var pos = line;
-            while (pos < input.len and state.space[input[pos]]) pos += 1;
-            const run_start = pos;
-            while (pos < input.len and state.run[input[pos]]) pos += 1;
-            if (pos > run_start and pos < input.len and input[pos] == state.literal) {
-                self.slots[0] = line;
-                self.slots[1] = pos + 1;
-                return .{ .start = line, .end = pos + 1, .slots = self.slots };
+        var search = search_start;
+        while (search < input.len) {
+            const literal = prefilter.indexOfByte(input, search, state.literal) orelse return null;
+            var key_start = literal;
+            while (key_start > search and state.run[input[key_start - 1]]) key_start -= 1;
+            if (key_start < literal) {
+                var space_start = key_start;
+                while (space_start > search and state.space[input[space_start - 1]]) space_start -= 1;
+                var line = @max(space_start, search);
+                while (line < key_start and line != 0 and input[line - 1] != '\n') line += 1;
+                if (line == 0 or input[line - 1] == '\n') {
+                    self.slots[0] = line;
+                    self.slots[1] = literal + 1;
+                    return .{ .start = line, .end = literal + 1, .slots = self.slots };
+                }
             }
-            if (pos >= input.len) return null;
-            line = nextLineStart(input, pos) orelse return null;
+            search = literal + 1;
         }
         return null;
     }
 
-    /// `(?m)^\[ run+ \]$`: each line start checks the bracket, the run and the
-    /// line end.
+    /// `(?m)^\[ run+ \]$`: scan for the bracket, require a line start, then
+    /// the run, the closing bracket and the line end.
     fn findLineBracket(self: *Workspace, state: *const LineBracketState, input: []const u8, search_start: usize) ?Match {
-        if (search_start > input.len) return null;
-        var line = search_start;
-        if (line > 0 and input[line - 1] != '\n') line = nextLineStart(input, line) orelse return null;
-        while (line < input.len) {
-            var pos = line;
-            if (input[pos] == '[') {
-                pos += 1;
+        var search = search_start;
+        while (search < input.len) {
+            const open = prefilter.indexOfByte(input, search, '[') orelse return null;
+            if (open == 0 or input[open - 1] == '\n') {
+                var pos = open + 1;
                 const run_start = pos;
                 while (pos < input.len and state.run[input[pos]]) pos += 1;
                 if (pos > run_start and pos < input.len and input[pos] == ']' and
                     (pos + 1 == input.len or input[pos + 1] == '\n'))
                 {
-                    self.slots[0] = line;
+                    self.slots[0] = open;
                     self.slots[1] = pos + 1;
-                    return .{ .start = line, .end = pos + 1, .slots = self.slots };
+                    return .{ .start = open, .end = pos + 1, .slots = self.slots };
                 }
             }
-            if (pos >= input.len) return null;
-            line = nextLineStart(input, pos) orelse return null;
+            search = open + 1;
         }
         return null;
     }
@@ -4546,7 +4547,7 @@ fn startsAtLineStart(program: Program) bool {
 
 /// First line start after `start`.
 fn nextLineStart(input: []const u8, start: usize) ?usize {
-    const found = prefilter.indexOfByte(input, start, '\n') orelse return null;
+    const found = prefilter.indexOfByteShort(input, start, '\n') orelse return null;
     return found + 1;
 }
 
