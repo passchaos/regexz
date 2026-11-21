@@ -818,8 +818,10 @@ pub const Workspace = struct {
             .zero_width => {
                 if (self.findZeroWidth(&self.program.zero_width.?, input, search_start)) |match| return match;
             },
-            .caseless_literal => {
-                if (self.findCaselessLiteral(input, search_start)) |match| return match;
+            .caseless_literal => switch (self.findCaselessLiteral(input, search_start)) {
+                .found => |match| return match,
+                .absent => return null,
+                .fallback => {},
             },
             .literal_multi => return self.findLiteralMulti(input, search_start),
             .literal_pair => return self.findLiteralPair(input, search_start),
@@ -1417,8 +1419,10 @@ pub const Workspace = struct {
             .zero_width => {
                 if (self.findZeroWidth(&self.program.zero_width.?, input, search_start)) |match| return match;
             },
-            .caseless_literal => {
-                if (self.findCaselessLiteral(input, search_start)) |match| return match;
+            .caseless_literal => switch (self.findCaselessLiteral(input, search_start)) {
+                .found => |match| return match,
+                .absent => return null,
+                .fallback => {},
             },
             .literal_multi => return self.findLiteralMulti(input, search_start),
             .literal_pair => return self.findLiteralPair(input, search_start),
@@ -2001,22 +2005,32 @@ pub const Workspace = struct {
         return if (byte >= 'A' and byte <= 'Z') byte + 32 else byte;
     }
 
+    /// Folded-literal scan result. `absent` is definitive because every
+    /// non-ASCII input byte is a filter hit and would have reached
+    /// verification; `fallback` means a non-ASCII byte may hide a Unicode
+    /// simple-fold peer (U+017F for `s`), so the general engine must decide.
+    const CaselessScan = union(enum) {
+        found: Match,
+        absent,
+        fallback,
+    };
+
     /// A pure `(?i)` literal. The folded pair filter proposes the earliest
     /// possible start; ASCII windows are verified here instead of entering
     /// the DFA, and windows with a non-ASCII byte fall back to it for
     /// Unicode simple folding.
-    fn findCaselessLiteral(self: *Workspace, input: []const u8, search_start: usize) ?Match {
+    inline fn findCaselessLiteral(self: *Workspace, input: []const u8, search_start: usize) CaselessScan {
         const literal = self.program.caseless_literal.?;
-        for (literal) |byte| if (byte >= 0x80) return null;
-        const filter = self.fold_filter orelse return null;
+        for (literal) |byte| if (byte >= 0x80) return .fallback;
+        const filter = self.fold_filter orelse return .fallback;
         var search = search_start;
         while (true) {
-            const start = filter.indexOf(input, search) orelse return null;
-            if (start + literal.len > input.len) return null;
+            const start = filter.indexOf(input, search) orelse return .absent;
+            if (start + literal.len > input.len) return .absent;
             var matched = true;
             for (literal, 0..) |literal_byte, index| {
                 const byte = input[start + index];
-                if (byte >= 0x80) return null;
+                if (byte >= 0x80) return .fallback;
                 if (foldAsciiByte(byte) != foldAsciiByte(literal_byte)) {
                     matched = false;
                     break;
@@ -2025,7 +2039,7 @@ pub const Workspace = struct {
             if (matched) {
                 self.slots[0] = start;
                 self.slots[1] = start + literal.len;
-                return .{ .start = start, .end = start + literal.len, .slots = self.slots };
+                return .{ .found = .{ .start = start, .end = start + literal.len, .slots = self.slots } };
             }
             search = start + 1;
         }
