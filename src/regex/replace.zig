@@ -2512,16 +2512,20 @@ pub const Workspace = struct {
         return null;
     }
 
-    /// First occurrence of `needle` at or after `start`. Two-byte prefixes
-    /// use the SIMD pair scan before the full comparison.
+    /// First occurrence of `needle` at or after `start`. Two-byte needles
+    /// use the SIMD pair scan; longer needles scan for their rarest byte and
+    /// verify the full window, which is much faster than a two-byte prefix
+    /// when the prefix is common.
     fn indexOfBytes(input: []const u8, start: usize, needle: []const u8) ?usize {
         if (needle.len == 1) return prefilter.indexOfByte(input, start, needle[0]);
         if (needle.len == 2) return prefilter.indexOfPair(input, start, needle[0], needle[1]);
+        const anchor = prefilter.rarestByte(needle);
         var offset = start;
-        while (prefilter.indexOfPair(input, offset, needle[0], needle[1])) |found| {
-            if (found + needle.len <= input.len and
-                std.mem.eql(u8, input[found..][0..needle.len], needle)) return found;
-            offset = found + 1;
+        while (prefilter.indexOfByte(input, offset + anchor, needle[anchor])) |found| {
+            const at = found - anchor;
+            if (at >= offset and at + needle.len <= input.len and
+                std.mem.eql(u8, input[at..][0..needle.len], needle)) return at;
+            offset = at + 1;
         }
         return null;
     }

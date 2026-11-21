@@ -25,18 +25,23 @@ inline fn laneMask(mask: @Vector(16, bool)) u16 {
     return @bitCast(mask);
 }
 
-/// First offset at or after `start` holding `byte`, scanned 64 bytes at a
+/// First offset at or after `start` holding `byte`, scanned 128 bytes at a
 /// time. Returns null when the byte is absent.
 pub fn indexOfByte(input: []const u8, start: usize, byte: u8) ?usize {
     if (start >= input.len) return null;
     const needle: Vec = @splat(byte);
     var offset = start;
-    while (offset + 64 <= input.len) : (offset += 64) {
+    while (offset + 128 <= input.len) : (offset += 128) {
         const a: Vec = input[offset..][0..16].*;
         const b: Vec = input[offset + 16 ..][0..16].*;
         const c: Vec = input[offset + 32 ..][0..16].*;
         const d: Vec = input[offset + 48 ..][0..16].*;
-        const hits = ((a == needle) | (b == needle)) | ((c == needle) | (d == needle));
+        const e: Vec = input[offset + 64 ..][0..16].*;
+        const f: Vec = input[offset + 80 ..][0..16].*;
+        const g: Vec = input[offset + 96 ..][0..16].*;
+        const h: Vec = input[offset + 112 ..][0..16].*;
+        const hits = (((a == needle) | (b == needle)) | ((c == needle) | (d == needle))) |
+            (((e == needle) | (f == needle)) | ((g == needle) | (h == needle)));
         if (@reduce(.Or, hits)) {
             while (input[offset] != byte) offset += 1;
             return offset;
@@ -53,6 +58,75 @@ pub fn indexOfByte(input: []const u8, start: usize, byte: u8) ?usize {
         if (input[offset] == byte) return offset;
     }
     return null;
+}
+
+/// Relative commonness of ASCII bytes in text and markup (higher = more
+/// common). Used only to pick the rarest anchor byte of a multi-byte needle.
+const byte_commonness: [256]u8 = blk: {
+    var table = [_]u8{4} ** 256;
+    for ('a'..'z' + 1) |byte| table[byte] = 20;
+    for ('A'..'Z' + 1) |byte| table[byte] = 10;
+    for ('0'..'9' + 1) |byte| table[byte] = 12;
+    table[' '] = 255;
+    table['e'] = 100;
+    table['t'] = 90;
+    table['a'] = 80;
+    table['o'] = 75;
+    table['i'] = 70;
+    table['n'] = 67;
+    table['s'] = 63;
+    table['h'] = 61;
+    table['r'] = 60;
+    table['d'] = 43;
+    table['\n'] = 50;
+    table['.'] = 40;
+    table[','] = 35;
+    table['\''] = 30;
+    table['"'] = 30;
+    table['<'] = 30;
+    table['>'] = 30;
+    table['-'] = 25;
+    table['/'] = 25;
+    table['('] = 20;
+    table[')'] = 20;
+    table['='] = 20;
+    table[':'] = 15;
+    table['_'] = 15;
+    table[';'] = 12;
+    table['['] = 3;
+    table[']'] = 3;
+    table['!'] = 2;
+    table['?'] = 3;
+    table['@'] = 2;
+    table['#'] = 2;
+    table['$'] = 2;
+    table['%'] = 2;
+    table['&'] = 2;
+    table['*'] = 2;
+    table['+'] = 2;
+    table['|'] = 2;
+    table['\\'] = 2;
+    table['{'] = 2;
+    table['}'] = 2;
+    table['^'] = 1;
+    table['~'] = 1;
+    table['`'] = 1;
+    break :blk table;
+};
+
+/// Index of the rarest byte in `needle`, used as the anchor of a multi-byte
+/// scan. Ties keep the earliest byte.
+pub fn rarestByte(needle: []const u8) usize {
+    var best_index: usize = 0;
+    var best: u8 = std.math.maxInt(u8);
+    for (needle, 0..) |byte, index| {
+        const commonness = byte_commonness[byte];
+        if (commonness < best) {
+            best = commonness;
+            best_index = index;
+        }
+    }
+    return best_index;
 }
 
 /// First offset at or after `start` where `a` is immediately followed by
