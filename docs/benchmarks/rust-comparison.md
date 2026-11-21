@@ -204,6 +204,11 @@ order-balanced sweep measured the 5-word alternation 1.17x, 10-word 1.13x,
 20-word 1.13x, `(?i)` alternation 1.12x, shared-prefix 1.08x and one-char
 1.06x faster. See [literal-set scanner spans](literal-set-spans.md).
 
+The camelCase chain (`[a-z]+[A-Z][a-z]+`) now uses a dedicated walk instead of
+the generic three-element dispatch, improving the case 1.25x in an
+order-balanced sweep (87.2 us -> 69.6 us). See
+[camelCase dedicated walk](camel-walk.md).
+
 Caveats: the iteration APIs are the natural ones for each library
 (`Workspace.find` in a loop versus `Regex::find_iter`), full match is
 `Regex::find` plus a bounds check on the Rust side, the word-boundary case

@@ -1180,6 +1180,10 @@ test "unbounded chain handles star runs and single-set elements" {
     try expectFastSpans("[a-z]+[A-Z][a-z]+", "fooBar bazQux x", &.{ .{ 0, 6 }, .{ 7, 13 } });
     try expectFastSpans("[a-z]+[A-Z][a-z]+", "fooB", &.{});
     try expectFastSpans("[a-z]+[A-Z][a-z]+", "aBc", &.{.{ 0, 3 }});
+    try expectFastSpans("[a-z]+[A-Z][a-z]+", "fooBARbaz", &.{});
+    try expectFastSpans("[a-z]+[A-Z][a-z]+", "xAb", &.{.{ 0, 3 }});
+    try expectFastSpans("[a-z]+[A-Z][a-z]+", "aBcDe", &.{.{ 0, 3 }});
+    try expectFastSpans("[a-z]+[A-Z][a-z]+", "éFooBar", &.{.{ 3, 8 }});
 
     var kv = try regex.Regex.init(gpa, "\\w+\\s*=\\s*\\w+", .{});
     defer kv.deinit();

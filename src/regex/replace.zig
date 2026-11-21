@@ -2353,6 +2353,38 @@ pub const Workspace = struct {
         return null;
     }
 
+    /// `[a-z]+[A-Z][a-z]+`: one lower run, one upper byte, one lower run.
+    /// The runs are maximal and the sets are disjoint, so a failed start
+    /// skips the whole first run exactly like the generic walk.
+    fn walkCamel(self: *Workspace, state: *const UnboundedSequenceState, input: []const u8, search_start: usize) ?Match {
+        const lo = state.camel_lo;
+        const span = state.camel_span;
+        const upper_lo = state.camel_upper_lo;
+        const upper_span = state.camel_upper_span;
+        var start = search_start;
+        while (start < input.len) {
+            if (input[start] -% lo > span) {
+                start += 1;
+                continue;
+            }
+            var pos = start;
+            while (pos < input.len and input[pos] -% lo <= span) pos += 1;
+            if (pos < input.len and input[pos] -% upper_lo <= upper_span) {
+                const after_upper = pos + 1;
+                if (after_upper < input.len and input[after_upper] -% lo <= span) {
+                    var end = after_upper;
+                    while (end < input.len and input[end] -% lo <= span) end += 1;
+                    self.slots[0] = start;
+                    self.slots[1] = end;
+                    return .{ .start = start, .end = end, .slots = self.slots };
+                }
+            }
+            // Every start inside the first run shares its end.
+            start = pos;
+        }
+        return null;
+    }
+
     /// Unbounded run chain: each run is maximal and the following literal's
     /// first byte is outside the run set, so the flat walk needs no
     /// backtracking.
@@ -2363,6 +2395,7 @@ pub const Workspace = struct {
         input: []const u8,
         search_start: usize,
     ) ?Match {
+        if (!fuse and state.camel) return self.walkCamel(state, input, search_start);
         if (search_start >= input.len) return null;
         var start = search_start;
         while (start < input.len) : (start += 1) {
@@ -4045,6 +4078,13 @@ const UnboundedSequenceState = struct {
     /// At least two runs are followed by a single-byte literal that the walk
     /// fuses; one fused pair does not repay the per-run marker test.
     has_fuse: bool = false,
+    /// `[a-z]+[A-Z][a-z]+`: one lower run, one upper byte, one lower run.
+    /// The dedicated walk skips the generic element dispatch.
+    camel: bool = false,
+    camel_lo: u8 = 0,
+    camel_span: u8 = 0,
+    camel_upper_lo: u8 = 0,
+    camel_upper_span: u8 = 0,
 
     fn deinit(self: *UnboundedSequenceState, allocator: std.mem.Allocator) void {
         for (&self.runs) |*run| {
@@ -4156,6 +4196,23 @@ const UnboundedSequenceState = struct {
             self.len += 1;
         }
         if (self.len == 0) return false;
+        if (self.len == 3 and
+            self.elements[0].kind == .run_range and self.elements[0].len == 1 and
+            self.elements[1].kind == .single_set and
+            self.elements[2].kind == .run_range and self.elements[2].len == 1 and
+            self.elements[0].value == self.elements[2].value)
+        {
+            const upper = source[1].single_set;
+            if (upper.ranges.len == 1 and upper.ranges[0].last < 0x80) {
+                const set_index = self.elements[0].value;
+                const lo = self.range_lo[set_index];
+                self.camel_lo = lo;
+                self.camel_span = self.range_hi[set_index] -% lo;
+                self.camel_upper_lo = @intCast(upper.ranges[0].first);
+                self.camel_upper_span = @intCast(upper.ranges[0].last - upper.ranges[0].first);
+                self.camel = true;
+            }
+        }
         // Leading min-0 runs and optional literals may consume nothing, so
         // the match can start at the next element's first bytes too.
         var index: usize = 0;

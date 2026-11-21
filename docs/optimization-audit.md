@@ -866,6 +866,16 @@ the same noisy sweep. See
 [unbounded chain fusion](benchmarks/unbounded-chain-fusion.md) and
 [literal fast paths](benchmarks/literal-fast-paths.md).
 
+The camelCase chain (`[a-z]+[A-Z][a-z]+`) now has a dedicated walk. The
+unbounded sequence recognizes exactly three elements whose first and third
+are the same contiguous ASCII run with minimum one and whose middle is one
+disjoint contiguous ASCII set. The walk scans the lower run, tests one upper
+byte with a range check, requires a lower byte and extends the second run;
+failed starts still skip the whole first run. An order-balanced sweep
+measured the camelCase case 1.25x faster (87.2 us -> 69.6 us), with unrelated
+non-camel cases moving up to 1.25x in the same noisy sweep. See
+[camelCase dedicated walk](benchmarks/camel-walk.md).
+
 Five literal-set verification refinements were screened and reverted. A
 distinct-first first-byte index and a length-specialized tail compare were
 neutral (the 20-literal set shares `e`/`t` first bytes, and the compiler
