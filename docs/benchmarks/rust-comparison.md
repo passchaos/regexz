@@ -40,7 +40,7 @@ text, and small full-match subjects.
 | find word boundary | 194,004.0 | 204,714.0 | 1.06x |
 | find (?i) literal | 69,224.5 | 168,154.4 | 2.43x |
 | find alternation (5 words) | 95,165.9 | 233,935.3 | 2.46x |
-| find (?i) alternation | 90,550.1 | 301,250.0 | 3.33x |
+| find (?i) alternation | 87,331.4 | 301,250.0 | 3.45x |
 | find 10-word alternation | 210,514.9 | 380,838.2 | 1.81x |
 | find Greek class | 96,581.9 | 146,396.9 | 1.52x |
 | find prefix+suffix | 15,135.2 | 47,467.6 | 3.14x |
@@ -81,7 +81,7 @@ text, and small full-match subjects.
 | find markdown list | 4,916.4 | 41,381.8 | 8.42x |
 | find JSON escaped string | 17,421.3 | 22,508.3 | 1.29x |
 | find double spaces | 10,252.3 | 42,050.1 | 4.10x |
-| find log level | 3,004.2 | 3,081.5 | 1.03x |
+| find log level | 1,574.8 | 3,081.5 | 1.96x |
 | find markdown heading ws | 71,242.0 | 104,201.1 | 1.46x |
 | find markdown list ws | 4,927.6 | 72,432.2 | 14.70x |
 | find escaped string loop | 17,421.0 | 22,409.3 | 1.29x |
@@ -135,12 +135,15 @@ losses are the one-character alternation (`a|b|c`, 0.88x), currency
 parity (1.01x). The largest leads are `replaceAll` with edge assertions
 (39.00x), blank-line scans (33.15x), capitalized-word scans (28.39x),
 `RegexSet` no-match scans (16.22x) and compile time (15.45x); the tokenizer
-searches are 2.13x and 2.16x ahead. The currency and HTML-tag rows are small
-absolute gaps (about 26 ns and 15 us respectively); the one-character
-alternation is dominated by the per-match dispatch call.
+searches are 2.13x and 2.16x ahead. The geometric-mean ratio is 2.28x. The
+currency and HTML-tag rows are small absolute gaps (about 26 ns and 15 us
+respectively); the one-character alternation is dominated by the per-match
+dispatch call.
 
-The compile rows were re-measured after the class-sort change below; the
-materialized sets are identical, so the search rows are unchanged.
+The compile rows were re-measured after the class-sort change, and the
+`find log level` and `find (?i) alternation` rows after the 32-lane caseless
+scan; the materialized sets are identical, so the other search rows are
+unchanged.
 
 ## What changed in this round
 
@@ -190,6 +193,10 @@ widens the hot scans:
   was redundant; removing it avoids a mispredicting branch on the many equal
   starts produced by Unicode property unions. Qwen compile improves about
   11% in the comparison harness.
+- Caseless literal alternations use the same 32-lane nibble scan as word
+  alternations, with `vzeroupper` before returning. `(?i)error|warn|info`
+  improves about 1.9x in the comparison harness.
+
 
 
 Earlier rounds on macOS ARM64 brought the suite from 63 to 93 cases and added

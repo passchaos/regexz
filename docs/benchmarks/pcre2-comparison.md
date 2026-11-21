@@ -16,8 +16,9 @@ both processes pinned to CPU 0 with `taskset`; the table reports medians.
 The suite covers 100 cases: the same cases as the Rust comparison minus the
 `RegexSet` row, because PCRE2 has no combined-set API. The compile rows
 measure PCRE2's compile plus JIT compilation against regexz's compile. The
-compile rows were re-measured after the class-sort change; the materialized
-sets are identical, so the search rows are unchanged. Raw samples and
+compile rows were re-measured after the class-sort change and the `find log
+level` row after the 32-lane caseless scan; the materialized sets are
+identical, so the other search rows are unchanged. Raw samples and
 executable identities are in
 [`pcre2-comparison-current.json`](pcre2-comparison-current.json).
 
@@ -36,7 +37,7 @@ executable identities are in
 | find word boundary | 188,732.6 | 378,293.8 | 2.00x |
 | find (?i) literal | 67,367.5 | 63,794.0 | 0.95x |
 | find alternation (5 words) | 95,071.2 | 217,215.1 | 2.28x |
-| find (?i) alternation | 90,478.4 | 154,895.2 | 1.71x |
+| find (?i) alternation | 87,331.4 | 154,895.2 | 1.77x |
 | find 10-word alternation | 210,593.9 | 289,826.0 | 1.38x |
 | find Greek class | 101,317.0 | 165,249.0 | 1.63x |
 | find prefix+suffix | 13,829.0 | 22,051.8 | 1.59x |
@@ -77,7 +78,7 @@ executable identities are in
 | find markdown list | 4,922.7 | 29,112.5 | 5.91x |
 | find JSON escaped string | 17,605.3 | 34,025.0 | 1.93x |
 | find double spaces | 10,206.9 | 16,012.6 | 1.57x |
-| find log level | 3,015.7 | 20,000.8 | 6.63x |
+| find log level | 1,574.8 | 20,000.8 | 12.70x |
 | find markdown heading ws | 72,105.9 | 121,794.1 | 1.69x |
 | find markdown list ws | 4,927.8 | 25,763.4 | 5.23x |
 | find escaped string loop | 17,637.5 | 30,834.9 | 1.75x |
@@ -125,7 +126,7 @@ executable identities are in
 | replaceAll digits -> N | 54,994.1 | 307,631.7 | 5.59x |
 
 regexz is faster on 97 of the 100 measured cases, with a geometric-mean
-PCRE2/regexz ratio of 2.10x. The three PCRE2 wins are the two compile rows
+PCRE2/regexz ratio of 2.12x. The three PCRE2 wins are the two compile rows
 and the ASCII case-insensitive literal:
 
 - `compile Qwen tokenizer` (0.35x):
@@ -144,7 +145,7 @@ filter, required-literal prefilters and counted split paths avoid PCRE2's
 byte-at-a-time interpreter/JIT loop. Representative rows: `replaceAll
 \A\|\z -> X` 27.37x, `find SQL keyword` 21.76x, `find JSON literal`
 21.03x, `find HTTP methods` 12.33x, `find optional prefix run` 8.60x,
-`find log level` 6.63x, and `split commas` 5.61x. The absolute times are
+`find log level` 12.70x, and `split commas` 5.61x. The absolute times are
 from a shared host; the interleaved medians are more reliable than any single
 run.
 
