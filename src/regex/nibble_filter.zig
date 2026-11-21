@@ -3,14 +3,32 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const Vec = @Vector(16, u8);
+const Vec32 = @Vector(32, u8);
 
-pub const supported = builtin.cpu.arch == .aarch64 and std.Target.aarch64.featureSetHas(builtin.cpu.features, .neon);
+const x86_avx = builtin.cpu.arch == .x86_64 and std.Target.x86.featureSetHas(builtin.cpu.features, .avx);
+const x86_avx2 = builtin.cpu.arch == .x86_64 and std.Target.x86.featureSetHas(builtin.cpu.features, .avx2);
+const x86_ssse3 = builtin.cpu.arch == .x86_64 and std.Target.x86.featureSetHas(builtin.cpu.features, .ssse3);
+
+pub const supported = switch (builtin.cpu.arch) {
+    .aarch64 => std.Target.aarch64.featureSetHas(builtin.cpu.features, .neon),
+    .x86_64 => x86_avx or x86_ssse3,
+    else => false,
+};
+
+/// 32-lane scan support: AVX2 plus the LLVM backend, which accepts the
+/// `vpshufb` mnemonic (the self-hosted Debug backend does not).
+pub const wide_supported = x86_avx2 and builtin.zig_backend == .stage2_llvm;
 
 pub const Filter = struct {
     first_low: Vec,
     first_high: Vec,
     second_low: Vec,
     second_high: Vec,
+    /// The same tables broadcast into both 128-bit lanes for the 32-lane scan.
+    first_low32: Vec32 = undefined,
+    first_high32: Vec32 = undefined,
+    second_low32: Vec32 = undefined,
+    second_high32: Vec32 = undefined,
 
     pub fn init(literals: []const []const u8) ?Filter {
         if (literals.len < 2 or literals.len > 32) return null;
@@ -26,7 +44,19 @@ pub const Filter = struct {
             tables[2][literal[1] & 15] |= bit;
             tables[3][literal[1] >> 4] |= bit;
         }
-        return .{ .first_low = tables[0], .first_high = tables[1], .second_low = tables[2], .second_high = tables[3] };
+        var filter = Filter{
+            .first_low = tables[0],
+            .first_high = tables[1],
+            .second_low = tables[2],
+            .second_high = tables[3],
+        };
+        if (comptime wide_supported) {
+            filter.first_low32 = std.simd.join(tables[0], tables[0]);
+            filter.first_high32 = std.simd.join(tables[1], tables[1]);
+            filter.second_low32 = std.simd.join(tables[2], tables[2]);
+            filter.second_high32 = std.simd.join(tables[3], tables[3]);
+        }
+        return filter;
     }
 
     pub fn candidates(self: *const Filter, first: Vec, second: Vec) @Vector(16, bool) {
@@ -35,6 +65,16 @@ pub const Filter = struct {
         const values = lookup(self.first_low, first & low) & lookup(self.first_high, first >> shift) &
             lookup(self.second_low, second & low) & lookup(self.second_high, second >> shift);
         return values != @as(Vec, @splat(0));
+    }
+
+    /// 32-lane candidate mask. Both 128-bit lanes hold the same nibble
+    /// tables, so one `vpshufb` handles two chunks per table.
+    pub fn candidates32(self: *const Filter, first: Vec32, second: Vec32) @Vector(32, bool) {
+        const low: Vec32 = @splat(15);
+        const shift: @Vector(32, u3) = @splat(4);
+        const values = lookup32(self.first_low32, first & low) & lookup32(self.first_high32, first >> shift) &
+            lookup32(self.second_low32, second & low) & lookup32(self.second_high32, second >> shift);
+        return values != @as(Vec32, @splat(0));
     }
 };
 
@@ -229,13 +269,51 @@ fn assignBuckets(literals: []const []const u8) [32]u3 {
     return buckets;
 }
 
-fn lookup(table: Vec, indices: Vec) Vec {
-    if (supported) {
-        return asm ("tbl %[result].16b, {%[table].16b}, %[indices].16b"
-            : [result] "=x" (-> Vec),
+inline fn lookup32(table: Vec32, indices: Vec32) Vec32 {
+    if (comptime wide_supported) {
+        return asm ("vpshufb %[indices], %[table], %[result]"
+            : [result] "=x" (-> Vec32),
             : [table] "x" (table),
               [indices] "x" (indices),
         );
+    }
+    const bytes: [32]u8 = table;
+    const offsets: [32]u8 = indices;
+    var result: [32]u8 = undefined;
+    for (0..32) |index| result[index] = bytes[offsets[index] & 15];
+    return result;
+}
+
+inline fn lookup(table: Vec, indices: Vec) Vec {
+    if (comptime builtin.cpu.arch == .aarch64) {
+        if (comptime supported) {
+            return asm ("tbl %[result].16b, {%[table].16b}, %[indices].16b"
+                : [result] "=x" (-> Vec),
+                : [table] "x" (table),
+                  [indices] "x" (indices),
+            );
+        }
+    } else if (comptime builtin.cpu.arch == .x86_64) {
+        if (comptime x86_avx) {
+            // VEX encoding keeps the surrounding AVX state clean; a legacy
+            // `pshufb` after 256-bit VEX instructions costs a transition
+            // penalty on P-cores.
+            return asm ("vpshufb %[indices], %[table], %[result]"
+                : [result] "=x" (-> Vec),
+                : [table] "x" (table),
+                  [indices] "x" (indices),
+            );
+        }
+        if (comptime x86_ssse3) {
+            // `pshufb` indexes the destination register, so seed it with the
+            // table and let the instruction replace every lane.
+            var result = table;
+            asm ("pshufb %[indices], %[result]"
+                : [result] "+x" (result),
+                : [indices] "x" (indices),
+            );
+            return result;
+        }
     }
     const bytes: [16]u8 = table;
     const offsets: [16]u8 = indices;

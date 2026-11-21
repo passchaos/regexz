@@ -122,44 +122,11 @@ fn splitLiteral(gpa: std.mem.Allocator, input: []const u8, literal: []const u8, 
     return parts.toOwnedSlice(gpa);
 }
 
-/// Single-byte delimiter split. A short sample picks between the dense
-/// single-pass mask fill and the sparse per-part search: dense delimiters
-/// amortize the exact count, while sparse ones (lines) avoid the count pass.
+/// Single-byte delimiter split. The exact count sizes the parts array, then
+/// one mask pass extracts every delimiter lane. Sparse delimiters (lines)
+/// pay a cheap count pass but avoid one filter setup per part.
 fn splitByte(gpa: std.mem.Allocator, input: []const u8, byte: u8, limit: usize) Error![][]const u8 {
-    const sample_len = @min(input.len, 256);
-    const sample_hits = prefilter.countByte(input[0..sample_len], byte);
-    if (sample_hits * 16 >= sample_len) return splitByteDense(gpa, input, byte, limit);
-    return splitByteSparse(gpa, input, byte, limit);
-}
-
-fn splitByteSparse(gpa: std.mem.Allocator, input: []const u8, byte: u8, limit: usize) Error![][]const u8 {
-    var parts: std.ArrayList([]const u8) = .empty;
-    errdefer parts.deinit(gpa);
-    if (limit == 0) return parts.toOwnedSlice(gpa);
-    try parts.ensureTotalCapacity(gpa, @min(@min(input.len / 4 + 1, 8192), limit));
-    var last: usize = 0;
-    var offset: usize = 0;
-    while (parts.items.len + 1 < limit) {
-        // Delimiters in CSV-like text are close together; a short scalar
-        // probe avoids the per-call vector setup of the generic search.
-        const near = @min(input.len, offset + 16);
-        while (offset < near and input[offset] != byte) offset += 1;
-        var found: usize = undefined;
-        if (offset < near) {
-            found = offset;
-        } else if (near >= input.len) {
-            break;
-        } else {
-            found = prefilter.indexOfByte(input, offset, byte) orelse break;
-        }
-        if (parts.items.len == parts.capacity) try parts.ensureUnusedCapacity(gpa, 1);
-        parts.appendAssumeCapacity(input[last..found]);
-        last = found + 1;
-        offset = last;
-    }
-    if (parts.items.len == parts.capacity) try parts.ensureUnusedCapacity(gpa, 1);
-    parts.appendAssumeCapacity(input[last..]);
-    return parts.toOwnedSlice(gpa);
+    return splitByteDense(gpa, input, byte, limit);
 }
 
 fn splitByteDense(gpa: std.mem.Allocator, input: []const u8, byte: u8, limit: usize) Error![][]const u8 {

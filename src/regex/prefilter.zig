@@ -7,6 +7,7 @@
 //! to the byte-at-a-time bitmap loop.
 //! Selective capture runs can later reuse range vectors for UTF-8 lead bytes.
 const std = @import("std");
+const builtin = @import("builtin");
 const model = @import("model.zig");
 const nibble_filter = @import("nibble_filter.zig");
 const utf8_prefix = @import("utf8_prefix.zig");
@@ -14,6 +15,7 @@ const utf8_prefix = @import("utf8_prefix.zig");
 const max_simd_bytes = 8;
 const max_simd_ranges = utf8_prefix.max_ranges;
 const Vec = @Vector(16, u8);
+const Vec32 = @Vector(32, u8);
 
 /// Sentinel returned by literal probes when no literal matches.
 const no_literal = std.math.maxInt(usize);
@@ -48,9 +50,9 @@ pub fn countByte(input: []const u8, byte: u8) usize {
     return count;
 }
 
-/// First offset at or after `start` holding `byte`. A 64-byte probe handles
-/// the common short search gap (JSON quotes, delimiters); longer scans then
-/// switch to the 128-byte unroll.
+/// First offset at or after `start` holding `byte`. A 64-byte 16-lane probe
+/// handles the common short search gap (JSON quotes, delimiters); longer
+/// scans then switch to the native-width 128-byte unroll.
 pub fn indexOfByte(input: []const u8, start: usize, byte: u8) ?usize {
     if (start >= input.len) return null;
     if (start + 64 > input.len) return indexOfByteShort(input, start, byte);
@@ -118,7 +120,101 @@ pub fn indexOfByteShort(input: []const u8, start: usize, byte: u8) ?usize {
     return null;
 }
 
+/// Long-scan byte search. AVX2 hosts scan 32 bytes per compare and clear the
+/// upper YMM state before returning; other targets keep the 16-lane unroll.
 fn indexOfByteLong(input: []const u8, start: usize, byte: u8) ?usize {
+    if (comptime wide_scan) {
+        const result = indexOfByteLongWide(input, start, byte);
+        // The wide scan leaves the upper YMM state dirty; clear it before the
+        // caller resumes legacy SSE code.
+        asm volatile ("vzeroupper" ::: .{ .memory = true });
+        return result;
+    }
+    return indexOfByteLongNarrow(input, start, byte);
+}
+
+const wide_scan = builtin.cpu.arch == .x86_64 and
+    std.Target.x86.featureSetHas(builtin.cpu.features, .avx2) and
+    builtin.zig_backend == .stage2_llvm;
+
+noinline fn indexOfByteLongWide(input: []const u8, start: usize, byte: u8) ?usize {
+    const W = @Vector(32, u8);
+    const needle: W = @splat(byte);
+    var offset = start;
+    while (offset + 128 <= input.len) : (offset += 128) {
+        const bits_a: u32 = @bitCast(@as(W, input[offset..][0..32].*) == needle);
+        const bits_b: u32 = @bitCast(@as(W, input[offset + 32 ..][0..32].*) == needle);
+        const bits_c: u32 = @bitCast(@as(W, input[offset + 64 ..][0..32].*) == needle);
+        const bits_d: u32 = @bitCast(@as(W, input[offset + 96 ..][0..32].*) == needle);
+        if ((bits_a | bits_b | bits_c | bits_d) != 0) {
+            if (bits_a != 0) return offset + @ctz(bits_a);
+            if (bits_b != 0) return offset + 32 + @ctz(bits_b);
+            if (bits_c != 0) return offset + 64 + @ctz(bits_c);
+            return offset + 96 + @ctz(bits_d);
+        }
+    }
+    while (offset + 32 <= input.len) : (offset += 32) {
+        const bits: u32 = @bitCast(@as(W, input[offset..][0..32].*) == needle);
+        if (bits != 0) return offset + @ctz(bits);
+    }
+    while (offset < input.len) : (offset += 1) {
+        if (input[offset] == byte) return offset;
+    }
+    return null;
+}
+
+fn indexOfSplatsWide(input: []const u8, start: usize, bytes: []const u8) ?usize {
+    const result = indexOfSplatsWideInner(input, start, bytes);
+    // The wide scan leaves the upper YMM state dirty; clear it before the
+    // caller resumes legacy SSE code.
+    asm volatile ("vzeroupper" ::: .{ .memory = true });
+    return result;
+}
+
+noinline fn indexOfSplatsWideInner(input: []const u8, start: usize, bytes: []const u8) ?usize {
+    const W = @Vector(32, u8);
+    var offset = start;
+    while (offset + 128 <= input.len) : (offset += 128) {
+        const a: W = input[offset..][0..32].*;
+        const b: W = input[offset + 32 ..][0..32].*;
+        const c: W = input[offset + 64 ..][0..32].*;
+        const d: W = input[offset + 96 ..][0..32].*;
+        var masks_a: u32 = 0;
+        var masks_b: u32 = 0;
+        var masks_c: u32 = 0;
+        var masks_d: u32 = 0;
+        for (bytes) |byte| {
+            const needle: W = @splat(byte);
+            masks_a |= @bitCast(a == needle);
+            masks_b |= @bitCast(b == needle);
+            masks_c |= @bitCast(c == needle);
+            masks_d |= @bitCast(d == needle);
+        }
+        if ((masks_a | masks_b | masks_c | masks_d) != 0) {
+            if (masks_a != 0) return offset + @ctz(masks_a);
+            if (masks_b != 0) return offset + 32 + @ctz(masks_b);
+            if (masks_c != 0) return offset + 64 + @ctz(masks_c);
+            return offset + 96 + @ctz(masks_d);
+        }
+    }
+    while (offset + 32 <= input.len) : (offset += 32) {
+        const chunk: W = input[offset..][0..32].*;
+        var mask: u32 = 0;
+        for (bytes) |byte| {
+            const needle: W = @splat(byte);
+            mask |= @bitCast(chunk == needle);
+        }
+        if (mask != 0) return offset + @ctz(mask);
+    }
+    while (offset < input.len) : (offset += 1) {
+        for (bytes) |byte| {
+            if (input[offset] == byte) return offset;
+        }
+    }
+    return null;
+}
+
+fn indexOfByteLongNarrow(input: []const u8, start: usize, byte: u8) ?usize {
     const needle: Vec = @splat(byte);
     var offset = start;
     while (offset + 128 <= input.len) : (offset += 128) {
@@ -130,24 +226,15 @@ fn indexOfByteLong(input: []const u8, start: usize, byte: u8) ?usize {
         const f: Vec = input[offset + 80 ..][0..16].*;
         const g: Vec = input[offset + 96 ..][0..16].*;
         const h: Vec = input[offset + 112 ..][0..16].*;
-        const eq_a = a == needle;
-        const eq_b = b == needle;
-        const eq_c = c == needle;
-        const eq_d = d == needle;
-        const eq_e = e == needle;
-        const eq_f = f == needle;
-        const eq_g = g == needle;
-        const eq_h = h == needle;
-        const hits = ((eq_a | eq_b) | (eq_c | eq_d)) | ((eq_e | eq_f) | (eq_g | eq_h));
-        if (@reduce(.Or, hits)) {
-            const bits_a: u16 = @bitCast(eq_a);
-            const bits_b: u16 = @bitCast(eq_b);
-            const bits_c: u16 = @bitCast(eq_c);
-            const bits_d: u16 = @bitCast(eq_d);
-            const bits_e: u16 = @bitCast(eq_e);
-            const bits_f: u16 = @bitCast(eq_f);
-            const bits_g: u16 = @bitCast(eq_g);
-            const bits_h: u16 = @bitCast(eq_h);
+        const bits_a: u16 = @bitCast(a == needle);
+        const bits_b: u16 = @bitCast(b == needle);
+        const bits_c: u16 = @bitCast(c == needle);
+        const bits_d: u16 = @bitCast(d == needle);
+        const bits_e: u16 = @bitCast(e == needle);
+        const bits_f: u16 = @bitCast(f == needle);
+        const bits_g: u16 = @bitCast(g == needle);
+        const bits_h: u16 = @bitCast(h == needle);
+        if ((bits_a | bits_b | bits_c | bits_d | bits_e | bits_f | bits_g | bits_h) != 0) {
             if (bits_a != 0) return offset + @ctz(bits_a);
             if (bits_b != 0) return offset + 16 + @ctz(bits_b);
             if (bits_c != 0) return offset + 32 + @ctz(bits_c);
@@ -158,39 +245,10 @@ fn indexOfByteLong(input: []const u8, start: usize, byte: u8) ?usize {
             return offset + 112 + @ctz(bits_h);
         }
     }
-    while (offset + 64 <= input.len) : (offset += 64) {
-        const a: Vec = input[offset..][0..16].*;
-        const b: Vec = input[offset + 16 ..][0..16].*;
-        const c: Vec = input[offset + 32 ..][0..16].*;
-        const d: Vec = input[offset + 48 ..][0..16].*;
-        const eq_a = a == needle;
-        const eq_b = b == needle;
-        const eq_c = c == needle;
-        const eq_d = d == needle;
-        if (@reduce(.Or, (eq_a | eq_b) | (eq_c | eq_d))) {
-            const bits_a: u16 = @bitCast(eq_a);
-            const bits_b: u16 = @bitCast(eq_b);
-            const bits_c: u16 = @bitCast(eq_c);
-            const bits_d: u16 = @bitCast(eq_d);
-            if (bits_a != 0) return offset + @ctz(bits_a);
-            if (bits_b != 0) return offset + 16 + @ctz(bits_b);
-            if (bits_c != 0) return offset + 32 + @ctz(bits_c);
-            return offset + 48 + @ctz(bits_d);
-        }
-    }
-    return indexOfByteTail(input, offset, byte);
-}
-
-fn indexOfByteTail(input: []const u8, start: usize, byte: u8) ?usize {
-    const needle: Vec = @splat(byte);
-    var offset = start;
     while (offset + 16 <= input.len) : (offset += 16) {
         const chunk: Vec = input[offset..][0..16].*;
-        const eq = chunk == needle;
-        if (@reduce(.Or, eq)) {
-            const bits: u16 = @bitCast(eq);
-            return offset + @ctz(bits);
-        }
+        const bits: u16 = @bitCast(chunk == needle);
+        if (bits != 0) return offset + @ctz(bits);
     }
     while (offset < input.len) : (offset += 1) {
         if (input[offset] == byte) return offset;
@@ -487,10 +545,73 @@ pub const PairSet = struct {
         return self.indexOfAnyScalar(input, offset, literal_index);
     }
 
-    /// Sparse first-byte variant: the SIMD filter jumps between candidate
-    /// bytes, so the pair table is read only at plausible starts.
+    /// Sparse first-byte variant: candidate lanes are walked inside one
+    /// vector chunk, so a failed pair does not restart the filter at every
+    /// first-byte hit (HTTP method lists in prose).
     fn indexOfAnySparse(self: *const PairSet, input: []const u8, start: usize, literal_index: *usize) ?usize {
+        if (comptime wide_scan) {
+            if (!self.first.first.nonascii and !self.first.too_many and self.first.range_count == 0 and
+                self.first.count != 0)
+            {
+                const result = self.indexOfAnySparseWide(input, start, literal_index);
+                // The wide scan leaves the upper YMM state dirty; clear it
+                // before the caller resumes legacy SSE code.
+                asm volatile ("vzeroupper" ::: .{ .memory = true });
+                return result;
+            }
+        }
+        return self.indexOfAnySparseNarrow(input, start, literal_index);
+    }
+
+    noinline fn indexOfAnySparseWide(self: *const PairSet, input: []const u8, start: usize, literal_index: *usize) ?usize {
         var offset = start;
+        while (offset + 33 <= input.len) : (offset += 32) {
+            const chunk: Vec32 = input[offset..][0..32].*;
+            var bits: u32 = @bitCast(self.first.memberMask32(chunk));
+            while (bits != 0) {
+                const lane = @ctz(bits);
+                bits &= bits - 1;
+                const at = offset + lane;
+                if (at + 1 >= input.len) return null;
+                const found = self.matchesAt(input, at);
+                if (found != no_literal) {
+                    literal_index.* = found;
+                    return at;
+                }
+            }
+        }
+        asm volatile ("vzeroupper" ::: .{ .memory = true });
+        return self.indexOfAnySparseNarrow(input, offset, literal_index);
+    }
+
+    fn indexOfAnySparseNarrow(self: *const PairSet, input: []const u8, start: usize, literal_index: *usize) ?usize {
+        var offset = start;
+        if (!self.first.first.nonascii and !self.first.too_many) {
+            while (offset + 16 <= input.len) : (offset += 16) {
+                const chunk: Vec = input[offset..][0..16].*;
+                var bits: u16 = laneMask(self.first.memberMask(chunk));
+                while (bits != 0) {
+                    const lane = @ctz(bits);
+                    bits &= bits - 1;
+                    const at = offset + lane;
+                    if (at + 1 >= input.len) return null;
+                    const found = self.matchesAt(input, at);
+                    if (found != no_literal) {
+                        literal_index.* = found;
+                        return at;
+                    }
+                }
+            }
+            while (offset + 1 < input.len) : (offset += 1) {
+                if (!self.first.first.allowsByte(input[offset])) continue;
+                const found = self.matchesAt(input, offset);
+                if (found != no_literal) {
+                    literal_index.* = found;
+                    return offset;
+                }
+            }
+            return null;
+        }
         while (offset + 1 < input.len) {
             offset = self.first.indexOf(input, offset) orelse return null;
             if (offset + 1 >= input.len) return null;
@@ -550,6 +671,17 @@ pub const FirstFilter = struct {
         return result;
     }
 
+    /// 32-lane membership mask for the splat-only case. Callers check that
+    /// `range_count` is zero and the set has no non-ASCII members.
+    pub inline fn memberMask32(self: *const FirstFilter, chunk: Vec32) @Vector(32, bool) {
+        var result = chunk == @as(Vec32, @splat(self.bytes[0]));
+        var index: usize = 1;
+        while (index < self.count) : (index += 1) {
+            result = result | (chunk == @as(Vec32, @splat(self.bytes[index])));
+        }
+        return result;
+    }
+
     pub fn init(first: model.FirstSet) FirstFilter {
         var result = FirstFilter{ .first = first };
         // The ASCII bitmap is authoritative, so walk its set bits instead of
@@ -600,7 +732,11 @@ pub const FirstFilter = struct {
                 run_count += 1;
             }
         }
-        result.range_count = if (run_disabled) 0 else @intCast(run_count);
+        // Prefer splats when every range is a single byte: two isolated
+        // bytes cost two compares as splats but four as range bounds. Keep
+        // ranges for classes (`[a-z]`, `\w`) where one range covers many
+        // bytes.
+        result.range_count = if (run_disabled or run_count >= @as(usize, result.count)) 0 else @intCast(run_count);
         var index: usize = 0;
         while (index < result.count) : (index += 1) result.byte_splats[index] = @splat(result.bytes[index]);
         index = 0;
@@ -654,6 +790,9 @@ pub const FirstFilter = struct {
     pub fn indexOf(self: *const FirstFilter, input: []const u8, start: usize) ?usize {
         if (start >= input.len) return null;
         if (self.first.empty) return start;
+        // A single ASCII byte uses the dedicated byte scanner, which unrolls
+        // 128 bytes and avoids the 16-lane splat loop.
+        if (self.count == 1 and !self.first.nonascii) return indexOfByte(input, start, self.bytes[0]);
         if (self.range_count != 0) return self.indexOfRanges(input, start);
         if (self.too_many) return byteLoop(input, start, self.first);
         const count: usize = self.count;
@@ -670,6 +809,23 @@ pub const FirstFilter = struct {
         }
         const nonascii: Vec = @splat(@as(u8, 0x80));
         var offset = start;
+        // A 64-byte 16-lane probe handles dense short gaps; long no-match
+        // scans then switch to the native-width splat scan.
+        if (comptime wide_scan) {
+            if (!self.first.nonascii and start + 64 <= input.len) {
+                const probe_end = start + 64;
+                while (offset < probe_end) : (offset += 16) {
+                    const raw: [16]u8 = input[offset..][0..16].*;
+                    const chunk: Vec = @bitCast(raw);
+                    var mask = chunk == self.byte_splats[0];
+                    var index: usize = 1;
+                    while (index < count) : (index += 1) mask = mask | (chunk == self.byte_splats[index]);
+                    const bits: u16 = @bitCast(mask);
+                    if (bits != 0) return offset + @ctz(bits);
+                }
+                return indexOfSplatsWide(input, offset, self.bytes[0..count]);
+            }
+        }
         while (offset + 16 <= input.len) : (offset += 16) {
             const raw: [16]u8 = input[offset..][0..16].*;
             const chunk: Vec = @bitCast(raw);
@@ -677,12 +833,8 @@ pub const FirstFilter = struct {
             var index: usize = 1;
             while (index < count) : (index += 1) mask = mask | (chunk == self.byte_splats[index]);
             if (self.first.nonascii) mask = mask | (chunk >= nonascii);
-            if (@reduce(.Or, mask)) {
-                var i: usize = 0;
-                while (i < 16) : (i += 1) {
-                    if (self.first.allowsByte(raw[i])) return offset + i;
-                }
-            }
+            const bits: u16 = @bitCast(mask);
+            if (bits != 0) return offset + @ctz(bits);
         }
         return byteLoop(input, offset, self.first);
     }
@@ -716,12 +868,8 @@ pub const FirstFilter = struct {
                 mask = mask | ((chunk >= self.range_lo[index]) & (chunk <= self.range_hi[index]));
             }
             if (self.first.nonascii) mask = mask | (chunk >= nonascii);
-            if (@reduce(.Or, mask)) {
-                var i: usize = 0;
-                while (i < 16) : (i += 1) {
-                    if (self.first.allowsByte(raw[i])) return offset + i;
-                }
-            }
+            const bits: u16 = @bitCast(mask);
+            if (bits != 0) return offset + @ctz(bits);
         }
         return byteLoop(input, offset, self.first);
     }
@@ -915,9 +1063,13 @@ pub const MultiFilter = struct {
             }
         }
         if (filter.pair_count == 0) return null;
-        // The third byte only disambiguates literals that share a pair or
-        // rejects pair collisions; distinct pairs already pin the branch.
-        filter.use_third = filter.use_third and filter.pair_count < literals.len;
+        // The third byte disambiguates literals that share a pair and also
+        // rejects pair collisions in running text ("er" inside "Numbers").
+        // Keep it when its allowed set is small: the check runs once per
+        // candidate chunk, so a wide set of third bytes would cost more than
+        // the candidates it rejects.
+        filter.use_third = filter.use_third and
+            (filter.pair_count < literals.len or filter.third_count <= 4);
         filter.first = @splat(@intCast(filter.pairs[0] >> 8));
         var index: usize = 0;
         while (index < filter.pair_count) : (index += 1) {
@@ -946,6 +1098,70 @@ pub const MultiFilter = struct {
                 std.mem.eql(u8, input[offset + 3 ..][0 .. literal.len - 3], literal[3..])) return index;
         }
         return no_literal;
+    }
+
+    /// Candidate lane mask for the 16-byte window at `offset`: bit N is set
+    /// when a folded literal pair may start at `offset + N`. The shared
+    /// third-byte filter is applied when enabled and the window leaves room
+    /// for the third lane. Callers iterate the set bits and verify each
+    /// candidate themselves, so a failed candidate does not restart the scan.
+    pub inline fn candidateBits(self: *const MultiFilter, input: []const u8, offset: usize) u16 {
+        const fold: Vec = @splat(0x20);
+        const base: Vec = @bitCast(@as([16]u8, input[offset..][0..16].*));
+        const chunk: Vec = base | fold;
+        const next_base: Vec = @bitCast(@as([16]u8, input[offset + 1 ..][0..16].*));
+        const next: Vec = next_base | fold;
+        var bits: u16 = undefined;
+        if (self.pair_nibble) |*nibble| {
+            bits = @bitCast(nibble.candidates(chunk, next));
+        } else {
+            var first_mask = chunk == self.first;
+            if (!self.shared_first) {
+                var pair_index: usize = 0;
+                while (pair_index < self.pair_count) : (pair_index += 1) {
+                    first_mask = first_mask | (chunk == self.first_splats[pair_index]);
+                }
+            }
+            bits = @bitCast(first_mask);
+            if (bits == 0) return 0;
+            var seconds = @as(@Vector(16, bool), @splat(false));
+            var pair_index: usize = 0;
+            while (pair_index < self.pair_count) : (pair_index += 1) {
+                seconds = seconds | (next == self.second_splats[pair_index]);
+            }
+            bits &= @as(u16, @bitCast(seconds));
+        }
+        if (bits == 0 or !self.use_third or offset + 18 > input.len) return bits;
+        const third_base: Vec = @bitCast(@as([16]u8, input[offset + 2 ..][0..16].*));
+        const third: Vec = third_base | fold;
+        var allowed = third == self.third_splats[0];
+        var third_index: usize = 1;
+        while (third_index < self.third_count) : (third_index += 1) {
+            allowed = allowed | (third == self.third_splats[third_index]);
+        }
+        return bits & @as(u16, @bitCast(allowed));
+    }
+
+    /// 32-lane variant of `candidateBits` for the wide scan. Requires the
+    /// nibble filter and a window that leaves room for the second and third
+    /// lanes; callers check those bounds.
+    pub inline fn candidateBits32(self: *const MultiFilter, input: []const u8, offset: usize) u32 {
+        const fold: Vec32 = @splat(0x20);
+        const base: Vec32 = @bitCast(@as([32]u8, input[offset..][0..32].*));
+        const chunk: Vec32 = base | fold;
+        const next_base: Vec32 = @bitCast(@as([32]u8, input[offset + 1 ..][0..32].*));
+        const next: Vec32 = next_base | fold;
+        const nibble = &self.pair_nibble.?;
+        const bits: u32 = @bitCast(nibble.candidates32(chunk, next));
+        if (bits == 0 or !self.use_third or offset + 34 > input.len) return bits;
+        const third_base: Vec32 = @bitCast(@as([32]u8, input[offset + 2 ..][0..32].*));
+        const third: Vec32 = third_base | fold;
+        var allowed = third == @as(Vec32, @splat(self.third_splats[0][0]));
+        var third_index: usize = 1;
+        while (third_index < self.third_count) : (third_index += 1) {
+            allowed = allowed | (third == @as(Vec32, @splat(self.third_splats[third_index][0])));
+        }
+        return bits & @as(u32, @bitCast(allowed));
     }
 
     pub inline fn indexOf(self: *const MultiFilter, input: []const u8, start: usize) ?usize {

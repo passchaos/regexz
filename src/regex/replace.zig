@@ -27,6 +27,7 @@ const search_dfa = @import("search_dfa.zig");
 const deferred_utf8 = @import("deferred_utf8_run.zig");
 const utf8_run_search = @import("utf8_run_search.zig");
 const prefilter = @import("prefilter.zig");
+const nibble_filter = @import("nibble_filter.zig");
 const shapes = @import("shapes.zig");
 const zero_width = @import("zero_width.zig");
 const fast_branch_mod = @import("fast_branch.zig");
@@ -559,13 +560,16 @@ pub const Workspace = struct {
             null;
         const run_literals: ?RunLiteralsState = if (limits.longest) null else blk: {
             const shape = program.run_literals orelse break :blk null;
-            var first_bytes = [_]bool{false} ** 256;
-            for (shape.literals) |literal| first_bytes[literal[0]] = true;
+            var first_index = [_]u8{0xFF} ** 256;
+            for (shape.literals, 0..) |literal, index| {
+                const first = literal[0];
+                first_index[first] = if (first_index[first] == 0xFF) @intCast(index) else 0xFE;
+            }
             break :blk .{
                 .run = byte_table.init(256, shape.run),
                 .filter = prefilter.FirstFilter.init(prefilter.firstSetOf(shape.run)),
                 .literals = shape.literals,
-                .first_bytes = first_bytes,
+                .first_index = first_index,
             };
         };
         const prefix_run_literal: ?PrefixRunLiteralState = if (limits.longest) null else blk: {
@@ -1050,6 +1054,7 @@ pub const Workspace = struct {
     ) Error!?Match {
         if (self.start_anchored and search_start != 0) return null;
         if (self.fast_kind == .set_run) return self.findSetRun(self.simple_set.?, input, search_start);
+        if (self.fast_kind == .run_literals) return self.findRunLiterals(&self.run_literals.?, input, search_start);
         if (self.fast_kind == .none) {
             if (self.fast_branch) |*branch| {
                 if (self.findFastBranch(branch, input, search_start)) |match| return match;
@@ -2373,51 +2378,48 @@ pub const Workspace = struct {
 
     /// `\b (?:word|word|...) \b`: a folded two-byte pair scan proposes the
     /// next candidate start, then the shared word boundaries and the
-    /// alternatives are verified in source order. Pair candidates are rare,
-    /// and verification handles non-ASCII fold peers exactly.
+    /// alternatives are verified in source order. Candidate lanes are walked
+    /// inside one chunk: a failed candidate resumes at the next lane instead
+    /// of restarting the vector scan, so dense pair collisions stay cheap.
     fn findWordAlternation(self: *Workspace, state: *const WordAlternationState, input: []const u8, search_start: usize) ?Match {
-        const Vec = @Vector(16, u8);
-        const fold: Vec = @splat(0x20);
-        var offset = search_start;
-        if (state.filter.pair_nibble) |*nibble| {
-            // One pass over the text; failed candidates do not restart the
-            // scan, so dense pair collisions stay cheap. Two chunks per
-            // iteration overlap their table lookups.
-            while (offset + 33 <= input.len) : (offset += 32) {
-                const a_first: Vec = @as(Vec, @bitCast(@as([16]u8, input[offset..][0..16].*))) | fold;
-                const a_second: Vec = @as(Vec, @bitCast(@as([16]u8, input[offset + 1 ..][0..16].*))) | fold;
-                const b_first: Vec = @as(Vec, @bitCast(@as([16]u8, input[offset + 16 ..][0..16].*))) | fold;
-                const b_second: Vec = @as(Vec, @bitCast(@as([16]u8, input[offset + 17 ..][0..16].*))) | fold;
-                const a_bits: u16 = @bitCast(nibble.candidates(a_first, a_second));
-                const b_bits: u16 = @bitCast(nibble.candidates(b_first, b_second));
-                if (a_bits != 0) {
-                    var bits = a_bits;
-                    while (bits != 0) {
-                        const lane = @ctz(bits);
-                        bits &= bits - 1;
-                        if (self.matchWordAlternation(state, input, offset + lane)) |match| return match;
-                    }
-                }
-                if (b_bits != 0) {
-                    var bits = b_bits;
-                    while (bits != 0) {
-                        const lane = @ctz(bits);
-                        bits &= bits - 1;
-                        if (self.matchWordAlternation(state, input, offset + 16 + lane)) |match| return match;
-                    }
-                }
+        if (comptime nibble_filter.wide_supported) {
+            if (state.filter.pair_nibble != null) {
+                const result = self.findWordAlternationWide(state, input, search_start);
+                // The wide scan leaves the upper YMM state dirty; clear it
+                // before the caller resumes legacy SSE code.
+                asm volatile ("vzeroupper" ::: .{ .memory = true });
+                return result;
             }
-            while (offset + 17 <= input.len) : (offset += 16) {
-                const first_raw: [16]u8 = input[offset..][0..16].*;
-                const second_raw: [16]u8 = input[offset + 1 ..][0..16].*;
-                const first: Vec = @as(Vec, @bitCast(first_raw)) | fold;
-                const second: Vec = @as(Vec, @bitCast(second_raw)) | fold;
-                var bits: u16 = @bitCast(nibble.candidates(first, second));
-                while (bits != 0) {
-                    const lane = @ctz(bits);
-                    bits &= bits - 1;
-                    if (self.matchWordAlternation(state, input, offset + lane)) |match| return match;
-                }
+        }
+        return self.findWordAlternationNarrow(state, input, search_start);
+    }
+
+    noinline fn findWordAlternationWide(self: *Workspace, state: *const WordAlternationState, input: []const u8, search_start: usize) ?Match {
+        var offset = search_start;
+        while (offset + 34 <= input.len) : (offset += 32) {
+            var bits = state.filter.candidateBits32(input, offset);
+            while (bits != 0) {
+                const lane = @ctz(bits);
+                bits &= bits - 1;
+                if (self.matchWordAlternation(state, input, offset + lane)) |match| return match;
+            }
+        }
+        asm volatile ("vzeroupper" ::: .{ .memory = true });
+        return self.findWordAlternationNarrowFrom(state, input, offset);
+    }
+
+    fn findWordAlternationNarrow(self: *Workspace, state: *const WordAlternationState, input: []const u8, search_start: usize) ?Match {
+        return self.findWordAlternationNarrowFrom(state, input, search_start);
+    }
+
+    fn findWordAlternationNarrowFrom(self: *Workspace, state: *const WordAlternationState, input: []const u8, search_start: usize) ?Match {
+        var offset = search_start;
+        while (offset + 17 <= input.len) : (offset += 16) {
+            var bits = state.filter.candidateBits(input, offset);
+            while (bits != 0) {
+                const lane = @ctz(bits);
+                bits &= bits - 1;
+                if (self.matchWordAlternation(state, input, offset + lane)) |match| return match;
             }
         }
         while (offset < input.len) {
@@ -2553,12 +2555,28 @@ pub const Workspace = struct {
             }
             var end = at;
             while (end < input.len and state.run[input[end]]) end += 1;
-            if (end < input.len and state.first_bytes[input[end]]) {
-                for (state.literals) |literal| {
-                    if (end + literal.len <= input.len and std.mem.eql(u8, input[end..][0..literal.len], literal)) {
-                        self.slots[0] = at;
-                        self.slots[1] = end + literal.len;
-                        return .{ .start = at, .end = end + literal.len, .slots = self.slots };
+            if (end < input.len) {
+                const slot = state.first_index[input[end]];
+                if (slot != 0xFF) {
+                    if (slot != 0xFE) {
+                        const literal = state.literals[slot];
+                        if (end + literal.len <= input.len and
+                            std.mem.eql(u8, input[end..][0..literal.len], literal))
+                        {
+                            self.slots[0] = at;
+                            self.slots[1] = end + literal.len;
+                            return .{ .start = at, .end = end + literal.len, .slots = self.slots };
+                        }
+                    } else {
+                        for (state.literals) |literal| {
+                            if (end + literal.len <= input.len and
+                                std.mem.eql(u8, input[end..][0..literal.len], literal))
+                            {
+                                self.slots[0] = at;
+                                self.slots[1] = end + literal.len;
+                                return .{ .start = at, .end = end + literal.len, .slots = self.slots };
+                            }
+                        }
                     }
                 }
             }
@@ -3516,6 +3534,30 @@ pub const Workspace = struct {
     fn findPrefixRun(self: *Workspace, state: *const PrefixRunState, input: []const u8, search_start: usize) ?Match {
         const rest = &state.table_b;
         var start = search_start;
+        // A single-byte prefix scans continuously: candidates are walked
+        // inside one vector chunk, so a failed run does not restart the
+        // filter at every separator (`#\w+`, `@\w+` in prose).
+        if (!state.dense and state.first_filter.count == 1 and !state.first_filter.first.nonascii) {
+            const Vec = @Vector(16, u8);
+            const needle: Vec = @splat(state.first_filter.bytes[0]);
+            var offset = start;
+            while (offset + 16 <= input.len) : (offset += 16) {
+                const chunk: Vec = input[offset..][0..16].*;
+                var bits: u16 = @bitCast(chunk == needle);
+                while (bits != 0) {
+                    const lane = @ctz(bits);
+                    bits &= bits - 1;
+                    const at = offset + lane;
+                    var end = at + 1;
+                    while (end < input.len and byte_table.has(rest, input[end])) end += 1;
+                    if (state.min_b == 1 and end == at + 1) continue;
+                    self.slots[0] = at;
+                    self.slots[1] = end;
+                    return .{ .start = at, .end = end, .slots = self.slots };
+                }
+            }
+            start = offset;
+        }
         while (start < input.len) {
             if (state.dense) {
                 // Dense first sets hit on most bytes; the scalar check beats
@@ -5263,8 +5305,9 @@ const RunLiteralsState = struct {
     run: [256]bool,
     filter: prefilter.FirstFilter,
     literals: []const []const u8,
-    /// First bytes of the suffix alternatives, gating the literal compare.
-    first_bytes: [256]bool = .{false} ** 256,
+    /// Suffix first byte -> literal index, `0xFE` when several alternatives
+    /// share the byte, `0xFF` when none starts with it.
+    first_index: [256]u8 = [_]u8{0xFF} ** 256,
 };
 
 const PrefixRunLiteralState = struct {

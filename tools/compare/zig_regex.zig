@@ -7,7 +7,7 @@
 const std = @import("std");
 const regexz = @import("regexz");
 
-const gpa = std.heap.page_allocator;
+const gpa = std.heap.smp_allocator;
 
 fn benchFind(
     io: std.Io,
