@@ -780,20 +780,34 @@ pub const Workspace = struct {
         return self.backtrack_workspace.?.partialMatch(input);
     }
 
-    /// Find the leftmost-first match at or after `search_start`.
+    /// Find the leftmost-first match at or after `search_start`. The hot
+    /// short-match scanners are inlined here so their code does not depend on
+    /// the inlining budget of the full dispatch, which keeps growing.
     pub fn find(
         self: *Workspace,
         input: []const u8,
         search_start: usize,
     ) Error!?Match {
         if (self.start_anchored and search_start != 0) return null;
+        if (self.fast_kind == .set_run) return self.findSetRun(self.simple_set.?, input, search_start);
+        if (self.fast_kind == .none) {
+            if (self.fast_branch) |*branch| {
+                if (self.findFastBranch(branch, input, search_start)) |match| return match;
+            }
+        }
+        return @call(.never_inline, findDispatch, .{ self, input, search_start });
+    }
+
+    fn findDispatch(
+        self: *Workspace,
+        input: []const u8,
+        search_start: usize,
+    ) Error!?Match {
         switch (self.fast_kind) {
-            .none => {
-                if (self.fast_branch) |*branch| {
-                    if (self.findFastBranch(branch, input, search_start)) |match| return match;
-                }
-            },
-            .set_run => return self.findSetRun(self.simple_set.?, input, search_start),
+            .set_run => unreachable,
+            // `find` already tried the dominant branch; a miss falls through
+            // to the general engine.
+            .none => {},
             .utf8_run => return self.findSetRunUtf8(&self.utf8_run.?, input, search_start),
             .utf8_run_prepared => return self.findPreparedSetRunUtf8(&self.utf8_run.?, input, search_start),
             .chain => return self.findChain(&self.simple_chain.?, input, search_start),
@@ -1868,7 +1882,7 @@ pub const Workspace = struct {
     /// `set+` over an ASCII-only set: skip to the next member with the SIMD
     /// first-byte filter, then extend the run. The shape is deterministic, so
     /// no DFA state or backtracking stack is involved.
-    fn findSetRun(self: *Workspace, set: model.Set, input: []const u8, search_start: usize) ?Match {
+    inline fn findSetRun(self: *Workspace, set: model.Set, input: []const u8, search_start: usize) ?Match {
         _ = set;
         const table = &self.simple_set_table;
         var offset = search_start;
@@ -2019,7 +2033,7 @@ pub const Workspace = struct {
     /// possible start; ASCII windows are verified here instead of entering
     /// the DFA, and windows with a non-ASCII byte fall back to it for
     /// Unicode simple folding.
-    inline fn findCaselessLiteral(self: *Workspace, input: []const u8, search_start: usize) CaselessScan {
+    fn findCaselessLiteral(self: *Workspace, input: []const u8, search_start: usize) CaselessScan {
         const literal = self.program.caseless_literal.?;
         for (literal) |byte| if (byte >= 0x80) return .fallback;
         const filter = self.fold_filter orelse return .fallback;
@@ -2047,7 +2061,7 @@ pub const Workspace = struct {
 
     /// A small pure literal alternation. The splat filter reports the matching
     /// branch, so the span is returned without a second verification pass.
-    inline fn findLiteralMulti(self: *Workspace, input: []const u8, search_start: usize) ?Match {
+    fn findLiteralMulti(self: *Workspace, input: []const u8, search_start: usize) ?Match {
         const filter = &self.literal_set_multi.?;
         if (filter.shared_first) {
             // Shared-prefix candidates pin the first byte, so the few
@@ -2077,7 +2091,7 @@ pub const Workspace = struct {
 
     /// A wide pure literal alternation. The nibble filter reports the matching
     /// branch, so the span is returned without a second verification pass.
-    inline fn findLiteralPair(self: *Workspace, input: []const u8, search_start: usize) ?Match {
+    fn findLiteralPair(self: *Workspace, input: []const u8, search_start: usize) ?Match {
         const filter = self.literal_set_pair.?;
         var literal_index: usize = undefined;
         const start = filter.indexOfAnyMatch(input, search_start, &literal_index) orelse return null;
@@ -2088,7 +2102,7 @@ pub const Workspace = struct {
     }
 
     /// Every branch is one byte, so the first-byte scan is the match.
-    inline fn findLiteralBytes(self: *Workspace, input: []const u8, search_start: usize) ?Match {
+    fn findLiteralBytes(self: *Workspace, input: []const u8, search_start: usize) ?Match {
         const start = self.first_filter.indexOf(input, search_start) orelse return null;
         self.slots[0] = start;
         self.slots[1] = start + 1;
@@ -2097,7 +2111,7 @@ pub const Workspace = struct {
 
     /// A whole-pattern case-folded literal alternation. The folded filter
     /// reports the matching branch, so the span is returned directly.
-    inline fn findCaselessLiteralSet(self: *Workspace, input: []const u8, search_start: usize) ?Match {
+    fn findCaselessLiteralSet(self: *Workspace, input: []const u8, search_start: usize) ?Match {
         const filter = &self.caseless_literal_set.?;
         var literal_index: usize = undefined;
         const start = filter.indexOfCaseless(input, search_start, &literal_index) orelse return null;
@@ -2968,7 +2982,7 @@ pub const Workspace = struct {
     /// the maximal run end, so scan runs and check the assertion once. When
     /// it fails, every start inside the run fails too and the scan resumes
     /// after the run.
-    inline fn findAnchoredRun(self: *Workspace, comptime ascii: bool, anchored: AnchoredRun, input: []const u8, search_start: usize) ?Match {
+    fn findAnchoredRun(self: *Workspace, comptime ascii: bool, anchored: AnchoredRun, input: []const u8, search_start: usize) ?Match {
         const set = anchored.set;
         const kind = anchored.kind;
         const table = &self.anchored_table;

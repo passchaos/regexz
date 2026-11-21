@@ -841,6 +841,18 @@ an A/A control spread of 0.90-1.05x on unrelated cases. The folded-literal
 scan now separates a definitive ASCII miss from a non-ASCII fold-peer
 window, so `(?i)` literal misses no longer fall through to a second generic
 scan and the interpreter; the 23 KiB `(?i)STRASSE` no-match returns from
-2.8 us to 1.6 us, matching the benchmark baseline. See
+2.8 us to 1.6 us, matching the benchmark baseline. `Workspace.find` is now a
+small entry point that forces the `set+` scanner inline and tries a `.none`
+program's dominant branch, then delegates every other shape to a
+never-inlined `findDispatch`; heavy literal and anchored scanners are no
+longer inline, keeping the dispatch prologue lean. LLVM inlines the small
+entry into caller match loops, so match-dense scans stop paying a call plus a
+`Match` copy per match. An order-balanced sweep measured optional-prefix run
+2.57x, Qwen find/findAll 1.24-1.26x, signed number 1.22x, line full 1.21x,
+percent 1.10x, one-char alternation 1.10x and word boundary 1.09x faster;
+unrelated non-`find` cases moved 1.10-1.26x in the same noisy sweep, and
+unbounded-chain shapes pay the one dispatch call (1.06-1.10x) while staying
+ahead of Rust. See
+[find hot-path dispatch](benchmarks/find-hot-dispatch.md),
 [unbounded chain fusion](benchmarks/unbounded-chain-fusion.md) and
 [literal fast paths](benchmarks/literal-fast-paths.md).

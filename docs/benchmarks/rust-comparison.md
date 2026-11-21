@@ -187,6 +187,16 @@ camelCase, version and key-value unchanged within the A/A noise band. See
 last quiet-window run: the shared host was busy (load average about 8)
 during this sweep, so its absolute times were not merged into the table.
 
+`Workspace.find` is now a small entry point that inlines the `set+` scanner
+and a `.none` program's dominant branch, then delegates every other shape to
+a never-inlined dispatch. The small entry is inlined into caller match loops,
+removing a call and a `Match` copy per match. An order-balanced sweep
+measured optional-prefix run 2.57x, Qwen find/findAll 1.24-1.26x, signed
+number 1.22x, line full 1.21x, percent 1.10x, one-char alternation 1.10x and
+word boundary 1.09x faster; unbounded-chain shapes pay the one dispatch call
+(1.06-1.10x) and remain ahead. See
+[find hot-path dispatch](find-hot-dispatch.md).
+
 Caveats: the iteration APIs are the natural ones for each library
 (`Workspace.find` in a loop versus `Regex::find_iter`), full match is
 `Regex::find` plus a bounds check on the Rust side, the word-boundary case
