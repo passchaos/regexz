@@ -25,6 +25,29 @@ inline fn laneMask(mask: @Vector(16, bool)) u16 {
     return @bitCast(mask);
 }
 
+/// Number of occurrences of `byte` in the whole input.
+pub fn countByte(input: []const u8, byte: u8) usize {
+    const needle: Vec = @splat(byte);
+    var count: usize = 0;
+    var offset: usize = 0;
+    while (offset + 64 <= input.len) : (offset += 64) {
+        const a: Vec = input[offset..][0..16].*;
+        const b: Vec = input[offset + 16 ..][0..16].*;
+        const c: Vec = input[offset + 32 ..][0..16].*;
+        const d: Vec = input[offset + 48 ..][0..16].*;
+        const bits_a: u16 = @bitCast(a == needle);
+        const bits_b: u16 = @bitCast(b == needle);
+        const bits_c: u16 = @bitCast(c == needle);
+        const bits_d: u16 = @bitCast(d == needle);
+        count += @as(usize, @popCount(bits_a)) + @as(usize, @popCount(bits_b)) +
+            @as(usize, @popCount(bits_c)) + @as(usize, @popCount(bits_d));
+    }
+    while (offset < input.len) : (offset += 1) {
+        if (input[offset] == byte) count += 1;
+    }
+    return count;
+}
+
 /// First offset at or after `start` holding `byte`. A 64-byte probe handles
 /// the common short search gap (JSON quotes, delimiters); longer scans then
 /// switch to the 128-byte unroll.

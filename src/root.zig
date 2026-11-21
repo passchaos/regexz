@@ -103,6 +103,7 @@ fn splitAsciiSet(gpa: std.mem.Allocator, input: []const u8, set: model.Set, limi
 /// Split around occurrences of a pure literal, scanning with the standard
 /// byte/pair search instead of creating a search workspace per part.
 fn splitLiteral(gpa: std.mem.Allocator, input: []const u8, literal: []const u8, limit: usize) Error![][]const u8 {
+    if (literal.len == 1) return splitByte(gpa, input, literal[0], limit);
     var parts: std.ArrayList([]const u8) = .empty;
     errdefer parts.deinit(gpa);
     if (limit == 0) return parts.toOwnedSlice(gpa);
@@ -110,29 +111,101 @@ fn splitLiteral(gpa: std.mem.Allocator, input: []const u8, literal: []const u8, 
     var last: usize = 0;
     var offset: usize = 0;
     while (parts.items.len + 1 < limit) {
-        var found: usize = undefined;
-        if (literal.len == 1) {
-            // Delimiters in CSV-like text are close together; a short scalar
-            // probe avoids the per-call vector setup of the generic search.
-            const byte = literal[0];
-            const near = @min(input.len, offset + 16);
-            while (offset < near and input[offset] != byte) offset += 1;
-            if (offset < near) {
-                found = offset;
-            } else if (near >= input.len) {
-                break;
-            } else {
-                found = prefilter.indexOfByte(input, offset, byte) orelse break;
-            }
-        } else {
-            found = findLiteral(input, offset, literal) orelse break;
-        }
+        const found = findLiteral(input, offset, literal) orelse break;
         if (parts.items.len == parts.capacity) try parts.ensureUnusedCapacity(gpa, 1);
         parts.appendAssumeCapacity(input[last..found]);
         last = found + literal.len;
         offset = last;
     }
     if (parts.items.len == parts.capacity) try parts.ensureUnusedCapacity(gpa, 1);
+    parts.appendAssumeCapacity(input[last..]);
+    return parts.toOwnedSlice(gpa);
+}
+
+/// Single-byte delimiter split. A short sample picks between the dense
+/// single-pass mask fill and the sparse per-part search: dense delimiters
+/// amortize the exact count, while sparse ones (lines) avoid the count pass.
+fn splitByte(gpa: std.mem.Allocator, input: []const u8, byte: u8, limit: usize) Error![][]const u8 {
+    const sample_len = @min(input.len, 256);
+    const sample_hits = prefilter.countByte(input[0..sample_len], byte);
+    if (sample_hits * 16 >= sample_len) return splitByteDense(gpa, input, byte, limit);
+    return splitByteSparse(gpa, input, byte, limit);
+}
+
+fn splitByteSparse(gpa: std.mem.Allocator, input: []const u8, byte: u8, limit: usize) Error![][]const u8 {
+    var parts: std.ArrayList([]const u8) = .empty;
+    errdefer parts.deinit(gpa);
+    if (limit == 0) return parts.toOwnedSlice(gpa);
+    try parts.ensureTotalCapacity(gpa, @min(@min(input.len / 4 + 1, 8192), limit));
+    var last: usize = 0;
+    var offset: usize = 0;
+    while (parts.items.len + 1 < limit) {
+        // Delimiters in CSV-like text are close together; a short scalar
+        // probe avoids the per-call vector setup of the generic search.
+        const near = @min(input.len, offset + 16);
+        while (offset < near and input[offset] != byte) offset += 1;
+        var found: usize = undefined;
+        if (offset < near) {
+            found = offset;
+        } else if (near >= input.len) {
+            break;
+        } else {
+            found = prefilter.indexOfByte(input, offset, byte) orelse break;
+        }
+        if (parts.items.len == parts.capacity) try parts.ensureUnusedCapacity(gpa, 1);
+        parts.appendAssumeCapacity(input[last..found]);
+        last = found + 1;
+        offset = last;
+    }
+    if (parts.items.len == parts.capacity) try parts.ensureUnusedCapacity(gpa, 1);
+    parts.appendAssumeCapacity(input[last..]);
+    return parts.toOwnedSlice(gpa);
+}
+
+fn splitByteDense(gpa: std.mem.Allocator, input: []const u8, byte: u8, limit: usize) Error![][]const u8 {
+    var parts: std.ArrayList([]const u8) = .empty;
+    errdefer parts.deinit(gpa);
+    if (limit == 0) return parts.toOwnedSlice(gpa);
+    const wanted: usize = if (limit == std.math.maxInt(usize)) blk: {
+        break :blk prefilter.countByte(input, byte);
+    } else blk: {
+        var total: usize = 0;
+        var offset: usize = 0;
+        while (total + 1 < limit) {
+            const found = prefilter.indexOfByte(input, offset, byte) orelse break;
+            total += 1;
+            offset = found + 1;
+        }
+        break :blk total;
+    };
+    try parts.ensureTotalCapacity(gpa, wanted + 1);
+    const Vec = @Vector(16, u8);
+    const needle: Vec = @splat(byte);
+    var last: usize = 0;
+    var offset: usize = 0;
+    while (offset + 64 <= input.len and parts.items.len < wanted) {
+        const a: Vec = input[offset..][0..16].*;
+        const b: Vec = input[offset + 16 ..][0..16].*;
+        const c: Vec = input[offset + 32 ..][0..16].*;
+        const d: Vec = input[offset + 48 ..][0..16].*;
+        var bits: u64 = @as(u64, @as(u16, @bitCast(a == needle))) |
+            (@as(u64, @as(u16, @bitCast(b == needle))) << 16) |
+            (@as(u64, @as(u16, @bitCast(c == needle))) << 32) |
+            (@as(u64, @as(u16, @bitCast(d == needle))) << 48);
+        while (bits != 0 and parts.items.len < wanted) {
+            const found = offset + @ctz(bits);
+            parts.appendAssumeCapacity(input[last..found]);
+            last = found + 1;
+            bits &= bits - 1;
+        }
+        offset += 64;
+    }
+    while (parts.items.len < wanted) {
+        const found = prefilter.indexOfByte(input, offset, byte) orelse break;
+        parts.appendAssumeCapacity(input[last..found]);
+        last = found + 1;
+        offset = last;
+    }
     parts.appendAssumeCapacity(input[last..]);
     return parts.toOwnedSlice(gpa);
 }
