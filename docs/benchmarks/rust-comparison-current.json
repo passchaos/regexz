@@ -1,15 +1,15 @@
 {
-  "baseline": "fc3e5f9",
+  "baseline": "09d1192",
   "method": "six alternating order-balanced executions (three rounds each order); the table reports medians",
-  "host": "macOS ARM64, shared host, load average about 16 during the sweep",
+  "host": "macOS ARM64, shared host, heavily loaded during the sweep",
   "executables": {
     "zig": {
-      "path": "/private/tmp/regexz-compare-current",
-      "sha256": "7180b408bd5d554178d03d698914b7b2c99cb3ca688e7b7ebda9f83c1fb8eccc"
+      "path": "/private/tmp/regexz-compare-nib3",
+      "sha256": "00aca77f1bdc68fb195716c0428eb5642ffeccd0b2c55811d98db93765047cb7"
     },
     "rust": {
       "path": "tools/compare/rust_regex/target/release/rust_regex",
-      "sha256": "74798f9878d0dcecba38484934905aa2ec2ffa09c6809969a97d972b32816623"
+      "sha256": "248de5561f1e410454257a816654390a1c148ffc9f0851ee0b7f7dddc2b61d4c"
     }
   },
   "rounds": [
@@ -21,262 +21,287 @@
       "runs": {
         "zig": {
           "compare/compile Qwen tokenizer": {
-            "ns": 31098.3,
+            "ns": 37378.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/compile xDS-like": {
-            "ns": 3196.7,
+            "ns": 3453.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find Qwen tokenizer": {
-            "ns": 38067.5,
+            "ns": 37198.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/findAll Qwen (borrowed)": {
-            "ns": 36799.2,
+            "ns": 35181.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/findAll Qwen (owning)": {
-            "ns": 36554.2,
+            "ns": 35570.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find CJK tokenizer": {
-            "ns": 135659.2,
+            "ns": 138719.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find HTML tag": {
-            "ns": 48560.4,
+            "ns": 52112.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find URL": {
-            "ns": 35217.9,
+            "ns": 36977.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find JSON string literal": {
-            "ns": 7815.6,
+            "ns": 8616.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find JSON number": {
-            "ns": 30748.3,
+            "ns": 32228.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find word boundary": {
-            "ns": 70648.3,
+            "ns": 76901.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) literal": {
-            "ns": 41940.2,
+            "ns": 43546.9,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find alternation (5 words)": {
-            "ns": 101876.9,
+            "ns": 101511.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) alternation": {
-            "ns": 69541.0,
+            "ns": 72224.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find 10-word alternation": {
-            "ns": 182316.9,
+            "ns": 182064.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find Greek class": {
-            "ns": 55969.4,
+            "ns": 61900.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find prefix+suffix": {
-            "ns": 8504.4,
+            "ns": 8470.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/replaceAll email captures": {
-            "ns": 25127.5,
+            "ns": 27830.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find IPv4": {
-            "ns": 70281.9,
+            "ns": 72538.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find date": {
-            "ns": 38850.4,
+            "ns": 42028.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find 20-word alternation": {
-            "ns": 179267.9,
+            "ns": 183615.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find anchored line": {
-            "ns": 2210.4,
+            "ns": 2280.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) Unicode literal": {
-            "ns": 74824.2,
+            "ns": 86649.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find shared-prefix alternation": {
-            "ns": 24642.3,
+            "ns": 23124.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find one-char alternation": {
-            "ns": 11720.0,
+            "ns": 11409.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find hex color": {
-            "ns": 31796.7,
+            "ns": 35457.9,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find version": {
-            "ns": 55875.4,
+            "ns": 66847.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find nullable prefix": {
-            "ns": 9644.4,
+            "ns": 9066.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find identifier": {
-            "ns": 48765.6,
+            "ns": 49198.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find thousands": {
-            "ns": 39159.6,
+            "ns": 41830.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find domain": {
-            "ns": 33465.0,
+            "ns": 35056.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find percent": {
-            "ns": 27357.5,
+            "ns": 28381.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find time": {
-            "ns": 48050.4,
+            "ns": 46195.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find end-anchored word": {
-            "ns": 13965.2,
+            "ns": 13995.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find UUID": {
-            "ns": 31659.0,
+            "ns": 34641.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find semver": {
-            "ns": 80422.3,
+            "ns": 66626.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find email TLD": {
-            "ns": 12209.2,
+            "ns": 10434.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find CIDR": {
-            "ns": 78064.4,
+            "ns": 79072.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find line full": {
-            "ns": 1791.0,
+            "ns": 1798.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find optional prefix run": {
-            "ns": 41310.0,
+            "ns": 41229.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find repeated literal group": {
-            "ns": 49420.4,
+            "ns": 55871.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find camelCase": {
-            "ns": 65495.4,
+            "ns": 73836.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find key-value": {
-            "ns": 95133.8,
+            "ns": 98171.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find IP port": {
-            "ns": 80754.6,
+            "ns": 84560.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) class": {
-            "ns": 23815.8,
+            "ns": 25393.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find prefix alternation": {
-            "ns": 124984.4,
+            "ns": 119291.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find signed number": {
-            "ns": 38262.9,
+            "ns": 37220.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find html attribute": {
-            "ns": 51438.3,
+            "ns": 49672.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find markdown heading": {
-            "ns": 37857.9,
+            "ns": 37569.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find mixed alternation": {
-            "ns": 172884.0,
+            "ns": 178837.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find capitalized words": {
+            "ns": 1802.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find markdown list": {
+            "ns": 20979.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON escaped string": {
+            "ns": 7529.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find double spaces": {
+            "ns": 10716.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find log level": {
+            "ns": 2368.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/split whitespace (22 KiB)": {
-            "ns": 16545.8,
+            "ns": 16324.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/split commas (29 KiB)": {
-            "ns": 15338.8,
+            "ns": 15755.0,
             "unit": "ns/iter",
             "counters": {}
           },
@@ -286,319 +311,344 @@
             "counters": {}
           },
           "compare/fullmatch class": {
-            "ns": 4.9,
+            "ns": 5.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/fullmatch xDS-like": {
-            "ns": 9.4,
+            "ns": 10.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/replaceAll a+ -> x": {
-            "ns": 20555.0,
+            "ns": 21117.9,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/replaceAll \\A|\\z -> X": {
-            "ns": 2434.2,
+            "ns": 2769.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/RegexSet 9 no-match patterns": {
-            "ns": 1839.0,
+            "ns": 1870.2,
             "unit": "ns/iter",
             "counters": {}
           }
         },
         "rust": {
           "compare/compile Qwen tokenizer": {
-            "ns": 429800.4,
+            "ns": 454684.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/compile xDS-like": {
-            "ns": 21107.9,
+            "ns": 20625.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find Qwen tokenizer": {
-            "ns": 64555.0,
+            "ns": 65320.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/findAll Qwen (borrowed)": {
-            "ns": 79425.0,
+            "ns": 63348.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/findAll Qwen (owning)": {
-            "ns": 80376.7,
+            "ns": 67205.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find CJK tokenizer": {
-            "ns": 333393.3,
+            "ns": 247869.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find HTML tag": {
-            "ns": 140499.6,
+            "ns": 132946.9,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find URL": {
-            "ns": 89415.2,
+            "ns": 98960.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find JSON string literal": {
-            "ns": 17095.0,
+            "ns": 20658.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find JSON number": {
-            "ns": 58537.3,
+            "ns": 65087.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find word boundary": {
-            "ns": 130999.0,
+            "ns": 130097.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) literal": {
-            "ns": 75506.5,
+            "ns": 82592.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find alternation (5 words)": {
-            "ns": 173767.9,
+            "ns": 160065.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) alternation": {
-            "ns": 163010.6,
+            "ns": 181468.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find 10-word alternation": {
-            "ns": 292316.7,
+            "ns": 302427.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find Greek class": {
-            "ns": 93035.4,
+            "ns": 89330.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find prefix+suffix": {
-            "ns": 28182.5,
+            "ns": 28598.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/replaceAll email captures": {
-            "ns": 86400.6,
+            "ns": 92319.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find IPv4": {
-            "ns": 119366.2,
+            "ns": 122855.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find date": {
-            "ns": 120506.9,
+            "ns": 120257.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find 20-word alternation": {
-            "ns": 304895.4,
+            "ns": 316867.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find anchored line": {
-            "ns": 7959.8,
+            "ns": 8791.9,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) Unicode literal": {
-            "ns": 123791.5,
+            "ns": 134164.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find shared-prefix alternation": {
-            "ns": 28217.3,
+            "ns": 32308.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find one-char alternation": {
-            "ns": 19035.8,
+            "ns": 18457.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find hex color": {
-            "ns": 86209.6,
+            "ns": 90526.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find version": {
-            "ns": 121636.9,
+            "ns": 124110.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find nullable prefix": {
-            "ns": 41396.7,
+            "ns": 43889.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find identifier": {
-            "ns": 103362.1,
+            "ns": 109549.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find thousands": {
-            "ns": 111232.7,
+            "ns": 111381.9,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find domain": {
-            "ns": 113231.7,
+            "ns": 112465.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find percent": {
-            "ns": 126536.5,
+            "ns": 116949.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find time": {
-            "ns": 116473.1,
+            "ns": 107021.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find end-anchored word": {
-            "ns": 31657.1,
+            "ns": 33180.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find UUID": {
-            "ns": 63004.2,
+            "ns": 61040.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find semver": {
-            "ns": 93179.2,
+            "ns": 91588.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find email TLD": {
-            "ns": 24232.3,
+            "ns": 21951.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find CIDR": {
-            "ns": 124570.4,
+            "ns": 123437.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find line full": {
-            "ns": 9105.4,
+            "ns": 9337.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find optional prefix run": {
-            "ns": 186980.4,
+            "ns": 182369.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find repeated literal group": {
-            "ns": 126387.9,
+            "ns": 131928.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find camelCase": {
-            "ns": 89205.2,
+            "ns": 99169.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find key-value": {
-            "ns": 194285.0,
+            "ns": 204710.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find IP port": {
-            "ns": 128934.4,
+            "ns": 132294.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) class": {
-            "ns": 35569.4,
+            "ns": 39819.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find prefix alternation": {
-            "ns": 150935.6,
+            "ns": 171117.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find signed number": {
-            "ns": 63242.1,
+            "ns": 66488.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find html attribute": {
-            "ns": 93359.2,
+            "ns": 102915.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find markdown heading": {
-            "ns": 76751.9,
+            "ns": 79608.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find mixed alternation": {
-            "ns": 332648.1,
+            "ns": 355025.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find capitalized words": {
+            "ns": 119160.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find markdown list": {
+            "ns": 30050.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON escaped string": {
+            "ns": 16651.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find double spaces": {
+            "ns": 8840.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find log level": {
+            "ns": 2048.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/split whitespace (22 KiB)": {
-            "ns": 74074.8,
+            "ns": 71103.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/split commas (29 KiB)": {
-            "ns": 55086.2,
+            "ns": 53722.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/fullmatch literal": {
-            "ns": 10.0,
+            "ns": 9.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/fullmatch class": {
-            "ns": 32.4,
+            "ns": 30.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/fullmatch xDS-like": {
-            "ns": 32.3,
+            "ns": 32.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/replaceAll a+ -> x": {
-            "ns": 105625.6,
+            "ns": 104297.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/replaceAll \\A|\\z -> X": {
-            "ns": 7841.9,
+            "ns": 7353.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/RegexSet 9 no-match patterns": {
-            "ns": 39773.3,
+            "ns": 37606.9,
             "unit": "ns/iter",
             "counters": {}
           }
@@ -613,262 +663,1571 @@
       "runs": {
         "zig": {
           "compare/compile Qwen tokenizer": {
-            "ns": 31795.8,
+            "ns": 31295.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/compile xDS-like": {
-            "ns": 3205.4,
+            "ns": 3274.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find Qwen tokenizer": {
-            "ns": 36915.8,
+            "ns": 37300.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/findAll Qwen (borrowed)": {
-            "ns": 37392.5,
+            "ns": 37110.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/findAll Qwen (owning)": {
-            "ns": 35352.5,
+            "ns": 33635.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find CJK tokenizer": {
-            "ns": 131898.3,
+            "ns": 136038.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find HTML tag": {
-            "ns": 47608.3,
+            "ns": 52704.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find URL": {
-            "ns": 34819.8,
+            "ns": 35608.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find JSON string literal": {
-            "ns": 7652.9,
+            "ns": 8859.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find JSON number": {
-            "ns": 32146.9,
+            "ns": 31314.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find word boundary": {
-            "ns": 72489.6,
+            "ns": 75155.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) literal": {
-            "ns": 41876.7,
+            "ns": 42796.9,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find alternation (5 words)": {
-            "ns": 103804.4,
+            "ns": 103928.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) alternation": {
-            "ns": 68808.5,
+            "ns": 72399.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find 10-word alternation": {
-            "ns": 174237.3,
+            "ns": 184316.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find Greek class": {
-            "ns": 60392.3,
+            "ns": 60178.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find prefix+suffix": {
-            "ns": 9712.3,
+            "ns": 9888.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/replaceAll email captures": {
-            "ns": 26227.1,
+            "ns": 24746.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find IPv4": {
-            "ns": 70051.3,
+            "ns": 72929.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find date": {
-            "ns": 37184.8,
+            "ns": 42775.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find 20-word alternation": {
-            "ns": 176911.9,
+            "ns": 183983.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find anchored line": {
-            "ns": 2215.6,
+            "ns": 2295.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) Unicode literal": {
-            "ns": 75801.9,
+            "ns": 85460.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find shared-prefix alternation": {
-            "ns": 23920.4,
+            "ns": 23676.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find one-char alternation": {
-            "ns": 11956.3,
+            "ns": 12235.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find hex color": {
-            "ns": 32510.4,
+            "ns": 35200.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find version": {
-            "ns": 58179.8,
+            "ns": 65941.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find nullable prefix": {
-            "ns": 10128.5,
+            "ns": 10665.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find identifier": {
-            "ns": 48432.5,
+            "ns": 51369.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find thousands": {
-            "ns": 41558.1,
+            "ns": 41535.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find domain": {
-            "ns": 35416.0,
+            "ns": 34937.9,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find percent": {
-            "ns": 27414.6,
+            "ns": 28710.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find time": {
-            "ns": 48933.5,
+            "ns": 44950.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find end-anchored word": {
-            "ns": 14427.9,
+            "ns": 14851.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find UUID": {
-            "ns": 36769.4,
+            "ns": 31943.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find semver": {
-            "ns": 75424.6,
+            "ns": 67096.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find email TLD": {
-            "ns": 14059.4,
+            "ns": 10201.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find CIDR": {
-            "ns": 74476.3,
+            "ns": 77065.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find line full": {
-            "ns": 1959.4,
+            "ns": 1721.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find optional prefix run": {
-            "ns": 41874.4,
+            "ns": 39968.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find repeated literal group": {
-            "ns": 48907.5,
+            "ns": 48650.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find camelCase": {
-            "ns": 72157.1,
+            "ns": 64390.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find key-value": {
-            "ns": 102977.1,
+            "ns": 94137.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find IP port": {
-            "ns": 85476.5,
+            "ns": 79715.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) class": {
-            "ns": 25484.6,
+            "ns": 24652.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find prefix alternation": {
-            "ns": 121379.0,
+            "ns": 120916.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find signed number": {
-            "ns": 36661.5,
+            "ns": 36812.9,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find html attribute": {
-            "ns": 50655.4,
+            "ns": 50106.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find markdown heading": {
-            "ns": 38355.4,
+            "ns": 36516.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find mixed alternation": {
-            "ns": 164450.0,
+            "ns": 178299.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find capitalized words": {
+            "ns": 2376.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find markdown list": {
+            "ns": 18986.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON escaped string": {
+            "ns": 7987.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find double spaces": {
+            "ns": 10674.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find log level": {
+            "ns": 3329.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/split whitespace (22 KiB)": {
-            "ns": 16337.1,
+            "ns": 19326.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/split commas (29 KiB)": {
-            "ns": 15156.5,
+            "ns": 17466.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch literal": {
+            "ns": 2.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch class": {
+            "ns": 6.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch xDS-like": {
+            "ns": 17.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll a+ -> x": {
+            "ns": 22275.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll \\A|\\z -> X": {
+            "ns": 3726.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/RegexSet 9 no-match patterns": {
+            "ns": 3070.4,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        },
+        "rust": {
+          "compare/compile Qwen tokenizer": {
+            "ns": 431960.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/compile xDS-like": {
+            "ns": 21413.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find Qwen tokenizer": {
+            "ns": 71344.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (borrowed)": {
+            "ns": 76489.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (owning)": {
+            "ns": 75370.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find CJK tokenizer": {
+            "ns": 292202.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find HTML tag": {
+            "ns": 131244.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find URL": {
+            "ns": 88238.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON string literal": {
+            "ns": 17779.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON number": {
+            "ns": 60368.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find word boundary": {
+            "ns": 130995.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find (?i) literal": {
+            "ns": 85227.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find alternation (5 words)": {
+            "ns": 157287.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find (?i) alternation": {
+            "ns": 187852.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find 10-word alternation": {
+            "ns": 305121.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find Greek class": {
+            "ns": 88289.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find prefix+suffix": {
+            "ns": 28185.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll email captures": {
+            "ns": 87867.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find IPv4": {
+            "ns": 127299.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find date": {
+            "ns": 121323.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find 20-word alternation": {
+            "ns": 318637.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find anchored line": {
+            "ns": 11955.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find (?i) Unicode literal": {
+            "ns": 142362.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find shared-prefix alternation": {
+            "ns": 30707.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find one-char alternation": {
+            "ns": 19234.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find hex color": {
+            "ns": 97722.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find version": {
+            "ns": 106585.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find nullable prefix": {
+            "ns": 36954.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find identifier": {
+            "ns": 99940.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find thousands": {
+            "ns": 109570.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find domain": {
+            "ns": 112893.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find percent": {
+            "ns": 120434.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find time": {
+            "ns": 105483.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find end-anchored word": {
+            "ns": 32121.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find UUID": {
+            "ns": 77849.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find semver": {
+            "ns": 89052.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find email TLD": {
+            "ns": 21199.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find CIDR": {
+            "ns": 123723.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find line full": {
+            "ns": 10605.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find optional prefix run": {
+            "ns": 193549.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find repeated literal group": {
+            "ns": 154150.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find camelCase": {
+            "ns": 103419.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find key-value": {
+            "ns": 210471.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find IP port": {
+            "ns": 144280.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find (?i) class": {
+            "ns": 41746.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find prefix alternation": {
+            "ns": 165527.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find signed number": {
+            "ns": 67604.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find html attribute": {
+            "ns": 106947.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find markdown heading": {
+            "ns": 68436.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find mixed alternation": {
+            "ns": 340499.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find capitalized words": {
+            "ns": 119514.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find markdown list": {
+            "ns": 30138.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON escaped string": {
+            "ns": 18023.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find double spaces": {
+            "ns": 9134.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find log level": {
+            "ns": 2186.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split whitespace (22 KiB)": {
+            "ns": 75870.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split commas (29 KiB)": {
+            "ns": 55239.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch literal": {
+            "ns": 9.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch class": {
+            "ns": 32.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch xDS-like": {
+            "ns": 30.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll a+ -> x": {
+            "ns": 100878.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll \\A|\\z -> X": {
+            "ns": 7752.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/RegexSet 9 no-match patterns": {
+            "ns": 40112.9,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        }
+      }
+    },
+    {
+      "order": [
+        "zig",
+        "rust"
+      ],
+      "runs": {
+        "zig": {
+          "compare/compile Qwen tokenizer": {
+            "ns": 36305.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/compile xDS-like": {
+            "ns": 3406.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find Qwen tokenizer": {
+            "ns": 36774.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (borrowed)": {
+            "ns": 34682.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (owning)": {
+            "ns": 37582.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find CJK tokenizer": {
+            "ns": 140510.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find HTML tag": {
+            "ns": 51177.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find URL": {
+            "ns": 35385.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON string literal": {
+            "ns": 8769.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON number": {
+            "ns": 31870.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find word boundary": {
+            "ns": 74602.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find (?i) literal": {
+            "ns": 42974.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find alternation (5 words)": {
+            "ns": 105255.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find (?i) alternation": {
+            "ns": 75510.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find 10-word alternation": {
+            "ns": 181874.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find Greek class": {
+            "ns": 55837.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find prefix+suffix": {
+            "ns": 8599.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll email captures": {
+            "ns": 24696.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find IPv4": {
+            "ns": 69540.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find date": {
+            "ns": 38514.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find 20-word alternation": {
+            "ns": 183562.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find anchored line": {
+            "ns": 2206.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find (?i) Unicode literal": {
+            "ns": 89018.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find shared-prefix alternation": {
+            "ns": 24210.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find one-char alternation": {
+            "ns": 13140.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find hex color": {
+            "ns": 35589.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find version": {
+            "ns": 58921.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find nullable prefix": {
+            "ns": 11615.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find identifier": {
+            "ns": 48624.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find thousands": {
+            "ns": 40541.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find domain": {
+            "ns": 36225.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find percent": {
+            "ns": 28318.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find time": {
+            "ns": 46207.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find end-anchored word": {
+            "ns": 14270.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find UUID": {
+            "ns": 35481.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find semver": {
+            "ns": 71898.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find email TLD": {
+            "ns": 10360.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find CIDR": {
+            "ns": 75910.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find line full": {
+            "ns": 1859.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find optional prefix run": {
+            "ns": 41494.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find repeated literal group": {
+            "ns": 56290.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find camelCase": {
+            "ns": 75406.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find key-value": {
+            "ns": 100644.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find IP port": {
+            "ns": 82776.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find (?i) class": {
+            "ns": 26043.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find prefix alternation": {
+            "ns": 124211.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find signed number": {
+            "ns": 37991.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find html attribute": {
+            "ns": 50962.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find markdown heading": {
+            "ns": 37474.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find mixed alternation": {
+            "ns": 179929.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find capitalized words": {
+            "ns": 1872.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find markdown list": {
+            "ns": 18862.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON escaped string": {
+            "ns": 7824.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find double spaces": {
+            "ns": 10617.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find log level": {
+            "ns": 2134.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split whitespace (22 KiB)": {
+            "ns": 16990.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split commas (29 KiB)": {
+            "ns": 15398.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch literal": {
+            "ns": 1.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch class": {
+            "ns": 5.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch xDS-like": {
+            "ns": 10.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll a+ -> x": {
+            "ns": 21372.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll \\A|\\z -> X": {
+            "ns": 2570.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/RegexSet 9 no-match patterns": {
+            "ns": 1836.5,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        },
+        "rust": {
+          "compare/compile Qwen tokenizer": {
+            "ns": 431634.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/compile xDS-like": {
+            "ns": 21572.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find Qwen tokenizer": {
+            "ns": 63630.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (borrowed)": {
+            "ns": 65546.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (owning)": {
+            "ns": 67325.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find CJK tokenizer": {
+            "ns": 217944.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find HTML tag": {
+            "ns": 135000.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find URL": {
+            "ns": 103343.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON string literal": {
+            "ns": 19895.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON number": {
+            "ns": 64536.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find word boundary": {
+            "ns": 135784.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find (?i) literal": {
+            "ns": 77502.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find alternation (5 words)": {
+            "ns": 160067.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find (?i) alternation": {
+            "ns": 181484.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find 10-word alternation": {
+            "ns": 306359.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find Greek class": {
+            "ns": 91255.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find prefix+suffix": {
+            "ns": 30550.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll email captures": {
+            "ns": 91013.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find IPv4": {
+            "ns": 121254.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find date": {
+            "ns": 122653.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find 20-word alternation": {
+            "ns": 321575.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find anchored line": {
+            "ns": 7986.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find (?i) Unicode literal": {
+            "ns": 124961.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find shared-prefix alternation": {
+            "ns": 27247.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find one-char alternation": {
+            "ns": 18728.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find hex color": {
+            "ns": 84025.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find version": {
+            "ns": 127873.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find nullable prefix": {
+            "ns": 48636.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find identifier": {
+            "ns": 110159.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find thousands": {
+            "ns": 114934.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find domain": {
+            "ns": 120996.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find percent": {
+            "ns": 123532.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find time": {
+            "ns": 106412.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find end-anchored word": {
+            "ns": 33465.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find UUID": {
+            "ns": 63285.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find semver": {
+            "ns": 87484.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find email TLD": {
+            "ns": 20597.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find CIDR": {
+            "ns": 121957.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find line full": {
+            "ns": 11338.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find optional prefix run": {
+            "ns": 181673.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find repeated literal group": {
+            "ns": 131952.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find camelCase": {
+            "ns": 111505.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find key-value": {
+            "ns": 218160.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find IP port": {
+            "ns": 127393.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find (?i) class": {
+            "ns": 37519.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find prefix alternation": {
+            "ns": 159751.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find signed number": {
+            "ns": 66212.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find html attribute": {
+            "ns": 125296.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find markdown heading": {
+            "ns": 76947.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find mixed alternation": {
+            "ns": 341333.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find capitalized words": {
+            "ns": 118829.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find markdown list": {
+            "ns": 30714.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON escaped string": {
+            "ns": 16618.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find double spaces": {
+            "ns": 11616.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find log level": {
+            "ns": 2050.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split whitespace (22 KiB)": {
+            "ns": 74972.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split commas (29 KiB)": {
+            "ns": 55924.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch literal": {
+            "ns": 9.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch class": {
+            "ns": 33.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/fullmatch xDS-like": {
+            "ns": 30.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll a+ -> x": {
+            "ns": 101028.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll \\A|\\z -> X": {
+            "ns": 7742.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/RegexSet 9 no-match patterns": {
+            "ns": 37125.6,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        }
+      }
+    },
+    {
+      "order": [
+        "rust",
+        "zig"
+      ],
+      "runs": {
+        "zig": {
+          "compare/compile Qwen tokenizer": {
+            "ns": 31431.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/compile xDS-like": {
+            "ns": 3362.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find Qwen tokenizer": {
+            "ns": 37406.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (borrowed)": {
+            "ns": 37821.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/findAll Qwen (owning)": {
+            "ns": 36963.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find CJK tokenizer": {
+            "ns": 158555.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find HTML tag": {
+            "ns": 55341.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find URL": {
+            "ns": 36364.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON string literal": {
+            "ns": 8789.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON number": {
+            "ns": 30725.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find word boundary": {
+            "ns": 71671.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find (?i) literal": {
+            "ns": 41561.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find alternation (5 words)": {
+            "ns": 97994.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find (?i) alternation": {
+            "ns": 68596.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find 10-word alternation": {
+            "ns": 176997.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find Greek class": {
+            "ns": 65628.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find prefix+suffix": {
+            "ns": 8549.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/replaceAll email captures": {
+            "ns": 25063.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find IPv4": {
+            "ns": 69246.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find date": {
+            "ns": 37558.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find 20-word alternation": {
+            "ns": 173619.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find anchored line": {
+            "ns": 2226.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find (?i) Unicode literal": {
+            "ns": 80934.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find shared-prefix alternation": {
+            "ns": 21777.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find one-char alternation": {
+            "ns": 11150.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find hex color": {
+            "ns": 33410.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find version": {
+            "ns": 57759.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find nullable prefix": {
+            "ns": 8973.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find identifier": {
+            "ns": 47509.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find thousands": {
+            "ns": 39665.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find domain": {
+            "ns": 32036.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find percent": {
+            "ns": 26018.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find time": {
+            "ns": 44517.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find end-anchored word": {
+            "ns": 14880.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find UUID": {
+            "ns": 29134.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find semver": {
+            "ns": 62469.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find email TLD": {
+            "ns": 10126.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find CIDR": {
+            "ns": 70996.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find line full": {
+            "ns": 1755.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find optional prefix run": {
+            "ns": 39154.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find repeated literal group": {
+            "ns": 46316.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find camelCase": {
+            "ns": 61957.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find key-value": {
+            "ns": 91802.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find IP port": {
+            "ns": 77610.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find (?i) class": {
+            "ns": 24069.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find prefix alternation": {
+            "ns": 114868.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find signed number": {
+            "ns": 35460.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find html attribute": {
+            "ns": 50552.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find markdown heading": {
+            "ns": 37896.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find mixed alternation": {
+            "ns": 167983.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find capitalized words": {
+            "ns": 1732.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find markdown list": {
+            "ns": 18060.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON escaped string": {
+            "ns": 7826.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find double spaces": {
+            "ns": 10536.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find log level": {
+            "ns": 2020.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split whitespace (22 KiB)": {
+            "ns": 17224.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/split commas (29 KiB)": {
+            "ns": 15548.3,
             "unit": "ns/iter",
             "counters": {}
           },
@@ -883,906 +2242,339 @@
             "counters": {}
           },
           "compare/fullmatch xDS-like": {
-            "ns": 9.2,
+            "ns": 8.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/replaceAll a+ -> x": {
-            "ns": 21654.2,
+            "ns": 19672.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/replaceAll \\A|\\z -> X": {
-            "ns": 2604.2,
+            "ns": 2611.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/RegexSet 9 no-match patterns": {
-            "ns": 1835.6,
+            "ns": 1842.7,
             "unit": "ns/iter",
             "counters": {}
           }
         },
         "rust": {
           "compare/compile Qwen tokenizer": {
-            "ns": 413424.1,
+            "ns": 426631.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/compile xDS-like": {
-            "ns": 21829.6,
+            "ns": 21305.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find Qwen tokenizer": {
-            "ns": 62125.0,
+            "ns": 60319.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/findAll Qwen (borrowed)": {
-            "ns": 60253.3,
+            "ns": 64604.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/findAll Qwen (owning)": {
-            "ns": 68037.5,
+            "ns": 75170.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find CJK tokenizer": {
-            "ns": 238119.2,
+            "ns": 294464.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find HTML tag": {
-            "ns": 120255.8,
+            "ns": 135913.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find URL": {
-            "ns": 80573.1,
+            "ns": 80989.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find JSON string literal": {
-            "ns": 17014.2,
+            "ns": 16762.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find JSON number": {
-            "ns": 66463.1,
+            "ns": 58676.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find word boundary": {
-            "ns": 143052.5,
+            "ns": 125423.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) literal": {
-            "ns": 86111.2,
+            "ns": 79731.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find alternation (5 words)": {
-            "ns": 169687.7,
+            "ns": 160726.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) alternation": {
-            "ns": 176301.9,
+            "ns": 178587.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find 10-word alternation": {
-            "ns": 286987.3,
+            "ns": 306157.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find Greek class": {
-            "ns": 89558.5,
+            "ns": 91667.9,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find prefix+suffix": {
-            "ns": 29010.0,
+            "ns": 30694.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/replaceAll email captures": {
-            "ns": 86567.3,
+            "ns": 91369.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find IPv4": {
-            "ns": 124059.4,
+            "ns": 129470.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find date": {
-            "ns": 124638.8,
+            "ns": 128642.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find 20-word alternation": {
-            "ns": 299695.0,
+            "ns": 314876.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find anchored line": {
-            "ns": 8116.0,
+            "ns": 8263.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) Unicode literal": {
-            "ns": 120536.5,
+            "ns": 121489.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find shared-prefix alternation": {
-            "ns": 29622.9,
+            "ns": 28437.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find one-char alternation": {
-            "ns": 18133.3,
+            "ns": 18433.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find hex color": {
-            "ns": 90905.4,
+            "ns": 94853.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find version": {
-            "ns": 109880.8,
+            "ns": 105081.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find nullable prefix": {
-            "ns": 37300.0,
+            "ns": 39338.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find identifier": {
-            "ns": 104479.2,
+            "ns": 102334.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find thousands": {
-            "ns": 116832.3,
+            "ns": 109744.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find domain": {
-            "ns": 119919.4,
+            "ns": 128265.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find percent": {
-            "ns": 123379.6,
+            "ns": 123708.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find time": {
-            "ns": 108560.2,
+            "ns": 108567.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find end-anchored word": {
-            "ns": 31767.9,
+            "ns": 32616.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find UUID": {
-            "ns": 60359.8,
+            "ns": 63183.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find semver": {
-            "ns": 87272.7,
+            "ns": 86360.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find email TLD": {
-            "ns": 21108.1,
+            "ns": 22918.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find CIDR": {
-            "ns": 122794.4,
+            "ns": 123688.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find line full": {
-            "ns": 10677.3,
+            "ns": 9680.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find optional prefix run": {
-            "ns": 210806.7,
+            "ns": 179584.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find repeated literal group": {
-            "ns": 166669.2,
+            "ns": 127571.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find camelCase": {
-            "ns": 103667.1,
+            "ns": 100236.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find key-value": {
-            "ns": 194008.5,
+            "ns": 198508.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find IP port": {
-            "ns": 127957.9,
+            "ns": 130128.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) class": {
-            "ns": 37276.7,
+            "ns": 36336.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find prefix alternation": {
-            "ns": 152774.6,
+            "ns": 155528.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find signed number": {
-            "ns": 61090.0,
+            "ns": 65190.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find html attribute": {
-            "ns": 96971.2,
+            "ns": 108979.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find markdown heading": {
-            "ns": 69109.0,
+            "ns": 66272.9,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find mixed alternation": {
-            "ns": 331781.5,
+            "ns": 327203.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find capitalized words": {
+            "ns": 117559.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find markdown list": {
+            "ns": 29817.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON escaped string": {
+            "ns": 16871.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find double spaces": {
+            "ns": 8512.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find log level": {
+            "ns": 2051.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/split whitespace (22 KiB)": {
-            "ns": 74466.5,
+            "ns": 70688.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/split commas (29 KiB)": {
-            "ns": 54458.8,
+            "ns": 53619.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/fullmatch literal": {
-            "ns": 9.4,
+            "ns": 9.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/fullmatch class": {
-            "ns": 32.8,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/fullmatch xDS-like": {
-            "ns": 29.8,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/replaceAll a+ -> x": {
-            "ns": 99456.7,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/replaceAll \\A|\\z -> X": {
-            "ns": 7568.5,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/RegexSet 9 no-match patterns": {
-            "ns": 37950.8,
-            "unit": "ns/iter",
-            "counters": {}
-          }
-        }
-      }
-    },
-    {
-      "order": [
-        "zig",
-        "rust"
-      ],
-      "runs": {
-        "zig": {
-          "compare/compile Qwen tokenizer": {
-            "ns": 29663.1,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/compile xDS-like": {
-            "ns": 3167.2,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find Qwen tokenizer": {
-            "ns": 35728.3,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/findAll Qwen (borrowed)": {
-            "ns": 34277.5,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/findAll Qwen (owning)": {
-            "ns": 34135.0,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find CJK tokenizer": {
-            "ns": 134286.7,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find HTML tag": {
-            "ns": 46061.5,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find URL": {
-            "ns": 34098.1,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find JSON string literal": {
-            "ns": 7513.5,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find JSON number": {
-            "ns": 31044.2,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find word boundary": {
-            "ns": 70314.4,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find (?i) literal": {
-            "ns": 43025.2,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find alternation (5 words)": {
-            "ns": 104106.7,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find (?i) alternation": {
-            "ns": 75387.1,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find 10-word alternation": {
-            "ns": 185156.9,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find Greek class": {
-            "ns": 60397.3,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find prefix+suffix": {
-            "ns": 8519.8,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/replaceAll email captures": {
-            "ns": 27599.6,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find IPv4": {
-            "ns": 73421.9,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find date": {
-            "ns": 38190.4,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find 20-word alternation": {
-            "ns": 184352.3,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find anchored line": {
-            "ns": 2281.9,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find (?i) Unicode literal": {
-            "ns": 78342.1,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find shared-prefix alternation": {
-            "ns": 22701.9,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find one-char alternation": {
-            "ns": 11588.5,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find hex color": {
-            "ns": 34052.5,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find version": {
-            "ns": 57725.8,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find nullable prefix": {
-            "ns": 9467.5,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find identifier": {
-            "ns": 48645.2,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find thousands": {
-            "ns": 39077.5,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find domain": {
-            "ns": 33215.8,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find percent": {
-            "ns": 26607.9,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find time": {
-            "ns": 44494.4,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find end-anchored word": {
-            "ns": 13496.3,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find UUID": {
-            "ns": 30247.3,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find semver": {
-            "ns": 67227.1,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find email TLD": {
-            "ns": 11087.7,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find CIDR": {
-            "ns": 72223.1,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find line full": {
-            "ns": 1723.5,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find optional prefix run": {
-            "ns": 40519.0,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find repeated literal group": {
-            "ns": 47777.9,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find camelCase": {
-            "ns": 65337.9,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find key-value": {
-            "ns": 94661.7,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find IP port": {
-            "ns": 82156.5,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find (?i) class": {
-            "ns": 24690.6,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find prefix alternation": {
-            "ns": 122658.8,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find signed number": {
-            "ns": 38143.1,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find html attribute": {
-            "ns": 51797.9,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find markdown heading": {
-            "ns": 36808.8,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find mixed alternation": {
-            "ns": 171710.4,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/split whitespace (22 KiB)": {
-            "ns": 18793.5,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/split commas (29 KiB)": {
-            "ns": 18181.0,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/fullmatch literal": {
-            "ns": 2.4,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/fullmatch class": {
-            "ns": 5.7,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/fullmatch xDS-like": {
-            "ns": 9.9,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/replaceAll a+ -> x": {
-            "ns": 22657.1,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/replaceAll \\A|\\z -> X": {
-            "ns": 3301.9,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/RegexSet 9 no-match patterns": {
-            "ns": 1936.5,
-            "unit": "ns/iter",
-            "counters": {}
-          }
-        },
-        "rust": {
-          "compare/compile Qwen tokenizer": {
-            "ns": 445196.9,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/compile xDS-like": {
-            "ns": 22247.9,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find Qwen tokenizer": {
-            "ns": 75108.3,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/findAll Qwen (borrowed)": {
-            "ns": 65834.2,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/findAll Qwen (owning)": {
-            "ns": 64448.3,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find CJK tokenizer": {
-            "ns": 227880.0,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find HTML tag": {
-            "ns": 130088.5,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find URL": {
-            "ns": 87644.6,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find JSON string literal": {
-            "ns": 18341.2,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find JSON number": {
-            "ns": 66797.9,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find word boundary": {
-            "ns": 142242.3,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find (?i) literal": {
-            "ns": 96530.0,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find alternation (5 words)": {
-            "ns": 202193.5,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find (?i) alternation": {
-            "ns": 215219.4,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find 10-word alternation": {
-            "ns": 322210.8,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find Greek class": {
-            "ns": 111643.5,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find prefix+suffix": {
-            "ns": 38245.2,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/replaceAll email captures": {
-            "ns": 99070.6,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find IPv4": {
-            "ns": 152024.8,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find date": {
-            "ns": 132940.4,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find 20-word alternation": {
-            "ns": 336325.0,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find anchored line": {
-            "ns": 9325.4,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find (?i) Unicode literal": {
-            "ns": 131310.0,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find shared-prefix alternation": {
-            "ns": 30905.0,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find one-char alternation": {
-            "ns": 19463.5,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find hex color": {
-            "ns": 88971.7,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find version": {
-            "ns": 118796.7,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find nullable prefix": {
-            "ns": 40985.0,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find identifier": {
-            "ns": 106984.8,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find thousands": {
-            "ns": 129750.2,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find domain": {
-            "ns": 139314.6,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find percent": {
-            "ns": 132872.3,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find time": {
-            "ns": 118277.9,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find end-anchored word": {
-            "ns": 33131.7,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find UUID": {
-            "ns": 73899.8,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find semver": {
-            "ns": 93064.0,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find email TLD": {
-            "ns": 25126.7,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find CIDR": {
-            "ns": 131876.5,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find line full": {
-            "ns": 14437.9,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find optional prefix run": {
-            "ns": 211671.2,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find repeated literal group": {
-            "ns": 133466.7,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find camelCase": {
-            "ns": 96665.8,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find key-value": {
-            "ns": 206019.0,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find IP port": {
-            "ns": 137916.0,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find (?i) class": {
-            "ns": 38862.1,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find prefix alternation": {
-            "ns": 172794.0,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find signed number": {
-            "ns": 67986.0,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find html attribute": {
-            "ns": 112773.1,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find markdown heading": {
-            "ns": 74151.9,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find mixed alternation": {
-            "ns": 356543.3,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/split whitespace (22 KiB)": {
-            "ns": 81098.5,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/split commas (29 KiB)": {
-            "ns": 58650.8,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/fullmatch literal": {
-            "ns": 9.9,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/fullmatch class": {
-            "ns": 36.1,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/fullmatch xDS-like": {
             "ns": 30.4,
             "unit": "ns/iter",
             "counters": {}
           },
+          "compare/fullmatch xDS-like": {
+            "ns": 29.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
           "compare/replaceAll a+ -> x": {
-            "ns": 107822.9,
+            "ns": 101353.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/replaceAll \\A|\\z -> X": {
-            "ns": 8116.9,
+            "ns": 7510.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/RegexSet 9 no-match patterns": {
-            "ns": 39925.8,
+            "ns": 38336.0,
             "unit": "ns/iter",
             "counters": {}
           }
@@ -1797,854 +2589,287 @@
       "runs": {
         "zig": {
           "compare/compile Qwen tokenizer": {
-            "ns": 40498.8,
+            "ns": 29616.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/compile xDS-like": {
-            "ns": 3642.7,
+            "ns": 3302.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find Qwen tokenizer": {
-            "ns": 43290.0,
+            "ns": 34781.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/findAll Qwen (borrowed)": {
-            "ns": 41053.3,
+            "ns": 34214.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/findAll Qwen (owning)": {
-            "ns": 40377.5,
+            "ns": 36487.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find CJK tokenizer": {
-            "ns": 157913.3,
+            "ns": 145603.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find HTML tag": {
-            "ns": 51174.8,
+            "ns": 49970.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find URL": {
-            "ns": 38077.7,
+            "ns": 33802.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find JSON string literal": {
-            "ns": 8148.1,
+            "ns": 8372.9,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find JSON number": {
-            "ns": 32016.7,
+            "ns": 30254.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find word boundary": {
-            "ns": 76768.8,
+            "ns": 81867.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) literal": {
-            "ns": 44129.0,
+            "ns": 44284.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find alternation (5 words)": {
-            "ns": 108062.3,
+            "ns": 100388.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) alternation": {
-            "ns": 74225.4,
+            "ns": 70507.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find 10-word alternation": {
-            "ns": 191160.8,
+            "ns": 177865.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find Greek class": {
-            "ns": 61094.8,
+            "ns": 55064.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find prefix+suffix": {
-            "ns": 9085.2,
+            "ns": 8139.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/replaceAll email captures": {
-            "ns": 28174.6,
+            "ns": 23993.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find IPv4": {
-            "ns": 77285.4,
+            "ns": 66168.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find date": {
-            "ns": 40414.4,
+            "ns": 37315.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find 20-word alternation": {
-            "ns": 195234.8,
+            "ns": 175646.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find anchored line": {
-            "ns": 2295.4,
+            "ns": 2204.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) Unicode literal": {
-            "ns": 82843.5,
+            "ns": 80467.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find shared-prefix alternation": {
-            "ns": 23150.6,
+            "ns": 22596.9,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find one-char alternation": {
-            "ns": 12942.7,
+            "ns": 11452.9,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find hex color": {
-            "ns": 35294.6,
+            "ns": 33705.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find version": {
-            "ns": 62877.1,
+            "ns": 58580.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find nullable prefix": {
-            "ns": 12557.9,
+            "ns": 9892.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find identifier": {
-            "ns": 51999.4,
+            "ns": 48585.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find thousands": {
-            "ns": 42617.5,
+            "ns": 38277.9,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find domain": {
-            "ns": 35223.3,
+            "ns": 32644.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find percent": {
-            "ns": 26753.1,
+            "ns": 26652.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find time": {
-            "ns": 49606.5,
+            "ns": 46880.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find end-anchored word": {
-            "ns": 14133.5,
+            "ns": 14601.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find UUID": {
-            "ns": 34112.7,
+            "ns": 29647.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find semver": {
-            "ns": 81929.4,
+            "ns": 62609.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find email TLD": {
-            "ns": 11450.6,
+            "ns": 10042.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find CIDR": {
-            "ns": 77836.9,
+            "ns": 72953.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find line full": {
-            "ns": 1793.1,
+            "ns": 1735.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find optional prefix run": {
-            "ns": 42115.2,
+            "ns": 38764.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find repeated literal group": {
-            "ns": 51096.3,
+            "ns": 48547.9,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find camelCase": {
-            "ns": 69725.8,
+            "ns": 73423.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find key-value": {
-            "ns": 102212.3,
+            "ns": 91155.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find IP port": {
-            "ns": 90553.1,
+            "ns": 85120.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) class": {
-            "ns": 26587.1,
+            "ns": 27011.9,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find prefix alternation": {
-            "ns": 126523.8,
+            "ns": 128340.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find signed number": {
-            "ns": 38363.8,
+            "ns": 42822.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find html attribute": {
-            "ns": 53064.4,
+            "ns": 58674.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find markdown heading": {
-            "ns": 37626.5,
+            "ns": 59622.9,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find mixed alternation": {
-            "ns": 182549.2,
+            "ns": 205599.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find capitalized words": {
+            "ns": 2230.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find markdown list": {
+            "ns": 20464.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON escaped string": {
+            "ns": 8627.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find double spaces": {
+            "ns": 10779.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find log level": {
+            "ns": 2299.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/split whitespace (22 KiB)": {
-            "ns": 17532.9,
+            "ns": 19217.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/split commas (29 KiB)": {
-            "ns": 16401.5,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/fullmatch literal": {
-            "ns": 1.8,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/fullmatch class": {
-            "ns": 5.5,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/fullmatch xDS-like": {
-            "ns": 10.8,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/replaceAll a+ -> x": {
-            "ns": 21796.0,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/replaceAll \\A|\\z -> X": {
-            "ns": 2484.0,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/RegexSet 9 no-match patterns": {
-            "ns": 1898.3,
-            "unit": "ns/iter",
-            "counters": {}
-          }
-        },
-        "rust": {
-          "compare/compile Qwen tokenizer": {
-            "ns": 454187.6,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/compile xDS-like": {
-            "ns": 21594.8,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find Qwen tokenizer": {
-            "ns": 67636.7,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/findAll Qwen (borrowed)": {
-            "ns": 61793.3,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/findAll Qwen (owning)": {
-            "ns": 64370.0,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find CJK tokenizer": {
-            "ns": 231915.8,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find HTML tag": {
-            "ns": 126807.1,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find URL": {
-            "ns": 86982.5,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find JSON string literal": {
-            "ns": 16704.0,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find JSON number": {
-            "ns": 60125.2,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find word boundary": {
-            "ns": 128436.0,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find (?i) literal": {
-            "ns": 84555.4,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find alternation (5 words)": {
-            "ns": 172296.5,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find (?i) alternation": {
-            "ns": 190161.9,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find 10-word alternation": {
-            "ns": 310216.7,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find Greek class": {
-            "ns": 95370.2,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find prefix+suffix": {
-            "ns": 31198.8,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/replaceAll email captures": {
-            "ns": 90995.4,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find IPv4": {
-            "ns": 125332.7,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find date": {
-            "ns": 127222.9,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find 20-word alternation": {
-            "ns": 321914.0,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find anchored line": {
-            "ns": 9137.1,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find (?i) Unicode literal": {
-            "ns": 126548.3,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find shared-prefix alternation": {
-            "ns": 22970.8,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find one-char alternation": {
-            "ns": 18775.4,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find hex color": {
-            "ns": 87201.9,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find version": {
-            "ns": 113764.0,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find nullable prefix": {
-            "ns": 38999.8,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find identifier": {
-            "ns": 101460.4,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find thousands": {
-            "ns": 114542.1,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find domain": {
-            "ns": 136638.1,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find percent": {
-            "ns": 132285.0,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find time": {
-            "ns": 113969.2,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find end-anchored word": {
-            "ns": 32718.8,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find UUID": {
-            "ns": 71510.4,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find semver": {
-            "ns": 106192.3,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find email TLD": {
-            "ns": 25959.8,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find CIDR": {
-            "ns": 140027.7,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find line full": {
-            "ns": 14548.3,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find optional prefix run": {
-            "ns": 193131.0,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find repeated literal group": {
-            "ns": 135981.2,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find camelCase": {
-            "ns": 92768.8,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find key-value": {
-            "ns": 198761.5,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find IP port": {
-            "ns": 141728.8,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find (?i) class": {
-            "ns": 38297.1,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find prefix alternation": {
-            "ns": 159440.8,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find signed number": {
-            "ns": 62368.3,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find html attribute": {
-            "ns": 97972.9,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find markdown heading": {
-            "ns": 73869.0,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find mixed alternation": {
-            "ns": 349334.2,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/split whitespace (22 KiB)": {
-            "ns": 93723.8,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/split commas (29 KiB)": {
-            "ns": 55555.4,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/fullmatch literal": {
-            "ns": 9.7,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/fullmatch class": {
-            "ns": 39.1,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/fullmatch xDS-like": {
-            "ns": 42.1,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/replaceAll a+ -> x": {
-            "ns": 122298.3,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/replaceAll \\A|\\z -> X": {
-            "ns": 10669.8,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/RegexSet 9 no-match patterns": {
-            "ns": 41472.3,
-            "unit": "ns/iter",
-            "counters": {}
-          }
-        }
-      }
-    },
-    {
-      "order": [
-        "rust",
-        "zig"
-      ],
-      "runs": {
-        "zig": {
-          "compare/compile Qwen tokenizer": {
-            "ns": 32313.4,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/compile xDS-like": {
-            "ns": 3092.7,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find Qwen tokenizer": {
-            "ns": 38103.3,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/findAll Qwen (borrowed)": {
-            "ns": 36605.8,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/findAll Qwen (owning)": {
-            "ns": 37378.3,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find CJK tokenizer": {
-            "ns": 134819.2,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find HTML tag": {
-            "ns": 48135.4,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find URL": {
-            "ns": 35768.3,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find JSON string literal": {
-            "ns": 8125.6,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find JSON number": {
-            "ns": 31885.2,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find word boundary": {
-            "ns": 73368.5,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find (?i) literal": {
-            "ns": 43472.5,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find alternation (5 words)": {
-            "ns": 108180.2,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find (?i) alternation": {
-            "ns": 74732.9,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find 10-word alternation": {
-            "ns": 188824.4,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find Greek class": {
-            "ns": 65921.0,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find prefix+suffix": {
-            "ns": 9702.5,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/replaceAll email captures": {
-            "ns": 28719.8,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find IPv4": {
-            "ns": 73760.0,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find date": {
-            "ns": 41620.4,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find 20-word alternation": {
-            "ns": 185875.2,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find anchored line": {
-            "ns": 2282.9,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find (?i) Unicode literal": {
-            "ns": 77205.0,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find shared-prefix alternation": {
-            "ns": 23944.2,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find one-char alternation": {
-            "ns": 12476.9,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find hex color": {
-            "ns": 35732.3,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find version": {
-            "ns": 58729.2,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find nullable prefix": {
-            "ns": 10039.2,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find identifier": {
-            "ns": 50333.3,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find thousands": {
-            "ns": 41706.5,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find domain": {
-            "ns": 34705.4,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find percent": {
-            "ns": 28316.0,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find time": {
-            "ns": 50957.9,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find end-anchored word": {
-            "ns": 14208.1,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find UUID": {
-            "ns": 30822.3,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find semver": {
-            "ns": 73689.2,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find email TLD": {
-            "ns": 12275.2,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find CIDR": {
-            "ns": 77495.0,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find line full": {
-            "ns": 1778.5,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find optional prefix run": {
-            "ns": 41325.8,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find repeated literal group": {
-            "ns": 48170.6,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find camelCase": {
-            "ns": 66904.4,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find key-value": {
-            "ns": 99523.3,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find IP port": {
-            "ns": 80484.4,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find (?i) class": {
-            "ns": 25519.8,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find prefix alternation": {
-            "ns": 122735.4,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find signed number": {
-            "ns": 37161.5,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find html attribute": {
-            "ns": 53643.3,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find markdown heading": {
-            "ns": 39961.5,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/find mixed alternation": {
-            "ns": 193261.0,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/split whitespace (22 KiB)": {
-            "ns": 18648.3,
-            "unit": "ns/iter",
-            "counters": {}
-          },
-          "compare/split commas (29 KiB)": {
-            "ns": 18999.0,
+            "ns": 17250.0,
             "unit": "ns/iter",
             "counters": {}
           },
@@ -2654,319 +2879,344 @@
             "counters": {}
           },
           "compare/fullmatch class": {
-            "ns": 6.2,
+            "ns": 5.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/fullmatch xDS-like": {
-            "ns": 16.8,
+            "ns": 14.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/replaceAll a+ -> x": {
-            "ns": 24843.3,
+            "ns": 23107.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/replaceAll \\A|\\z -> X": {
-            "ns": 4131.9,
+            "ns": 3465.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/RegexSet 9 no-match patterns": {
-            "ns": 3182.1,
+            "ns": 2777.9,
             "unit": "ns/iter",
             "counters": {}
           }
         },
         "rust": {
           "compare/compile Qwen tokenizer": {
-            "ns": 489361.8,
+            "ns": 567347.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/compile xDS-like": {
-            "ns": 22648.0,
+            "ns": 25769.9,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find Qwen tokenizer": {
-            "ns": 69843.3,
+            "ns": 62515.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/findAll Qwen (borrowed)": {
-            "ns": 73565.8,
+            "ns": 70118.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/findAll Qwen (owning)": {
-            "ns": 66649.2,
+            "ns": 66582.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find CJK tokenizer": {
-            "ns": 252359.2,
+            "ns": 216665.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find HTML tag": {
-            "ns": 127641.5,
+            "ns": 122393.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find URL": {
-            "ns": 87636.0,
+            "ns": 107888.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find JSON string literal": {
-            "ns": 17896.0,
+            "ns": 21357.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find JSON number": {
-            "ns": 64712.1,
+            "ns": 72209.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find word boundary": {
-            "ns": 144129.4,
+            "ns": 149867.9,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) literal": {
-            "ns": 89923.5,
+            "ns": 85130.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find alternation (5 words)": {
-            "ns": 193433.1,
+            "ns": 179369.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) alternation": {
-            "ns": 216071.7,
+            "ns": 207698.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find 10-word alternation": {
-            "ns": 317952.7,
+            "ns": 323004.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find Greek class": {
-            "ns": 87176.9,
+            "ns": 121017.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find prefix+suffix": {
-            "ns": 32199.0,
+            "ns": 38174.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/replaceAll email captures": {
-            "ns": 94461.9,
+            "ns": 93682.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find IPv4": {
-            "ns": 139921.5,
+            "ns": 143723.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find date": {
-            "ns": 139334.4,
+            "ns": 142811.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find 20-word alternation": {
-            "ns": 338054.6,
+            "ns": 326238.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find anchored line": {
-            "ns": 9837.3,
+            "ns": 10289.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) Unicode literal": {
-            "ns": 133187.3,
+            "ns": 132439.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find shared-prefix alternation": {
-            "ns": 31074.0,
+            "ns": 29435.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find one-char alternation": {
-            "ns": 20528.5,
+            "ns": 18630.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find hex color": {
-            "ns": 89424.0,
+            "ns": 87906.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find version": {
-            "ns": 110982.9,
+            "ns": 118085.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find nullable prefix": {
-            "ns": 29874.0,
+            "ns": 43220.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find identifier": {
-            "ns": 99840.8,
+            "ns": 102928.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find thousands": {
-            "ns": 120377.7,
+            "ns": 116945.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find domain": {
-            "ns": 117024.6,
+            "ns": 119917.9,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find percent": {
-            "ns": 126591.5,
+            "ns": 126843.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find time": {
-            "ns": 116546.0,
+            "ns": 114897.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find end-anchored word": {
-            "ns": 35494.4,
+            "ns": 32222.9,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find UUID": {
-            "ns": 75191.5,
+            "ns": 79762.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find semver": {
-            "ns": 108208.8,
+            "ns": 110552.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find email TLD": {
-            "ns": 23125.0,
+            "ns": 27988.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find CIDR": {
-            "ns": 130779.0,
+            "ns": 159967.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find line full": {
-            "ns": 13964.4,
+            "ns": 12250.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find optional prefix run": {
-            "ns": 190553.1,
+            "ns": 192438.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find repeated literal group": {
-            "ns": 138169.4,
+            "ns": 138331.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find camelCase": {
-            "ns": 103164.4,
+            "ns": 106430.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find key-value": {
-            "ns": 214326.5,
+            "ns": 208310.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find IP port": {
-            "ns": 141597.9,
+            "ns": 135547.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) class": {
-            "ns": 41002.7,
+            "ns": 38191.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find prefix alternation": {
-            "ns": 171525.8,
+            "ns": 157249.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find signed number": {
-            "ns": 65340.0,
+            "ns": 69167.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find html attribute": {
-            "ns": 103161.2,
+            "ns": 106118.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find markdown heading": {
-            "ns": 71539.6,
+            "ns": 75611.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find mixed alternation": {
-            "ns": 352329.2,
+            "ns": 358822.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find capitalized words": {
+            "ns": 118681.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find markdown list": {
+            "ns": 31992.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON escaped string": {
+            "ns": 16716.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find double spaces": {
+            "ns": 9216.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find log level": {
+            "ns": 2050.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/split whitespace (22 KiB)": {
-            "ns": 81726.9,
+            "ns": 77797.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/split commas (29 KiB)": {
-            "ns": 57562.3,
+            "ns": 56117.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/fullmatch literal": {
-            "ns": 9.7,
+            "ns": 9.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/fullmatch class": {
-            "ns": 35.7,
+            "ns": 41.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/fullmatch xDS-like": {
-            "ns": 32.1,
+            "ns": 43.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/replaceAll a+ -> x": {
-            "ns": 117055.2,
+            "ns": 112576.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/replaceAll \\A|\\z -> X": {
-            "ns": 8523.5,
+            "ns": 8079.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/RegexSet 9 no-match patterns": {
-            "ns": 43070.0,
+            "ns": 39893.5,
             "unit": "ns/iter",
             "counters": {}
           }
@@ -2981,584 +3231,634 @@
       "runs": {
         "zig": {
           "compare/compile Qwen tokenizer": {
-            "ns": 36070.4,
+            "ns": 30959.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/compile xDS-like": {
-            "ns": 4076.5,
+            "ns": 3261.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find Qwen tokenizer": {
-            "ns": 41404.2,
+            "ns": 36835.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/findAll Qwen (borrowed)": {
-            "ns": 39470.0,
+            "ns": 36155.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/findAll Qwen (owning)": {
-            "ns": 38142.5,
+            "ns": 35660.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find CJK tokenizer": {
-            "ns": 147074.2,
+            "ns": 139144.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find HTML tag": {
-            "ns": 52298.5,
+            "ns": 51492.9,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find URL": {
-            "ns": 38433.3,
+            "ns": 36812.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find JSON string literal": {
-            "ns": 8257.5,
+            "ns": 8798.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find JSON number": {
-            "ns": 32682.9,
+            "ns": 30984.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find word boundary": {
-            "ns": 74890.8,
+            "ns": 74821.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) literal": {
-            "ns": 44362.5,
+            "ns": 42472.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find alternation (5 words)": {
-            "ns": 105261.7,
+            "ns": 100871.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) alternation": {
-            "ns": 76206.3,
+            "ns": 71696.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find 10-word alternation": {
-            "ns": 190793.5,
+            "ns": 181644.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find Greek class": {
-            "ns": 56464.6,
+            "ns": 55380.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find prefix+suffix": {
-            "ns": 8518.5,
+            "ns": 8504.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/replaceAll email captures": {
-            "ns": 25335.8,
+            "ns": 24303.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find IPv4": {
-            "ns": 72187.1,
+            "ns": 68792.9,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find date": {
-            "ns": 39461.7,
+            "ns": 40174.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find 20-word alternation": {
-            "ns": 187900.6,
+            "ns": 180285.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find anchored line": {
-            "ns": 2347.1,
+            "ns": 2337.9,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) Unicode literal": {
-            "ns": 73157.1,
+            "ns": 88244.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find shared-prefix alternation": {
-            "ns": 23720.0,
+            "ns": 22444.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find one-char alternation": {
-            "ns": 11967.3,
+            "ns": 12071.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find hex color": {
-            "ns": 33877.7,
+            "ns": 33866.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find version": {
-            "ns": 61444.2,
+            "ns": 62823.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find nullable prefix": {
-            "ns": 12195.0,
+            "ns": 9890.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find identifier": {
-            "ns": 52081.5,
+            "ns": 49562.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find thousands": {
-            "ns": 44353.5,
+            "ns": 40341.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find domain": {
-            "ns": 35688.3,
+            "ns": 34930.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find percent": {
-            "ns": 26800.6,
+            "ns": 30275.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find time": {
-            "ns": 47843.3,
+            "ns": 50732.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find end-anchored word": {
-            "ns": 14580.2,
+            "ns": 14417.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find UUID": {
-            "ns": 32551.7,
+            "ns": 36471.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find semver": {
-            "ns": 68775.2,
+            "ns": 63590.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find email TLD": {
-            "ns": 11532.3,
+            "ns": 10206.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find CIDR": {
-            "ns": 74502.7,
+            "ns": 75076.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find line full": {
-            "ns": 1728.1,
+            "ns": 1729.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find optional prefix run": {
-            "ns": 40613.3,
+            "ns": 39366.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find repeated literal group": {
-            "ns": 46970.4,
+            "ns": 48487.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find camelCase": {
-            "ns": 73056.3,
+            "ns": 63394.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find key-value": {
-            "ns": 128021.3,
+            "ns": 95715.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find IP port": {
-            "ns": 97585.8,
+            "ns": 78921.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) class": {
-            "ns": 28165.2,
+            "ns": 25538.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find prefix alternation": {
-            "ns": 133613.3,
+            "ns": 122334.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find signed number": {
-            "ns": 41667.1,
+            "ns": 36304.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find html attribute": {
-            "ns": 55688.8,
+            "ns": 49570.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find markdown heading": {
-            "ns": 42054.0,
+            "ns": 36691.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find mixed alternation": {
-            "ns": 185361.0,
+            "ns": 178036.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find capitalized words": {
+            "ns": 1747.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find markdown list": {
+            "ns": 18392.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON escaped string": {
+            "ns": 7632.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find double spaces": {
+            "ns": 10562.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find log level": {
+            "ns": 1998.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/split whitespace (22 KiB)": {
-            "ns": 18318.8,
+            "ns": 18319.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/split commas (29 KiB)": {
-            "ns": 18772.5,
+            "ns": 15603.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/fullmatch literal": {
-            "ns": 1.8,
+            "ns": 1.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/fullmatch class": {
-            "ns": 5.3,
+            "ns": 5.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/fullmatch xDS-like": {
-            "ns": 11.8,
+            "ns": 9.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/replaceAll a+ -> x": {
-            "ns": 22945.2,
+            "ns": 21687.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/replaceAll \\A|\\z -> X": {
-            "ns": 3684.6,
+            "ns": 2883.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/RegexSet 9 no-match patterns": {
-            "ns": 1969.2,
+            "ns": 2075.2,
             "unit": "ns/iter",
             "counters": {}
           }
         },
         "rust": {
           "compare/compile Qwen tokenizer": {
-            "ns": 478880.6,
+            "ns": 419366.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/compile xDS-like": {
-            "ns": 24792.1,
+            "ns": 20980.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find Qwen tokenizer": {
-            "ns": 131964.2,
+            "ns": 71549.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/findAll Qwen (borrowed)": {
-            "ns": 82014.2,
+            "ns": 67915.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/findAll Qwen (owning)": {
-            "ns": 91523.3,
+            "ns": 69124.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find CJK tokenizer": {
-            "ns": 460925.8,
+            "ns": 223648.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find HTML tag": {
-            "ns": 170484.2,
+            "ns": 119605.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find URL": {
-            "ns": 139226.9,
+            "ns": 97502.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find JSON string literal": {
-            "ns": 21635.8,
+            "ns": 18261.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find JSON number": {
-            "ns": 82668.8,
+            "ns": 65404.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find word boundary": {
-            "ns": 178187.5,
+            "ns": 151892.1,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) literal": {
-            "ns": 115963.8,
+            "ns": 81144.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find alternation (5 words)": {
-            "ns": 208737.1,
+            "ns": 162135.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) alternation": {
-            "ns": 229065.6,
+            "ns": 176424.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find 10-word alternation": {
-            "ns": 343355.4,
+            "ns": 300820.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find Greek class": {
-            "ns": 114939.6,
+            "ns": 97825.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find prefix+suffix": {
-            "ns": 41712.9,
+            "ns": 29752.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/replaceAll email captures": {
-            "ns": 104178.1,
+            "ns": 88722.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find IPv4": {
-            "ns": 169297.9,
+            "ns": 121766.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find date": {
-            "ns": 175100.2,
+            "ns": 124254.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find 20-word alternation": {
-            "ns": 341936.2,
+            "ns": 317434.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find anchored line": {
-            "ns": 9621.9,
+            "ns": 8355.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) Unicode literal": {
-            "ns": 138438.1,
+            "ns": 119933.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find shared-prefix alternation": {
-            "ns": 30770.0,
+            "ns": 30690.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find one-char alternation": {
-            "ns": 19291.5,
+            "ns": 18771.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find hex color": {
-            "ns": 90430.2,
+            "ns": 81703.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find version": {
-            "ns": 112662.9,
+            "ns": 106180.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find nullable prefix": {
-            "ns": 46048.8,
+            "ns": 41708.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find identifier": {
-            "ns": 116354.4,
+            "ns": 109279.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find thousands": {
-            "ns": 122771.2,
+            "ns": 117905.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find domain": {
-            "ns": 133446.7,
+            "ns": 122971.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find percent": {
-            "ns": 140500.0,
+            "ns": 117755.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find time": {
-            "ns": 128799.6,
+            "ns": 106173.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find end-anchored word": {
-            "ns": 33663.8,
+            "ns": 32477.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find UUID": {
-            "ns": 88544.8,
+            "ns": 107327.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find semver": {
-            "ns": 127407.1,
+            "ns": 93694.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find email TLD": {
-            "ns": 30817.9,
+            "ns": 21337.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find CIDR": {
-            "ns": 157312.9,
+            "ns": 120550.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find line full": {
-            "ns": 18349.6,
+            "ns": 9613.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find optional prefix run": {
-            "ns": 244000.6,
+            "ns": 178713.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find repeated literal group": {
-            "ns": 166595.4,
+            "ns": 129326.9,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find camelCase": {
-            "ns": 144350.0,
+            "ns": 102103.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find key-value": {
-            "ns": 246149.6,
+            "ns": 208481.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find IP port": {
-            "ns": 172694.4,
+            "ns": 158442.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find (?i) class": {
-            "ns": 48666.5,
+            "ns": 37539.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find prefix alternation": {
-            "ns": 188227.7,
+            "ns": 165564.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find signed number": {
-            "ns": 81031.7,
+            "ns": 63118.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find html attribute": {
-            "ns": 116233.5,
+            "ns": 98208.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find markdown heading": {
-            "ns": 80989.6,
+            "ns": 77385.2,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/find mixed alternation": {
-            "ns": 384233.5,
+            "ns": 367276.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find capitalized words": {
+            "ns": 118631.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find markdown list": {
+            "ns": 33035.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find JSON escaped string": {
+            "ns": 20436.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find double spaces": {
+            "ns": 20086.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compare/find log level": {
+            "ns": 2359.8,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/split whitespace (22 KiB)": {
-            "ns": 80934.8,
+            "ns": 97327.5,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/split commas (29 KiB)": {
-            "ns": 58197.1,
+            "ns": 55105.4,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/fullmatch literal": {
-            "ns": 10.9,
+            "ns": 9.7,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/fullmatch class": {
-            "ns": 34.4,
+            "ns": 37.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/fullmatch xDS-like": {
-            "ns": 31.1,
+            "ns": 29.6,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/replaceAll a+ -> x": {
-            "ns": 105475.2,
+            "ns": 104281.0,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/replaceAll \\A|\\z -> X": {
-            "ns": 8413.8,
+            "ns": 7283.3,
             "unit": "ns/iter",
             "counters": {}
           },
           "compare/RegexSet 9 no-match patterns": {
-            "ns": 41539.0,
+            "ns": 36682.1,
             "unit": "ns/iter",
             "counters": {}
           }

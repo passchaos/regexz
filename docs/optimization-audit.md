@@ -943,3 +943,17 @@ on shared-prefix in one isolated batch, but 0.99-1.01x with shared-prefix
 1.05x in the comparison harness, while unrelated cases moved by up to 1.13x.
 The effect is below the shared host's noise floor and the change is
 reverted; the scan loops stay as separate functions.
+
+An expanded 63-case comparison suite exposed four common real-world patterns
+that were behind Rust. Whole-pattern `set{min,}` with an unbounded maximum
+now has an AST-detected `set_run_min` scanner (`\s{2,}` 5.0x, from 0.24x to
+1.63x of Rust). A line-marker shape scans `(?m)^space* marker literal`
+(`(?m)^\s*[-*+] ` 5.8x, 0.30x to 1.61x). An escaped-delimited shape scans
+`quote(?:\\.|[^"\\])*quote` while honoring escapes and UTF-8
+(`"(?:\\.|[^"\\])*"` 6.5x, 0.33x to 2.15x). Distinct-first alternations
+with three pairs now use the nibble pair filter instead of splats, cutting
+the case-insensitive three-literal no-match scan from 5.7 us to 2.2 us
+(0.36x to 0.93x). The suite covers 63 cases; 61 are ahead, and the remaining
+two are runs of two or more spaces (0.86x) and case-insensitive log levels
+(0.93x). See
+[Rust comparison](benchmarks/rust-comparison.md).
