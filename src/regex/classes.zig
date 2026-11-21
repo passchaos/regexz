@@ -110,6 +110,9 @@ fn appendAsciiFolded(gpa: std.mem.Allocator, ranges: *std.ArrayList(m.Range)) m.
 fn complement(gpa: std.mem.Allocator, ranges: []const m.Range, limit: usize) m.Error![]const m.Range {
     var inverted: std.ArrayList(m.Range) = .empty;
     errdefer inverted.deinit(gpa);
+    // The complement has at most one more range than the input; size it once
+    // instead of growing through several reallocations.
+    try inverted.ensureTotalCapacity(gpa, ranges.len + 1);
     var next: u32 = 0;
     for (ranges) |range| {
         if (next < range.first) {
