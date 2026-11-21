@@ -953,7 +953,8 @@ now has an AST-detected `set_run_min` scanner (`\s{2,}` 5.0x, from 0.24x to
 (`"(?:\\.|[^"\\])*"` 6.5x, 0.33x to 2.15x). Distinct-first alternations
 with three pairs now use the nibble pair filter instead of splats, cutting
 the case-insensitive three-literal no-match scan from 5.7 us to 2.2 us
-(0.36x to 0.93x). The suite covers 63 cases; 61 are ahead, and the remaining
-two are runs of two or more spaces (0.86x) and case-insensitive log levels
-(0.93x). See
+(0.36x to 0.93x). A two-byte SIMD pair filter then took runs of two or more
+spaces from 10.4 us to 4.9 us (2.1x, 0.86x to about 1.9x). The suite covers
+63 cases and all are ahead in the latest sweep; the case-insensitive log
+level is at parity within host noise (1.08x). See
 [Rust comparison](benchmarks/rust-comparison.md).
