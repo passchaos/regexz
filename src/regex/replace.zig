@@ -2304,28 +2304,32 @@ pub const Workspace = struct {
             var index: usize = 0;
             while (index < state.len) : (index += 1) {
                 const element = state.elements[index];
-                switch (element.kind) {
-                    .run => {
-                        const begin = pos;
-                        if (state.set_ascii[element.value]) {
-                            const table = &state.tables[element.value];
-                            while (pos < input.len and table[input[pos]]) pos += 1;
-                        } else {
-                            const runner = &state.runs[element.value].?;
-                            pos = runner.runEnd(self.allocator, input, pos);
-                        }
-                        if (pos - begin < element.len) break;
-                    },
-                    .literal => {
-                        const bytes = state.literal_bytes[element.value..][0..element.len];
-                        if (bytes.len == 1) {
-                            if (pos >= input.len or input[pos] != bytes[0]) break;
-                            pos += 1;
-                        } else {
-                            if (pos + bytes.len > input.len or !std.mem.eql(u8, input[pos..][0..bytes.len], bytes)) break;
-                            pos += bytes.len;
-                        }
-                    },
+                if (element.kind == .literal) {
+                    const bytes = state.literal_bytes[element.value..][0..element.len];
+                    if (bytes.len == 1) {
+                        if (pos >= input.len or input[pos] != bytes[0]) break;
+                        pos += 1;
+                    } else {
+                        if (pos + bytes.len > input.len or !std.mem.eql(u8, input[pos..][0..bytes.len], bytes)) break;
+                        pos += bytes.len;
+                    }
+                } else if (element.kind == .run_range) {
+                    const begin = pos;
+                    const lo = state.range_lo[element.value];
+                    const span = state.range_hi[element.value] -% lo;
+                    while (pos < input.len and input[pos] -% lo <= span) pos += 1;
+                    if (pos - begin < element.len) break;
+                } else if (element.kind == .run) {
+                    const begin = pos;
+                    if (state.set_ascii[element.value]) {
+                        const table = &state.tables[element.value];
+                        while (pos < input.len and table[input[pos]]) pos += 1;
+                    } else {
+                        const runner = &state.runs[element.value].?;
+                        pos = runner.runEnd(self.allocator, input, pos);
+                    }
+                    if (pos - begin < element.len) break;
+                } else switch (element.kind) {
                     .optional => {
                         if (pos < input.len and input[pos] == element.value) pos += 1;
                     },
@@ -2346,6 +2350,7 @@ pub const Workspace = struct {
                         }
                         if (!matched) break;
                     },
+                    else => unreachable,
                 }
             }
             if (index == state.len) {
@@ -2356,7 +2361,7 @@ pub const Workspace = struct {
             // A failed start inside the first run shares the same run end and
             // the same remaining input, so the whole run can be skipped.
             const first = state.elements[0];
-            if (first.kind == .run and first.len != 0) {
+            if ((first.kind == .run or first.kind == .run_range) and first.len != 0) {
                 const table = &state.tables[first.value];
                 var end = start + 1;
                 while (end < input.len and table[input[end]]) end += 1;
@@ -3924,13 +3929,16 @@ const UnboundedSequenceState = struct {
     const max_elements = 32;
     const max_sets = 8;
     const max_literal_bytes = 64;
-    const Kind = enum(u8) { run, literal, optional, alternation, single_set };
+    const Kind = enum(u8) { run, run_range, literal, optional, alternation, single_set };
     const Element = struct { kind: Kind, value: u8, len: u8 };
     const Alternative = struct { offset: u8, len: u8 };
 
     elements: [max_elements]Element = undefined,
     len: u8 = 0,
     tables: [max_sets][256]bool = undefined,
+    /// Contiguous ASCII run bounds for `run_range` elements.
+    range_lo: [max_sets]u8 = undefined,
+    range_hi: [max_sets]u8 = undefined,
     runs: [max_sets]?deferred_utf8.Run = .{null} ** max_sets,
     set_ascii: [max_sets]bool = .{false} ** max_sets,
     set_count: u8 = 0,
@@ -3969,7 +3977,18 @@ const UnboundedSequenceState = struct {
                         }
                         self.set_count += 1;
                     }
-                    self.elements[self.len] = .{ .kind = .run, .value = set_index, .len = run.min };
+                    if (run.set.ascii_only) self.set_ascii[set_index] = true;
+                    const single_range = run.set.ascii_only and run.set.ranges.len == 1 and
+                        run.set.ranges[0].last < 0x80;
+                    if (single_range) {
+                        self.range_lo[set_index] = @intCast(run.set.ranges[0].first);
+                        self.range_hi[set_index] = @intCast(run.set.ranges[0].last);
+                    }
+                    self.elements[self.len] = .{
+                        .kind = if (single_range) .run_range else .run,
+                        .value = set_index,
+                        .len = run.min,
+                    };
                 },
                 .literal => |bytes| {
                     if (bytes.len == 0 or bytes.len > std.math.maxInt(u8)) return false;
@@ -4029,7 +4048,7 @@ const UnboundedSequenceState = struct {
         while (index < self.len) : (index += 1) {
             const element = self.elements[index];
             switch (element.kind) {
-                .run => {
+                .run, .run_range => {
                     if (!self.set_ascii[element.value]) return false;
                     self.first_table = mergeTables(self.first_table, self.tables[element.value]);
                     if (element.len != 0) return true;

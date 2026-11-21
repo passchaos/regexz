@@ -818,6 +818,9 @@ must not match `ABC`). Dot-star literals find the line end with a vector scan th
 first line break or non-ASCII byte, moving the nullable-prefix case from
 1.30x to 3.83x. A CJK-specific three-byte shortcut in the fast-branch run
 scan was measured and reverted: branchy per-rune checks were 62% slower than
-the UTF-8 automaton's hot table lookup. The comparison covers 58 cases and
-all of them are faster. See
+the UTF-8 automaton's hot table lookup. Unbounded run chains now scan
+contiguous ASCII runs with a range check instead of a byte table and dispatch
+run/literal elements before the rare optional and alternation cases; the
+semver, camelCase, IP-port and key-value scans improve 4-7%. The comparison
+covers 58 cases and all of them are faster. See
 [literal fast paths](benchmarks/literal-fast-paths.md).

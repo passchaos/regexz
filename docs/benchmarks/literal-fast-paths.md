@@ -290,6 +290,13 @@ validates the sequence and continues through valid runes. ASCII lines end the
 run after a handful of vector steps instead of one byte-table lookup per
 byte. The nullable-prefix case improves 2.7x and is 3.83x ahead.
 
+## Chain run ranges and dispatch
+
+Unbounded run chains scan a contiguous ASCII run such as `[0-9]` or `[a-z]`
+with a range check instead of a byte-table lookup, and the walk dispatches
+the common run/literal elements before the rare optional and alternation
+cases. The semver, camelCase, IP-port and key-value scans improve 4-7%.
+
 The comparison now covers 58 cases and regexz is faster on all of them; the
-thinnest margins are the camelCase scan at 1.14x and the semver scan at
-1.16x.
+thinnest margins are the semver scan at 1.06x and the camelCase scan at
+1.08x.
