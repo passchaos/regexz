@@ -593,6 +593,9 @@ pub const MultiFilter = struct {
     third_splats: [max_pairs]Vec = undefined,
     third_count: u8 = 0,
     use_third: bool = false,
+    /// Two-byte nibble test for distinct-first sets; replaces the per-pair
+    /// first and second splats once the set is not tiny.
+    pair_nibble: ?nibble_filter.Filter = null,
 
     const max_pairs = 16;
 
@@ -658,6 +661,9 @@ pub const MultiFilter = struct {
             filter.first_splats[index] = @splat(@intCast(pair >> 8));
             filter.second_splats[index] = @splat(@intCast(pair & 0xFF));
         }
+        if (!filter.shared_first and nibble_filter.supported and filter.pair_count >= 4) {
+            filter.pair_nibble = nibble_filter.Filter.init(literals);
+        }
         return filter;
     }
 
@@ -680,27 +686,32 @@ pub const MultiFilter = struct {
 
     pub inline fn indexOf(self: *const MultiFilter, input: []const u8, start: usize) ?usize {
         var ignored: usize = undefined;
-        return self.scan(false, false, input, start, &ignored);
+        if (self.pair_nibble) |*nibble| return self.scan(false, false, true, nibble, input, start, &ignored);
+        return self.scan(false, false, false, undefined, input, start, &ignored);
     }
 
     /// Like `indexOf`, but also reports which literal matched. The index is
     /// the first exact match in source order, so a caller can return the
     /// span without verifying the literals again.
     pub inline fn indexOfMatch(self: *const MultiFilter, input: []const u8, start: usize, literal_index: *usize) ?usize {
-        return self.scan(true, false, input, start, literal_index);
+        if (self.pair_nibble) |*nibble| return self.scan(true, false, true, nibble, input, start, literal_index);
+        return self.scan(true, false, false, undefined, input, start, literal_index);
     }
 
     /// Case-folded scan for a whole-pattern caseless literal alternation.
     /// Detection guarantees every leaf's fold class is ASCII-only, so the
     /// bytes that fold to a literal byte are exactly its members.
     pub inline fn indexOfCaseless(self: *const MultiFilter, input: []const u8, start: usize, literal_index: *usize) ?usize {
-        return self.scan(true, true, input, start, literal_index);
+        if (self.pair_nibble) |*nibble| return self.scan(true, true, true, nibble, input, start, literal_index);
+        return self.scan(true, true, false, undefined, input, start, literal_index);
     }
 
     fn scan(
         self: *const MultiFilter,
         comptime want_index: bool,
         comptime caseless: bool,
+        comptime use_nibble: bool,
+        nibble: *const nibble_filter.Filter,
         input: []const u8,
         start: usize,
         literal_index: *usize,
@@ -713,23 +724,31 @@ pub const MultiFilter = struct {
             const raw: [16]u8 = input[offset..][0..16].*;
             const base: Vec = @bitCast(raw);
             const chunk: Vec = if (caseless) base | fold else base;
-            var first_mask = chunk == self.first;
-            if (!self.shared_first) {
+            var mask: @Vector(16, bool) = undefined;
+            if (use_nibble) {
+                const next_raw: [16]u8 = input[offset + 1 ..][0..16].*;
+                const next_base: Vec = @bitCast(next_raw);
+                const next: Vec = if (caseless) next_base | fold else next_base;
+                mask = nibble.candidates(chunk, next);
+            } else {
+                var first_mask = chunk == self.first;
+                if (!self.shared_first) {
+                    var pair_index: usize = 0;
+                    while (pair_index < count) : (pair_index += 1) {
+                        first_mask = first_mask | (chunk == self.first_splats[pair_index]);
+                    }
+                }
+                if (!@reduce(.Or, first_mask)) continue;
+                const next_raw: [16]u8 = input[offset + 1 ..][0..16].*;
+                const next_base: Vec = @bitCast(next_raw);
+                const next: Vec = if (caseless) next_base | fold else next_base;
+                var seconds = @as(@Vector(16, bool), @splat(false));
                 var pair_index: usize = 0;
                 while (pair_index < count) : (pair_index += 1) {
-                    first_mask = first_mask | (chunk == self.first_splats[pair_index]);
+                    seconds = seconds | (next == self.second_splats[pair_index]);
                 }
+                mask = first_mask & seconds;
             }
-            if (!@reduce(.Or, first_mask)) continue;
-            const next_raw: [16]u8 = input[offset + 1 ..][0..16].*;
-            const next_base: Vec = @bitCast(next_raw);
-            const next: Vec = if (caseless) next_base | fold else next_base;
-            var seconds = @as(@Vector(16, bool), @splat(false));
-            var pair_index: usize = 0;
-            while (pair_index < count) : (pair_index += 1) {
-                seconds = seconds | (next == self.second_splats[pair_index]);
-            }
-            var mask = first_mask & seconds;
             // The last block has no third-byte lane; skipping the filter
             // there only leaves more candidates for exact verification.
             if (self.use_third and offset + 18 <= input.len and @reduce(.Or, mask)) {

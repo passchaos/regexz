@@ -16,72 +16,72 @@ text and small full-match subjects.
 
 | Case | regexz, ns/iter | Rust, ns/iter | Rust / regexz |
 | --- | ---: | ---: | ---: |
-| compile Qwen tokenizer | 32,508.3 | 443,805.9 | 13.65x |
-| compile xDS-like | 3,281.4 | 21,302.7 | 6.49x |
-| find Qwen tokenizer | 40,169.2 | 64,020.0 | 1.59x |
-| findAll Qwen (borrowed) | 39,347.5 | 63,925.8 | 1.62x |
-| findAll Qwen (owning) | 40,412.5 | 63,808.3 | 1.58x |
-| find CJK tokenizer | 170,195.8 | 215,617.5 | 1.27x |
-| find HTML tag | 47,770.6 | 126,099.4 | 2.64x |
-| find URL | 34,336.3 | 90,556.2 | 2.64x |
-| find JSON string literal | 7,920.8 | 16,441.5 | 2.08x |
-| find JSON number | 33,086.9 | 61,819.2 | 1.87x |
-| find word boundary | 77,329.8 | 141,749.8 | 1.83x |
-| find (?i) literal | 42,813.8 | 84,465.4 | 1.97x |
-| find alternation (5 words) | 141,190.4 | 169,289.6 | 1.20x |
-| find (?i) alternation | 81,214.0 | 183,622.5 | 2.26x |
-| find 10-word alternation | 204,326.7 | 296,797.1 | 1.45x |
-| find Greek class | 59,894.6 | 90,530.2 | 1.51x |
-| find prefix+suffix | 8,650.6 | 30,005.8 | 3.47x |
-| replaceAll email captures | 25,587.9 | 89,366.9 | 3.49x |
-| find IPv4 | 71,654.4 | 131,481.7 | 1.83x |
-| find date | 38,817.3 | 122,942.5 | 3.17x |
-| find 20-word alternation | 204,566.0 | 309,621.5 | 1.51x |
-| find anchored line | 2,318.3 | 8,522.3 | 3.68x |
-| find (?i) Unicode literal | 78,055.4 | 124,561.2 | 1.60x |
-| find shared-prefix alternation | 22,887.5 | 31,419.0 | 1.37x |
-| find one-char alternation | 13,796.0 | 18,394.4 | 1.33x |
-| find hex color | 34,897.9 | 84,079.4 | 2.41x |
-| find version | 62,677.1 | 112,229.0 | 1.79x |
-| find nullable prefix | 10,644.0 | 39,970.0 | 3.76x |
-| find identifier | 50,559.8 | 104,129.4 | 2.06x |
-| find thousands | 39,532.3 | 120,640.8 | 3.05x |
-| find domain | 34,369.8 | 122,254.6 | 3.56x |
-| find percent | 31,810.0 | 121,807.7 | 3.83x |
-| find time | 47,176.0 | 109,114.2 | 2.31x |
-| find end-anchored word | 13,913.8 | 32,207.1 | 2.31x |
-| find UUID | 32,889.2 | 64,294.4 | 1.95x |
-| find semver | 83,701.9 | 89,036.2 | 1.06x |
-| find email TLD | 13,328.1 | 23,519.0 | 1.76x |
-| find CIDR | 75,383.3 | 124,250.0 | 1.65x |
-| find line full | 2,130.6 | 10,590.4 | 4.97x |
-| find optional prefix run | 112,081.3 | 188,916.7 | 1.69x |
-| find repeated literal group | 47,167.1 | 137,040.6 | 2.91x |
-| find camelCase | 89,766.7 | 96,897.9 | 1.08x |
-| find key-value | 91,591.5 | 206,362.7 | 2.25x |
-| find IP port | 91,278.3 | 142,306.5 | 1.56x |
-| find (?i) class | 23,987.1 | 40,177.7 | 1.67x |
-| find prefix alternation | 121,190.8 | 164,302.3 | 1.36x |
-| find signed number | 43,908.3 | 71,386.7 | 1.63x |
-| find html attribute | 51,456.9 | 103,396.7 | 2.01x |
-| find markdown heading | 35,518.5 | 73,711.5 | 2.08x |
-| find mixed alternation | 175,526.5 | 359,699.2 | 2.05x |
-| split whitespace (22 KiB) | 17,061.5 | 74,213.8 | 4.35x |
-| split commas (29 KiB) | 15,904.6 | 55,372.7 | 3.48x |
-| fullmatch literal | 1.8 | 9.1 | 5.06x |
-| fullmatch class | 5.1 | 32.0 | 6.27x |
-| fullmatch xDS-like | 10.4 | 29.6 | 2.85x |
-| replaceAll a+ -> x | 21,032.5 | 102,575.4 | 4.88x |
-| replaceAll \A|\z -> X | 2,887.9 | 7,517.7 | 2.60x |
-| RegexSet 9 no-match patterns | 1,999.6 | 38,202.7 | 19.11x |
+| compile Qwen tokenizer | 31,794.0 | 449,019.2 | 14.12x |
+| compile xDS-like | 3,199.6 | 21,314.8 | 6.66x |
+| find Qwen tokenizer | 41,140.0 | 62,489.2 | 1.52x |
+| findAll Qwen (borrowed) | 39,335.0 | 64,015.0 | 1.63x |
+| findAll Qwen (owning) | 40,002.5 | 64,207.5 | 1.61x |
+| find CJK tokenizer | 166,246.7 | 219,548.3 | 1.32x |
+| find HTML tag | 48,264.4 | 122,728.5 | 2.54x |
+| find URL | 34,047.9 | 83,379.0 | 2.45x |
+| find JSON string literal | 7,559.4 | 16,675.0 | 2.21x |
+| find JSON number | 33,491.7 | 59,966.5 | 1.79x |
+| find word boundary | 78,123.3 | 133,734.8 | 1.71x |
+| find (?i) literal | 43,399.8 | 91,349.6 | 2.10x |
+| find alternation (5 words) | 118,922.9 | 169,726.7 | 1.43x |
+| find (?i) alternation | 81,976.3 | 187,332.5 | 2.29x |
+| find 10-word alternation | 204,345.6 | 299,471.0 | 1.47x |
+| find Greek class | 55,353.5 | 89,955.6 | 1.63x |
+| find prefix+suffix | 8,362.3 | 29,990.0 | 3.59x |
+| replaceAll email captures | 25,170.6 | 87,837.1 | 3.49x |
+| find IPv4 | 68,860.6 | 126,338.8 | 1.83x |
+| find date | 38,900.2 | 128,557.9 | 3.30x |
+| find 20-word alternation | 204,311.3 | 316,768.1 | 1.55x |
+| find anchored line | 2,248.1 | 8,967.5 | 3.99x |
+| find (?i) Unicode literal | 76,509.6 | 135,834.0 | 1.78x |
+| find shared-prefix alternation | 23,031.0 | 30,605.4 | 1.33x |
+| find one-char alternation | 13,059.2 | 18,519.4 | 1.42x |
+| find hex color | 32,047.7 | 82,398.8 | 2.57x |
+| find version | 58,372.9 | 111,040.8 | 1.90x |
+| find nullable prefix | 10,666.5 | 39,935.6 | 3.74x |
+| find identifier | 51,435.8 | 106,090.6 | 2.06x |
+| find thousands | 39,579.4 | 121,256.7 | 3.06x |
+| find domain | 33,230.6 | 122,757.9 | 3.69x |
+| find percent | 32,527.1 | 123,401.5 | 3.79x |
+| find time | 44,928.1 | 108,173.5 | 2.41x |
+| find end-anchored word | 13,829.2 | 32,515.6 | 2.35x |
+| find UUID | 30,089.6 | 67,712.3 | 2.25x |
+| find semver | 84,123.1 | 92,059.0 | 1.09x |
+| find email TLD | 12,456.9 | 23,174.0 | 1.86x |
+| find CIDR | 74,077.1 | 128,007.1 | 1.73x |
+| find line full | 2,197.5 | 10,897.7 | 4.96x |
+| find optional prefix run | 111,057.9 | 192,501.7 | 1.73x |
+| find repeated literal group | 45,504.6 | 135,762.7 | 2.98x |
+| find camelCase | 82,820.2 | 97,976.5 | 1.18x |
+| find key-value | 93,295.2 | 207,379.4 | 2.22x |
+| find IP port | 88,040.2 | 139,337.9 | 1.58x |
+| find (?i) class | 23,930.6 | 37,970.2 | 1.59x |
+| find prefix alternation | 119,638.3 | 162,159.8 | 1.36x |
+| find signed number | 41,384.6 | 61,365.0 | 1.48x |
+| find html attribute | 52,370.0 | 98,699.0 | 1.88x |
+| find markdown heading | 36,028.5 | 69,461.7 | 1.93x |
+| find mixed alternation | 182,329.2 | 353,469.6 | 1.94x |
+| split whitespace (22 KiB) | 17,291.9 | 75,228.3 | 4.35x |
+| split commas (29 KiB) | 16,366.9 | 55,615.8 | 3.40x |
+| fullmatch literal | 1.7 | 9.5 | 5.59x |
+| fullmatch class | 5.4 | 33.4 | 6.19x |
+| fullmatch xDS-like | 9.2 | 30.9 | 3.36x |
+| replaceAll a+ -> x | 21,332.1 | 104,740.0 | 4.91x |
+| replaceAll \A|\z -> X | 2,684.2 | 7,936.7 | 2.96x |
+| RegexSet 9 no-match patterns | 1,871.5 | 38,709.0 | 20.68x |
 
-regexz is faster on all 58 measured cases. The ranges are 13.65x on
-tokenizer compilation, 6.49x on a small-pattern compile, 1.27–1.62x on
-tokenizer scans and match iteration, 1.06–3.83x on search scans, 3.48–4.35x
-on splits, 2.85–6.27x on full-match calls, 4.88x on a set-run replacement,
-3.49x on a capture replacement, 2.60x on a zero-width replacement and 19.11x
-on the nine-pattern set. The thinnest margins are the semver scan at 1.06x
-and the camelCase scan at 1.08x.
+regexz is faster on all 58 measured cases. The ranges are 14.12x on
+tokenizer compilation, 6.66x on a small-pattern compile, 1.32–1.63x on
+tokenizer scans and match iteration, 1.09–3.99x on search scans, 3.40–4.35x
+on splits, 3.36–6.19x on full-match calls, 4.91x on a set-run replacement,
+3.49x on a capture replacement, 2.96x on a zero-width replacement and 20.68x
+on the nine-pattern set. The thinnest margins are the semver scan at 1.09x
+and the camelCase scan at 1.18x.
 
 Compilation now selects a 16 KiB, 64 KiB or 256 KiB block by pattern shape,
 reuses page-allocator blocks from a process pool, and falls back to the arena
@@ -166,7 +166,9 @@ nullable-prefix case moved from 1.30x to 3.76x. Unbounded run chains scan
 contiguous ASCII runs such as `[0-9]` and `[a-z]` with a range check instead
 of a byte table, and dispatch the run/literal elements before the rare
 optional and alternation cases; semver, camelCase, IP-port and key-value
-scans improve 4-7%.
+scans improve 4-7%. Distinct-first literal sets with four or more branches
+use the two-byte nibble filter instead of one splat per pair: the five-word
+alternation moves from 1.20x to 1.43x.
 
 Caveats: the iteration APIs are the natural ones for each library
 (`Workspace.find` in a loop versus `Regex::find_iter`), full match is

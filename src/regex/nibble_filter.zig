@@ -13,7 +13,7 @@ pub const Filter = struct {
     second_high: Vec,
 
     pub fn init(literals: []const []const u8) ?Filter {
-        if (literals.len < 9 or literals.len > 32) return null;
+        if (literals.len < 2 or literals.len > 32) return null;
         for (literals) |literal| {
             if (literal.len < 2) return null;
         }

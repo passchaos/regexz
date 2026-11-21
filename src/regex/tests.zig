@@ -1055,6 +1055,20 @@ test "repeated literal group falls back for variable or bounded units" {
     try std.testing.expect(bounded_workspace.fast_kind != .repeated_literal);
 }
 
+test "wide distinct-first literal alternation scans pairs" {
+    var value = try regex.Regex.init(gpa, "alpha|gamma|epsilon|zeta|theta", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind == .literal_multi);
+
+    try expectFastSpans(
+        "alpha|gamma|epsilon|zeta|theta",
+        "xx theta epsilon gamma zeta alpha yy",
+        &.{ .{ 3, 8 }, .{ 9, 16 }, .{ 17, 22 }, .{ 23, 27 }, .{ 28, 33 } },
+    );
+}
+
 test "single-byte literal alternation scans first bytes only" {
     var value = try regex.Regex.init(gpa, "a|b|c", .{});
     defer value.deinit();

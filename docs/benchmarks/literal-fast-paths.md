@@ -297,6 +297,14 @@ with a range check instead of a byte-table lookup, and the walk dispatches
 the common run/literal elements before the rare optional and alternation
 cases. The semver, camelCase, IP-port and key-value scans improve 4-7%.
 
+## Nibble pair filter for distinct-first sets
+
+A whole-pattern literal alternation with four or more distinct first bytes
+now tests the first two bytes with the nibble-table filter instead of one
+splat compare per branch at each stage. The filter is a compile-time
+specialization, so shared-first sets keep their single-splat early-out. The
+five-word alternation improves 16% and is 1.43x ahead.
+
 The comparison now covers 58 cases and regexz is faster on all of them; the
-thinnest margins are the semver scan at 1.06x and the camelCase scan at
-1.08x.
+thinnest margins are the semver scan at 1.09x and the camelCase scan at
+1.18x.

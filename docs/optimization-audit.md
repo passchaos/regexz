@@ -821,6 +821,8 @@ scan was measured and reverted: branchy per-rune checks were 62% slower than
 the UTF-8 automaton's hot table lookup. Unbounded run chains now scan
 contiguous ASCII runs with a range check instead of a byte table and dispatch
 run/literal elements before the rare optional and alternation cases; the
-semver, camelCase, IP-port and key-value scans improve 4-7%. The comparison
-covers 58 cases and all of them are faster. See
+semver, camelCase, IP-port and key-value scans improve 4-7%. Distinct-first
+literal sets with four or more branches use the two-byte nibble filter,
+improving the five-word alternation 16% (1.43x ahead). The comparison covers
+58 cases and all of them are faster. See
 [literal fast paths](benchmarks/literal-fast-paths.md).
