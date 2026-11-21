@@ -2404,6 +2404,45 @@ pub const Workspace = struct {
             var pos = start;
             var index: usize = 0;
             var first_end: usize = 0;
+            // Peel a run first element: it is the common chain shape, and it
+            // keeps the element loop free of first-element bookkeeping.
+            const first = state.elements[0];
+            if (first.kind == .run_range or first.kind == .run) {
+                const begin = pos;
+                if (first.kind == .run_range) {
+                    const set_index = if (fuse) first.value & 0x7F else first.value;
+                    const lo = state.range_lo[set_index];
+                    const span = state.range_hi[set_index] -% lo;
+                    while (pos < input.len and input[pos] -% lo <= span) pos += 1;
+                } else {
+                    const set_index = if (fuse) first.value & 0x7F else first.value;
+                    if (state.set_ascii[set_index]) {
+                        const table = &state.tables[set_index];
+                        while (pos < input.len and table[input[pos]]) pos += 1;
+                    } else {
+                        const runner = &state.runs[set_index].?;
+                        pos = runner.runEnd(self.allocator, input, pos);
+                    }
+                }
+                first_end = pos;
+                if (pos - begin < first.len) {
+                    // Every start inside the run shares its end.
+                    if (first.len != 0) start = first_end;
+                    continue;
+                }
+                if (fuse and first.value & 0x80 != 0) {
+                    const following = state.elements[1];
+                    const bytes = state.literal_bytes[following.value..][0..following.len];
+                    if (pos >= input.len or input[pos] != bytes[0]) {
+                        if (first.len != 0) start = first_end;
+                        continue;
+                    }
+                    pos += 1;
+                    index = 2;
+                } else {
+                    index = 1;
+                }
+            }
             while (index < state.len) : (index += 1) {
                 const element = state.elements[index];
                 if (element.kind == .literal) {
@@ -2421,7 +2460,6 @@ pub const Workspace = struct {
                     const lo = state.range_lo[set_index];
                     const span = state.range_hi[set_index] -% lo;
                     while (pos < input.len and input[pos] -% lo <= span) pos += 1;
-                    if (index == 0) first_end = pos;
                     if (pos - begin < element.len) break;
                     // Fuse a following single-byte literal to halve the loop
                     // overhead on run/literal chains.
@@ -2442,7 +2480,6 @@ pub const Workspace = struct {
                         const runner = &state.runs[set_index].?;
                         pos = runner.runEnd(self.allocator, input, pos);
                     }
-                    if (index == 0) first_end = pos;
                     if (pos - begin < element.len) break;
                     if (fuse and element.value & 0x80 != 0) {
                         const following = state.elements[index + 1];
@@ -2483,7 +2520,6 @@ pub const Workspace = struct {
             // A failed start inside the first run shares the same run end and
             // the same remaining input, so the whole run can be skipped. The
             // walk already knows that end.
-            const first = state.elements[0];
             if ((first.kind == .run or first.kind == .run_range) and first.len != 0) {
                 start = first_end;
             }
