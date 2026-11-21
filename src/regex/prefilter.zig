@@ -25,13 +25,34 @@ inline fn laneMask(mask: @Vector(16, bool)) u16 {
     return @bitCast(mask);
 }
 
-/// First offset at or after `start` holding `byte`. Long scans use a
-/// 128-byte unroll for throughput; short gaps keep the 64-byte loop, which
-/// is faster per call for line walks and quote scans.
-pub inline fn indexOfByte(input: []const u8, start: usize, byte: u8) ?usize {
+/// First offset at or after `start` holding `byte`. A 64-byte probe handles
+/// the common short search gap (JSON quotes, delimiters); longer scans then
+/// switch to the 128-byte unroll.
+pub fn indexOfByte(input: []const u8, start: usize, byte: u8) ?usize {
     if (start >= input.len) return null;
-    if (input.len - start >= 1024) return indexOfByteLong(input, start, byte);
-    return indexOfByteShort(input, start, byte);
+    if (start + 64 > input.len) return indexOfByteShort(input, start, byte);
+    const needle: Vec = @splat(byte);
+    const a: Vec = input[start..][0..16].*;
+    const b: Vec = input[start + 16 ..][0..16].*;
+    const c: Vec = input[start + 32 ..][0..16].*;
+    const d: Vec = input[start + 48 ..][0..16].*;
+    const eq_a = a == needle;
+    const eq_b = b == needle;
+    const eq_c = c == needle;
+    const eq_d = d == needle;
+    if (@reduce(.Or, (eq_a | eq_b) | (eq_c | eq_d))) {
+        const bits_a: u16 = @bitCast(eq_a);
+        const bits_b: u16 = @bitCast(eq_b);
+        const bits_c: u16 = @bitCast(eq_c);
+        const bits_d: u16 = @bitCast(eq_d);
+        if (bits_a != 0) return start + @ctz(bits_a);
+        if (bits_b != 0) return start + 16 + @ctz(bits_b);
+        if (bits_c != 0) return start + 32 + @ctz(bits_c);
+        return start + 48 + @ctz(bits_d);
+    }
+    const next = start + 64;
+    if (next >= input.len) return null;
+    return indexOfByteLong(input, next, byte);
 }
 
 /// Short-gap variant without the width dispatch, so line walks can inline a
