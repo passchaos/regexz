@@ -2801,8 +2801,17 @@ pub const Workspace = struct {
     /// when the prefix is common.
     fn indexOfBytes(input: []const u8, start: usize, needle: []const u8) ?usize {
         if (needle.len == 1) return prefilter.indexOfByte(input, start, needle[0]);
-        if (needle.len == 2) return prefilter.indexOfPair(input, start, needle[0], needle[1]);
         const anchor = prefilter.rarestByte(needle);
+        if (needle.len == 2) {
+            const other: usize = 1 - anchor;
+            var offset = start;
+            while (prefilter.indexOfByte(input, offset + anchor, needle[anchor])) |found| {
+                const at = found - anchor;
+                if (at + 2 <= input.len and input[at + other] == needle[other]) return at;
+                offset = at + 1;
+            }
+            return null;
+        }
         var offset = start;
         while (prefilter.indexOfByte(input, offset + anchor, needle[anchor])) |found| {
             const at = found - anchor;
