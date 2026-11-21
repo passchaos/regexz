@@ -14,6 +14,11 @@ fn lessThan(_: void, a: m.Range, b: m.Range) bool {
     return a.first < b.first;
 }
 
+/// Restore canonical `first` order for a short range list.
+pub fn sortRanges(ranges: []m.Range) void {
+    std.mem.sort(m.Range, ranges, {}, lessThan);
+}
+
 /// Whether the ranges are already sorted by `first`. Property groups and
 /// most parsed classes arrive sorted, so the full sort only runs for unions
 /// that concatenate them out of order.
@@ -160,6 +165,13 @@ pub fn fromSortedRanges(ranges: []const m.Range) m.Set {
     return buildSet(ranges, true);
 }
 
+/// Build a set from ranges that are already canonical (sorted, disjoint and
+/// non-adjacent). Returns null when the ranges need normalization.
+pub fn fromCanonical(ranges: []const m.Range) ?m.Set {
+    if (!coalesced(ranges)) return null;
+    return fromSortedRanges(ranges);
+}
+
 fn buildSet(ranges: []const m.Range, comptime ordered: bool) m.Set {
     var bitmap = [2]u64{ 0, 0 };
     var ascii_only = true;
@@ -192,7 +204,7 @@ fn buildSet(ranges: []const m.Range, comptime ordered: bool) m.Set {
 /// Normalize an owned range list in place. The parser's class operand is
 /// already allocated from the compile arena; taking ownership avoids the
 /// copy that `normalize` makes before sorting.
-pub fn normalizeOwned(gpa: std.mem.Allocator, list: std.ArrayList(m.Range), negate: bool, fold: m.Fold, limit: usize) m.Error!m.Set {
+pub fn normalizeOwned(gpa: std.mem.Allocator, list: std.ArrayList(m.Range), negate: bool, fold: m.Fold, limit: usize, known_sorted: bool) m.Error!m.Set {
     var ranges = list;
     errdefer ranges.deinit(gpa);
     if (ranges.items.len > limit) return error.RegexLimitExceeded;
@@ -203,7 +215,9 @@ pub fn normalizeOwned(gpa: std.mem.Allocator, list: std.ArrayList(m.Range), nega
             else => try appendFolded(gpa, &ranges),
         }
     }
-    if (!sorted(ranges.items)) std.mem.sort(m.Range, ranges.items, {}, lessThan);
+    // Folding appends peers that can break `first` order; only the parser's
+    // unfolded operand can vouch for its own ordering.
+    if (!(known_sorted and fold == .none) and !sorted(ranges.items)) std.mem.sort(m.Range, ranges.items, {}, lessThan);
     var count: usize = ranges.items.len;
     if (!coalesced(ranges.items)) {
         count = 0;
@@ -341,6 +355,11 @@ pub fn appendSorted(list: *std.ArrayList(m.Range), gpa: std.mem.Allocator, set: 
         return;
     }
     const old_len = list.items.len;
+    if (list.items[old_len - 1].first <= set.ranges[0].first) {
+        try list.ensureUnusedCapacity(gpa, set.ranges.len);
+        list.appendSliceAssumeCapacity(set.ranges);
+        return;
+    }
     const total = old_len + set.ranges.len;
     try list.ensureTotalCapacity(gpa, total);
     list.items.len = total;
@@ -383,6 +402,12 @@ pub fn appendUnionSorted(list: *std.ArrayList(m.Range), gpa: std.mem.Allocator, 
         return;
     }
     const old_len = list.items.len;
+    if (list.items[old_len - 1].first <= table.range(0).first) {
+        try list.ensureUnusedCapacity(gpa, table.count);
+        var index: usize = 0;
+        while (index < table.count) : (index += 1) list.appendAssumeCapacity(table.range(index));
+        return;
+    }
     const total = old_len + table.count;
     try list.ensureTotalCapacity(gpa, total);
     list.items.len = total;

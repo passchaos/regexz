@@ -944,11 +944,12 @@ pub const Parser = struct {
 
     pub fn materialize(self: *Parser, parsed: m.ParsedSet) m.Error!m.Set {
         if (parsed.materialized) |set| return set;
-        // Parsed single-range sets are already canonical and owned by the
-        // parser arena or static tables, so avoid a duplicate allocation.
-        if (parsed.ranges.len == 1 and !parsed.negate and parsed.fold == .none) {
-            if (parsed.ranges[0].first > parsed.ranges[0].last) return error.InvalidRegex;
-            return classes.fromRanges(parsed.ranges);
+        // Property and POSIX tables are already canonical and owned by the
+        // parser arena or static data, so validate them in place instead of
+        // copying the range list through `normalize`.
+        if (!parsed.negate and parsed.fold == .none) {
+            if (parsed.ranges.len > self.limits.max_ranges) return error.RegexLimitExceeded;
+            if (classes.fromCanonical(parsed.ranges)) |set| return set;
         }
         return classes.normalize(self.allocator, parsed.ranges, parsed.negate, parsed.fold, self.limits.max_ranges);
     }
@@ -1073,6 +1074,13 @@ pub const Parser = struct {
         if (names.len == 0) return;
         if (names.len >= 2) {
             if (m.unicode.lookupUnion(names)) |table| {
+                if (!operand_sorted.* and operand.items.len <= 32) {
+                    // A short literal prefix (for example `\r\n`) is cheaper
+                    // to sort on its own than to append the union out of
+                    // order and sort the combined list.
+                    classes.sortRanges(operand.items);
+                    operand_sorted.* = true;
+                }
                 if (operand_sorted.*) {
                     try classes.appendUnionSorted(operand, self.allocator, table, self.limits.max_ranges);
                 } else {
@@ -1105,7 +1113,7 @@ pub const Parser = struct {
             if (!first and self.take(']')) {
                 try self.flushClassProperties(property_names[0..property_count], property_sets[0..property_count], &operand, &operand_sorted);
                 property_count = 0;
-                const right = classes.normalizeOwned(self.allocator, operand, false, self.foldMode(), self.limits.max_ranges) catch |err| {
+                const right = classes.normalizeOwned(self.allocator, operand, false, self.foldMode(), self.limits.max_ranges, operand_sorted) catch |err| {
                     operand = .empty;
                     return err;
                 };
@@ -1121,7 +1129,7 @@ pub const Parser = struct {
                 if (self.takeClassOp()) |op| {
                     try self.flushClassProperties(property_names[0..property_count], property_sets[0..property_count], &operand, &operand_sorted);
                     property_count = 0;
-                    const right = classes.normalizeOwned(self.allocator, operand, false, self.foldMode(), self.limits.max_ranges) catch |err| {
+                    const right = classes.normalizeOwned(self.allocator, operand, false, self.foldMode(), self.limits.max_ranges, operand_sorted) catch |err| {
                         operand = .empty;
                         return err;
                     };
