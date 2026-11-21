@@ -193,6 +193,51 @@ pub fn fromCanonical(ranges: []const m.Range) ?m.Set {
     return fromSortedRanges(ranges);
 }
 
+/// Fold a single ASCII rune without the generic normalize path. The simple
+/// fold peers are the case flip plus the long-s and Kelvin members of the
+/// `s`/`k` classes. Returns null for non-ASCII or Turkish folds, which need
+/// the fold table.
+pub fn foldedLiteral(gpa: std.mem.Allocator, rune: u21, fold: m.Fold, limit: usize) m.Error!?m.Set {
+    if (rune >= 128 or fold == .turkish) return null;
+    var peers: [3]m.Range = undefined;
+    var count: usize = 0;
+    const flipped: ?u21 = if (rune >= 'A' and rune <= 'Z')
+        rune + 32
+    else if (rune >= 'a' and rune <= 'z')
+        rune - 32
+    else
+        null;
+    if (flipped) |peer| {
+        if (peer < rune) {
+            peers[0] = .{ .first = peer, .last = peer };
+            peers[1] = .{ .first = rune, .last = rune };
+        } else {
+            peers[0] = .{ .first = rune, .last = rune };
+            peers[1] = .{ .first = peer, .last = peer };
+        }
+        count = 2;
+    } else {
+        peers[0] = .{ .first = rune, .last = rune };
+        count = 1;
+    }
+    if (fold == .unicode) {
+        const special: ?u21 = if (rune == 's' or rune == 'S')
+            0x17f
+        else if (rune == 'k' or rune == 'K')
+            0x212a
+        else
+            null;
+        if (special) |peer| {
+            peers[count] = .{ .first = peer, .last = peer };
+            count += 1;
+        }
+    }
+    if (count > limit) return null;
+    const ranges = try gpa.alloc(m.Range, count);
+    @memcpy(ranges, peers[0..count]);
+    return fromSortedRanges(ranges);
+}
+
 fn buildSet(ranges: []const m.Range, comptime ordered: bool) m.Set {
     var bitmap = [2]u64{ 0, 0 };
     var ascii_only = true;

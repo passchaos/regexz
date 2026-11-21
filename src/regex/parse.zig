@@ -953,6 +953,13 @@ pub const Parser = struct {
 
     pub fn materialize(self: *Parser, parsed: m.ParsedSet) m.Error!m.Set {
         if (parsed.materialized) |set| return set;
+        // Single ASCII literals under simple folding have direct peers; skip
+        // the fold-table walk and sort in `normalize`.
+        if (!parsed.negate and parsed.fold != .none and parsed.ranges.len == 1 and
+            parsed.ranges[0].first == parsed.ranges[0].last)
+        {
+            if (try classes.foldedLiteral(self.allocator, parsed.ranges[0].first, parsed.fold, self.limits.max_ranges)) |set| return set;
+        }
         const set = blk: {
             if (parsed.group) |category| {
                 // Expand a deferred general-category group. Its ranges are
@@ -982,6 +989,11 @@ pub const Parser = struct {
     /// unfolded cache.
     fn materializeFold(self: *Parser, parsed: m.ParsedSet, fold: m.Fold) m.Error!m.Set {
         if (fold == .none) return self.materialize(parsed);
+        if (!parsed.negate and parsed.fold == .none and parsed.ranges.len == 1 and
+            parsed.ranges[0].first == parsed.ranges[0].last)
+        {
+            if (try classes.foldedLiteral(self.allocator, parsed.ranges[0].first, fold, self.limits.max_ranges)) |set| return set;
+        }
         if (parsed.group) |category| {
             if (category.count > self.limits.max_ranges) return error.RegexLimitExceeded;
             const ranges = try self.allocator.alloc(m.Range, category.count);
