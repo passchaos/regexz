@@ -24,6 +24,17 @@ fn sorted(ranges: []const m.Range) bool {
     return true;
 }
 
+/// Whether the sorted ranges are already coalesced and valid. The merge loop
+/// can then be skipped entirely.
+fn coalesced(ranges: []const m.Range) bool {
+    if (ranges.len != 0 and ranges[0].first > ranges[0].last) return false;
+    for (ranges[1..], 1..) |range, index| {
+        if (range.first > range.last) return false;
+        if (@as(u32, range.first) <= @as(u32, ranges[index - 1].last) + 1) return false;
+    }
+    return true;
+}
+
 /// Add every simple case-fold peer of the runes already in `ranges`.
 /// Only runes covered by the fold table can produce peers, so the work is
 /// bounded by the size of that table rather than by the input range width.
@@ -178,14 +189,17 @@ pub fn normalizeOwned(gpa: std.mem.Allocator, list: std.ArrayList(m.Range), nega
         }
     }
     if (!sorted(ranges.items)) std.mem.sort(m.Range, ranges.items, {}, lessThan);
-    var count: usize = 0;
-    for (ranges.items) |range| {
-        if (range.first > range.last) return error.InvalidRegex;
-        if (count != 0 and @as(u32, range.first) <= @as(u32, ranges.items[count - 1].last) + 1) {
-            ranges.items[count - 1].last = @max(ranges.items[count - 1].last, range.last);
-        } else {
-            ranges.items[count] = range;
-            count += 1;
+    var count: usize = ranges.items.len;
+    if (!coalesced(ranges.items)) {
+        count = 0;
+        for (ranges.items) |range| {
+            if (range.first > range.last) return error.InvalidRegex;
+            if (count != 0 and @as(u32, range.first) <= @as(u32, ranges.items[count - 1].last) + 1) {
+                ranges.items[count - 1].last = @max(ranges.items[count - 1].last, range.last);
+            } else {
+                ranges.items[count] = range;
+                count += 1;
+            }
         }
     }
     if (count > limit) return error.RegexLimitExceeded;
@@ -210,14 +224,17 @@ pub fn normalize(gpa: std.mem.Allocator, raw: []const m.Range, negate: bool, fol
         }
     }
     if (!sorted(ranges.items)) std.mem.sort(m.Range, ranges.items, {}, lessThan);
-    var count: usize = 0;
-    for (ranges.items) |range| {
-        if (range.first > range.last) return error.InvalidRegex;
-        if (count != 0 and @as(u32, range.first) <= @as(u32, ranges.items[count - 1].last) + 1) {
-            ranges.items[count - 1].last = @max(ranges.items[count - 1].last, range.last);
-        } else {
-            ranges.items[count] = range;
-            count += 1;
+    var count: usize = ranges.items.len;
+    if (!coalesced(ranges.items)) {
+        count = 0;
+        for (ranges.items) |range| {
+            if (range.first > range.last) return error.InvalidRegex;
+            if (count != 0 and @as(u32, range.first) <= @as(u32, ranges.items[count - 1].last) + 1) {
+                ranges.items[count - 1].last = @max(ranges.items[count - 1].last, range.last);
+            } else {
+                ranges.items[count] = range;
+                count += 1;
+            }
         }
     }
     if (count > limit) return error.RegexLimitExceeded;
