@@ -1080,7 +1080,7 @@ and HTML tags (0.92x). The geometric-mean ratio is 2.30x. See
 
 The same 100-case workload (minus `RegexSet`) was also run against PCRE2
 10.42 with JIT on the same host. regexz is faster on 97 of 100 cases, with a
-geometric-mean PCRE2/regexz ratio of 2.13x. PCRE2 wins compile Qwen (0.41x)
+geometric-mean PCRE2/regexz ratio of 2.13x. PCRE2 wins compile Qwen (0.44x)
 and the small ASCII case-insensitive literal (0.95x); regexz now also wins
 compile xDS-like (1.21x);
 regexz materializes Unicode property sets at compile time, while PCRE2
