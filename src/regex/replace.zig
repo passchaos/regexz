@@ -86,6 +86,10 @@ pub const FastKind = enum {
     word_alternation,
     email,
     blank_lines,
+    run_literals,
+    prefix_run_literal,
+    delimited_any,
+    delimited_tail,
 };
 pub const Error = model.Error;
 
@@ -273,6 +277,14 @@ pub const Workspace = struct {
     email: ?EmailState = null,
     /// `(?m)^\s*$` in LF mode.
     blank_lines: ?BlankLinesState = null,
+    /// `run+ literal-alternation` (`\d+(?:px|em|rem|%)`).
+    run_literals: ?RunLiteralsState = null,
+    /// `prefix-set run+ literal` (`[?&]\w+=`).
+    prefix_run_literal: ?PrefixRunLiteralState = null,
+    /// `open any*? close` (`<!--[\s\S]*?-->`).
+    delimited_any: ?DelimitedAnyState = null,
+    /// `quote body+ quote space* literal` (`"[^"]+"\s*:`).
+    delimited_tail: ?DelimitedTailState = null,
     /// Byte membership tables for the chain fast path. `Set.matches` is a
     /// binary search over rune ranges; the per-byte chain scans run several
     /// lookups per input byte, so cache the answers once per workspace.
@@ -501,7 +513,7 @@ pub const Workspace = struct {
         const word_alternation: ?WordAlternationState = if (limits.longest)
             null
         else if (program.word_alternation) |shape| blk: {
-            const filter = prefilter.MultiFilter.initAny(shape.literals) orelse break :blk null;
+            const filter = prefilter.MultiFilter.initAny(shape.filter_literals) orelse break :blk null;
             break :blk .{
                 .filter = filter,
                 .literals = shape.literals,
@@ -524,6 +536,38 @@ pub const Workspace = struct {
             .{ .space = byte_table.init(256, shape.space) }
         else
             null;
+        const run_literals: ?RunLiteralsState = if (limits.longest) null else blk: {
+            const shape = program.run_literals orelse break :blk null;
+            var first_bytes = [_]bool{false} ** 256;
+            for (shape.literals) |literal| first_bytes[literal[0]] = true;
+            break :blk .{
+                .run = byte_table.init(256, shape.run),
+                .filter = prefilter.FirstFilter.init(prefilter.firstSetOf(shape.run)),
+                .literals = shape.literals,
+                .first_bytes = first_bytes,
+            };
+        };
+        const prefix_run_literal: ?PrefixRunLiteralState = if (limits.longest) null else blk: {
+            const shape = program.prefix_run_literal orelse break :blk null;
+            break :blk .{
+                .prefix_filter = prefilter.FirstFilter.init(prefilter.firstSetOf(shape.prefix)),
+                .run = byte_table.init(256, shape.run),
+                .literal = shape.literal,
+            };
+        };
+        const delimited_any: ?DelimitedAnyState = if (limits.longest) null else blk: {
+            const shape = program.delimited_any orelse break :blk null;
+            break :blk .{ .open = shape.open, .close = shape.close };
+        };
+        const delimited_tail: ?DelimitedTailState = if (limits.longest) null else blk: {
+            const shape = program.delimited_tail orelse break :blk null;
+            break :blk .{
+                .quote = shape.quote,
+                .body = byte_table.init(256, shape.body),
+                .space = byte_table.init(256, shape.space),
+                .literal = shape.literal,
+            };
+        };
         const anchored_table: [256]bool = if (simple_anchored) |anchored|
             (if (anchored.set.ascii_only) byte_table.init(256, anchored.set) else .{false} ** 256)
         else
@@ -604,10 +648,13 @@ pub const Workspace = struct {
         };
         const prefix_run: ?PrefixRunState = if (limits.longest) null else blk: {
             const shape = program.prefix_run orelse break :blk null;
+            const first = prefilter.firstSetOf(shape.set_a);
             break :blk .{
                 .table_a = byte_table.bits(shape.set_a),
                 .table_b = byte_table.bits(shape.set_b),
                 .min_b = shape.min_b,
+                .first_filter = prefilter.FirstFilter.init(first),
+                .dense = @as(usize, @popCount(first.ascii[0])) + @popCount(first.ascii[1]) >= 48,
             };
         };
         const star_literal: ?*StarLiteralState = if (limits.longest) null else blk: {
@@ -680,6 +727,14 @@ pub const Workspace = struct {
             .email
         else if (blank_lines != null)
             .blank_lines
+        else if (delimited_any != null)
+            .delimited_any
+        else if (delimited_tail != null)
+            .delimited_tail
+        else if (run_literals != null)
+            .run_literals
+        else if (prefix_run_literal != null)
+            .prefix_run_literal
         else if (bounded_sequence != null)
             .bounded_sequence
         else if (unbounded_sequence) |state|
@@ -828,6 +883,10 @@ pub const Workspace = struct {
             .word_alternation = word_alternation,
             .email = email,
             .blank_lines = blank_lines,
+            .run_literals = run_literals,
+            .prefix_run_literal = prefix_run_literal,
+            .delimited_any = delimited_any,
+            .delimited_tail = delimited_tail,
         };
     }
 
@@ -981,6 +1040,10 @@ pub const Workspace = struct {
             .word_alternation => return self.findWordAlternation(&self.word_alternation.?, input, search_start),
             .email => return self.findEmail(&self.email.?, input, search_start),
             .blank_lines => return self.findBlankLines(&self.blank_lines.?, input, search_start),
+            .run_literals => return self.findRunLiterals(&self.run_literals.?, input, search_start),
+            .prefix_run_literal => return self.findPrefixRunLiteral(&self.prefix_run_literal.?, input, search_start),
+            .delimited_any => return self.findDelimitedAny(&self.delimited_any.?, input, search_start),
+            .delimited_tail => return self.findDelimitedTail(&self.delimited_tail.?, input, search_start),
         }
         // Every match must start at a start-literal occurrence, so the first
         // occurrence bounds the leftmost match start and the DFA can skip
@@ -1601,6 +1664,10 @@ pub const Workspace = struct {
             .word_alternation => return self.findWordAlternation(&self.word_alternation.?, input, search_start),
             .email => return self.findEmail(&self.email.?, input, search_start),
             .blank_lines => return self.findBlankLines(&self.blank_lines.?, input, search_start),
+            .run_literals => return self.findRunLiterals(&self.run_literals.?, input, search_start),
+            .prefix_run_literal => return self.findPrefixRunLiteral(&self.prefix_run_literal.?, input, search_start),
+            .delimited_any => return self.findDelimitedAny(&self.delimited_any.?, input, search_start),
+            .delimited_tail => return self.findDelimitedTail(&self.delimited_tail.?, input, search_start),
         }
         var from = search_start;
         if (self.pair_filter) |filter| {
@@ -2362,6 +2429,103 @@ pub const Workspace = struct {
         return null;
     }
 
+    /// `run+ literal-alternation`: the run is maximal and every alternative
+    /// starts outside the run set, so a failed suffix rejects the whole run.
+    fn findRunLiterals(self: *Workspace, state: *const RunLiteralsState, input: []const u8, search_start: usize) ?Match {
+        var search = search_start;
+        while (search < input.len) {
+            // Dense runs sit a few bytes apart; probe scalar first and only
+            // pay the vector setup after a long gap.
+            var at = search;
+            const probe_end = @min(input.len, search + 16);
+            while (at < probe_end and !state.run[input[at]]) at += 1;
+            if (at == probe_end) {
+                at = state.filter.indexOf(input, probe_end) orelse return null;
+            }
+            var end = at;
+            while (end < input.len and state.run[input[end]]) end += 1;
+            if (end < input.len and state.first_bytes[input[end]]) {
+                for (state.literals) |literal| {
+                    if (end + literal.len <= input.len and std.mem.eql(u8, input[end..][0..literal.len], literal)) {
+                        self.slots[0] = at;
+                        self.slots[1] = end + literal.len;
+                        return .{ .start = at, .end = end + literal.len, .slots = self.slots };
+                    }
+                }
+            }
+            search = end;
+        }
+        return null;
+    }
+
+    /// `prefix-set run+ literal`: the literal is outside the run set, so a
+    /// failed check rejects every start inside the run.
+    fn findPrefixRunLiteral(self: *Workspace, state: *const PrefixRunLiteralState, input: []const u8, search_start: usize) ?Match {
+        var search = search_start;
+        while (search < input.len) {
+            const at = state.prefix_filter.indexOf(input, search) orelse return null;
+            var end = at + 1;
+            while (end < input.len and state.run[input[end]]) end += 1;
+            if (end > at + 1 and end < input.len and input[end] == state.literal) {
+                self.slots[0] = at;
+                self.slots[1] = end + 1;
+                return .{ .start = at, .end = end + 1, .slots = self.slots };
+            }
+            search = end;
+        }
+        return null;
+    }
+
+    /// `open any*? close`: the lazy body ends at the first close after the
+    /// open. A missing close rejects every later open as well.
+    fn findDelimitedAny(self: *Workspace, state: *const DelimitedAnyState, input: []const u8, search_start: usize) ?Match {
+        const open = indexOfBytes(input, search_start, state.open) orelse return null;
+        const close = indexOfBytes(input, open + state.open.len, state.close) orelse return null;
+        self.slots[0] = open;
+        self.slots[1] = close + state.close.len;
+        return .{ .start = open, .end = close + state.close.len, .slots = self.slots };
+    }
+
+    /// `quote body+ quote space* literal`: the quote bounds the body run, so
+    /// each candidate needs one local check. A failed check resumes at the
+    /// body end, which may itself be the next opening quote.
+    fn findDelimitedTail(self: *Workspace, state: *const DelimitedTailState, input: []const u8, search_start: usize) ?Match {
+        var search = search_start;
+        while (search < input.len) {
+            const open = prefilter.indexOfByte(input, search, state.quote) orelse return null;
+            var pos = open + 1;
+            const body_start = pos;
+            while (pos < input.len and state.body[input[pos]]) pos += 1;
+            const body_end = pos;
+            if (body_end > body_start and body_end < input.len and input[body_end] == state.quote) {
+                var tail = body_end + 1;
+                while (tail < input.len and state.space[input[tail]]) tail += 1;
+                if (tail < input.len and input[tail] == state.literal) {
+                    self.slots[0] = open;
+                    self.slots[1] = tail + 1;
+                    return .{ .start = open, .end = tail + 1, .slots = self.slots };
+                }
+            }
+            // The body end may itself be the next opening quote.
+            search = body_end;
+        }
+        return null;
+    }
+
+    /// First occurrence of `needle` at or after `start`. Two-byte prefixes
+    /// use the SIMD pair scan before the full comparison.
+    fn indexOfBytes(input: []const u8, start: usize, needle: []const u8) ?usize {
+        if (needle.len == 1) return prefilter.indexOfByte(input, start, needle[0]);
+        if (needle.len == 2) return prefilter.indexOfPair(input, start, needle[0], needle[1]);
+        var offset = start;
+        while (prefilter.indexOfPair(input, offset, needle[0], needle[1])) |found| {
+            if (found + needle.len <= input.len and
+                std.mem.eql(u8, input[found..][0..needle.len], needle)) return found;
+            offset = found + 1;
+        }
+        return null;
+    }
+
     /// `(?m)^space* marker literal`: the whitespace run is maximal, so the
     /// marker must follow it directly. Line starts whose run reaches the same
     /// failure point are skipped together.
@@ -3054,12 +3218,17 @@ pub const Workspace = struct {
     /// One set byte followed by a greedy run: the first set byte anchors the
     /// match and the run is maximal, so no backtracking is needed.
     fn findPrefixRun(self: *Workspace, state: *const PrefixRunState, input: []const u8, search_start: usize) ?Match {
-        const first = &state.table_a;
         const rest = &state.table_b;
         var start = search_start;
         while (start < input.len) {
-            while (start < input.len and !byte_table.has(first, input[start])) start += 1;
-            if (start >= input.len) return null;
+            if (state.dense) {
+                // Dense first sets hit on most bytes; the scalar check beats
+                // the 16-byte filter setup.
+                while (start < input.len and !byte_table.has(&state.table_a, input[start])) start += 1;
+                if (start >= input.len) return null;
+            } else {
+                start = state.first_filter.indexOf(input, start) orelse return null;
+            }
             var end = start + 1;
             while (end < input.len and byte_table.has(rest, input[end])) end += 1;
             if (state.min_b == 1 and end == start + 1) {
@@ -4794,6 +4963,29 @@ const EmailState = struct {
 
 const BlankLinesState = struct { space: [256]bool };
 
+const RunLiteralsState = struct {
+    run: [256]bool,
+    filter: prefilter.FirstFilter,
+    literals: []const []const u8,
+    /// First bytes of the suffix alternatives, gating the literal compare.
+    first_bytes: [256]bool = .{false} ** 256,
+};
+
+const PrefixRunLiteralState = struct {
+    prefix_filter: prefilter.FirstFilter,
+    run: [256]bool,
+    literal: u8,
+};
+
+const DelimitedAnyState = struct { open: []const u8, close: []const u8 };
+
+const DelimitedTailState = struct {
+    quote: u8,
+    body: [256]bool,
+    space: [256]bool,
+    literal: u8,
+};
+
 const LineMarkerState = struct {
     space: [256]bool,
     marker: [256]bool,
@@ -4856,6 +5048,8 @@ const PrefixRunState = struct {
     table_a: [4]u64 = undefined,
     table_b: [4]u64 = undefined,
     min_b: u8 = 0,
+    first_filter: prefilter.FirstFilter,
+    dense: bool = false,
 };
 
 const StarLiteralShape = struct { set: model.Set, literal: [64]u8, literal_len: u8 };

@@ -1085,13 +1085,13 @@ test "word alternation fast path scans boundaries" {
     try std.testing.expect(strict_workspace.fast_kind == .word_alternation);
     try expectFastSpans("\\b(?:get|post)\\b", "get GET post Post", &.{.{ 0, 3 }});
 
-    // A fold peer in the first two bytes cannot use the pair filter, so the
-    // shape is rejected and the general engine matches U+017F.
+    // A fold peer in the first two bytes keeps the shape through a filter
+    // variant that spells the peer in folded bytes.
     var peer = try regex.Regex.init(gpa, "(?i)\\b(?:ask|get)\\b", .{});
     defer peer.deinit();
     var peer_workspace = try regex.ReplaceWorkspace.init(gpa, peer.program, .{});
     defer peer_workspace.deinit();
-    try std.testing.expect(peer_workspace.fast_kind != .word_alternation);
+    try std.testing.expect(peer_workspace.fast_kind == .word_alternation);
     try expectFastSpans("(?i)\\b(?:ask|get)\\b", "aſk get", &.{ .{ 0, 4 }, .{ 5, 8 } });
 }
 
@@ -1132,6 +1132,45 @@ test "blank line fast path matches line runs" {
     try expectFastSpans(pattern, "abc", &.{});
     try expectFastSpans(pattern, "abc\n", &.{.{ 4, 4 }});
     try expectFastSpans(pattern, "", &.{.{ 0, 0 }});
+}
+
+test "run literal and delimited shapes scan real-world tails" {
+    var unit = try regex.Regex.init(gpa, "\\d+(?:px|em|rem|%)", .{});
+    defer unit.deinit();
+    var unit_workspace = try regex.ReplaceWorkspace.init(gpa, unit.program, .{});
+    defer unit_workspace.deinit();
+    try std.testing.expect(unit_workspace.fast_kind == .run_literals);
+    try expectFastSpans("\\d+(?:px|em|rem|%)", "12px 3.5em 100% 2rem", &.{
+        .{ 0, 4 }, .{ 7, 10 }, .{ 11, 15 }, .{ 16, 20 },
+    });
+    try expectFastSpans("\\d+(?:px|em|rem|%)", "1pxx 12p 12%x 12rem", &.{ .{ 0, 3 }, .{ 9, 12 }, .{ 14, 19 } });
+
+    var comment = try regex.Regex.init(gpa, "<!--[\\s\\S]*?-->", .{});
+    defer comment.deinit();
+    var comment_workspace = try regex.ReplaceWorkspace.init(gpa, comment.program, .{});
+    defer comment_workspace.deinit();
+    try std.testing.expect(comment_workspace.fast_kind == .delimited_any);
+    try expectFastSpans("<!--[\\s\\S]*?-->", "<!-- a --> <!--b-->", &.{ .{ 0, 10 }, .{ 11, 19 } });
+    try expectFastSpans("<!--[\\s\\S]*?-->", "<!-- x", &.{});
+    try expectFastSpans("<!--[\\s\\S]*?-->", "<!---->", &.{.{ 0, 7 }});
+
+    var query = try regex.Regex.init(gpa, "[?&]\\w+=", .{});
+    defer query.deinit();
+    var query_workspace = try regex.ReplaceWorkspace.init(gpa, query.program, .{});
+    defer query_workspace.deinit();
+    try std.testing.expect(query_workspace.fast_kind == .prefix_run_literal);
+    try expectFastSpans("[?&]\\w+=", "?a=1&b=2", &.{ .{ 0, 3 }, .{ 4, 7 } });
+    try expectFastSpans("[?&]\\w+=", "?=x ?a ??a=1", &.{.{ 8, 11 }});
+
+    var key = try regex.Regex.init(gpa, "\"[^\"]+\"\\s*:", .{});
+    defer key.deinit();
+    var key_workspace = try regex.ReplaceWorkspace.init(gpa, key.program, .{});
+    defer key_workspace.deinit();
+    try std.testing.expect(key_workspace.fast_kind == .delimited_tail);
+    try expectFastSpans("\"[^\"]+\"\\s*:", "{\"a\": 1, \"b\" : 2, \"c\"  :3}", &.{
+        .{ 1, 5 }, .{ 9, 14 }, .{ 18, 24 },
+    });
+    try expectFastSpans("\"[^\"]+\"\\s*:", "\"\" \"a\": \"b\" : 2", &.{ .{ 3, 7 }, .{ 8, 13 } });
 }
 
 test "signed number fast path scans sign and fraction" {

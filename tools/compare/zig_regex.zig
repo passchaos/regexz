@@ -370,6 +370,18 @@ pub fn main() !void {
     defer mixed_text.deinit(gpa);
     for (0..4000) |_| try mixed_text.appendSlice(gpa, "a bb ccc a bb ccc ");
 
+    var stamp_text: std.ArrayList(u8) = .empty;
+    defer stamp_text.deinit(gpa);
+    for (0..2000) |_| try stamp_text.appendSlice(gpa, "2026-11-21T13:29:29 2025-01-05T00:00:00 ");
+
+    var unit_text: std.ArrayList(u8) = .empty;
+    defer unit_text.deinit(gpa);
+    for (0..2000) |_| try unit_text.appendSlice(gpa, "12px 3.5em 100% 2rem ");
+
+    var call_text: std.ArrayList(u8) = .empty;
+    defer call_text.deinit(gpa);
+    for (0..2000) |_| try call_text.appendSlice(gpa, "foo(1) bar_baz(x) qux () ");
+
     const qwen = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+";
     const ucp = regexz.Limits{ .unicode_perl_space = true, .max_execution_steps = 16_000_000 };
 
@@ -436,6 +448,18 @@ pub fn main() !void {
     try benchFind(io, out, "find blank lines", "(?m)^\\s*$", ascii_text.items, 200, .{});
     try benchFind(io, out, "find floats", "\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?", number_text.items, 200, .{});
     try benchFind(io, out, "find currency", "\\$\\d+(?:\\.\\d{2})?", number_text.items, 200, .{});
+    try benchFind(io, out, "find ISO timestamp", "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}", stamp_text.items, 200, .{});
+    try benchFind(io, out, "find JSON key", "\"[^\"]+\"\\s*:", json_text.items, 200, .{});
+    try benchFind(io, out, "find HTML comment", "<!--[\\s\\S]*?-->", html_text.items, 200, .{});
+    try benchFind(io, out, "find hashtag", "#\\w+", ascii_text.items, 200, .{});
+    try benchFind(io, out, "find mention", "@\\w+", ascii_text.items, 200, .{});
+    try benchFind(io, out, "find CSS unit", "\\d+(?:px|em|rem|%)", unit_text.items, 200, .{});
+    try benchFind(io, out, "find function call", "[A-Za-z_]\\w*\\s*\\(", call_text.items, 200, .{});
+    try benchFind(io, out, "find SQL keyword", "(?i)\\b(?:select|from|where|join)\\b", ascii_text.items, 200, .{});
+    try benchFind(io, out, "find JSON literal", "\\b(?:true|false|null)\\b", json_text.items, 200, .{});
+    try benchFind(io, out, "find blockquote", "(?m)^>.*$", md_text.items, 200, .{});
+    try benchFind(io, out, "find ordered list", "(?m)^\\d+\\.\\s", md_text.items, 200, .{});
+    try benchFind(io, out, "find query param", "[?&]\\w+=", url_text.items, 200, .{});
     try benchSplit(io, out, "split whitespace (22 KiB)", "\\s+", ascii_text.items, 200);
     try benchSplit(io, out, "split commas (29 KiB)", ",", csv_text.items, 200);
     try benchMatches(io, out, "fullmatch literal", "hello, world!", "hello, world!", 200000, .{});

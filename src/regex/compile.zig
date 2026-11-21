@@ -172,6 +172,14 @@ pub const Program = struct {
     email: ?EmailShape = null,
     /// `(?m)^\s*$` in LF mode. Not serialized.
     blank_lines: ?BlankLinesShape = null,
+    /// `run+ literal-alternation` (`\d+(?:px|em|rem|%)`). Not serialized.
+    run_literals: ?RunLiteralsShape = null,
+    /// `prefix-set run+ literal` (`[?&]\w+=`). Not serialized.
+    prefix_run_literal: ?PrefixRunLiteralShape = null,
+    /// `open any*? close` (`<!--[\s\S]*?-->`). Not serialized.
+    delimited_any: ?DelimitedAnyShape = null,
+    /// `quote body+ quote space* literal` (`"[^"]+"\s*:`). Not serialized.
+    delimited_tail: ?DelimitedTailShape = null,
     /// `x? set+` where `x` is a member of the set, which matches exactly the
     /// same spans as `set+`. Not serialized.
     optional_run: ?model.Set = null,
@@ -1350,7 +1358,12 @@ fn detectLineMarker(root: *const model.Node) ?LineMarkerShape {
 }
 
 pub const WordAlternationShape = struct {
+    /// Canonical lowercase literals used for verification.
     literals: []const []const u8,
+    /// Literals for the ASCII-folded pair filter. Caseless literals with a
+    /// non-ASCII fold peer in the first two bytes get extra variants that
+    /// spell the peer in folded bytes, so the lane scan proposes them.
+    filter_literals: []const []const u8,
     caseless: bool,
 };
 
@@ -1369,6 +1382,118 @@ pub const EmailShape = struct {
 /// end. The match ends at the last line break inside the run, or at the text
 /// end when the run reaches it.
 pub const BlankLinesShape = struct { space: model.Set };
+
+/// `run+ literal-alternation`, for example `\d+(?:px|em|rem|%)`. The first
+/// byte of every alternative is outside the run set, so the run ends exactly
+/// at the suffix and no backtracking is needed.
+pub const RunLiteralsShape = struct { run: model.Set, literals: []const []const u8 };
+
+/// `prefix-set run+ literal`, for example `[?&]\w+=`. The literal is outside
+/// the run set.
+pub const PrefixRunLiteralShape = struct { prefix: model.Set, run: model.Set, literal: u8 };
+
+/// `open any*? close` where the body matches every rune, for example
+/// `<!--[\s\S]*?-->`. The match ends at the first close after the open.
+pub const DelimitedAnyShape = struct { open: []const u8, close: []const u8 };
+
+/// `quote body+ quote space* literal`, for example `"[^"]+"\s*:`. The body
+/// excludes the quote and covers every non-ASCII rune.
+pub const DelimitedTailShape = struct {
+    quote: u8,
+    body: model.Set,
+    space: model.Set,
+    literal: u8,
+};
+
+fn detectDelimitedTail(root: *const model.Node) ?DelimitedTailShape {
+    var nodes: [5]*const model.Node = undefined;
+    var count: usize = 0;
+    if (!flattenUpTo(root, &nodes, &count) or count != 5) return null;
+    const quote = literalByteOf(nodes[0]) orelse return null;
+    const body_repeat = (repeatOf(nodes[1]) orelse return null).repeat;
+    if (body_repeat.lazy or body_repeat.possessive or body_repeat.maximum != null or body_repeat.minimum == 0) return null;
+    const body = nodeSet(body_repeat.child) orelse return null;
+    const close = literalByteOf(nodes[2]) orelse return null;
+    if (close != quote) return null;
+    const space_repeat = (repeatOf(nodes[3]) orelse return null).repeat;
+    if (space_repeat.lazy or space_repeat.possessive or space_repeat.maximum != null or space_repeat.minimum != 0) return null;
+    const space = nodeSet(space_repeat.child) orelse return null;
+    const literal = literalByteOf(nodes[4]) orelse return null;
+    if (body.ranges.len == 0 or space.ranges.len == 0) return null;
+    if (!space.ascii_only) return null;
+    if (!body.ascii_only and !body.covers(0x80, 0x10FFFF)) return null;
+    if (body.matches(quote)) return null;
+    if (space.matches(literal)) return null;
+    return .{ .quote = quote, .body = body, .space = space, .literal = literal };
+}
+
+fn detectRunLiterals(allocator: std.mem.Allocator, root: *const model.Node) model.Error!?RunLiteralsShape {
+    var nodes: [2]*const model.Node = undefined;
+    var count: usize = 0;
+    if (!flattenUpTo(root, &nodes, &count) or count != 2) return null;
+    const repeat = (repeatOf(nodes[0]) orelse return null).repeat;
+    if (repeat.lazy or repeat.possessive or repeat.maximum != null or repeat.minimum == 0) return null;
+    const run = nodeSet(repeat.child) orelse return null;
+    if (!run.ascii_only or run.ranges.len == 0) return null;
+    const literals = try expandLiteralSet(allocator, nodes[1], false) orelse return null;
+    for (literals) |literal| {
+        if (literal.len == 0 or run.matches(literal[0])) return null;
+    }
+    return .{ .run = run, .literals = literals };
+}
+
+fn detectPrefixRunLiteral(root: *const model.Node) ?PrefixRunLiteralShape {
+    var nodes: [3]*const model.Node = undefined;
+    var count: usize = 0;
+    if (!flattenUpTo(root, &nodes, &count) or count != 3) return null;
+    const prefix = nodeSet(nodes[0]) orelse return null;
+    const repeat = (repeatOf(nodes[1]) orelse return null).repeat;
+    if (repeat.lazy or repeat.possessive or repeat.maximum != null or repeat.minimum == 0) return null;
+    const run = nodeSet(repeat.child) orelse return null;
+    const literal = literalByteOf(nodes[2]) orelse return null;
+    if (!prefix.ascii_only or prefix.ranges.len == 0) return null;
+    if (!run.ascii_only or run.ranges.len == 0) return null;
+    if (run.matches(literal)) return null;
+    return .{ .prefix = prefix, .run = run, .literal = literal };
+}
+
+fn detectDelimitedAny(allocator: std.mem.Allocator, root: *const model.Node) model.Error!?DelimitedAnyShape {
+    var nodes: [16]*const model.Node = undefined;
+    var count: usize = 0;
+    if (!flattenUpTo(root, &nodes, &count) or count < 3) return null;
+    var repeat_index: ?usize = null;
+    for (nodes[0..count], 0..) |node, index| {
+        if (repeatOf(node) == null) continue;
+        if (repeat_index != null) return null;
+        repeat_index = index;
+    }
+    const split = repeat_index orelse return null;
+    if (split == 0 or split + 1 == count) return null;
+    var open_buf: [16]u8 = undefined;
+    var open_len: usize = 0;
+    for (nodes[0..split]) |node| {
+        const byte = literalByteOf(node) orelse return null;
+        if (open_len == open_buf.len) return null;
+        open_buf[open_len] = byte;
+        open_len += 1;
+    }
+    var close_buf: [16]u8 = undefined;
+    var close_len: usize = 0;
+    for (nodes[split + 1 .. count]) |node| {
+        const byte = literalByteOf(node) orelse return null;
+        if (close_len == close_buf.len) return null;
+        close_buf[close_len] = byte;
+        close_len += 1;
+    }
+    const repeat = (repeatOf(nodes[split]) orelse return null).repeat;
+    if (!repeat.lazy or repeat.possessive or repeat.maximum != null or repeat.minimum != 0) return null;
+    const any = nodeSet(repeat.child) orelse return null;
+    if (!any.covers(0, 0x10FFFF)) return null;
+    return .{
+        .open = try allocator.dupe(u8, open_buf[0..open_len]),
+        .close = try allocator.dupe(u8, close_buf[0..close_len]),
+    };
+}
 
 fn detectBlankLines(root: *const model.Node) ?BlankLinesShape {
     var nodes: [3]*const model.Node = undefined;
@@ -1442,24 +1567,57 @@ fn detectWordAlternation(allocator: std.mem.Allocator, root: *const model.Node) 
     // verifies non-ASCII fold peers (`s`, `k`) itself, so allow them here.
     var caseless_expander = LiteralExpander{ .allocator = allocator, .caseless = true, .allow_peers = true };
     if (try expandBranches(&caseless_expander, body)) |literals| {
-        // The candidate filter folds ASCII bytes only, so a fold peer in the
-        // first two bytes (the pair filter's inputs) would never be proposed.
-        for (literals) |literal| {
-            if (foldPeerByte(literal[0])) return null;
-            if (literal.len >= 2 and foldPeerByte(literal[1])) return null;
-        }
-        return .{ .literals = literals, .caseless = true };
+        const filter_literals = try buildWordFilterLiterals(allocator, literals) orelse return null;
+        return .{ .literals = literals, .filter_literals = filter_literals, .caseless = true };
     }
     if (try expandLiteralSet(allocator, body, false)) |literals| {
-        return .{ .literals = literals, .caseless = false };
+        return .{ .literals = literals, .filter_literals = literals, .caseless = false };
     }
     return null;
 }
 
-/// ASCII letters with a non-ASCII simple-fold peer (`s` -> U+017F,
-/// `k` -> U+212A).
-fn foldPeerByte(byte: u8) bool {
-    return byte == 's' or byte == 'k';
+/// Folded spellings for the pair filter. A literal byte with a non-ASCII
+/// simple-fold peer (`s` -> U+017F, `k` -> U+212A) gets one variant per
+/// peer position in the first two bytes, spelling the peer in folded bytes
+/// (`0xE5 0xBF` and `0xE2 0x84 0xAA`) so the ASCII-folded lane scan
+/// proposes it. Verification still uses the canonical literal.
+fn buildWordFilterLiterals(allocator: std.mem.Allocator, literals: []const []const u8) model.Error!?[]const []const u8 {
+    var list: std.ArrayList([]const u8) = .empty;
+    defer list.deinit(allocator);
+    for (literals) |literal| {
+        try list.append(allocator, literal);
+        const limit = @min(literal.len, 2);
+        var pos: usize = 0;
+        while (pos < limit) : (pos += 1) {
+            const peer = foldPeerBytes(literal[pos]) orelse continue;
+            const bytes = try allocator.alloc(u8, literal.len - 1 + peer.len);
+            @memcpy(bytes[0..pos], literal[0..pos]);
+            @memcpy(bytes[pos..][0..peer.len], peer);
+            @memcpy(bytes[pos + peer.len ..], literal[pos + 1 ..]);
+            var exists = false;
+            for (list.items) |existing| {
+                if (std.mem.eql(u8, existing, bytes)) {
+                    exists = true;
+                    break;
+                }
+            }
+            if (exists) continue;
+            if (list.items.len == 16) return null;
+            try list.append(allocator, bytes);
+        }
+    }
+    if (list.items.len > 16) return null;
+    const owned = try list.toOwnedSlice(allocator);
+    return @as([]const []const u8, owned);
+}
+
+/// Folded UTF-8 bytes of the non-ASCII simple-fold peers of `s` and `k`.
+fn foldPeerBytes(byte: u8) ?[]const u8 {
+    return switch (byte) {
+        's' => &.{ 0xE5, 0xBF }, // U+017F after `| 0x20`
+        'k' => &.{ 0xE2, 0x84, 0xAA }, // U+212A
+        else => null,
+    };
 }
 
 /// A bounded run followed by a greedy repetition of a bounded
@@ -2250,6 +2408,26 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         detectBlankLines(parsed.root)
     else
         null;
+    const run_literals: ?RunLiteralsShape = if (literal == null and caseless_literal == null and
+        literal_set == null and !limits.auto_callout)
+        try detectRunLiterals(allocator, parsed.root)
+    else
+        null;
+    const prefix_run_literal: ?PrefixRunLiteralShape = if (literal == null and caseless_literal == null and
+        literal_set == null and !limits.auto_callout)
+        detectPrefixRunLiteral(parsed.root)
+    else
+        null;
+    const delimited_any: ?DelimitedAnyShape = if (literal == null and caseless_literal == null and
+        literal_set == null and !limits.auto_callout)
+        try detectDelimitedAny(allocator, parsed.root)
+    else
+        null;
+    const delimited_tail: ?DelimitedTailShape = if (literal == null and caseless_literal == null and
+        literal_set == null and !limits.auto_callout)
+        detectDelimitedTail(parsed.root)
+    else
+        null;
     const optional_run: ?model.Set = if (literal == null and caseless_literal == null and
         literal_set == null and !limits.auto_callout) detectOptionalRun(parsed.root) else null;
     var unbounded_builder = UnboundedSequenceBuilder{ .allocator = allocator, .literal_bytes = unbounded_storage };
@@ -2320,6 +2498,10 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         .word_alternation = word_alternation,
         .email = email,
         .blank_lines = blank_lines,
+        .run_literals = run_literals,
+        .prefix_run_literal = prefix_run_literal,
+        .delimited_any = delimited_any,
+        .delimited_tail = delimited_tail,
         .optional_run = optional_run,
         .dfa_eligible = dfa_eligible,
         .extended = extended,

@@ -56,12 +56,33 @@ pub fn indexOfByte(input: []const u8, start: usize, byte: u8) ?usize {
 }
 
 /// First offset at or after `start` where `a` is immediately followed by
-/// `b`, scanned 16 bytes at a time. Returns null when the pair is absent.
+/// `b`, scanned 64 bytes at a time. Returns null when the pair is absent.
 pub fn indexOfPair(input: []const u8, start: usize, a: u8, b: u8) ?usize {
     if (start + 1 >= input.len) return null;
     const splat_a: Vec = @splat(a);
     const splat_b: Vec = @splat(b);
     var offset = start;
+    while (offset + 64 <= input.len - 1) : (offset += 64) {
+        const a0: Vec = input[offset..][0..16].*;
+        const b0: Vec = input[offset + 1 ..][0..16].*;
+        const a1: Vec = input[offset + 16 ..][0..16].*;
+        const b1: Vec = input[offset + 17 ..][0..16].*;
+        const a2: Vec = input[offset + 32 ..][0..16].*;
+        const b2: Vec = input[offset + 33 ..][0..16].*;
+        const a3: Vec = input[offset + 48 ..][0..16].*;
+        const b3: Vec = input[offset + 49 ..][0..16].*;
+        const hits = ((a0 == splat_a) & (b0 == splat_b)) |
+            ((a1 == splat_a) & (b1 == splat_b)) |
+            ((a2 == splat_a) & (b2 == splat_b)) |
+            ((a3 == splat_a) & (b3 == splat_b));
+        if (@reduce(.Or, hits)) {
+            var probe = offset;
+            const end = offset + 64;
+            while (probe < end) : (probe += 1) {
+                if (input[probe] == a and input[probe + 1] == b) return probe;
+            }
+        }
+    }
     while (offset + 16 <= input.len - 1) : (offset += 16) {
         const chunk_a: Vec = input[offset..][0..16].*;
         const chunk_b: Vec = input[offset + 1 ..][0..16].*;
@@ -786,8 +807,10 @@ pub const MultiFilter = struct {
             if (bits != 0) return offset + @ctz(bits);
         }
         while (offset + 1 < input.len) : (offset += 1) {
-            const first = foldByte(input[offset]);
-            const second = foldByte(input[offset + 1]);
+            // Match the SIMD lane fold (`| 0x20`), which also maps the lead
+            // bytes of non-ASCII fold peers to their folded splats.
+            const first = input[offset] | 0x20;
+            const second = input[offset + 1] | 0x20;
             for (self.pairs[0..self.pair_count]) |pair| {
                 if (@as(u8, @intCast(pair >> 8)) == first and
                     @as(u8, @intCast(pair & 0xFF)) == second) return offset;
@@ -943,6 +966,19 @@ pub fn literalSetMulti(literals: []const []const u8) ?MultiFilter {
         }
     }
     return MultiFilter.initAny(literals);
+}
+
+/// First-byte set for an ASCII set, using the existing bitmap.
+pub fn firstSetOf(set: model.Set) model.FirstSet {
+    var first = model.FirstSet{};
+    for (set.ranges) |range| {
+        var byte: u32 = range.first;
+        while (byte <= range.last and byte < 0x80) : (byte += 1) {
+            first.ascii[byte >> 6] |= @as(u64, 1) << @intCast(byte & 63);
+        }
+    }
+    if (!set.ascii_only) first.nonascii = true;
+    return first;
 }
 
 /// One-shot variant for callers that do not keep a workspace. Hot paths

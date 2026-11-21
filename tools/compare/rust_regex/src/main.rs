@@ -156,6 +156,9 @@ fn main() {
     let md_text = "# Title\n## Section\ntext\n### Sub\n".repeat(1500);
     let prefix_text = "prefix postfix prefixx post ".repeat(3000);
     let mixed_text = "a bb ccc a bb ccc ".repeat(4000);
+    let stamp_text = "2026-11-21T13:29:29 2025-01-05T00:00:00 ".repeat(2000);
+    let unit_text = "12px 3.5em 100% 2rem ".repeat(2000);
+    let call_text = "foo(1) bar_baz(x) qux () ".repeat(2000);
 
     let qwen = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+";
 
@@ -297,6 +300,28 @@ fn main() {
     bench_find("find blank lines", r"(?m)^\s*$", &ascii_text, 200);
     bench_find("find floats", r"\d+(?:\.\d+)?(?:[eE][+-]?\d+)?", &number_text, 200);
     bench_find("find currency", r"\$\d+(?:\.\d{2})?", &number_text, 200);
+    bench_find(
+        "find ISO timestamp",
+        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}",
+        &stamp_text,
+        200,
+    );
+    bench_find("find JSON key", r#""[^"]+"\s*:"#, &json_text, 200);
+    bench_find("find HTML comment", r"<!--[\s\S]*?-->", &html_text, 200);
+    bench_find("find hashtag", r"#\w+", &ascii_text, 200);
+    bench_find("find mention", r"@\w+", &ascii_text, 200);
+    bench_find("find CSS unit", r"\d+(?:px|em|rem|%)", &unit_text, 200);
+    bench_find("find function call", r"[A-Za-z_]\w*\s*\(", &call_text, 200);
+    bench_find(
+        "find SQL keyword",
+        r"(?i)\b(?:select|from|where|join)\b",
+        &ascii_text,
+        200,
+    );
+    bench_find("find JSON literal", r"\b(?:true|false|null)\b", &json_text, 200);
+    bench_find("find blockquote", r"(?m)^>.*$", &md_text, 200);
+    bench_find("find ordered list", r"(?m)^\d+\.\s", &md_text, 200);
+    bench_find("find query param", r"[?&]\w+=", &url_text, 200);
     bench_split("split whitespace (22 KiB)", "\\s+", &ascii_text, 200);
     bench_split("split commas (29 KiB)", ",", &csv_text, 200);
     bench_fullmatch(
