@@ -145,14 +145,29 @@ fn complement(gpa: std.mem.Allocator, ranges: []const m.Range, limit: usize) m.E
 
 /// Complement an already-normalized set without copying and re-merging it.
 pub fn complementSet(gpa: std.mem.Allocator, set: m.Set, limit: usize) m.Error!m.Set {
-    return fromRanges(try complement(gpa, set.ranges, limit));
+    return fromSortedRanges(try complement(gpa, set.ranges, limit));
 }
 
 /// Build a materialized set, including its 128-bit ASCII membership bitmap.
 pub fn fromRanges(ranges: []const m.Range) m.Set {
+    return buildSet(ranges, false);
+}
+
+/// Build a materialized set from ranges already sorted by `first`. Sorted
+/// input lets construction stop at the first non-ASCII range instead of
+/// walking every Unicode range.
+pub fn fromSortedRanges(ranges: []const m.Range) m.Set {
+    return buildSet(ranges, true);
+}
+
+fn buildSet(ranges: []const m.Range, comptime ordered: bool) m.Set {
     var bitmap = [2]u64{ 0, 0 };
     var ascii_only = true;
     for (ranges) |range| {
+        if (ordered and range.first > 127) {
+            ascii_only = false;
+            break;
+        }
         if (range.last >= 128) ascii_only = false;
         const end: u32 = @min(@as(u32, range.last), 127);
         if (range.first > end) continue;
@@ -206,9 +221,9 @@ pub fn normalizeOwned(gpa: std.mem.Allocator, list: std.ArrayList(m.Range), nega
     if (negate) {
         const result = try complement(gpa, ranges.items[0..count], limit);
         ranges.deinit(gpa);
-        return fromRanges(result);
+        return fromSortedRanges(result);
     }
-    return fromRanges(ranges.items[0..count]);
+    return fromSortedRanges(ranges.items[0..count]);
 }
 
 pub fn normalize(gpa: std.mem.Allocator, raw: []const m.Range, negate: bool, fold: m.Fold, limit: usize) m.Error!m.Set {
@@ -238,9 +253,9 @@ pub fn normalize(gpa: std.mem.Allocator, raw: []const m.Range, negate: bool, fol
         }
     }
     if (count > limit) return error.RegexLimitExceeded;
-    if (negate) return fromRanges(try complement(gpa, ranges.items[0..count], limit));
+    if (negate) return fromSortedRanges(try complement(gpa, ranges.items[0..count], limit));
     const owned = try ranges.toOwnedSlice(gpa);
-    return fromRanges(owned[0..count]);
+    return fromSortedRanges(owned[0..count]);
 }
 
 /// PCRE2's UCP `\s` set: Unicode White_Space plus U+180E from `\h`.
@@ -567,5 +582,5 @@ pub fn combine(gpa: std.mem.Allocator, left: m.Set, op: SetOp, right: m.Set, lim
             break :blk try unionRanges(gpa, only_left, only_right, limit);
         },
     };
-    return fromRanges(ranges);
+    return fromSortedRanges(ranges);
 }
