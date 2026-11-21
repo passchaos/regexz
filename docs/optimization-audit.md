@@ -1085,18 +1085,20 @@ before merging a precomputed union, avoiding a block sort of the combined
 list, and the parser's sortedness witness skips the redundant scan. Adjacent
 positive properties stay unmaterialized until a union misses, canonical
 property tables are validated in place, and negated union classes emit their
-complement directly from the generated table. These changes cut Qwen compile
-from 23.3 us to 16.4 us. Case-folded literal filters use a 32-lane pair
-scan on AVX2 hosts. The latest eight-execution order-balanced
-sweep covers 101 cases: 98 are faster, IPv6 is at parity (1.01x), and the
-remaining losses are the one-character alternation (0.88x), currency (0.92x)
-and HTML tags (0.92x). The geometric-mean ratio is 2.31x. See
-[Rust comparison](benchmarks/rust-comparison.md).
+complement directly from the generated table. Precomputed unions are stored
+as static `Range` arrays, so positive union classes reference them without
+copying, and general-category groups stay deferred until a union misses.
+These changes cut Qwen compile from 23.3 us to 11.6 us. Case-folded literal
+filters use a 32-lane pair scan on AVX2 hosts. The latest eight-execution
+order-balanced sweep covers 101 cases: 98 are faster, IPv6 is at parity
+(1.01x), and the remaining losses are the one-character alternation (0.88x),
+currency (0.92x) and HTML tags (0.92x). The geometric-mean ratio is 2.32x.
+See [Rust comparison](benchmarks/rust-comparison.md).
 
 The same 100-case workload (minus `RegexSet`) was also run against PCRE2
-10.42 with JIT on the same host. regexz is faster or at parity on 98 of 100
-cases, with a geometric-mean PCRE2/regexz ratio of 2.14x. Compile Qwen is at
-parity (0.99x, down from 0.69x); the small ASCII case-insensitive literal is
-also at parity (0.99x). regexz wins compile xDS-like (1.23x). regexz
-materializes Unicode property sets at compile time, while PCRE2 defers them.
-See [PCRE2 comparison](benchmarks/pcre2-comparison.md).
+10.42 with JIT on the same host. regexz is faster or at parity on 99 of 100
+cases, with a geometric-mean PCRE2/regexz ratio of 2.15x. Compile Qwen is now
+1.39x ahead (up from 0.69x); the small ASCII case-insensitive literal is at
+parity (0.99x). regexz wins compile xDS-like (1.24x). regexz materializes
+Unicode property sets at compile time, while PCRE2 defers them. See
+[PCRE2 comparison](benchmarks/pcre2-comparison.md).
