@@ -214,6 +214,11 @@ the generic three-element dispatch, improving the case 1.25x in an
 order-balanced sweep (87.2 us -> 69.6 us). See
 [camelCase dedicated walk](camel-walk.md).
 
+Run-first unbounded chains now peel the first run out of the generic element
+loop, dropping the per-element first-element check. An order-balanced batch
+measured semver 1.08x, email TLD 1.12x and IP port 1.07x faster. See
+[unbounded chain fusion](unbounded-chain-fusion.md).
+
 Caveats: the iteration APIs are the natural ones for each library
 (`Workspace.find` in a loop versus `Regex::find_iter`), full match is
 `Regex::find` plus a bounds check on the Rust side, the word-boundary case

@@ -72,3 +72,22 @@ The span tests cover fused and unfused chains (`v?\d+\.\d+\.\d+`,
 `\w+="[^"]*"`, `\w+@\w+\.(?:com|org|net)`, `[a-z]+[A-Z][a-z]+`,
 `\w+\s*=\s*\w+`), including failed starts, literal mismatches and the
 ambiguous optional case that must stay off the fast path.
+
+## First-element peel
+
+Run-first chains re-scanned the first element inside the generic element
+loop and carried an `index == 0` check on every element. A profile of the
+semver scan attributed about 8% of the walk to that check alone.
+
+The walk now scans a `run`/`run_range` first element before the loop,
+records its end for the failed-start skip, and starts the element loop at
+the next element. Chains whose first element is a literal, optional,
+single-set or alternation keep the generic loop; their skip never applies
+because the first element is not a run.
+
+Six isolated before/after executions (order-balanced; raw samples in
+[`unbounded-first-peel.json`](unbounded-first-peel.json)) measured semver
+1.14x and email TLD 1.14x faster, with the other isolated cases neutral.
+An order-balanced comparison batch measured semver 1.08x, email TLD 1.12x
+and IP port 1.07x faster; unrelated cases moved up to 1.2x in the same
+noisy sweep.

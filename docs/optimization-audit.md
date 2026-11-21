@@ -876,6 +876,24 @@ measured the camelCase case 1.25x faster (87.2 us -> 69.6 us), with unrelated
 non-camel cases moving up to 1.25x in the same noisy sweep. See
 [camelCase dedicated walk](benchmarks/camel-walk.md).
 
+Run-first unbounded chains now peel the first element out of the generic
+element loop: the walk scans the run/run_range, keeps its end for the
+failed-start skip, and starts the loop at the next element, dropping the
+`index == 0` check from every element. Isolated order-balanced runs measured
+semver 1.14x and email TLD 1.14x faster, and an order-balanced comparison
+batch measured semver 1.08x, email TLD 1.12x and IP port 1.07x faster. See
+[unbounded chain fusion](benchmarks/unbounded-chain-fusion.md).
+
+A differential-fuzz mismatch exposed two fast-branch plan bugs. `laterPlan`
+treated `A?\s+(?!\S)` as `A?\s+`, dropping the lookahead, and the collapsed
+whitespace plan assumed a bare `\s+` fallback that may not exist, so a
+single space before text (and a newline-only plan without a newline) wrongly
+matched. Lookaround-containing branches are now left to the engine, the plan
+records whether a bare `\s+` follows, and the scanner tries the newline,
+lookahead and bare branches in source order. The failing fuzz seed and the
+extended fuzzer pass, and a regression test compares the fast plan against
+the engine for these shapes.
+
 Five literal-set verification refinements were screened and reverted. A
 distinct-first first-byte index and a length-specialized tail compare were
 neutral (the 20-literal set shares `e`/`t` first bytes, and the compiler
