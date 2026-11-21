@@ -1067,7 +1067,9 @@ alternations, sparse pair sets and single-byte prefix runs; first-byte scans
 use `@ctz` of the lane mask; the pair filter keeps its third-byte check for
 small allowed sets; and single-byte splits always use the counted mask
 fill. CSS units take a direct dispatch path in `find`, and the suffix table
-maps a first byte to one literal. The latest eight-execution order-balanced
+maps a first byte to one literal. Class normalization sorts ranges by start
+only, removing a mispredicting end tie-break on the many equal starts from
+Unicode property unions. The latest eight-execution order-balanced
 sweep covers 101 cases: 98 are faster, IPv6 is at parity (1.01x), and the
 remaining losses are the one-character alternation (0.88x), currency (0.92x)
 and HTML tags (0.92x). The geometric-mean ratio is 2.26x. See
@@ -1076,6 +1078,6 @@ and HTML tags (0.92x). The geometric-mean ratio is 2.26x. See
 The same 100-case workload (minus `RegexSet`) was also run against PCRE2
 10.42 with JIT on the same host. regexz is faster on 97 of 100 cases, with a
 geometric-mean PCRE2/regexz ratio of 2.10x. PCRE2 wins the two compile rows
-(0.31x and 0.59x) and the small ASCII case-insensitive literal (0.95x);
+(0.35x and 0.59x) and the small ASCII case-insensitive literal (0.95x);
 regexz materializes Unicode property sets at compile time, while PCRE2
 defers them. See [PCRE2 comparison](benchmarks/pcre2-comparison.md).

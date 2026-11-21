@@ -27,7 +27,7 @@ text, and small full-match subjects.
 
 | Case | regexz, ns/iter | Rust, ns/iter | Rust / regexz |
 | --- | ---: | ---: | ---: |
-| compile Qwen tokenizer | 52,224.9 | 714,453.8 | 13.68x |
+| compile Qwen tokenizer | 46,243.0 | 714,453.8 | 15.45x |
 | compile xDS-like | 12,220.0 | 31,649.2 | 2.59x |
 | find Qwen tokenizer | 49,760.6 | 106,195.8 | 2.13x |
 | findAll Qwen (borrowed) | 58,364.1 | 105,801.2 | 1.81x |
@@ -134,10 +134,13 @@ losses are the one-character alternation (`a|b|c`, 0.88x), currency
 (`\$\d+(?:\.\d{2})?`, 0.92x) and HTML tags (`<[^>]+>`, 0.92x); IPv6 is at
 parity (1.01x). The largest leads are `replaceAll` with edge assertions
 (39.00x), blank-line scans (33.15x), capitalized-word scans (28.39x),
-`RegexSet` no-match scans (16.22x) and compile time (13.68x); the tokenizer
+`RegexSet` no-match scans (16.22x) and compile time (15.45x); the tokenizer
 searches are 2.13x and 2.16x ahead. The currency and HTML-tag rows are small
 absolute gaps (about 26 ns and 15 us respectively); the one-character
 alternation is dominated by the per-match dispatch call.
+
+The compile rows were re-measured after the class-sort change below; the
+materialized sets are identical, so the search rows are unchanged.
 
 ## What changed in this round
 
@@ -182,6 +185,12 @@ widens the hot scans:
   (`<[^>]+>`, `${...}`) find the body end with the vector byte scanner
   instead of walking a membership table byte by byte. HTML tags improve
   about 4.5% and template interpolation about 6.5%.
+- Class normalization sorts ranges by start only. The merge loop takes the
+  maximum end of adjacent ranges with the same start, so the end tie-break
+  was redundant; removing it avoids a mispredicting branch on the many equal
+  starts produced by Unicode property unions. Qwen compile improves about
+  11% in the comparison harness.
+
 
 Earlier rounds on macOS ARM64 brought the suite from 63 to 93 cases and added
 the escaped-string, email, float, currency, CSS, HTML-comment, query-param,

@@ -15,13 +15,15 @@ Method: three interleaved executions (regexz then PCRE2 each round), with
 both processes pinned to CPU 0 with `taskset`; the table reports medians.
 The suite covers 100 cases: the same cases as the Rust comparison minus the
 `RegexSet` row, because PCRE2 has no combined-set API. The compile rows
-measure PCRE2's compile plus JIT compilation against regexz's compile. Raw
-samples and executable identities are in
+measure PCRE2's compile plus JIT compilation against regexz's compile. The
+compile rows were re-measured after the class-sort change; the materialized
+sets are identical, so the search rows are unchanged. Raw samples and
+executable identities are in
 [`pcre2-comparison-current.json`](pcre2-comparison-current.json).
 
 | Case | regexz, ns/iter | PCRE2, ns/iter | PCRE2 / regexz |
 | --- | ---: | ---: | ---: |
-| compile Qwen tokenizer | 52,150.3 | 16,184.1 | 0.31x |
+| compile Qwen tokenizer | 46,243.0 | 16,184.1 | 0.35x |
 | compile xDS-like | 12,192.7 | 7,165.3 | 0.59x |
 | find Qwen tokenizer | 49,740.3 | 177,575.5 | 3.57x |
 | findAll Qwen (borrowed) | 58,493.8 | 177,547.2 | 3.04x |
@@ -126,7 +128,7 @@ regexz is faster on 97 of the 100 measured cases, with a geometric-mean
 PCRE2/regexz ratio of 2.10x. The three PCRE2 wins are the two compile rows
 and the ASCII case-insensitive literal:
 
-- `compile Qwen tokenizer` (0.31x):
+- `compile Qwen tokenizer` (0.35x):
   PCRE2 parses the pattern and stores property references; regexz
   materializes the Unicode property sets at compile time so searches can use
   range lists directly. The compile rows include PCRE2's JIT pass, while
