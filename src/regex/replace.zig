@@ -3032,7 +3032,13 @@ pub const Workspace = struct {
         const filter = self.fold_filter orelse return .fallback;
         var search = search_start;
         while (true) {
-            const start = filter.indexOf(input, search) orelse return .absent;
+            const candidate = if (comptime prefilter.wide_scan) blk: {
+                const found = filter.indexOfWide(input, search);
+                // The wide scan leaves the upper YMM state dirty.
+                asm volatile ("vzeroupper" ::: .{ .memory = true });
+                break :blk found;
+            } else filter.indexOf(input, search);
+            const start = candidate orelse return .absent;
             if (start + literal.len > input.len) return .absent;
             var matched = true;
             for (literal, 0..) |literal_byte, index| {

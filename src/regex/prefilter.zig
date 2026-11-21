@@ -133,7 +133,7 @@ fn indexOfByteLong(input: []const u8, start: usize, byte: u8) ?usize {
     return indexOfByteLongNarrow(input, start, byte);
 }
 
-const wide_scan = builtin.cpu.arch == .x86_64 and
+pub const wide_scan = builtin.cpu.arch == .x86_64 and
     std.Target.x86.featureSetHas(builtin.cpu.features, .avx2) and
     builtin.zig_backend == .stage2_llvm;
 
@@ -920,6 +920,11 @@ fn foldChunk(chunk: Vec) Vec {
     return chunk + @select(u8, upper, @as(Vec, @splat(32)), @as(Vec, @splat(0)));
 }
 
+fn foldChunk32(chunk: @Vector(32, u8)) @Vector(32, u8) {
+    const upper = (chunk >= @as(@Vector(32, u8), @splat('A'))) & (chunk <= @as(@Vector(32, u8), @splat('Z')));
+    return chunk + @select(u8, upper, @as(@Vector(32, u8), @splat(32)), @as(@Vector(32, u8), @splat(0)));
+}
+
 /// Absence filter for a case-folded literal: scans 16 bytes at a time for the
 /// rarest adjacent folded byte pair. A hit keeps the candidate; non-ASCII
 /// bytes stay conservative because a UTF-8 rune can fold to an ASCII letter
@@ -948,6 +953,27 @@ pub const FoldFilter = struct {
             }
         }
         return best;
+    }
+
+    /// 32-lane variant of `indexOf` for AVX2 hosts.
+    pub fn indexOfWide(self: FoldFilter, input: []const u8, start: usize) ?usize {
+        if (start >= input.len or input.len - start < 2) return null;
+        const W = @Vector(32, u8);
+        const splat_a: W = @splat(self.a);
+        const splat_b: W = @splat(self.b);
+        const nonascii: W = @splat(@as(u8, 0x80));
+        var offset = start;
+        while (offset + 32 <= input.len - 1) : (offset += 32) {
+            const raw_a: [32]u8 = input[offset..][0..32].*;
+            const raw_b: [32]u8 = input[offset + 1 ..][0..32].*;
+            const chunk_a: W = @bitCast(raw_a);
+            const chunk_b: W = @bitCast(raw_b);
+            var mask = (foldChunk32(chunk_a) == splat_a) & (foldChunk32(chunk_b) == splat_b);
+            mask = mask | (chunk_a >= nonascii) | (chunk_b >= nonascii);
+            const bits: u32 = @bitCast(mask);
+            if (bits != 0) return self.candidateStart(offset + @ctz(bits), start);
+        }
+        return self.indexOf(input, offset);
     }
 
     /// Earliest possible match start given the first pair hit at or after
