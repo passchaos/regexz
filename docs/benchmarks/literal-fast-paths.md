@@ -315,5 +315,17 @@ group that does not fit, so mixed scripts, malformed sequences and the
 Extension-A block stay exact. A focused before/after run measured the CJK
 tokenizer case 13% faster.
 
+## Definitive folded-literal misses
+
+The folded-literal scan returned plain null for two different outcomes: an
+ASCII scan that proved no match, and a window containing a non-ASCII byte
+that might hide a Unicode simple-fold peer (U+017F folds to `s`). The caller
+therefore fell through to the generic fold filter and interpreter for every
+miss, scanning the input twice. The scan now reports found/absent/fallback:
+`absent` returns immediately and only a non-ASCII window falls back to the
+engine. The `(?i)STRASSE` no-match case on 23 KiB returns from 2.8 us to
+1.6 us, matching the recorded benchmark baseline (1.5 us).
+
+
 The comparison table remains the last quiet-window run; the shared host was
 saturated during this sweep, so the 58-case table was not refreshed.

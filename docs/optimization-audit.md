@@ -837,6 +837,10 @@ own `fast_kind` slot, so chains without fusion (camelCase, key-value) keep
 the original walk and pay no per-search branch; a single fused pair stays
 unfused because it measured slower. An order-balanced sweep measured semver
 1.16x, email TLD 1.14x, IP-port 1.13x and HTML-attribute 1.07x faster, with
-an A/A control spread of 0.90-1.05x on unrelated cases. See
+an A/A control spread of 0.90-1.05x on unrelated cases. The folded-literal
+scan now separates a definitive ASCII miss from a non-ASCII fold-peer
+window, so `(?i)` literal misses no longer fall through to a second generic
+scan and the interpreter; the 23 KiB `(?i)STRASSE` no-match returns from
+2.8 us to 1.6 us, matching the benchmark baseline. See
 [unbounded chain fusion](benchmarks/unbounded-chain-fusion.md) and
 [literal fast paths](benchmarks/literal-fast-paths.md).
