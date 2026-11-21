@@ -926,32 +926,45 @@ pub const Parser = struct {
         name: []const u8,
         negate: bool,
         fold: m.Fold,
-        set: m.Set,
+        parsed: m.ParsedSet,
     };
 
-    pub fn cachedProperty(self: *Parser, name: []const u8, negate: bool, fold: m.Fold) ?m.Set {
+    pub fn cachedProperty(self: *Parser, name: []const u8, negate: bool, fold: m.Fold) ?m.ParsedSet {
         for (self.property_cache[0..self.property_cache_len]) |entry| {
-            if (entry.negate == negate and entry.fold == fold and std.mem.eql(u8, entry.name, name)) return entry.set;
+            if (entry.negate == negate and entry.fold == fold and std.mem.eql(u8, entry.name, name)) return entry.parsed;
         }
         return null;
     }
 
-    pub fn cacheProperty(self: *Parser, name: []const u8, negate: bool, fold: m.Fold, set: m.Set) void {
+    pub fn cacheProperty(self: *Parser, name: []const u8, negate: bool, fold: m.Fold, parsed: m.ParsedSet) void {
         if (self.property_cache_len == self.property_cache.len) return;
-        self.property_cache[self.property_cache_len] = .{ .name = name, .negate = negate, .fold = fold, .set = set };
+        self.property_cache[self.property_cache_len] = .{ .name = name, .negate = negate, .fold = fold, .parsed = parsed };
         self.property_cache_len += 1;
+    }
+
+    pub fn cachePropertySet(self: *Parser, name: []const u8, negate: bool, fold: m.Fold, set: m.Set) void {
+        for (self.property_cache[0..self.property_cache_len]) |*entry| {
+            if (entry.negate == negate and entry.fold == fold and std.mem.eql(u8, entry.name, name)) {
+                entry.parsed.materialized = set;
+                return;
+            }
+        }
     }
 
     pub fn materialize(self: *Parser, parsed: m.ParsedSet) m.Error!m.Set {
         if (parsed.materialized) |set| return set;
-        // Property and POSIX tables are already canonical and owned by the
-        // parser arena or static data, so validate them in place instead of
-        // copying the range list through `normalize`.
-        if (!parsed.negate and parsed.fold == .none) {
-            if (parsed.ranges.len > self.limits.max_ranges) return error.RegexLimitExceeded;
-            if (classes.fromCanonical(parsed.ranges)) |set| return set;
-        }
-        return classes.normalize(self.allocator, parsed.ranges, parsed.negate, parsed.fold, self.limits.max_ranges);
+        const set = blk: {
+            // Property and POSIX tables are already canonical and owned by
+            // the parser arena or static data, so validate them in place
+            // instead of copying the range list through `normalize`.
+            if (!parsed.negate and parsed.fold == .none) {
+                if (parsed.ranges.len > self.limits.max_ranges) return error.RegexLimitExceeded;
+                if (classes.fromCanonical(parsed.ranges)) |set| break :blk set;
+            }
+            break :blk try classes.normalize(self.allocator, parsed.ranges, parsed.negate, parsed.fold, self.limits.max_ranges);
+        };
+        if (parsed.cache_name) |name| self.cachePropertySet(name, parsed.negate, parsed.fold, set);
+        return set;
     }
     fn element(self: *Parser, fold: m.Fold) m.Error!m.ParsedSet {
         if (self.take('\\')) {
@@ -1067,7 +1080,7 @@ pub const Parser = struct {
     fn flushClassProperties(
         self: *Parser,
         names: []const []const u8,
-        sets: []const m.Set,
+        sets: []const m.ParsedSet,
         operand: *std.ArrayList(m.Range),
         operand_sorted: *bool,
         operand_union: *?m.unicode.Union,
@@ -1097,7 +1110,8 @@ pub const Parser = struct {
             }
         }
         try self.materializePendingUnion(operand, operand_union);
-        for (sets) |set| {
+        for (sets) |parsed| {
+            const set = try self.materialize(parsed);
             if (operand_sorted.*) {
                 try classes.appendSorted(operand, self.allocator, set, self.limits.max_ranges);
             } else {
@@ -1120,7 +1134,7 @@ pub const Parser = struct {
         var operand_sorted = true;
         var operand_union: ?m.unicode.Union = null;
         var property_names: [8][]const u8 = undefined;
-        var property_sets: [8]m.Set = undefined;
+        var property_sets: [8]m.ParsedSet = undefined;
         var property_count: usize = 0;
         var first = true;
         while (self.peek()) |_| {
@@ -1189,25 +1203,26 @@ pub const Parser = struct {
                 const range = m.Range{ .first = start.ranges[0].first, .last = end.ranges[0].first };
                 if (operand_sorted and operand.items.len != 0 and range.first < operand.items[operand.items.len - 1].first) operand_sorted = false;
                 try operand.append(self.allocator, range);
-            } else if (start.property_name != null and start.materialized != null) {
+            } else if (start.property_name != null) {
                 // Positive, unfolded property: buffer it so adjacent
-                // properties can use a precomputed union.
+                // properties can use a precomputed union. The set stays
+                // unmaterialized until a union miss needs it.
                 if (property_count == property_names.len) {
                     try self.flushClassProperties(property_names[0..property_count], property_sets[0..property_count], &operand, &operand_sorted, &operand_union);
                     property_count = 0;
                 }
                 property_names[property_count] = start.property_name.?;
-                property_sets[property_count] = start.materialized.?;
+                property_sets[property_count] = start;
                 property_count += 1;
             } else {
                 try self.flushClassProperties(property_names[0..property_count], property_sets[0..property_count], &operand, &operand_sorted, &operand_union);
                 property_count = 0;
                 try self.materializePendingUnion(&operand, &operand_union);
-                // A cached property set is already canonical and carries the
-                // property's own negation; the class fold is applied here, so
-                // the cache is only reusable without one.
-                const folded = if (start.materialized != null and self.foldMode() == .none)
-                    start.materialized.?
+                // Materialized property sets are cached; the class fold is
+                // applied to the whole operand, so only reuse the cache when
+                // the class is unfolded.
+                const folded = if (self.foldMode() == .none)
+                    try self.materialize(start)
                 else
                     try classes.normalize(self.allocator, start.ranges, start.negate, self.foldMode(), self.limits.max_ranges);
                 if (operand_sorted and folded.ranges.len != 0 and operand.items.len != 0 and folded.ranges[0].first < operand.items[operand.items.len - 1].first) operand_sorted = false;

@@ -143,6 +143,9 @@ pub const ParsedSet = struct {
     /// class parser uses it to replace adjacent property atoms with a
     /// precomputed union.
     property_name: ?[]const u8 = null,
+    /// Raw property name, used to reuse parsed ranges and a materialized set
+    /// across repeated `\p{...}` atoms.
+    cache_name: ?[]const u8 = null,
 };
 /// A positive, case-folded set. Negation and `(?i)` folding are materialized
 /// at compile time so matching is a binary search (plus a 128-bit ASCII

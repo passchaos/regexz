@@ -89,13 +89,18 @@ fn property(p: anytype, negative: bool, fold: m.Fold) m.Error!m.ParsedSet {
     }
     name = std.mem.trim(u8, name, " \t\n\r\x0b\x0c");
     const property_name: ?[]const u8 = if (!negate and fold == .none) name else null;
-    if (p.cachedProperty(name, negate, fold)) |set| {
-        return .{ .ranges = set.ranges, .negate = false, .fold = .none, .materialized = set, .property_name = property_name };
+    if (p.cachedProperty(name, negate, fold)) |cached| {
+        var parsed = cached;
+        parsed.property_name = property_name;
+        return parsed;
     }
-    const parsed = try propertyRanges(p, name, negate, fold);
-    const set = try p.materialize(parsed);
-    p.cacheProperty(name, negate, fold, set);
-    return .{ .ranges = set.ranges, .negate = false, .fold = .none, .materialized = set, .property_name = property_name };
+    // Leave the set unmaterialized so classes that replace adjacent property
+    // atoms with a precomputed union never build the individual sets.
+    var parsed = try propertyRanges(p, name, negate, fold);
+    parsed.property_name = property_name;
+    parsed.cache_name = name;
+    p.cacheProperty(name, negate, fold, parsed);
+    return parsed;
 }
 
 fn propertyRanges(p: anytype, name: []const u8, negate: bool, fold: m.Fold) m.Error!m.ParsedSet {
