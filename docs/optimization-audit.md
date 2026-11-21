@@ -995,3 +995,36 @@ The latest six-execution interleaved sweep covers 71 cases: 69 are ahead,
 the case-insensitive log level and HTTP methods are at parity within host
 noise (1.00x and 0.97x), and the geometric-mean ratio is 2.63x. See
 [Rust comparison](benchmarks/rust-comparison.md).
+
+A second expansion brought the comparison suite to 83 cases. Hashtags and
+mentions already used the prefix-run shape, but its first-byte scan was a
+byte loop; a vector `FirstFilter` (with a scalar probe retained for dense
+sets) moved `#\w+` and `@\w+` from 0.26x and 0.21x to 1.30x and 1.31x. CSS
+units (`\d+(?:px|em|rem|%)`) now scan a digit run and check the literal
+alternation, skipping the run when no suffix follows, and probe scalar before
+the vector filter because unit runs sit a few bytes apart (0.29x to 1.11x).
+HTML comments (`<!--[\s\S]*?-->`) scan a literal prefix and the first close
+after it (0.04x to 2.57x). Multi-byte needles now anchor on their rarest byte
+(by text commonness) and verify the full window, so the `<!--` no-match scan
+runs at single-byte speed instead of two-byte-pair speed. Query parameters
+(`[?&]\w+=`) scan a prefix set, a word run and the literal (0.58x to 1.52x).
+JSON keys (`"[^"]+"\s*:`) scan the quoted run, the closing quote, optional
+spaces and the colon (0.87x to 1.51x). A case-insensitive word alternation
+with a non-ASCII fold peer in its first two bytes now keeps the pair filter:
+the detector adds folded peer variants (`s` -> `0xE5 0xBF`, `k` -> `0xE2 0x84
+0xAA`) to the candidate literals while verification uses the canonical form,
+and the scalar pair fallback now folds with `| 0x20` like the SIMD lane.
+`(?i)\b(?:select|from|where|join)\b` moved from 0.03x to parity. The
+single-byte prefilter scans 128 bytes per iteration and the pair prefilter 64
+bytes; currency moved from 0.49x to 1.06x and ordered lists from 0.97x to
+1.02x, and the identifier case rose to 1.93x.
+
+A 64-byte unroll of the word-alternation scan was screened and reverted: the
+four-chunk candidate table and loop made the HTTP-method scan 1.6x slower
+(1.7 us to 2.7-2.9 us), so the two-chunk loop stays. The third-byte lane
+filter remains rejected (see the previous section). The latest six-execution
+interleaved sweep covers 83 cases: 78 are faster, log level, SQL keywords,
+blank lines and blockquotes are at parity within host noise (0.98x, 1.00x,
+0.95x and 0.91x), HTTP methods measured 0.81x after 1.03x in the previous
+sweep (about 25% host variance at this scale), and the geometric-mean ratio
+is 2.38x. See [Rust comparison](benchmarks/rust-comparison.md).
