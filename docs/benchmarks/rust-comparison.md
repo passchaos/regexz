@@ -27,8 +27,8 @@ text, and small full-match subjects.
 
 | Case | regexz, ns/iter | Rust, ns/iter | Rust / regexz |
 | --- | ---: | ---: | ---: |
-| compile Qwen tokenizer | 46,243.0 | 714,453.8 | 15.45x |
-| compile xDS-like | 12,220.0 | 31,649.2 | 2.59x |
+| compile Qwen tokenizer | 39,650.0 | 714,453.8 | 18.02x |
+| compile xDS-like | 5,900.0 | 31,649.2 | 5.36x |
 | find Qwen tokenizer | 49,760.6 | 106,195.8 | 2.13x |
 | findAll Qwen (borrowed) | 58,364.1 | 105,801.2 | 1.81x |
 | findAll Qwen (owning) | 58,294.2 | 105,031.1 | 1.80x |
@@ -134,16 +134,16 @@ losses are the one-character alternation (`a|b|c`, 0.88x), currency
 (`\$\d+(?:\.\d{2})?`, 0.92x) and HTML tags (`<[^>]+>`, 0.92x); IPv6 is at
 parity (1.01x). The largest leads are `replaceAll` with edge assertions
 (39.00x), blank-line scans (33.15x), capitalized-word scans (28.39x),
-`RegexSet` no-match scans (16.22x) and compile time (15.45x); the tokenizer
-searches are 2.13x and 2.16x ahead. The geometric-mean ratio is 2.28x. The
+`RegexSet` no-match scans (16.22x) and compile time (18.02x); the tokenizer
+searches are 2.13x and 2.16x ahead. The geometric-mean ratio is 2.30x. The
 currency and HTML-tag rows are small absolute gaps (about 26 ns and 15 us
 respectively); the one-character alternation is dominated by the per-match
 dispatch call.
 
-The compile rows were re-measured after the class-sort change, and the
-`find log level` and `find (?i) alternation` rows after the 32-lane caseless
-scan; the materialized sets are identical, so the other search rows are
-unchanged.
+The compile rows were re-measured after the class-sort and workspace-pointer
+changes, and the `find log level` and `find (?i) alternation` rows after the
+32-lane caseless scan; the materialized sets are identical, so the other
+search rows are unchanged.
 
 ## What changed in this round
 
@@ -196,6 +196,11 @@ widens the hot scans:
 - Caseless literal alternations use the same 32-lane nibble scan as word
   alternations, with `vzeroupper` before returning. `(?i)error|warn|info`
   improves about 1.9x in the comparison harness.
+- Persistent workspaces moved behind pointers. `Regex` no longer carries a
+  28.8 KiB `ReplaceWorkspace` inline, shrinking from about 33 KiB to 3 KiB
+  and removing a 30 KiB copy per compile. xDS-like compile improves 2.1x and
+  Qwen 1.16x.
+
 
 
 

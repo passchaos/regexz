@@ -1070,15 +1070,18 @@ fill. CSS units take a direct dispatch path in `find`, and the suffix table
 maps a first byte to one literal. Class normalization sorts ranges by start
 only, removing a mispredicting end tie-break on the many equal starts from
 Unicode property unions. Caseless literal alternations reuse the 32-lane
-nibble scan, improving `(?i)error|warn|info` about 1.9x. The latest eight-execution order-balanced
+nibble scan, improving `(?i)error|warn|info` about 1.9x. Persistent
+workspaces moved behind pointers, shrinking `Regex` from about 33 KiB to
+3 KiB and cutting xDS-like compile 2.1x and Qwen 1.16x. The latest eight-execution order-balanced
 sweep covers 101 cases: 98 are faster, IPv6 is at parity (1.01x), and the
 remaining losses are the one-character alternation (0.88x), currency (0.92x)
-and HTML tags (0.92x). The geometric-mean ratio is 2.28x. See
+and HTML tags (0.92x). The geometric-mean ratio is 2.30x. See
 [Rust comparison](benchmarks/rust-comparison.md).
 
 The same 100-case workload (minus `RegexSet`) was also run against PCRE2
 10.42 with JIT on the same host. regexz is faster on 97 of 100 cases, with a
-geometric-mean PCRE2/regexz ratio of 2.12x. PCRE2 wins the two compile rows
-(0.35x and 0.59x) and the small ASCII case-insensitive literal (0.95x);
+geometric-mean PCRE2/regexz ratio of 2.13x. PCRE2 wins compile Qwen (0.41x)
+and the small ASCII case-insensitive literal (0.95x); regexz now also wins
+compile xDS-like (1.21x);
 regexz materializes Unicode property sets at compile time, while PCRE2
 defers them. See [PCRE2 comparison](benchmarks/pcre2-comparison.md).

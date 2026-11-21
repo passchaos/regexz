@@ -16,16 +16,16 @@ both processes pinned to CPU 0 with `taskset`; the table reports medians.
 The suite covers 100 cases: the same cases as the Rust comparison minus the
 `RegexSet` row, because PCRE2 has no combined-set API. The compile rows
 measure PCRE2's compile plus JIT compilation against regexz's compile. The
-compile rows were re-measured after the class-sort change and the `find log
-level` row after the 32-lane caseless scan; the materialized sets are
-identical, so the other search rows are unchanged. Raw samples and
+compile rows were re-measured after the class-sort and workspace-pointer
+changes and the `find log level` row after the 32-lane caseless scan; the
+materialized sets are identical, so the other search rows are unchanged. Raw samples and
 executable identities are in
 [`pcre2-comparison-current.json`](pcre2-comparison-current.json).
 
 | Case | regexz, ns/iter | PCRE2, ns/iter | PCRE2 / regexz |
 | --- | ---: | ---: | ---: |
-| compile Qwen tokenizer | 46,243.0 | 16,184.1 | 0.35x |
-| compile xDS-like | 12,192.7 | 7,165.3 | 0.59x |
+| compile Qwen tokenizer | 39,650.0 | 16,184.1 | 0.41x |
+| compile xDS-like | 5,900.0 | 7,148.6 | 1.21x |
 | find Qwen tokenizer | 49,740.3 | 177,575.5 | 3.57x |
 | findAll Qwen (borrowed) | 58,493.8 | 177,547.2 | 3.04x |
 | findAll Qwen (owning) | 58,303.3 | 177,425.6 | 3.04x |
@@ -125,20 +125,19 @@ executable identities are in
 | replaceAll \A\|\z -> X | 1,007.0 | 27,559.6 | 27.37x |
 | replaceAll digits -> N | 54,994.1 | 307,631.7 | 5.59x |
 
-regexz is faster on 97 of the 100 measured cases, with a geometric-mean
-PCRE2/regexz ratio of 2.12x. The three PCRE2 wins are the two compile rows
-and the ASCII case-insensitive literal:
+regexz is faster on 98 of the 100 measured cases, with a geometric-mean
+PCRE2/regexz ratio of 2.13x. The two PCRE2 wins are compile Qwen and the
+ASCII case-insensitive literal:
 
-- `compile Qwen tokenizer` (0.35x):
+- `compile Qwen tokenizer` (0.41x):
   PCRE2 parses the pattern and stores property references; regexz
   materializes the Unicode property sets at compile time so searches can use
   range lists directly. The compile rows include PCRE2's JIT pass, while
   regexz has no JIT.
-- `compile xDS-like` (0.59x):
-  the same materialization tradeoff on a smaller pattern.
 - `find (?i) literal` (0.95x): PCRE2's JIT is slightly faster on the small
-  case-insensitive literal scan. HTML tags and the case-insensitive Unicode
-  literal are at parity (1.00x).
+  case-insensitive literal scan. Compile xDS-like is now 1.21x ahead of
+  PCRE2 after the workspace-pointer change; HTML tags and the
+  case-insensitive Unicode literal are at parity (1.00x).
 
 The largest leads are on literal-heavy scans and alternations: the nibble
 filter, required-literal prefilters and counted split paths avoid PCRE2's
