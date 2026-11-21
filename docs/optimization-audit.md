@@ -865,3 +865,17 @@ the same noisy sweep. See
 [find hot-path dispatch](benchmarks/find-hot-dispatch.md),
 [unbounded chain fusion](benchmarks/unbounded-chain-fusion.md) and
 [literal fast paths](benchmarks/literal-fast-paths.md).
+
+Five literal-set verification refinements were screened and reverted. A
+distinct-first first-byte index and a length-specialized tail compare were
+neutral (the 20-literal set shares `e`/`t` first bytes, and the compiler
+already specializes short tails). Replacing the pair bitmap with a 64-entry
+pair hash table was 1.30-1.33x slower on the 10/20-word alternations: the
+small literal loop and hot pair bitmap beat a dependent hash probe. Inlining
+the pair scanner into the dispatch regressed the 10/20-word scans 6-7% by
+inflating the dispatch prologue. A vectorized contiguous-range run scan was
+2.4x slower on short runs (version, IP-port) because the 16-byte setup
+dominates two-to-four-byte runs. The alternation scanners keep their current
+shape; the profile attributes about 28% of the 20-word scan to `matchesAt`
+and 34% to the nibble scan, so a bucket-bit candidate dispatch remains the
+next candidate.
