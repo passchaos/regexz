@@ -176,6 +176,17 @@ scans improve 4-7%. Distinct-first literal sets with four or more branches
 use the two-byte nibble filter instead of one splat per pair: the five-word
 alternation moves from 1.20x to 1.43x.
 
+Unbounded run chains now reuse the first run's scanned end after a failed
+start instead of rescanning it, and fuse a following single-byte literal into
+the same walk iteration when at least two such pairs exist; the fused state
+gets its own `fast_kind` slot so other chains keep the original walk without
+a per-search branch. An order-balanced before/after sweep measured semver
+1.16x, email TLD 1.14x, IP-port 1.13x and HTML-attribute 1.07x faster, with
+camelCase, version and key-value unchanged within the A/A noise band. See
+[unbounded chain fusion](unbounded-chain-fusion.md). The table above is the
+last quiet-window run: the shared host was busy (load average about 8)
+during this sweep, so its absolute times were not merged into the table.
+
 Caveats: the iteration APIs are the natural ones for each library
 (`Workspace.find` in a loop versus `Regex::find_iter`), full match is
 `Regex::find` plus a bounds check on the Rust side, the word-boundary case

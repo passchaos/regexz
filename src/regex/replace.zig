@@ -68,6 +68,7 @@ pub const FastKind = enum {
     line_start_run,
     bounded_sequence,
     unbounded_sequence,
+    unbounded_sequence_fused,
     star_literal,
     prefix_run,
     chain_loop,
@@ -583,8 +584,8 @@ pub const Workspace = struct {
             .line_heading
         else if (bounded_sequence != null)
             .bounded_sequence
-        else if (unbounded_sequence != null)
-            .unbounded_sequence
+        else if (unbounded_sequence) |state|
+            (if (state.has_fuse) .unbounded_sequence_fused else .unbounded_sequence)
         else if (star_literal != null)
             .star_literal
         else if (prefix_run != null)
@@ -830,7 +831,8 @@ pub const Workspace = struct {
             .fixed_sequence => return self.findFixedSequence(self.fixed_sequence.?, input, search_start),
             .line_start_run => return self.findLineStartRun(&self.line_start_run.?, input, search_start),
             .bounded_sequence => return self.findBoundedSequence(self.bounded_sequence.?, input, search_start),
-            .unbounded_sequence => return self.findUnboundedSequence(self.unbounded_sequence.?, input, search_start),
+            .unbounded_sequence => return self.findUnboundedSequence(false, self.unbounded_sequence.?, input, search_start),
+            .unbounded_sequence_fused => return self.findUnboundedSequence(true, self.unbounded_sequence.?, input, search_start),
             .star_literal => return self.findStarLiteral(self.star_literal.?, input, search_start),
             .prefix_run => return self.findPrefixRun(&self.prefix_run.?, input, search_start),
             .chain_loop => return self.findChainLoop(&self.chain_loop.?, input, search_start),
@@ -1428,7 +1430,8 @@ pub const Workspace = struct {
             .fixed_sequence => return self.findFixedSequence(self.fixed_sequence.?, input, search_start),
             .line_start_run => return self.findLineStartRun(&self.line_start_run.?, input, search_start),
             .bounded_sequence => return self.findBoundedSequence(self.bounded_sequence.?, input, search_start),
-            .unbounded_sequence => return self.findUnboundedSequence(self.unbounded_sequence.?, input, search_start),
+            .unbounded_sequence => return self.findUnboundedSequence(false, self.unbounded_sequence.?, input, search_start),
+            .unbounded_sequence_fused => return self.findUnboundedSequence(true, self.unbounded_sequence.?, input, search_start),
             .star_literal => return self.findStarLiteral(self.star_literal.?, input, search_start),
             .prefix_run => return self.findPrefixRun(&self.prefix_run.?, input, search_start),
             .chain_loop => return self.findChainLoop(&self.chain_loop.?, input, search_start),
@@ -2296,13 +2299,20 @@ pub const Workspace = struct {
     /// Unbounded run chain: each run is maximal and the following literal's
     /// first byte is outside the run set, so the flat walk needs no
     /// backtracking.
-    fn findUnboundedSequence(self: *Workspace, state: *UnboundedSequenceState, input: []const u8, search_start: usize) ?Match {
+    fn findUnboundedSequence(
+        self: *Workspace,
+        comptime fuse: bool,
+        state: *UnboundedSequenceState,
+        input: []const u8,
+        search_start: usize,
+    ) ?Match {
         if (search_start >= input.len) return null;
         var start = search_start;
         while (start < input.len) : (start += 1) {
             if (!state.first_table[input[start]]) continue;
             var pos = start;
             var index: usize = 0;
+            var first_end: usize = 0;
             while (index < state.len) : (index += 1) {
                 const element = state.elements[index];
                 if (element.kind == .literal) {
@@ -2315,21 +2325,41 @@ pub const Workspace = struct {
                         pos += bytes.len;
                     }
                 } else if (element.kind == .run_range) {
+                    const set_index = if (fuse) element.value & 0x7F else element.value;
                     const begin = pos;
-                    const lo = state.range_lo[element.value];
-                    const span = state.range_hi[element.value] -% lo;
+                    const lo = state.range_lo[set_index];
+                    const span = state.range_hi[set_index] -% lo;
                     while (pos < input.len and input[pos] -% lo <= span) pos += 1;
+                    if (index == 0) first_end = pos;
                     if (pos - begin < element.len) break;
+                    // Fuse a following single-byte literal to halve the loop
+                    // overhead on run/literal chains.
+                    if (fuse and element.value & 0x80 != 0) {
+                        const following = state.elements[index + 1];
+                        const bytes = state.literal_bytes[following.value..][0..following.len];
+                        if (pos >= input.len or input[pos] != bytes[0]) break;
+                        pos += 1;
+                        index += 1;
+                    }
                 } else if (element.kind == .run) {
+                    const set_index = if (fuse) element.value & 0x7F else element.value;
                     const begin = pos;
-                    if (state.set_ascii[element.value]) {
-                        const table = &state.tables[element.value];
+                    if (state.set_ascii[set_index]) {
+                        const table = &state.tables[set_index];
                         while (pos < input.len and table[input[pos]]) pos += 1;
                     } else {
-                        const runner = &state.runs[element.value].?;
+                        const runner = &state.runs[set_index].?;
                         pos = runner.runEnd(self.allocator, input, pos);
                     }
+                    if (index == 0) first_end = pos;
                     if (pos - begin < element.len) break;
+                    if (fuse and element.value & 0x80 != 0) {
+                        const following = state.elements[index + 1];
+                        const bytes = state.literal_bytes[following.value..][0..following.len];
+                        if (pos >= input.len or input[pos] != bytes[0]) break;
+                        pos += 1;
+                        index += 1;
+                    }
                 } else switch (element.kind) {
                     .optional => {
                         if (pos < input.len and input[pos] == element.value) pos += 1;
@@ -2360,13 +2390,11 @@ pub const Workspace = struct {
                 return .{ .start = start, .end = pos, .slots = self.slots };
             }
             // A failed start inside the first run shares the same run end and
-            // the same remaining input, so the whole run can be skipped.
+            // the same remaining input, so the whole run can be skipped. The
+            // walk already knows that end.
             const first = state.elements[0];
             if ((first.kind == .run or first.kind == .run_range) and first.len != 0) {
-                const table = &state.tables[first.value];
-                var end = start + 1;
-                while (end < input.len and table[input[end]]) end += 1;
-                start = end;
+                start = first_end;
             }
         }
         return null;
@@ -3937,6 +3965,9 @@ const UnboundedSequenceState = struct {
     const max_sets = 8;
     const max_literal_bytes = 64;
     const Kind = enum(u8) { run, run_range, literal, optional, alternation, single_set };
+    /// Run `value` bytes keep the set index in the low seven bits; bit 7
+    /// marks a following single-byte literal that the walk fuses into the
+    /// same loop iteration.
     const Element = struct { kind: Kind, value: u8, len: u8 };
     const Alternative = struct { offset: u8, len: u8 };
 
@@ -3954,6 +3985,9 @@ const UnboundedSequenceState = struct {
     alternatives: [16]Alternative = undefined,
     alternative_count: u8 = 0,
     first_table: [256]bool = .{false} ** 256,
+    /// At least two runs are followed by a single-byte literal that the walk
+    /// fuses; one fused pair does not repay the per-run marker test.
+    has_fuse: bool = false,
 
     fn deinit(self: *UnboundedSequenceState, allocator: std.mem.Allocator) void {
         for (&self.runs) |*run| {
@@ -3964,8 +3998,20 @@ const UnboundedSequenceState = struct {
 
     fn build(self: *UnboundedSequenceState, source: []const UnboundedElement) bool {
         if (source.len > self.elements.len) return false;
+        var fuse_count: usize = 0;
+        for (source, 0..) |element, index| {
+            if (element != .run or index + 1 >= source.len) continue;
+            switch (source[index + 1]) {
+                .literal => |bytes| if (bytes.len == 1) {
+                    fuse_count += 1;
+                },
+                else => {},
+            }
+        }
+        const fuse_enabled = fuse_count >= 2;
+        self.has_fuse = fuse_enabled;
         var sets: [max_sets]model.Set = undefined;
-        for (source) |element| {
+        for (source, 0..) |element, source_index| {
             switch (element) {
                 .run => |run| {
                     var set_index: u8 = 0;
@@ -3991,9 +4037,13 @@ const UnboundedSequenceState = struct {
                         self.range_lo[set_index] = @intCast(run.set.ranges[0].first);
                         self.range_hi[set_index] = @intCast(run.set.ranges[0].last);
                     }
+                    const fuse = fuse_enabled and source_index + 1 < source.len and switch (source[source_index + 1]) {
+                        .literal => |bytes| bytes.len == 1,
+                        else => false,
+                    };
                     self.elements[self.len] = .{
                         .kind = if (single_range) .run_range else .run,
-                        .value = set_index,
+                        .value = set_index | (if (fuse) @as(u8, 0x80) else 0),
                         .len = run.min,
                     };
                 },
@@ -4056,8 +4106,9 @@ const UnboundedSequenceState = struct {
             const element = self.elements[index];
             switch (element.kind) {
                 .run, .run_range => {
-                    if (!self.set_ascii[element.value]) return false;
-                    self.first_table = mergeTables(self.first_table, self.tables[element.value]);
+                    const set_index = element.value & 0x7F;
+                    if (!self.set_ascii[set_index]) return false;
+                    self.first_table = mergeTables(self.first_table, self.tables[set_index]);
                     if (element.len != 0) return true;
                 },
                 .literal => {

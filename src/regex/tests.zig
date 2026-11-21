@@ -1,6 +1,13 @@
 const std = @import("std");
 const regex = @import("../root.zig");
+const replace_mod = @import("replace.zig");
 const gpa = std.testing.allocator;
+
+/// Unbounded run chains report a distinct kind when the walk fuses following
+/// single-byte literals.
+fn isUnboundedSequence(kind: replace_mod.FastKind) bool {
+    return kind == .unbounded_sequence or kind == .unbounded_sequence_fused;
+}
 test "gRPC xDS safe regex supports full match RE2 operators Unicode and byte escapes" {
     const Case = struct { pattern: []const u8, yes: []const []const u8, no: []const []const u8 };
     for ([_]Case{
@@ -1043,7 +1050,7 @@ test "unbounded chain accepts a negated-class run" {
     defer value.deinit();
     var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
     defer workspace.deinit();
-    try std.testing.expect(workspace.fast_kind == .unbounded_sequence);
+    try std.testing.expect(isUnboundedSequence(workspace.fast_kind));
 
     try expectFastSpans("\\w+=\"[^\"]*\"", "<div id=\"main\" class=\"box\">", &.{ .{ 5, 14 }, .{ 15, 26 } });
     try expectFastSpans("\\w+=\"[^\"]*\"", "a=\"\" b=\"x y\"", &.{ .{ 0, 4 }, .{ 5, 12 } });
@@ -1169,7 +1176,7 @@ test "unbounded chain handles star runs and single-set elements" {
     defer camel.deinit();
     var camel_workspace = try regex.ReplaceWorkspace.init(gpa, camel.program, .{});
     defer camel_workspace.deinit();
-    try std.testing.expect(camel_workspace.fast_kind == .unbounded_sequence);
+    try std.testing.expect(isUnboundedSequence(camel_workspace.fast_kind));
     try expectFastSpans("[a-z]+[A-Z][a-z]+", "fooBar bazQux x", &.{ .{ 0, 6 }, .{ 7, 13 } });
     try expectFastSpans("[a-z]+[A-Z][a-z]+", "fooB", &.{});
     try expectFastSpans("[a-z]+[A-Z][a-z]+", "aBc", &.{.{ 0, 3 }});
@@ -1178,7 +1185,7 @@ test "unbounded chain handles star runs and single-set elements" {
     defer kv.deinit();
     var kv_workspace = try regex.ReplaceWorkspace.init(gpa, kv.program, .{});
     defer kv_workspace.deinit();
-    try std.testing.expect(kv_workspace.fast_kind == .unbounded_sequence);
+    try std.testing.expect(isUnboundedSequence(kv_workspace.fast_kind));
     try expectFastSpans("\\w+\\s*=\\s*\\w+", "name = value key=value a  =  b", &.{ .{ 0, 12 }, .{ 13, 22 }, .{ 23, 30 } });
     try expectFastSpans("\\w+\\s*=\\s*\\w+", "name value", &.{});
 }
@@ -1188,7 +1195,7 @@ test "unbounded chain handles a literal alternation element" {
     defer value.deinit();
     var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
     defer workspace.deinit();
-    try std.testing.expect(workspace.fast_kind == .unbounded_sequence);
+    try std.testing.expect(isUnboundedSequence(workspace.fast_kind));
 
     try expectFastSpans("\\w+@\\w+\\.(?:com|org|net)", "user.name@example.com x a@b.org", &.{ .{ 5, 21 }, .{ 24, 31 } });
     try expectFastSpans("\\w+@\\w+\\.(?:com|org|net)", "a@b.net", &.{.{ 0, 7 }});
@@ -1272,7 +1279,7 @@ test "unbounded sequence fast path walks runs and separators" {
     defer value.deinit();
     var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
     defer workspace.deinit();
-    try std.testing.expect(workspace.fast_kind == .unbounded_sequence);
+    try std.testing.expect(isUnboundedSequence(workspace.fast_kind));
 
     const cases = [_]struct { input: []const u8, from: usize, spans: []const [2]usize }{
         .{ .input = "v1.2.3 10.0.0 v2.11.5", .from = 0, .spans = &.{ .{ 0, 6 }, .{ 7, 13 }, .{ 14, 21 } } },
@@ -1300,7 +1307,7 @@ test "unbounded sequence fast path walks runs and separators" {
     defer ambiguous.deinit();
     var ambiguous_workspace = try regex.ReplaceWorkspace.init(gpa, ambiguous.program, .{});
     defer ambiguous_workspace.deinit();
-    try std.testing.expect(ambiguous_workspace.fast_kind != .unbounded_sequence);
+    try std.testing.expect(!isUnboundedSequence(ambiguous_workspace.fast_kind));
     const still_correct = (try ambiguous_workspace.find("1.2", 0)).?;
     try std.testing.expectEqual(@as(usize, 0), still_correct.start);
     try std.testing.expectEqual(@as(usize, 3), still_correct.end);
@@ -1311,6 +1318,25 @@ test "unbounded sequence fast path walks runs and separators" {
     var chain_workspace = try regex.ReplaceWorkspace.init(gpa, chain.program, .{});
     defer chain_workspace.deinit();
     try std.testing.expect(chain_workspace.fast_kind == .chain);
+}
+
+test "unbounded chain fuses literal pairs only when two exist" {
+    // Two fused pairs select the fused walk.
+    var fused = try regex.Regex.init(gpa, "\\d+\\.\\d*\\.\\d+", .{});
+    defer fused.deinit();
+    var fused_workspace = try regex.ReplaceWorkspace.init(gpa, fused.program, .{});
+    defer fused_workspace.deinit();
+    try std.testing.expect(fused_workspace.fast_kind == .unbounded_sequence_fused);
+    try expectFastSpans("\\d+\\.\\d*\\.\\d+", "1..2 3.4.5 x", &.{ .{ 0, 4 }, .{ 5, 10 } });
+    try expectFastSpans("\\d+\\.\\d*\\.\\d+", "1..2.3", &.{.{ 0, 4 }});
+    try expectFastSpans("\\d+\\.\\d*\\.\\d+", "1.2.", &.{});
+
+    // One fused pair stays on the unfused walk.
+    var single = try regex.Regex.init(gpa, "\\w+\\s*=\\s*\\w+", .{});
+    defer single.deinit();
+    var single_workspace = try regex.ReplaceWorkspace.init(gpa, single.program, .{});
+    defer single_workspace.deinit();
+    try std.testing.expect(single_workspace.fast_kind == .unbounded_sequence);
 }
 
 test "bounded sequence fast path backtracks greedy runs" {

@@ -829,5 +829,14 @@ covers U+4E00-U+9FFF, with the scalar UTF-8 scan resuming at the first
 non-conforming group; a focused before/after run measured the CJK tokenizer
 13% faster. The 58-case comparison table was not refreshed this turn because
 the shared host was saturated (load average above 20); the last quiet-window
-table remains in the comparison page. See
+table remains in the comparison page. Unbounded run chains now record the
+first run's end while scanning and reuse it for the failed-start skip instead
+of rescanning the run, and they fuse a following single-byte literal into the
+same iteration when at least two fused pairs exist. The fused state takes its
+own `fast_kind` slot, so chains without fusion (camelCase, key-value) keep
+the original walk and pay no per-search branch; a single fused pair stays
+unfused because it measured slower. An order-balanced sweep measured semver
+1.16x, email TLD 1.14x, IP-port 1.13x and HTML-attribute 1.07x faster, with
+an A/A control spread of 0.90-1.05x on unrelated cases. See
+[unbounded chain fusion](benchmarks/unbounded-chain-fusion.md) and
 [literal fast paths](benchmarks/literal-fast-paths.md).
