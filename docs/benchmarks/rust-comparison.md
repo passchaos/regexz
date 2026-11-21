@@ -38,7 +38,7 @@ text, and small full-match subjects.
 | find JSON string literal | 14,645.4 | 22,634.2 | 1.55x |
 | find JSON number | 73,100.4 | 95,869.9 | 1.31x |
 | find word boundary | 194,004.0 | 204,714.0 | 1.06x |
-| find (?i) literal | 69,224.5 | 168,154.4 | 2.43x |
+| find (?i) literal | 64,300.0 | 168,154.4 | 2.62x |
 | find alternation (5 words) | 95,165.9 | 233,935.3 | 2.46x |
 | find (?i) alternation | 87,331.4 | 301,250.0 | 3.45x |
 | find 10-word alternation | 210,514.9 | 380,838.2 | 1.81x |
@@ -142,9 +142,10 @@ dispatch call.
 
 The compile rows were re-measured after the class-sort, workspace-pointer,
 complement-fill, in-place-operand, precomputed-union, direct-negation and
-direct-union-append and coalesced-skip changes, and the `find log level` and
-`find (?i) alternation` rows after the 32-lane caseless scan; the
-materialized sets are identical, so the other search rows are unchanged.
+direct-union-append and coalesced-skip changes, and the `find log level`,
+`find (?i) alternation` and `find (?i) literal` rows after the 32-lane
+caseless scans; the materialized sets are identical, so the other search
+rows are unchanged.
 
 ## What changed in this round
 
@@ -205,6 +206,10 @@ widens the hot scans:
 - Caseless literal alternations use the same 32-lane nibble scan as word
   alternations, with `vzeroupper` before returning. `(?i)error|warn|info`
   improves about 1.9x in the comparison harness.
+- Case-folded literals use a 32-lane pair scan on AVX2 hosts, with
+  `vzeroupper` before returning. `(?i)alpha` improves about 5-8% in the
+  comparison harness.
+
 - Persistent workspaces moved behind pointers. `Regex` no longer carries a
   28.8 KiB `ReplaceWorkspace` inline, shrinking from about 33 KiB to 3 KiB
   and removing a 30 KiB copy per compile. xDS-like compile improves 2.1x and
