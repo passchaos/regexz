@@ -305,6 +305,15 @@ splat compare per branch at each stage. The filter is a compile-time
 specialization, so shared-first sets keep their single-splat early-out. The
 five-word alternation improves 16% and is 1.43x ahead.
 
-The comparison now covers 58 cases and regexz is faster on all of them; the
-thinnest margins are the semver scan at 1.09x and the camelCase scan at
-1.18x.
+## CJK run vector scan
+
+When the tokenizer fast branch's run set covers the CJK block U+4E00-U+9FFF,
+the run scan checks four consecutive three-byte groups per vector iteration:
+lead bytes must be E4-E9 (E4 only with a second byte at or above B8), and
+continuation bytes must be 80-BF. The scalar UTF-8 scan resumes at the first
+group that does not fit, so mixed scripts, malformed sequences and the
+Extension-A block stay exact. A focused before/after run measured the CJK
+tokenizer case 13% faster.
+
+The comparison table remains the last quiet-window run; the shared host was
+saturated during this sweep, so the 58-case table was not refreshed.

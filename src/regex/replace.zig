@@ -620,6 +620,7 @@ pub const Workspace = struct {
                 .prior = prefilter.FirstFilter.init(plan.prior_first),
                 .prefix = if (plan.prefix) |set| deferred_utf8.Run.init(set) else null,
                 .run = deferred_utf8.Run.init(plan.run),
+                .cjk = plan.run.covers(0x4E00, 0x9FFF),
             };
             errdefer value.deinit(allocator);
             if (plan.later.len != 0) {
@@ -2641,7 +2642,10 @@ pub const Workspace = struct {
                 if (next < input.len and
                     (input[next] >= 0x80 or branch.run.runeAt(self.allocator, input, next) != null))
                 {
-                    const end = branch.run.runEndAsciiFirst(self.allocator, input, next);
+                    const end = if (branch.cjk)
+                        branch.run.runEndCjk(self.allocator, input, next)
+                    else
+                        branch.run.runEndAsciiFirst(self.allocator, input, next);
                     if (end > next) {
                         self.slots[0] = search_start;
                         self.slots[1] = end;
@@ -2651,7 +2655,10 @@ pub const Workspace = struct {
             }
         }
         if (input[search_start] >= 0x80 or branch.run.runeAt(self.allocator, input, search_start) != null) {
-            const end = branch.run.runEndAsciiFirst(self.allocator, input, search_start);
+            const end = if (branch.cjk)
+                branch.run.runEndCjk(self.allocator, input, search_start)
+            else
+                branch.run.runEndAsciiFirst(self.allocator, input, search_start);
             if (end > search_start) {
                 self.slots[0] = search_start;
                 self.slots[1] = end;
@@ -4170,6 +4177,9 @@ const FastBranch = struct {
     prior: prefilter.FirstFilter,
     prefix: ?deferred_utf8.Run,
     run: deferred_utf8.Run,
+    /// The run set covers U+4E00-U+9FFF, so three-byte CJK groups can be
+    /// checked in vectors before the scalar scan.
+    cjk: bool = false,
     /// Branches after the dominant one, scanned directly when it fails.
     later: ?[]LaterRun = null,
     /// ASCII first bytes of the later plans; other bytes skip the scan.

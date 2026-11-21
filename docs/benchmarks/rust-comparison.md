@@ -162,7 +162,13 @@ pre-existing false positive for case-sensitive scopes inside a caseless
 pattern (`(?i:ab)c` must not match `ABC`). Dot-star literals (`.*test`)
 find the line end with a vector scan that stops at the first line break or
 non-ASCII byte, deferring non-ASCII input to the UTF-8 run scan: the
-nullable-prefix case moved from 1.30x to 3.76x. Unbounded run chains scan
+nullable-prefix case moved from 1.30x to 3.76x. When the tokenizer fast
+branch's run set covers U+4E00-U+9FFF, four three-byte Han groups are checked
+per vector iteration before the scalar UTF-8 scan resumes; a focused
+before/after run measured the CJK tokenizer case 13% faster. The table above
+is the last quiet-window run: the shared host was saturated (load average
+above 20) during the latest sweep, so its absolute times and ratios are not
+directly comparable. Unbounded run chains scan
 contiguous ASCII runs such as `[0-9]` and `[a-z]` with a range check instead
 of a byte table, and dispatch the run/literal elements before the rare
 optional and alternation cases; semver, camelCase, IP-port and key-value

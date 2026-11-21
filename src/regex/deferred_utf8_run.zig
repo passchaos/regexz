@@ -64,6 +64,44 @@ pub const Run = struct {
         return self.unicodeRunEnd(allocator, input, end);
     }
 
+    /// Like `runEndAsciiFirst`, with a vector check for four consecutive
+    /// three-byte groups in U+4E00-U+9FFF. Callers enable it only when the
+    /// set covers that block. The scalar scan resumes at the first group
+    /// that does not fit, so mixed and malformed input stays exact.
+    pub fn runEndCjk(self: *Run, allocator: std.mem.Allocator, input: []const u8, offset: usize) usize {
+        const Vec = @Vector(16, u8);
+        var end = offset;
+        if (end < input.len and input[end] < 0x80) {
+            while (end < input.len and self.ascii[input[end]]) end += 1;
+            if (end >= input.len or input[end] < 0x80) return end;
+        }
+        const lead_lo: Vec = @splat(0xE4);
+        const lead_hi: Vec = @splat(0xE9);
+        const cont_lo: Vec = @splat(0x80);
+        const cont_hi: Vec = @splat(0xBF);
+        const e4: Vec = @splat(0xE4);
+        const b8: Vec = @splat(0xB8);
+        while (end + 16 <= input.len) {
+            const chunk: Vec = input[end..][0..16].*;
+            const lead = (chunk >= lead_lo) & (chunk <= lead_hi);
+            const cont = (chunk >= cont_lo) & (chunk <= cont_hi);
+            // U+4E00 starts at E4 B8 80; E4 with a lower second byte is
+            // outside the covered block and falls back to the scalar scan.
+            const next = std.simd.shiftElementsLeft(chunk, 1, 0);
+            const lead_ok = (lead & (chunk != e4)) | ((chunk == e4) & (next >= b8));
+            const ok: u16 = @bitCast(lead_ok | cont);
+            if ((ok & 0x0FFF) != 0x0FFF) break;
+            end += 12;
+        }
+        if (end >= input.len) return end;
+        if (input[end] < 0x80) {
+            while (end < input.len and self.ascii[input[end]]) end += 1;
+            if (end >= input.len or input[end] < 0x80) return end;
+        }
+        if (self.table) |*table| return table.runEnd(input, end);
+        return self.unicodeRunEnd(allocator, input, end);
+    }
+
     noinline fn unicodeRunEnd(self: *Run, allocator: std.mem.Allocator, input: []const u8, offset: usize) usize {
         var end = offset;
         while (end < input.len) {

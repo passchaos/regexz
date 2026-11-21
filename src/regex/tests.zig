@@ -73,6 +73,37 @@ test "set lookahead compiles Qwen pre-tokenizer pattern and returns spans" {
         try std.testing.expectEqual(case.input.len, offset);
     }
 }
+test "Qwen tokenizer fast branch scans CJK runs" {
+    const pattern = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+";
+    const limits = regex.Limits{ .unicode_perl_space = true, .max_execution_steps = 16_000_000 };
+    const Case = struct { input: []const u8, spans: []const [2]usize };
+    for ([_]Case{
+        .{ .input = "你", .spans = &.{.{ 0, 3 }} },
+        .{ .input = "你好世界", .spans = &.{.{ 0, 12 }} },
+        .{ .input = "你好世界这是一个中文分词测试", .spans = &.{.{ 0, 42 }} },
+        .{ .input = "你好世界这是一个中文分词测试abcdef", .spans = &.{.{ 0, 48 }} },
+        .{ .input = "你好世界Δσabc，def", .spans = &.{ .{ 0, 19 }, .{ 19, 25 } } },
+        .{ .input = "你好\xff世界", .spans = &.{ .{ 0, 6 }, .{ 7, 13 } } },
+        .{ .input = "\u{3400}\u{3401}abc", .spans = &.{.{ 0, 9 }} },
+        .{ .input = "abc你好def", .spans = &.{.{ 0, 12 }} },
+        .{ .input = "你好，世界。\n", .spans = &.{ .{ 0, 6 }, .{ 6, 15 }, .{ 15, 19 } } },
+        .{ .input = "一二三四五六七八九十一二三四五六七八九十", .spans = &.{.{ 0, 60 }} },
+    }) |case| {
+        var value = try regex.Regex.init(gpa, pattern, limits);
+        defer value.deinit();
+        var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, limits);
+        defer workspace.deinit();
+        var offset: usize = 0;
+        for (case.spans) |span| {
+            const match = (try workspace.find(case.input, offset)) orelse return error.TestUnexpectedResult;
+            try std.testing.expectEqual(span[0], match.start);
+            try std.testing.expectEqual(span[1], match.end);
+            offset = match.end;
+        }
+        try std.testing.expectEqual(case.input.len, offset);
+    }
+}
+
 test "set lookahead decodes multi-byte runes in the backtracking workspace" {
     var value = try regex.Regex.init(gpa, "\\p{L}+(?!\\p{L})", .{});
     defer value.deinit();

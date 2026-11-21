@@ -823,6 +823,11 @@ contiguous ASCII runs with a range check instead of a byte table and dispatch
 run/literal elements before the rare optional and alternation cases; the
 semver, camelCase, IP-port and key-value scans improve 4-7%. Distinct-first
 literal sets with four or more branches use the two-byte nibble filter,
-improving the five-word alternation 16% (1.43x ahead). The comparison covers
-58 cases and all of them are faster. See
+improving the five-word alternation 16% (1.43x ahead). The tokenizer fast
+branch scans four three-byte Han groups per vector iteration when the run set
+covers U+4E00-U+9FFF, with the scalar UTF-8 scan resuming at the first
+non-conforming group; a focused before/after run measured the CJK tokenizer
+13% faster. The 58-case comparison table was not refreshed this turn because
+the shared host was saturated (load average above 20); the last quiet-window
+table remains in the comparison page. See
 [literal fast paths](benchmarks/literal-fast-paths.md).

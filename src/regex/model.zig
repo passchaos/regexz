@@ -169,6 +169,19 @@ pub const Set = struct {
         if (self.ascii_only) return false;
         return self.includes(rune);
     }
+
+    /// Whether every rune in `first..=last` is a member. Ranges are sorted
+    /// and merged, so the coverage walk is linear.
+    pub fn covers(self: Set, first: u21, last: u21) bool {
+        var cursor: u21 = first;
+        for (self.ranges) |range| {
+            if (range.last < cursor) continue;
+            if (range.first > cursor) return false;
+            if (range.last >= last) return true;
+            cursor = range.last + 1;
+        }
+        return false;
+    }
     /// Offset just past the rune at `offset` when that rune belongs to the
     /// set; null when the rune is absent, malformed, or not a member.
     pub fn matchAdvance(self: Set, input: []const u8, offset: usize) ?usize {
