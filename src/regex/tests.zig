@@ -1252,6 +1252,12 @@ test "bounded-minimum set run scans maximal runs" {
     try expectFastSpans("\\s{3,}", "a  b   c", &.{.{ 4, 7 }});
     try expectFastSpans("\\w{2,}", "a bb ccc", &.{ .{ 2, 4 }, .{ 5, 8 } });
     try expectFastSpans("\\w{2,}", "a b c", &.{});
+    // Pair candidates across a 16-byte block boundary.
+    try expectFastSpans("\\s{2,}", "aaaaaaaaaaaaaaaa   b", &.{.{ 16, 19 }});
+    try expectFastSpans("\\s{2,}", "aaaaaaaaaaaaaaa  b", &.{.{ 15, 17 }});
+    // Byte-splat sets (more than four runs) use the same pair scan.
+    try expectFastSpans("[acegik]{2,}", "aa cc ee", &.{ .{ 0, 2 }, .{ 3, 5 }, .{ 6, 8 } });
+    try expectFastSpans("[acegik]{2,}", "a c e g i k", &.{});
 }
 
 test "optional prefix run matches the plain run spans" {

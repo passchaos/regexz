@@ -286,6 +286,26 @@ pub const FirstFilter = struct {
     /// Valid misses across ordinary searches; fits the filter's padding.
     prefix_probes: u8 = 0,
 
+    /// Membership mask for 16 lanes, using the same range or byte-splat
+    /// representation as `indexOf`. Only valid when `range_count` or `count`
+    /// covers the ASCII set exactly and `first.nonascii` is false.
+    pub inline fn memberMask(self: *const FirstFilter, chunk: Vec) @Vector(16, bool) {
+        if (self.range_count != 0) {
+            var result = (chunk >= self.range_lo[0]) & (chunk <= self.range_hi[0]);
+            var index: usize = 1;
+            while (index < self.range_count) : (index += 1) {
+                result = result | ((chunk >= self.range_lo[index]) & (chunk <= self.range_hi[index]));
+            }
+            return result;
+        }
+        var result = chunk == self.byte_splats[0];
+        var index: usize = 1;
+        while (index < self.count) : (index += 1) {
+            result = result | (chunk == self.byte_splats[index]);
+        }
+        return result;
+    }
+
     pub fn init(first: model.FirstSet) FirstFilter {
         var result = FirstFilter{ .first = first };
         // The ASCII bitmap is authoritative, so walk its set bits instead of

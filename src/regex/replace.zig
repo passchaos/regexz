@@ -1984,6 +1984,12 @@ pub const Workspace = struct {
     /// `set{min,}` with `min > 1`: maximal runs shorter than the minimum are
     /// skipped whole, because every start inside them fails too.
     fn findSetRunMin(self: *Workspace, input: []const u8, search_start: usize) ?Match {
+        if (!self.first_filter.first.nonascii and
+            (self.first_filter.range_count != 0 or
+                (self.first_filter.count != 0 and !self.first_filter.too_many)))
+        {
+            return self.findSetRunMinPairs(input, search_start);
+        }
         const table = &self.simple_set_table;
         const min = self.simple_set_min;
         var search = search_start;
@@ -2004,6 +2010,49 @@ pub const Workspace = struct {
                 return .{ .start = start, .end = offset, .slots = self.slots };
             }
             search = offset;
+        }
+        return null;
+    }
+
+    /// `set{min,}` pair scan: a SIMD test finds the first position whose next
+    /// byte is also a member, so runs below the minimum are rejected in
+    /// 16-byte blocks instead of one table lookup per byte.
+    fn findSetRunMinPairs(self: *Workspace, input: []const u8, search_start: usize) ?Match {
+        const table = &self.simple_set_table;
+        const min = self.simple_set_min;
+        const Vec = @Vector(16, u8);
+        var search = search_start;
+        while (search + 1 < input.len) {
+            var offset = search;
+            var candidate: ?usize = null;
+            while (offset + 17 <= input.len) : (offset += 16) {
+                const chunk: Vec = input[offset..][0..16].*;
+                const next: Vec = input[offset + 1 ..][0..16].*;
+                const mask = self.first_filter.memberMask(chunk) & self.first_filter.memberMask(next);
+                const bits: u16 = @bitCast(mask);
+                if (bits != 0) {
+                    candidate = offset + @ctz(bits);
+                    break;
+                }
+            }
+            if (candidate == null) {
+                var index = offset;
+                while (index + 1 < input.len) : (index += 1) {
+                    if (table[input[index]] and table[input[index + 1]]) {
+                        candidate = index;
+                        break;
+                    }
+                }
+            }
+            const start = candidate orelse return null;
+            var end = start + 2;
+            while (end < input.len and table[input[end]]) end += 1;
+            if (end - start >= min) {
+                self.slots[0] = start;
+                self.slots[1] = end;
+                return .{ .start = start, .end = end, .slots = self.slots };
+            }
+            search = end;
         }
         return null;
     }
