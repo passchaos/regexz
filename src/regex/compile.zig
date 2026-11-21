@@ -810,6 +810,36 @@ fn expandLiteralSet(allocator: std.mem.Allocator, root: *const model.Node, casel
     return expandBranches(&expander, root);
 }
 
+/// A whole-pattern ASCII set whose members are single bytes. A match is then
+/// exactly one literal byte, so the literal-set fast path can serve it.
+fn singleByteSetLiterals(allocator: std.mem.Allocator, root: *const model.Node) model.Error!?[]const []const u8 {
+    var node = root;
+    while (node.* == .group) node = node.group;
+    if (node.* != .set) return null;
+    const set = node.set;
+    if (!set.ascii_only or set.ranges.len == 0) return null;
+    var total: usize = 0;
+    for (set.ranges) |range| {
+        if (range.first > range.last or range.last >= 0x80) return null;
+        total += range.last - range.first + 1;
+    }
+    // Bound the literal list; the first-byte filter still scans the set's
+    // ranges, so even wider classes keep their range scan.
+    if (total == 0 or total > 64) return null;
+    const bytes = try allocator.alloc(u8, total);
+    const literals = try allocator.alloc([]const u8, total);
+    var index: usize = 0;
+    for (set.ranges) |range| {
+        var byte: u21 = range.first;
+        while (byte <= range.last) : (byte += 1) {
+            bytes[index] = @intCast(byte);
+            literals[index] = bytes[index..][0..1];
+            index += 1;
+        }
+    }
+    return literals;
+}
+
 fn expandBranches(expander: *LiteralExpander, root: *const model.Node) model.Error!?[]const []const u8 {
     const branches = try expander.expand(root) orelse return null;
     if (branches.len < 2) return null;
@@ -2633,13 +2663,21 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         try caseless_builder.bytes.toOwnedSlice(allocator)
     else
         null;
-    const literal_set: ?[]const []const u8 = if (literal == null and caseless_literal == null and
+    const expanded_literal_set: ?[]const []const u8 = if (literal == null and caseless_literal == null and
         !limits.auto_callout) try expandLiteralSet(allocator, parsed.root, false) else null;
     const caseless_literal_set: ?[]const []const u8 = if (literal == null and caseless_literal == null and
-        literal_set == null and !limits.auto_callout)
+        expanded_literal_set == null and !limits.auto_callout)
         try expandLiteralSet(allocator, parsed.root, true)
     else
         null;
+    // A whole one-byte ASCII set is an alternation of literal bytes, so the
+    // literal-set fast path can serve it. Keep the caseless path when it
+    // already recognizes the pattern.
+    const literal_set: ?[]const []const u8 = expanded_literal_set orelse
+        (if (caseless_literal_set == null and !limits.auto_callout)
+            try singleByteSetLiterals(allocator, parsed.root)
+        else
+            null);
     const repeated_literal: ?[]const u8 = if (literal == null and caseless_literal == null and
         literal_set == null and caseless_literal_set == null and !limits.auto_callout)
         try detectRepeatedLiteral(allocator, parsed.root)
