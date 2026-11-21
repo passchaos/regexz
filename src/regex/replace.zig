@@ -2655,14 +2655,27 @@ pub const Workspace = struct {
     /// failed close check rejects the run and the scan resumes after the open.
     fn findWrappedRun(self: *Workspace, state: *const WrappedRunState, input: []const u8, search_start: usize) ?Match {
         var search = search_start;
+        const single_open = state.open.len == 1;
         while (search < input.len) {
-            const open = indexOfBytes(input, search, state.open) orelse return null;
+            // Adjacent delimiters dominate tag-like inputs, so probe the
+            // current byte before paying the vector scanner's setup.
+            const open = if (single_open and input[search] == state.open[0])
+                search
+            else
+                indexOfBytes(input, search, state.open) orelse return null;
             const body_start = open + state.open.len;
             if (state.body_excludes_close) {
                 // The body is every byte except the close, so the body end is
-                // exactly the next close occurrence; the vector byte scanner
-                // replaces the scalar body walk.
-                const close = prefilter.indexOfByte(input, body_start, state.close[0]) orelse return null;
+                // exactly the next close occurrence. Tag bodies are usually
+                // short; probe a small window scalar before the vector scan.
+                const close = blk: {
+                    var probe = body_start;
+                    const probe_end = @min(input.len, body_start + 16);
+                    while (probe < probe_end) : (probe += 1) {
+                        if (input[probe] == state.close[0]) break :blk probe;
+                    }
+                    break :blk prefilter.indexOfByte(input, probe, state.close[0]) orelse return null;
+                };
                 if (close > body_start) {
                     self.slots[0] = open;
                     self.slots[1] = close + 1;
