@@ -274,6 +274,12 @@ pub fn unicodeWordRanges(gpa: std.mem.Allocator, limit: usize) m.Error![]const m
 
 /// Union of several Unicode property groups.
 pub fn unicodePropertyUnion(gpa: std.mem.Allocator, names: []const []const u8, limit: usize) m.Error![]const m.Range {
+    if (m.unicode.lookupUnion(names)) |table| {
+        if (table.count > limit) return error.RegexLimitExceeded;
+        const ranges = try gpa.alloc(m.Range, table.count);
+        for (ranges, 0..) |*range, index| range.* = table.range(index);
+        return ranges;
+    }
     var ranges: std.ArrayList(m.Range) = .empty;
     errdefer ranges.deinit(gpa);
     for (names) |name| {
@@ -287,6 +293,52 @@ pub fn unicodePropertyUnion(gpa: std.mem.Allocator, names: []const []const u8, l
 pub fn append(list: *std.ArrayList(m.Range), gpa: std.mem.Allocator, set: m.Set, limit: usize) m.Error!void {
     if (list.items.len + set.ranges.len > limit) return error.RegexLimitExceeded;
     try list.appendSlice(gpa, set.ranges);
+}
+
+/// Append a sorted set to a sorted list, merging in place from the back.
+pub fn appendSorted(list: *std.ArrayList(m.Range), gpa: std.mem.Allocator, set: m.Set, limit: usize) m.Error!void {
+    if (list.items.len + set.ranges.len > limit) return error.RegexLimitExceeded;
+    if (set.ranges.len == 0) return;
+    if (list.items.len == 0) {
+        try list.appendSlice(gpa, set.ranges);
+        return;
+    }
+    const old_len = list.items.len;
+    const total = old_len + set.ranges.len;
+    try list.ensureTotalCapacity(gpa, total);
+    list.items.len = total;
+    var i = old_len;
+    var j = set.ranges.len;
+    var k = total;
+    while (i > 0 and j > 0) {
+        if (list.items[i - 1].first > set.ranges[j - 1].first) {
+            k -= 1;
+            list.items[k] = list.items[i - 1];
+            i -= 1;
+        } else {
+            k -= 1;
+            list.items[k] = set.ranges[j - 1];
+            j -= 1;
+        }
+    }
+    while (i > 0) {
+        k -= 1;
+        list.items[k] = list.items[i - 1];
+        i -= 1;
+    }
+    while (j > 0) {
+        k -= 1;
+        list.items[k] = set.ranges[j - 1];
+        j -= 1;
+    }
+}
+
+/// Materialize a precomputed property union.
+pub fn unionSet(gpa: std.mem.Allocator, table: m.unicode.Union, limit: usize) m.Error!m.Set {
+    if (table.count > limit) return error.RegexLimitExceeded;
+    const ranges = try gpa.alloc(m.Range, table.count);
+    for (ranges, 0..) |*range, index| range.* = table.range(index);
+    return fromRanges(ranges);
 }
 
 pub fn ascii(name: []const u8) ?[]const m.Range {

@@ -139,6 +139,10 @@ pub const ParsedSet = struct {
     /// A property set already materialized (and possibly cached) for this
     /// compile; consumers may use it instead of normalizing again.
     materialized: ?Set = null,
+    /// Canonical group name for a positive, unfolded `\p{...}` atom. The
+    /// class parser uses it to replace adjacent property atoms with a
+    /// precomputed union.
+    property_name: ?[]const u8 = null,
 };
 /// A positive, case-folded set. Negation and `(?i)` folding are materialized
 /// at compile time so matching is a binary search (plus a 128-bit ASCII

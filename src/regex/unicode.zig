@@ -62,6 +62,41 @@ pub fn lookup(name: []const u8) ?Group {
     return null;
 }
 
+/// Precomputed sorted, disjoint union of several property groups.
+pub const UnionEntry = struct { names: []const []const u8, offset: usize, count: usize };
+const union_entries = @import("unicode/unions.zig").entries;
+const union_data = @embedFile("unicode/unions.bin");
+pub const Union = struct {
+    offset: usize,
+    count: usize,
+    pub fn range(self: Union, index: usize) Range {
+        const bytes = union_data[self.offset + index * 8 ..];
+        return .{ .first = @intCast(std.mem.readInt(u32, bytes[0..4], .little)), .last = @intCast(std.mem.readInt(u32, bytes[4..8], .little)) };
+    }
+};
+/// Look up a precomputed union by its property names, ignoring order.
+pub fn lookupUnion(names: []const []const u8) ?Union {
+    for (union_entries) |entry| {
+        if (entry.names.len != names.len) continue;
+        var matched = true;
+        for (entry.names) |name| {
+            var found = false;
+            for (names) |query| {
+                if (std.mem.eql(u8, name, query)) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                matched = false;
+                break;
+            }
+        }
+        if (matched) return .{ .offset = entry.offset, .count = entry.count };
+    }
+    return null;
+}
+
 /// A binary Unicode property such as `Alphabetic`, `White_Space`, or `Emoji`.
 pub const Property = struct {
     offset: usize,

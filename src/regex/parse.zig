@@ -1060,16 +1060,52 @@ pub const Parser = struct {
             self.cursor += 1;
         }
     }
+    /// Append buffered positive property atoms. Adjacent `\p{...}` atoms
+    /// with a precomputed union are replaced by one sorted set, so the class
+    /// operand stays sorted and `normalize` skips its sort.
+    fn flushClassProperties(
+        self: *Parser,
+        names: []const []const u8,
+        sets: []const m.Set,
+        operand: *std.ArrayList(m.Range),
+        operand_sorted: *bool,
+    ) m.Error!void {
+        if (names.len == 0) return;
+        if (names.len >= 2) {
+            if (m.unicode.lookupUnion(names)) |table| {
+                const set = try classes.unionSet(self.allocator, table, self.limits.max_ranges);
+                if (operand_sorted.*) {
+                    try classes.appendSorted(operand, self.allocator, set, self.limits.max_ranges);
+                } else {
+                    try classes.append(operand, self.allocator, set, self.limits.max_ranges);
+                }
+                return;
+            }
+        }
+        for (sets) |set| {
+            if (operand_sorted.*) {
+                try classes.appendSorted(operand, self.allocator, set, self.limits.max_ranges);
+            } else {
+                try classes.append(operand, self.allocator, set, self.limits.max_ranges);
+            }
+        }
+    }
     fn characterClass(self: *Parser) m.Error!*const m.Node {
         const negate = self.take('^');
         var accumulator: ?m.Set = null;
         var pending: classes.SetOp = .intersection;
         var operand: std.ArrayList(m.Range) = .empty;
         defer operand.deinit(self.allocator);
+        var operand_sorted = true;
+        var property_names: [8][]const u8 = undefined;
+        var property_sets: [8]m.Set = undefined;
+        var property_count: usize = 0;
         var first = true;
         while (self.peek()) |_| {
             if (self.flags.extended_more) self.skipClassSpace();
             if (!first and self.take(']')) {
+                try self.flushClassProperties(property_names[0..property_count], property_sets[0..property_count], &operand, &operand_sorted);
+                property_count = 0;
                 const right = classes.normalizeOwned(self.allocator, operand, false, self.foldMode(), self.limits.max_ranges) catch |err| {
                     operand = .empty;
                     return err;
@@ -1083,11 +1119,14 @@ pub const Parser = struct {
             }
             if (!first) {
                 if (self.takeClassOp()) |op| {
+                    try self.flushClassProperties(property_names[0..property_count], property_sets[0..property_count], &operand, &operand_sorted);
+                    property_count = 0;
                     const right = classes.normalizeOwned(self.allocator, operand, false, self.foldMode(), self.limits.max_ranges) catch |err| {
                         operand = .empty;
                         return err;
                     };
                     operand = .empty;
+                    operand_sorted = true;
                     accumulator = if (accumulator) |left|
                         try classes.combine(self.allocator, left, pending, right, self.limits.max_ranges)
                     else
@@ -1110,8 +1149,24 @@ pub const Parser = struct {
                 const end = try self.element(.none);
                 if (start.negate or end.negate or start.ranges.len != 1 or end.ranges.len != 1 or start.ranges[0].first != start.ranges[0].last or end.ranges[0].first != end.ranges[0].last) return error.InvalidRegex;
                 if (operand.items.len >= self.limits.max_ranges) return error.RegexLimitExceeded;
-                try operand.append(self.allocator, .{ .first = start.ranges[0].first, .last = end.ranges[0].first });
+                try self.flushClassProperties(property_names[0..property_count], property_sets[0..property_count], &operand, &operand_sorted);
+                property_count = 0;
+                const range = m.Range{ .first = start.ranges[0].first, .last = end.ranges[0].first };
+                if (operand_sorted and operand.items.len != 0 and range.first < operand.items[operand.items.len - 1].first) operand_sorted = false;
+                try operand.append(self.allocator, range);
+            } else if (start.property_name != null and start.materialized != null) {
+                // Positive, unfolded property: buffer it so adjacent
+                // properties can use a precomputed union.
+                if (property_count == property_names.len) {
+                    try self.flushClassProperties(property_names[0..property_count], property_sets[0..property_count], &operand, &operand_sorted);
+                    property_count = 0;
+                }
+                property_names[property_count] = start.property_name.?;
+                property_sets[property_count] = start.materialized.?;
+                property_count += 1;
             } else {
+                try self.flushClassProperties(property_names[0..property_count], property_sets[0..property_count], &operand, &operand_sorted);
+                property_count = 0;
                 // A cached property set is already canonical and carries the
                 // property's own negation; the class fold is applied here, so
                 // the cache is only reusable without one.
@@ -1119,6 +1174,7 @@ pub const Parser = struct {
                     start.materialized.?
                 else
                     try classes.normalize(self.allocator, start.ranges, start.negate, self.foldMode(), self.limits.max_ranges);
+                if (operand_sorted and folded.ranges.len != 0 and operand.items.len != 0 and folded.ranges[0].first < operand.items[operand.items.len - 1].first) operand_sorted = false;
                 try classes.append(&operand, self.allocator, folded, self.limits.max_ranges);
             }
         }
