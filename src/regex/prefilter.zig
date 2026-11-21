@@ -1186,6 +1186,27 @@ pub const MultiFilter = struct {
         return self.scan(true, true, false, undefined, input, start, literal_index);
     }
 
+    /// 32-lane case-folded scan for a whole-pattern caseless literal
+    /// alternation. Requires the nibble filter; the caller clears the upper
+    /// YMM state after the wide part.
+    pub fn indexOfCaselessWide(self: *const MultiFilter, input: []const u8, start: usize, literal_index: *usize) ?usize {
+        var offset = start;
+        while (offset + 34 <= input.len) : (offset += 32) {
+            var bits = self.candidateBits32(input, offset);
+            while (bits != 0) {
+                const lane = @ctz(bits);
+                bits &= bits - 1;
+                const at = offset + lane;
+                const found = self.matchesAtCaseless(input, at);
+                if (found != no_literal) {
+                    literal_index.* = found;
+                    return at;
+                }
+            }
+        }
+        return self.scan(true, true, true, &self.pair_nibble.?, input, offset, literal_index);
+    }
+
     /// First offset whose folded first two bytes match a literal pair,
     /// without verifying the remaining bytes. Callers with custom literal
     /// semantics (non-ASCII fold peers) verify the candidate themselves.

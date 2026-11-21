@@ -3108,8 +3108,26 @@ pub const Workspace = struct {
     /// reports the matching branch, so the span is returned directly.
     fn findCaselessLiteralSet(self: *Workspace, input: []const u8, search_start: usize) bool {
         const filter = &self.caseless_literal_set.?;
+        if (comptime nibble_filter.wide_supported) {
+            if (filter.pair_nibble != null) {
+                const result = self.findCaselessLiteralSetWide(filter, input, search_start);
+                // The wide scan leaves the upper YMM state dirty; clear it
+                // before the caller resumes legacy SSE code.
+                asm volatile ("vzeroupper" ::: .{ .memory = true });
+                return result;
+            }
+        }
         var literal_index: usize = undefined;
         const start = filter.indexOfCaseless(input, search_start, &literal_index) orelse return false;
+        const literal = filter.literals[literal_index];
+        self.slots[0] = start;
+        self.slots[1] = start + literal.len;
+        return true;
+    }
+
+    noinline fn findCaselessLiteralSetWide(self: *Workspace, filter: *const prefilter.MultiFilter, input: []const u8, search_start: usize) bool {
+        var literal_index: usize = undefined;
+        const start = filter.indexOfCaselessWide(input, search_start, &literal_index) orelse return false;
         const literal = filter.literals[literal_index];
         self.slots[0] = start;
         self.slots[1] = start + literal.len;
