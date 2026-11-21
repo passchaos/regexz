@@ -29,8 +29,8 @@ rows differ from the table only by shared-host noise.
 
 | Case | regexz, ns/iter | PCRE2, ns/iter | PCRE2 / regexz |
 | --- | ---: | ---: | ---: |
-| compile Qwen tokenizer | 11,654.6 | 16,240.7 | 1.39x |
-| compile xDS-like | 5,792.3 | 7,171.6 | 1.24x |
+| compile Qwen tokenizer | 11,415.9 | 16,171.3 | 1.42x |
+| compile xDS-like | 5,774.3 | 7,162.7 | 1.24x |
 | find Qwen tokenizer | 49,740.3 | 177,575.5 | 3.57x |
 | findAll Qwen (borrowed) | 58,493.8 | 177,547.2 | 3.04x |
 | findAll Qwen (owning) | 58,303.3 | 177,425.6 | 3.04x |
@@ -137,7 +137,7 @@ within host noise:
 - `find (?i) literal` (0.99x): parity within host noise after the 32-lane
   case-folded scan.
 
-Compile Qwen is now 1.39x ahead of PCRE2, up from a 0.69x ratio: PCRE2 parses
+Compile Qwen is now 1.42x ahead of PCRE2, up from a 0.69x ratio: PCRE2 parses
 the pattern and stores property references, while regexz materializes the
 Unicode property sets at compile time so searches can use range lists
 directly. The compile rows include PCRE2's JIT pass, while regexz has no JIT.

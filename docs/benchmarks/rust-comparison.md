@@ -27,8 +27,8 @@ text, and small full-match subjects.
 
 | Case | regexz, ns/iter | Rust, ns/iter | Rust / regexz |
 | --- | ---: | ---: | ---: |
-| compile Qwen tokenizer | 11,603.0 | 715,457.4 | 61.66x |
-| compile xDS-like | 5,814.1 | 31,738.5 | 5.46x |
+| compile Qwen tokenizer | 11,374.4 | 714,325.1 | 62.80x |
+| compile xDS-like | 5,780.1 | 31,644.4 | 5.47x |
 | find Qwen tokenizer | 49,760.6 | 106,195.8 | 2.13x |
 | findAll Qwen (borrowed) | 58,364.1 | 105,801.2 | 1.81x |
 | findAll Qwen (owning) | 58,294.2 | 105,031.1 | 1.80x |
@@ -134,7 +134,7 @@ are the one-character alternation (`a|b|c`, 0.88x) and currency
 (`\$\d+(?:\.\d{2})?`, 0.92x); IPv6 is at parity (1.01x). The largest leads
 are `replaceAll` with edge assertions (39.00x), blank-line scans (33.15x),
 capitalized-word scans (28.39x), `RegexSet` no-match scans (16.22x) and
-compile time (61.66x); the tokenizer searches are 2.13x and 2.16x ahead.
+compile time (62.80x); the tokenizer searches are 2.13x and 2.16x ahead.
 The geometric-mean ratio is 2.33x. The currency row is a small absolute gap
 (about 39 ns); the one-character alternation is dominated by the per-match
 dispatch call.
@@ -170,6 +170,8 @@ The compile path gained four more class-construction changes:
 - General-category groups stay deferred too: a buffered `\p{...}` atom is
   expanded only when no precomputed union matches, so tokenizer classes never
   copy the individual group ranges.
+- Single ASCII literals under simple folding build their case peers directly
+  instead of walking the fold table and sorting the result.
 
 The search paths gained two contained changes:
 
