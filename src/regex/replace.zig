@@ -2805,7 +2805,15 @@ pub const Workspace = struct {
     fn findHtmlTag(self: *Workspace, state: *const HtmlTagState, input: []const u8, search_start: usize) ?Match {
         var search = search_start;
         while (search < input.len) {
-            const open = prefilter.indexOfByte(input, search, '<') orelse return null;
+            // Tag opens usually sit close to the previous name; probe a short
+            // scalar window before paying the vector scanner's setup.
+            var probe = search;
+            const probe_end = @min(input.len, search + 8);
+            while (probe < probe_end and input[probe] != '<') probe += 1;
+            const open = if (probe < probe_end)
+                probe
+            else
+                prefilter.indexOfByte(input, probe, '<') orelse return null;
             var pos = open + 1;
             if (pos < input.len and input[pos] == '/') pos += 1;
             if (pos < input.len and state.letters[input[pos]]) {
