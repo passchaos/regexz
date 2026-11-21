@@ -6,7 +6,7 @@
 //! the Thompson NFA/DFA/Pike paths. Extended programs are marked
 //! `Program.extended` and run on the bounded backtracking VM.
 const std = @import("std");
-const model = @import("regex/model.zig");
+pub const model = @import("regex/model.zig");
 const parse_mod = @import("regex/parse.zig");
 const compile_mod = @import("regex/compile.zig");
 const backtrack = @import("regex/backtrack.zig");
@@ -35,6 +35,9 @@ const substitution_mod = @import("regex/substitution.zig");
 pub const validateSubstitution = substitution_mod.validateSubstitution;
 pub const validateSubstitutionFor = substitution_mod.validateSubstitutionFor;
 pub const Program = @import("regex/compile.zig").Program;
+/// Compile an already parsed model into a bounded program. Adapters use this
+/// to lower an external AST without re-parsing pattern text.
+pub const compileParsed = @import("regex/compile.zig").compile;
 pub const comptime_regex = @import("regex/comptime_regex.zig");
 const unset = std.math.maxInt(usize);
 
