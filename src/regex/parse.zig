@@ -1073,11 +1073,10 @@ pub const Parser = struct {
         if (names.len == 0) return;
         if (names.len >= 2) {
             if (m.unicode.lookupUnion(names)) |table| {
-                const set = try classes.unionSet(self.allocator, table, self.limits.max_ranges);
                 if (operand_sorted.*) {
-                    try classes.appendSorted(operand, self.allocator, set, self.limits.max_ranges);
+                    try classes.appendUnionSorted(operand, self.allocator, table, self.limits.max_ranges);
                 } else {
-                    try classes.append(operand, self.allocator, set, self.limits.max_ranges);
+                    try classes.appendUnion(operand, self.allocator, table, self.limits.max_ranges);
                 }
                 return;
             }
