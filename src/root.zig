@@ -9,6 +9,7 @@ const std = @import("std");
 pub const model = @import("regex/model.zig");
 const parse_mod = @import("regex/parse.zig");
 const compile_mod = @import("regex/compile.zig");
+const prefilter = @import("regex/prefilter.zig");
 const backtrack = @import("regex/backtrack.zig");
 pub const Error = model.Error;
 pub const Diagnostic = model.Diagnostic;
@@ -121,7 +122,7 @@ fn splitLiteral(gpa: std.mem.Allocator, input: []const u8, literal: []const u8, 
             } else if (near >= input.len) {
                 break;
             } else {
-                found = std.mem.indexOfScalarPos(u8, input, offset, byte) orelse break;
+                found = prefilter.indexOfByte(input, offset, byte) orelse break;
             }
         } else {
             found = findLiteral(input, offset, literal) orelse break;

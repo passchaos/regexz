@@ -166,6 +166,9 @@ fn main() {
     let path_text = "C:\\Users\\dev\\file.txt D:\\data\\x.csv ".repeat(2000);
     let css_text = ".button { color: red; } #main { margin: 0; } ".repeat(2000);
     let slash_text = "11/21/2026 01/05/2025 12/31/1999 ".repeat(2000);
+    let ipv6_text = "2001:0db8:85a3:0000:0000:8a2e:0370:7334 fe80:0000:0000:0000:0202:b3ff:fe1e:8329 ".repeat(1000);
+    let c_text = "/* comment */ int x; /* multi\nline */ ".repeat(2000);
+    let sh_text = "echo $HOME ${PATH} $1 ${USER:-root} ".repeat(2000);
 
     let qwen = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+";
 
@@ -354,8 +357,20 @@ fn main() {
         &ascii_text,
         200,
     );
+    bench_find(
+        "find IPv6",
+        r"(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}",
+        &ipv6_text,
+        200,
+    );
+    bench_find("find C comment", r"/\*[\s\S]*?\*/", &c_text, 200);
+    bench_find("find markdown image", r"!\[[^\]]*\]\([^)]+\)", &md_text, 200);
+    bench_find("find HTML tag name", r"</?([a-z][a-z0-9]*)\b", &html_text, 200);
+    bench_find("find shell var", r"\$\{[^}]+\}|\$\w+", &sh_text, 200);
     bench_split("split whitespace (22 KiB)", "\\s+", &ascii_text, 200);
     bench_split("split commas (29 KiB)", ",", &csv_text, 200);
+    bench_split("split lines", "\n", &ascii_text, 200);
+    bench_split("split semicolons", ";", &code_text, 200);
     bench_fullmatch(
         "fullmatch literal",
         "hello, world!",
@@ -371,6 +386,7 @@ fn main() {
     );
     bench_replace("replaceAll a+ -> x", "a+", &replace_text, "x", 200);
     bench_replace("replaceAll \\A|\\z -> X", "\\A|\\z", &ascii_text, "X", 200);
+    bench_replace("replaceAll digits -> N", "\\d+", &number_text, "N", 200);
 
     let set_patterns = [
         "[a-z]+@", "[a-z]+#", "[a-z]+%", "[a-z]+&", "[a-z]+!", "[a-z]+~", "[a-z]+`", "[a-z]+;",

@@ -410,6 +410,18 @@ pub fn main() !void {
     defer slash_text.deinit(gpa);
     for (0..2000) |_| try slash_text.appendSlice(gpa, "11/21/2026 01/05/2025 12/31/1999 ");
 
+    var ipv6_text: std.ArrayList(u8) = .empty;
+    defer ipv6_text.deinit(gpa);
+    for (0..1000) |_| try ipv6_text.appendSlice(gpa, "2001:0db8:85a3:0000:0000:8a2e:0370:7334 fe80:0000:0000:0000:0202:b3ff:fe1e:8329 ");
+
+    var c_text: std.ArrayList(u8) = .empty;
+    defer c_text.deinit(gpa);
+    for (0..2000) |_| try c_text.appendSlice(gpa, "/* comment */ int x; /* multi\nline */ ");
+
+    var sh_text: std.ArrayList(u8) = .empty;
+    defer sh_text.deinit(gpa);
+    for (0..2000) |_| try sh_text.appendSlice(gpa, "echo $HOME ${PATH} $1 ${USER:-root} ");
+
     const qwen = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+";
     const ucp = regexz.Limits{ .unicode_perl_space = true, .max_execution_steps = 16_000_000 };
 
@@ -498,13 +510,21 @@ pub fn main() !void {
     try benchFind(io, out, "find CSS selector", "[.#][\\w-]+\\s*\\{", css_text.items, 200, .{});
     try benchFind(io, out, "find slash date", "\\d{2}/\\d{2}/\\d{4}", slash_text.items, 200, .{});
     try benchFind(io, out, "find HTTP request", "(?:GET|POST) /[^ ]+ HTTP/1\\.[01]", ascii_text.items, 200, .{});
+    try benchFind(io, out, "find IPv6", "(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}", ipv6_text.items, 200, .{});
+    try benchFind(io, out, "find C comment", "/\\*[\\s\\S]*?\\*/", c_text.items, 200, .{});
+    try benchFind(io, out, "find markdown image", "!\\[[^\\]]*\\]\\([^)]+\\)", md_text.items, 200, .{});
+    try benchFind(io, out, "find HTML tag name", "</?([a-z][a-z0-9]*)\\b", html_text.items, 200, .{});
+    try benchFind(io, out, "find shell var", "\\$\\{[^}]+\\}|\\$\\w+", sh_text.items, 200, .{});
     try benchSplit(io, out, "split whitespace (22 KiB)", "\\s+", ascii_text.items, 200);
     try benchSplit(io, out, "split commas (29 KiB)", ",", csv_text.items, 200);
+    try benchSplit(io, out, "split lines", "\\n", ascii_text.items, 200);
+    try benchSplit(io, out, "split semicolons", ";", code_text.items, 200);
     try benchMatches(io, out, "fullmatch literal", "hello, world!", "hello, world!", 200000, .{});
     try benchMatches(io, out, "fullmatch class", "[A-Za-z0-9._-]+", "User.Name_42", 200000, .{});
     try benchMatches(io, out, "fullmatch xDS-like", "/(?:demo|test)\\.[A-Z][A-Za-z]+/(Get|List)", "/demo.Service/Get", 200000, .{});
     try benchReplace(io, out, "replaceAll a+ -> x", "a+", replace_text.items, "x", 200);
     try benchReplace(io, out, "replaceAll \\A|\\z -> X", "\\A|\\z", ascii_text.items, "X", 200);
+    try benchReplace(io, out, "replaceAll digits -> N", "\\d+", number_text.items, "N", 200);
 
     const set_patterns = [_][]const u8{
         "[a-z]+@", "[a-z]+#", "[a-z]+%", "[a-z]+&", "[a-z]+!",

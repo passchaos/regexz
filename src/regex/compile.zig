@@ -192,6 +192,10 @@ pub const Program = struct {
     line_bracket: ?LineBracketShape = null,
     /// `letters : \ run+` (Windows paths). Not serialized.
     windows_path: ?WindowsPathShape = null,
+    /// `< /? letter run* \b` (HTML tag names). Not serialized.
+    html_tag: ?HtmlTagShape = null,
+    /// `$\{ body+ \} | $ word+` (shell variables). Not serialized.
+    dollar_var: ?DollarVarShape = null,
     /// `x? set+` where `x` is a member of the set, which matches exactly the
     /// same spans as `set+`. Not serialized.
     optional_run: ?model.Set = null,
@@ -1446,12 +1450,17 @@ pub const WrappedRunShape = struct { open: []const u8, close: []const u8, body: 
 /// `open1 body1+ close1 open2 body2+ close2`, for example a markdown link
 /// `\[[^\]]+\]\([^)]+\)`.
 pub const PairedShape = struct {
-    open1: u8,
-    close1: u8,
-    open2: u8,
-    close2: u8,
+    /// Bytes before the first body, between the bodies, and after the second
+    /// body. The middle is `close1 ++ open2`; the split is not needed because
+    /// the scanner checks the concatenation.
+    open: []const u8,
+    middle: []const u8,
+    close: []const u8,
     body1: model.Set,
     body2: model.Set,
+    /// Minimum body lengths (0 or 1), from the repeats.
+    body1_min: u8,
+    body2_min: u8,
 };
 
 /// `(?m)^space* run+ literal`, for example a YAML key `(?m)^\s*[\w-]+:`.
@@ -1459,6 +1468,12 @@ pub const LineKeyShape = struct { space: model.Set, run: model.Set, literal: u8 
 
 /// `(?m)^\[ run+ \]$`, for example a TOML table header.
 pub const LineBracketShape = struct { run: model.Set };
+
+/// `< /? letter run* \b`, for example an HTML tag name.
+pub const HtmlTagShape = struct { letters: model.Set, run: model.Set };
+
+/// `$\{ body+ \} | $ word+`, for example a shell variable.
+pub const DollarVarShape = struct { braced: model.Set, word: model.Set };
 
 /// `letters : \ run+`, for example a Windows path `[A-Za-z]:\\[^:*?"<>|]+`.
 pub const WindowsPathShape = struct { letters: model.Set, run: model.Set };
@@ -1509,30 +1524,64 @@ fn detectWrappedRun(allocator: std.mem.Allocator, root: *const model.Node) model
     };
 }
 
-fn detectPaired(root: *const model.Node) ?PairedShape {
-    var nodes: [6]*const model.Node = undefined;
+fn detectPaired(allocator: std.mem.Allocator, root: *const model.Node) model.Error!?PairedShape {
+    var nodes: [16]*const model.Node = undefined;
     var count: usize = 0;
-    if (!flattenUpTo(root, &nodes, &count) or count != 6) return null;
-    const open1 = literalByteOf(nodes[0]) orelse return null;
-    const body1_repeat = (repeatOf(nodes[1]) orelse return null).repeat;
-    if (body1_repeat.lazy or body1_repeat.possessive or body1_repeat.maximum != null or body1_repeat.minimum == 0) return null;
+    if (!flattenUpTo(root, &nodes, &count) or count < 5) return null;
+    var first_repeat: ?usize = null;
+    var second_repeat: ?usize = null;
+    for (nodes[0..count], 0..) |node, index| {
+        if (repeatOf(node) == null) continue;
+        if (first_repeat == null) {
+            first_repeat = index;
+        } else if (second_repeat == null) {
+            second_repeat = index;
+        } else return null;
+    }
+    const r1 = first_repeat orelse return null;
+    const r2 = second_repeat orelse return null;
+    if (r1 == 0 or r2 <= r1 + 1 or r2 + 1 == count) return null;
+    var open_buf: [16]u8 = undefined;
+    var open_len: usize = 0;
+    for (nodes[0..r1]) |node| {
+        const byte = literalByteOf(node) orelse return null;
+        if (open_len == open_buf.len) return null;
+        open_buf[open_len] = byte;
+        open_len += 1;
+    }
+    var middle_buf: [16]u8 = undefined;
+    var middle_len: usize = 0;
+    for (nodes[r1 + 1 .. r2]) |node| {
+        const byte = literalByteOf(node) orelse return null;
+        if (middle_len == middle_buf.len) return null;
+        middle_buf[middle_len] = byte;
+        middle_len += 1;
+    }
+    var close_buf: [16]u8 = undefined;
+    var close_len: usize = 0;
+    for (nodes[r2 + 1 .. count]) |node| {
+        const byte = literalByteOf(node) orelse return null;
+        if (close_len == close_buf.len) return null;
+        close_buf[close_len] = byte;
+        close_len += 1;
+    }
+    const body1_repeat = (repeatOf(nodes[r1]) orelse return null).repeat;
+    if (body1_repeat.lazy or body1_repeat.possessive or body1_repeat.maximum != null or body1_repeat.minimum > 1) return null;
     const body1 = nodeSet(body1_repeat.child) orelse return null;
-    const close1 = literalByteOf(nodes[2]) orelse return null;
-    const open2 = literalByteOf(nodes[3]) orelse return null;
-    const body2_repeat = (repeatOf(nodes[4]) orelse return null).repeat;
-    if (body2_repeat.lazy or body2_repeat.possessive or body2_repeat.maximum != null or body2_repeat.minimum == 0) return null;
+    const body2_repeat = (repeatOf(nodes[r2]) orelse return null).repeat;
+    if (body2_repeat.lazy or body2_repeat.possessive or body2_repeat.maximum != null or body2_repeat.minimum > 1) return null;
     const body2 = nodeSet(body2_repeat.child) orelse return null;
-    const close2 = literalByteOf(nodes[5]) orelse return null;
     if (body1.ranges.len == 0 or body2.ranges.len == 0) return null;
-    if (body1.matches(close1) or body2.matches(close2)) return null;
+    if (body1.matches(middle_buf[0]) or body2.matches(close_buf[0])) return null;
     if (!bodyRepresentable(body1) or !bodyRepresentable(body2)) return null;
     return .{
-        .open1 = open1,
-        .close1 = close1,
-        .open2 = open2,
-        .close2 = close2,
+        .open = try allocator.dupe(u8, open_buf[0..open_len]),
+        .middle = try allocator.dupe(u8, middle_buf[0..middle_len]),
+        .close = try allocator.dupe(u8, close_buf[0..close_len]),
         .body1 = body1,
         .body2 = body2,
+        .body1_min = @intCast(body1_repeat.minimum),
+        .body2_min = @intCast(body2_repeat.minimum),
     };
 }
 
@@ -1567,6 +1616,79 @@ fn detectLineBracket(root: *const model.Node) ?LineBracketShape {
     if (nodes[4].* != .assertion or nodes[4].assertion != .end_line) return null;
     if (!run.ascii_only or run.ranges.len == 0 or run.matches(']')) return null;
     return .{ .run = run };
+}
+
+fn detectHtmlTag(root: *const model.Node) ?HtmlTagShape {
+    var nodes: [5]*const model.Node = undefined;
+    var count: usize = 0;
+    if (!flattenUpTo(root, &nodes, &count)) return null;
+    if (count != 4 and count != 5) return null;
+    if (literalByteOf(nodes[0]) != '<') return null;
+    const slash_repeat = (repeatOf(nodes[1]) orelse return null).repeat;
+    if (!optionalRepeat(slash_repeat)) return null;
+    if (literalByteOf(slash_repeat.child) != '/') return null;
+    var letters: model.Set = undefined;
+    var run: model.Set = undefined;
+    var boundary_index: usize = undefined;
+    if (count == 4) {
+        if (nodes[2].* != .capture) return null;
+        var child = nodes[2].capture.child;
+        while (child.* == .group) child = child.group;
+        if (child.* != .pair) return null;
+        letters = nodeSet(child.pair.left) orelse return null;
+        run = runStarSet(child.pair.right) orelse return null;
+        boundary_index = 3;
+    } else {
+        letters = nodeSet(nodes[2]) orelse return null;
+        run = runStarSet(nodes[3]) orelse return null;
+        boundary_index = 4;
+    }
+    if (nodes[boundary_index].* != .assertion or nodes[boundary_index].assertion != .word_boundary) return null;
+    if (!letters.ascii_only or letters.ranges.len == 0) return null;
+    if (!run.ascii_only or run.ranges.len == 0) return null;
+    return .{ .letters = letters, .run = run };
+}
+
+fn runStarSet(node: *const model.Node) ?model.Set {
+    const repeat = (repeatOf(node) orelse return null).repeat;
+    if (repeat.lazy or repeat.possessive or repeat.maximum != null or repeat.minimum != 0) return null;
+    return nodeSet(repeat.child);
+}
+
+fn detectDollarVar(root: *const model.Node) ?DollarVarShape {
+    var node = root;
+    while (node.* == .group) node = node.group;
+    if (node.* != .alternate) return null;
+    const braced = detectBracedVar(node.alternate.left) orelse return null;
+    const word = detectWordVar(node.alternate.right) orelse return null;
+    return .{ .braced = braced, .word = word };
+}
+
+fn detectBracedVar(node: *const model.Node) ?model.Set {
+    var nodes: [4]*const model.Node = undefined;
+    var count: usize = 0;
+    if (!flattenUpTo(node, &nodes, &count) or count != 4) return null;
+    if (literalByteOf(nodes[0]) != '$') return null;
+    if (literalByteOf(nodes[1]) != '{') return null;
+    const repeat = (repeatOf(nodes[2]) orelse return null).repeat;
+    if (repeat.lazy or repeat.possessive or repeat.maximum != null or repeat.minimum == 0) return null;
+    const body = nodeSet(repeat.child) orelse return null;
+    if (literalByteOf(nodes[3]) != '}') return null;
+    if (body.ranges.len == 0 or body.matches('}')) return null;
+    if (!bodyRepresentable(body)) return null;
+    return body;
+}
+
+fn detectWordVar(node: *const model.Node) ?model.Set {
+    var nodes: [2]*const model.Node = undefined;
+    var count: usize = 0;
+    if (!flattenUpTo(node, &nodes, &count) or count != 2) return null;
+    if (literalByteOf(nodes[0]) != '$') return null;
+    const repeat = (repeatOf(nodes[1]) orelse return null).repeat;
+    if (repeat.lazy or repeat.possessive or repeat.maximum != null or repeat.minimum == 0) return null;
+    const word = nodeSet(repeat.child) orelse return null;
+    if (!word.ascii_only or word.ranges.len == 0) return null;
+    return word;
 }
 
 fn detectWindowsPath(root: *const model.Node) ?WindowsPathShape {
@@ -2593,7 +2715,7 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         null;
     const paired: ?PairedShape = if (literal == null and caseless_literal == null and
         literal_set == null and !limits.auto_callout)
-        detectPaired(parsed.root)
+        try detectPaired(allocator, parsed.root)
     else
         null;
     const line_key: ?LineKeyShape = if (literal == null and caseless_literal == null and
@@ -2609,6 +2731,16 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
     const windows_path: ?WindowsPathShape = if (literal == null and caseless_literal == null and
         literal_set == null and !limits.auto_callout)
         detectWindowsPath(parsed.root)
+    else
+        null;
+    const html_tag: ?HtmlTagShape = if (literal == null and caseless_literal == null and
+        literal_set == null and !limits.auto_callout)
+        detectHtmlTag(parsed.root)
+    else
+        null;
+    const dollar_var: ?DollarVarShape = if (literal == null and caseless_literal == null and
+        literal_set == null and !limits.auto_callout)
+        detectDollarVar(parsed.root)
     else
         null;
     const optional_run: ?model.Set = if (literal == null and caseless_literal == null and
@@ -2690,6 +2822,8 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         .line_key = line_key,
         .line_bracket = line_bracket,
         .windows_path = windows_path,
+        .html_tag = html_tag,
+        .dollar_var = dollar_var,
         .optional_run = optional_run,
         .dfa_eligible = dfa_eligible,
         .extended = extended,

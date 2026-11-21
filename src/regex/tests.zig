@@ -1218,6 +1218,37 @@ test "paired, wrapped and line shapes scan config text" {
     try expectFastSpans(path_pattern, "1:\\x 22:\\y", &.{});
 }
 
+test "image, tag and shell variable fast paths" {
+    const image_pattern = "!\\[[^\\]]*\\]\\([^)]+\\)";
+    var image = try regex.Regex.init(gpa, image_pattern, .{});
+    defer image.deinit();
+    var image_workspace = try regex.ReplaceWorkspace.init(gpa, image.program, .{});
+    defer image_workspace.deinit();
+    try std.testing.expect(image_workspace.fast_kind == .paired);
+    try expectFastSpans(image_pattern, "![alt](img.png) ![](x) ![a](b c)", &.{ .{ 0, 15 }, .{ 16, 22 }, .{ 23, 32 } });
+    try expectFastSpans(image_pattern, "![a] (b) ![a](b", &.{});
+
+    const tag_pattern = "</?([a-z][a-z0-9]*)\\b";
+    var tag = try regex.Regex.init(gpa, tag_pattern, .{});
+    defer tag.deinit();
+    var tag_workspace = try regex.ReplaceWorkspace.init(gpa, tag.program, .{});
+    defer tag_workspace.deinit();
+    try std.testing.expect(tag_workspace.fast_kind == .html_tag);
+    try expectFastSpans(tag_pattern, "<div> </span> <a1> <A> <1a> <div_>", &.{ .{ 0, 4 }, .{ 6, 12 }, .{ 14, 17 } });
+    try expectFastSpans(tag_pattern, "</> <a b> <a1b2>", &.{ .{ 4, 6 }, .{ 10, 15 } });
+
+    const var_pattern = "\\$\\{[^}]+\\}|\\$\\w+";
+    var shell = try regex.Regex.init(gpa, var_pattern, .{});
+    defer shell.deinit();
+    var shell_workspace = try regex.ReplaceWorkspace.init(gpa, shell.program, .{});
+    defer shell_workspace.deinit();
+    try std.testing.expect(shell_workspace.fast_kind == .dollar_var);
+    try expectFastSpans(var_pattern, "echo $HOME ${PATH} $1 ${USER:-root}", &.{
+        .{ 5, 10 }, .{ 11, 18 }, .{ 19, 21 }, .{ 22, 35 },
+    });
+    try expectFastSpans(var_pattern, "$${a} ${} $", &.{.{ 1, 5 }});
+}
+
 test "signed number fast path scans sign and fraction" {
     var value = try regex.Regex.init(gpa, "[+-]?\\d+(?:\\.\\d+)?", .{});
     defer value.deinit();

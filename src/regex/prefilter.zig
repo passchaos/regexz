@@ -45,17 +45,27 @@ pub fn indexOfByteShort(input: []const u8, start: usize, byte: u8) ?usize {
         const b: Vec = input[offset + 16 ..][0..16].*;
         const c: Vec = input[offset + 32 ..][0..16].*;
         const d: Vec = input[offset + 48 ..][0..16].*;
-        const hits = ((a == needle) | (b == needle)) | ((c == needle) | (d == needle));
-        if (@reduce(.Or, hits)) {
-            while (input[offset] != byte) offset += 1;
-            return offset;
+        const eq_a = a == needle;
+        const eq_b = b == needle;
+        const eq_c = c == needle;
+        const eq_d = d == needle;
+        if (@reduce(.Or, (eq_a | eq_b) | (eq_c | eq_d))) {
+            const bits_a: u16 = @bitCast(eq_a);
+            const bits_b: u16 = @bitCast(eq_b);
+            const bits_c: u16 = @bitCast(eq_c);
+            const bits_d: u16 = @bitCast(eq_d);
+            if (bits_a != 0) return offset + @ctz(bits_a);
+            if (bits_b != 0) return offset + 16 + @ctz(bits_b);
+            if (bits_c != 0) return offset + 32 + @ctz(bits_c);
+            return offset + 48 + @ctz(bits_d);
         }
     }
     while (offset + 16 <= input.len) : (offset += 16) {
         const chunk: Vec = input[offset..][0..16].*;
-        if (@reduce(.Or, chunk == needle)) {
-            while (input[offset] != byte) offset += 1;
-            return offset;
+        const eq = chunk == needle;
+        if (@reduce(.Or, eq)) {
+            const bits: u16 = @bitCast(eq);
+            return offset + @ctz(bits);
         }
     }
     while (offset < input.len) : (offset += 1) {
@@ -76,11 +86,32 @@ fn indexOfByteLong(input: []const u8, start: usize, byte: u8) ?usize {
         const f: Vec = input[offset + 80 ..][0..16].*;
         const g: Vec = input[offset + 96 ..][0..16].*;
         const h: Vec = input[offset + 112 ..][0..16].*;
-        const hits = (((a == needle) | (b == needle)) | ((c == needle) | (d == needle))) |
-            (((e == needle) | (f == needle)) | ((g == needle) | (h == needle)));
+        const eq_a = a == needle;
+        const eq_b = b == needle;
+        const eq_c = c == needle;
+        const eq_d = d == needle;
+        const eq_e = e == needle;
+        const eq_f = f == needle;
+        const eq_g = g == needle;
+        const eq_h = h == needle;
+        const hits = ((eq_a | eq_b) | (eq_c | eq_d)) | ((eq_e | eq_f) | (eq_g | eq_h));
         if (@reduce(.Or, hits)) {
-            while (input[offset] != byte) offset += 1;
-            return offset;
+            const bits_a: u16 = @bitCast(eq_a);
+            const bits_b: u16 = @bitCast(eq_b);
+            const bits_c: u16 = @bitCast(eq_c);
+            const bits_d: u16 = @bitCast(eq_d);
+            const bits_e: u16 = @bitCast(eq_e);
+            const bits_f: u16 = @bitCast(eq_f);
+            const bits_g: u16 = @bitCast(eq_g);
+            const bits_h: u16 = @bitCast(eq_h);
+            if (bits_a != 0) return offset + @ctz(bits_a);
+            if (bits_b != 0) return offset + 16 + @ctz(bits_b);
+            if (bits_c != 0) return offset + 32 + @ctz(bits_c);
+            if (bits_d != 0) return offset + 48 + @ctz(bits_d);
+            if (bits_e != 0) return offset + 64 + @ctz(bits_e);
+            if (bits_f != 0) return offset + 80 + @ctz(bits_f);
+            if (bits_g != 0) return offset + 96 + @ctz(bits_g);
+            return offset + 112 + @ctz(bits_h);
         }
     }
     while (offset + 64 <= input.len) : (offset += 64) {
@@ -88,10 +119,19 @@ fn indexOfByteLong(input: []const u8, start: usize, byte: u8) ?usize {
         const b: Vec = input[offset + 16 ..][0..16].*;
         const c: Vec = input[offset + 32 ..][0..16].*;
         const d: Vec = input[offset + 48 ..][0..16].*;
-        const hits = ((a == needle) | (b == needle)) | ((c == needle) | (d == needle));
-        if (@reduce(.Or, hits)) {
-            while (input[offset] != byte) offset += 1;
-            return offset;
+        const eq_a = a == needle;
+        const eq_b = b == needle;
+        const eq_c = c == needle;
+        const eq_d = d == needle;
+        if (@reduce(.Or, (eq_a | eq_b) | (eq_c | eq_d))) {
+            const bits_a: u16 = @bitCast(eq_a);
+            const bits_b: u16 = @bitCast(eq_b);
+            const bits_c: u16 = @bitCast(eq_c);
+            const bits_d: u16 = @bitCast(eq_d);
+            if (bits_a != 0) return offset + @ctz(bits_a);
+            if (bits_b != 0) return offset + 16 + @ctz(bits_b);
+            if (bits_c != 0) return offset + 32 + @ctz(bits_c);
+            return offset + 48 + @ctz(bits_d);
         }
     }
     return indexOfByteTail(input, offset, byte);
@@ -102,9 +142,10 @@ fn indexOfByteTail(input: []const u8, start: usize, byte: u8) ?usize {
     var offset = start;
     while (offset + 16 <= input.len) : (offset += 16) {
         const chunk: Vec = input[offset..][0..16].*;
-        if (@reduce(.Or, chunk == needle)) {
-            while (input[offset] != byte) offset += 1;
-            return offset;
+        const eq = chunk == needle;
+        if (@reduce(.Or, eq)) {
+            const bits: u16 = @bitCast(eq);
+            return offset + @ctz(bits);
         }
     }
     while (offset < input.len) : (offset += 1) {

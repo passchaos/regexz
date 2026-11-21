@@ -95,6 +95,8 @@ pub const FastKind = enum {
     line_key,
     line_bracket,
     windows_path,
+    html_tag,
+    dollar_var,
 };
 pub const Error = model.Error;
 
@@ -300,6 +302,10 @@ pub const Workspace = struct {
     line_bracket: ?LineBracketState = null,
     /// `letters : \ run+` (Windows paths).
     windows_path: ?WindowsPathState = null,
+    /// `< /? letter run* \b` (HTML tag names).
+    html_tag: ?HtmlTagState = null,
+    /// `$\{ body+ \} | $ word+` (shell variables).
+    dollar_var: ?DollarVarState = null,
     /// Byte membership tables for the chain fast path. `Set.matches` is a
     /// binary search over rune ranges; the per-byte chain scans run several
     /// lookups per input byte, so cache the answers once per workspace.
@@ -594,12 +600,13 @@ pub const Workspace = struct {
         const paired: ?PairedState = if (limits.longest) null else blk: {
             const shape = program.paired orelse break :blk null;
             break :blk .{
-                .open1 = shape.open1,
-                .close1 = shape.close1,
-                .open2 = shape.open2,
-                .close2 = shape.close2,
+                .open = shape.open,
+                .middle = shape.middle,
+                .close = shape.close,
                 .body1 = byte_table.init(256, shape.body1),
                 .body2 = byte_table.init(256, shape.body2),
+                .body1_min = shape.body1_min,
+                .body2_min = shape.body2_min,
             };
         };
         const line_key: ?LineKeyState = if (limits.longest) null else blk: {
@@ -619,6 +626,20 @@ pub const Workspace = struct {
             break :blk .{
                 .letters = byte_table.init(256, shape.letters),
                 .run = byte_table.init(256, shape.run),
+            };
+        };
+        const html_tag: ?HtmlTagState = if (limits.longest) null else blk: {
+            const shape = program.html_tag orelse break :blk null;
+            break :blk .{
+                .letters = byte_table.init(256, shape.letters),
+                .run = byte_table.init(256, shape.run),
+            };
+        };
+        const dollar_var: ?DollarVarState = if (limits.longest) null else blk: {
+            const shape = program.dollar_var orelse break :blk null;
+            break :blk .{
+                .braced = byte_table.init(256, shape.braced),
+                .word = byte_table.init(256, shape.word),
             };
         };
         const anchored_table: [256]bool = if (simple_anchored) |anchored|
@@ -762,6 +783,10 @@ pub const Workspace = struct {
             .utf8_run
         else if (windows_path != null)
             .windows_path
+        else if (html_tag != null)
+            .html_tag
+        else if (dollar_var != null)
+            .dollar_var
         else if (simple_chain != null)
             .chain
         else if (run_then_literal != null)
@@ -955,6 +980,8 @@ pub const Workspace = struct {
             .line_key = line_key,
             .line_bracket = line_bracket,
             .windows_path = windows_path,
+            .html_tag = html_tag,
+            .dollar_var = dollar_var,
         };
     }
 
@@ -1117,6 +1144,8 @@ pub const Workspace = struct {
             .line_key => return self.findLineKey(&self.line_key.?, input, search_start),
             .line_bracket => return self.findLineBracket(&self.line_bracket.?, input, search_start),
             .windows_path => return self.findWindowsPath(&self.windows_path.?, input, search_start),
+            .html_tag => return self.findHtmlTag(&self.html_tag.?, input, search_start),
+            .dollar_var => return self.findDollarVar(&self.dollar_var.?, input, search_start),
         }
         // Every match must start at a start-literal occurrence, so the first
         // occurrence bounds the leftmost match start and the DFA can skip
@@ -1746,6 +1775,8 @@ pub const Workspace = struct {
             .line_key => return self.findLineKey(&self.line_key.?, input, search_start),
             .line_bracket => return self.findLineBracket(&self.line_bracket.?, input, search_start),
             .windows_path => return self.findWindowsPath(&self.windows_path.?, input, search_start),
+            .html_tag => return self.findHtmlTag(&self.html_tag.?, input, search_start),
+            .dollar_var => return self.findDollarVar(&self.dollar_var.?, input, search_start),
         }
         var from = search_start;
         if (self.pair_filter) |filter| {
@@ -2611,25 +2642,29 @@ pub const Workspace = struct {
         return null;
     }
 
-    /// `open1 body1+ close1 open2 body2+ close2`: both bodies exclude their
-    /// closer, so each candidate needs one local check.
+    /// `open body1+ middle body2+ close`: each body excludes the first byte
+    /// of the delimiter that follows it, so a failed check is local.
     fn findPaired(self: *Workspace, state: *const PairedState, input: []const u8, search_start: usize) ?Match {
         var search = search_start;
         while (search < input.len) {
-            const open = prefilter.indexOfByte(input, search, state.open1) orelse return null;
-            var pos = open + 1;
+            const open = indexOfBytes(input, search, state.open) orelse return null;
+            var pos = open + state.open.len;
             const body1_start = pos;
             while (pos < input.len and state.body1[input[pos]]) pos += 1;
-            if (pos > body1_start and pos + 2 <= input.len and input[pos] == state.close1 and
-                input[pos + 1] == state.open2)
+            if ((pos > body1_start or state.body1_min == 0) and
+                pos + state.middle.len <= input.len and
+                std.mem.eql(u8, input[pos..][0..state.middle.len], state.middle))
             {
-                var tail = pos + 2;
+                var tail = pos + state.middle.len;
                 const body2_start = tail;
                 while (tail < input.len and state.body2[input[tail]]) tail += 1;
-                if (tail > body2_start and tail < input.len and input[tail] == state.close2) {
+                if ((tail > body2_start or state.body2_min == 0) and
+                    tail + state.close.len <= input.len and
+                    std.mem.eql(u8, input[tail..][0..state.close.len], state.close))
+                {
                     self.slots[0] = open;
-                    self.slots[1] = tail + 1;
-                    return .{ .start = open, .end = tail + 1, .slots = self.slots };
+                    self.slots[1] = tail + state.close.len;
+                    return .{ .start = open, .end = tail + state.close.len, .slots = self.slots };
                 }
             }
             search = open + 1;
@@ -2705,6 +2740,57 @@ pub const Workspace = struct {
                 }
             }
             search = colon + 1;
+        }
+        return null;
+    }
+
+    /// `< /? letter run* \b`: each `<` checks the optional slash, the first
+    /// letter, the tag run and the trailing word boundary.
+    fn findHtmlTag(self: *Workspace, state: *const HtmlTagState, input: []const u8, search_start: usize) ?Match {
+        var search = search_start;
+        while (search < input.len) {
+            const open = prefilter.indexOfByte(input, search, '<') orelse return null;
+            var pos = open + 1;
+            if (pos < input.len and input[pos] == '/') pos += 1;
+            if (pos < input.len and state.letters[input[pos]]) {
+                pos += 1;
+                while (pos < input.len and state.run[input[pos]]) pos += 1;
+                if (wordBoundaryAt(input, pos)) {
+                    self.slots[0] = open;
+                    self.slots[1] = pos;
+                    return .{ .start = open, .end = pos, .slots = self.slots };
+                }
+            }
+            search = open + 1;
+        }
+        return null;
+    }
+
+    /// `$\{ body+ \} | $ word+`: each `$` tries the braced branch first, then
+    /// the word branch, matching source order.
+    fn findDollarVar(self: *Workspace, state: *const DollarVarState, input: []const u8, search_start: usize) ?Match {
+        var search = search_start;
+        while (search < input.len) {
+            const dollar = prefilter.indexOfByte(input, search, '$') orelse return null;
+            const next = dollar + 1;
+            if (next < input.len and input[next] == '{') {
+                var body = next + 1;
+                const body_start = body;
+                while (body < input.len and state.braced[input[body]]) body += 1;
+                if (body > body_start and body < input.len and input[body] == '}') {
+                    self.slots[0] = dollar;
+                    self.slots[1] = body + 1;
+                    return .{ .start = dollar, .end = body + 1, .slots = self.slots };
+                }
+            }
+            if (next < input.len and state.word[input[next]]) {
+                var end = next + 1;
+                while (end < input.len and state.word[input[end]]) end += 1;
+                self.slots[0] = dollar;
+                self.slots[1] = end;
+                return .{ .start = dollar, .end = end, .slots = self.slots };
+            }
+            search = dollar + 1;
         }
         return null;
     }
@@ -5194,12 +5280,13 @@ const WrappedRunState = struct {
 };
 
 const PairedState = struct {
-    open1: u8,
-    close1: u8,
-    open2: u8,
-    close2: u8,
+    open: []const u8,
+    middle: []const u8,
+    close: []const u8,
     body1: [256]bool,
     body2: [256]bool,
+    body1_min: u8,
+    body2_min: u8,
 };
 
 const LineKeyState = struct {
@@ -5213,6 +5300,16 @@ const LineBracketState = struct { run: [256]bool };
 const WindowsPathState = struct {
     letters: [256]bool,
     run: [256]bool,
+};
+
+const HtmlTagState = struct {
+    letters: [256]bool,
+    run: [256]bool,
+};
+
+const DollarVarState = struct {
+    braced: [256]bool,
+    word: [256]bool,
 };
 
 const LineMarkerState = struct {
