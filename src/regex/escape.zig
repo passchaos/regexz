@@ -199,14 +199,16 @@ fn propertyRanges(p: anytype, name: []const u8, negate: bool, fold: m.Fold) m.Er
     if (group == null and binary == null and !scripts_only) {
         binary = m.unicode.lookupPropertyNormalized(property_name);
     }
-    const count = if (group) |value| value.count else if (binary) |value| value.count else return error.InvalidRegex;
-    if (count > p.limits.max_ranges) return error.RegexLimitExceeded;
-    const ranges = try p.allocator.alloc(m.Range, count);
     if (group) |value| {
-        for (ranges, 0..) |*range, index| range.* = value.range(index);
-    } else {
-        for (ranges, 0..) |*range, index| range.* = binary.?.range(index);
+        if (value.count > p.limits.max_ranges) return error.RegexLimitExceeded;
+        // Defer the range copy; a class that buffers this property into a
+        // precomputed union never needs the individual group.
+        return .{ .ranges = &.{}, .negate = negate, .fold = fold, .group = value };
     }
+    const binary_property = binary orelse return error.InvalidRegex;
+    if (binary_property.count > p.limits.max_ranges) return error.RegexLimitExceeded;
+    const ranges = try p.allocator.alloc(m.Range, binary_property.count);
+    for (ranges, 0..) |*range, index| range.* = binary_property.range(index);
     return .{ .ranges = ranges, .negate = negate, .fold = fold };
 }
 

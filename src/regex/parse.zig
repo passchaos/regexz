@@ -954,6 +954,16 @@ pub const Parser = struct {
     pub fn materialize(self: *Parser, parsed: m.ParsedSet) m.Error!m.Set {
         if (parsed.materialized) |set| return set;
         const set = blk: {
+            if (parsed.group) |category| {
+                // Expand a deferred general-category group. Its ranges are
+                // canonical, so an unfolded set needs no normalization.
+                if (category.count > self.limits.max_ranges) return error.RegexLimitExceeded;
+                const ranges = try self.allocator.alloc(m.Range, category.count);
+                for (ranges, 0..) |*range, index| range.* = category.range(index);
+                if (!parsed.negate and parsed.fold == .none) break :blk classes.fromSortedRanges(ranges);
+                const list = std.ArrayList(m.Range){ .items = ranges, .capacity = ranges.len };
+                break :blk try classes.normalizeOwned(self.allocator, list, parsed.negate, parsed.fold, self.limits.max_ranges, true);
+            }
             // Property and POSIX tables are already canonical and owned by
             // the parser arena or static data, so validate them in place
             // instead of copying the range list through `normalize`.
@@ -965,6 +975,21 @@ pub const Parser = struct {
         };
         if (parsed.cache_name) |name| self.cachePropertySet(name, parsed.negate, parsed.fold, set);
         return set;
+    }
+
+    /// Materialize an atom with a class-level fold. Folding must happen before
+    /// the atom's own negation (`(?i)[[:^alpha:]]`), so this cannot reuse the
+    /// unfolded cache.
+    fn materializeFold(self: *Parser, parsed: m.ParsedSet, fold: m.Fold) m.Error!m.Set {
+        if (fold == .none) return self.materialize(parsed);
+        if (parsed.group) |category| {
+            if (category.count > self.limits.max_ranges) return error.RegexLimitExceeded;
+            const ranges = try self.allocator.alloc(m.Range, category.count);
+            for (ranges, 0..) |*range, index| range.* = category.range(index);
+            const list = std.ArrayList(m.Range){ .items = ranges, .capacity = ranges.len };
+            return classes.normalizeOwned(self.allocator, list, parsed.negate, fold, self.limits.max_ranges, true);
+        }
+        return classes.normalize(self.allocator, parsed.ranges, parsed.negate, fold, self.limits.max_ranges);
     }
     fn element(self: *Parser, fold: m.Fold) m.Error!m.ParsedSet {
         if (self.take('\\')) {
@@ -1218,13 +1243,7 @@ pub const Parser = struct {
                 try self.flushClassProperties(property_names[0..property_count], property_sets[0..property_count], &operand, &operand_sorted, &operand_union);
                 property_count = 0;
                 try self.materializePendingUnion(&operand, &operand_union);
-                // Materialized property sets are cached; the class fold is
-                // applied to the whole operand, so only reuse the cache when
-                // the class is unfolded.
-                const folded = if (self.foldMode() == .none)
-                    try self.materialize(start)
-                else
-                    try classes.normalize(self.allocator, start.ranges, start.negate, self.foldMode(), self.limits.max_ranges);
+                const folded = try self.materializeFold(start, self.foldMode());
                 if (operand_sorted and folded.ranges.len != 0 and operand.items.len != 0 and folded.ranges[0].first < operand.items[operand.items.len - 1].first) operand_sorted = false;
                 try classes.append(&operand, self.allocator, folded, self.limits.max_ranges);
             }

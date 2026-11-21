@@ -146,6 +146,9 @@ pub const ParsedSet = struct {
     /// Raw property name, used to reuse parsed ranges and a materialized set
     /// across repeated `\p{...}` atoms.
     cache_name: ?[]const u8 = null,
+    /// General-category group whose ranges have not been expanded yet.
+    /// Buffered property atoms can use a precomputed union without copying.
+    group: ?unicode.Group = null,
 };
 /// A positive, case-folded set. Negation and `(?i)` folding are materialized
 /// at compile time so matching is a binary search (plus a 128-bit ASCII
