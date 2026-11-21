@@ -1078,7 +1078,8 @@ positive `\p{...}` atoms use precomputed sorted unions (L+M, L+N, L+M+N),
 keeping the operand sorted so `normalize` skips its sort. Non-negated
 classes return the normalized set directly; negated classes complement the
 normalized ranges without a copy. Precomputed unions are merged directly
-from the generated table without an intermediate set. The latest eight-execution order-balanced
+from the generated table without an intermediate set, and coalesced range
+lists skip the merge loop. The latest eight-execution order-balanced
 sweep covers 101 cases: 98 are faster, IPv6 is at parity (1.01x), and the
 remaining losses are the one-character alternation (0.88x), currency (0.92x)
 and HTML tags (0.92x). The geometric-mean ratio is 2.30x. See
@@ -1086,7 +1087,7 @@ and HTML tags (0.92x). The geometric-mean ratio is 2.30x. See
 
 The same 100-case workload (minus `RegexSet`) was also run against PCRE2
 10.42 with JIT on the same host. regexz is faster on 97 of 100 cases, with a
-geometric-mean PCRE2/regexz ratio of 2.13x. PCRE2 wins compile Qwen (0.68x)
+geometric-mean PCRE2/regexz ratio of 2.13x. PCRE2 wins compile Qwen (0.69x)
 and the small ASCII case-insensitive literal (0.95x); regexz now also wins
 compile xDS-like (1.21x);
 regexz materializes Unicode property sets at compile time, while PCRE2
