@@ -452,10 +452,11 @@ pub const Regex = struct {
     /// Process-unique identity for the workspace pool.
     program_id: u64 = 0,
     limits: Limits,
-    /// Persistent linear workspace; owns the lazy DFA cache.
-    workspace: ?Workspace = null,
+    /// Persistent linear workspace; owns the lazy DFA cache. Allocated on
+    /// first use so the `Regex` value stays small and cheap to return.
+    workspace: ?*Workspace = null,
     /// Persistent search/replace workspace, created on first use.
-    replace_workspace: ?ReplaceWorkspace = null,
+    replace_workspace: ?*ReplaceWorkspace = null,
     mutex: std.atomic.Mutex = .unlocked,
     fn lock(self: *Regex) void {
         while (!self.mutex.tryLock()) std.Thread.yield() catch {};
@@ -517,21 +518,35 @@ pub const Regex = struct {
 
     pub fn deinit(self: *Regex) void {
         clearPooledWorkspace(self.program_id);
-        if (self.workspace) |*workspace| workspace.deinit();
-        if (self.replace_workspace) |*workspace| workspace.deinit();
+        if (self.workspace) |workspace| {
+            workspace.deinit();
+            self.allocator.destroy(workspace);
+        }
+        if (self.replace_workspace) |workspace| {
+            workspace.deinit();
+            self.allocator.destroy(workspace);
+        }
         if (self.block) |block| returnCompileBlock(self.allocator, block);
         self.arena.deinit();
         self.* = undefined;
     }
     fn ensureWorkspace(self: *Regex) Error!*Workspace {
-        if (self.workspace == null) self.workspace = try Workspace.init(self.allocator, self.program);
-        return &self.workspace.?;
+        if (self.workspace == null) {
+            const workspace = try self.allocator.create(Workspace);
+            errdefer self.allocator.destroy(workspace);
+            workspace.* = try Workspace.init(self.allocator, self.program);
+            self.workspace = workspace;
+        }
+        return self.workspace.?;
     }
     fn ensureReplaceWorkspace(self: *Regex) Error!*ReplaceWorkspace {
         if (self.replace_workspace == null) {
-            self.replace_workspace = try ReplaceWorkspace.init(self.allocator, self.program, self.limits);
+            const workspace = try self.allocator.create(ReplaceWorkspace);
+            errdefer self.allocator.destroy(workspace);
+            workspace.* = try ReplaceWorkspace.init(self.allocator, self.program, self.limits);
+            self.replace_workspace = workspace;
         }
-        return &self.replace_workspace.?;
+        return self.replace_workspace.?;
     }
     pub fn matches(self: *Regex, gpa: std.mem.Allocator, input: []const u8) Error!bool {
         if (self.program.literal) |literal| {
