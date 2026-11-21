@@ -121,13 +121,13 @@ fn complement(gpa: std.mem.Allocator, ranges: []const m.Range, limit: usize) m.E
     for (ranges) |range| {
         if (next < range.first) {
             if (inverted.items.len >= limit) return error.RegexLimitExceeded;
-            try inverted.append(gpa, .{ .first = @intCast(next), .last = range.first - 1 });
+            inverted.appendAssumeCapacity(.{ .first = @intCast(next), .last = range.first - 1 });
         }
         next = @as(u32, range.last) + 1;
     }
     if (next <= 0x10ffff) {
         if (inverted.items.len >= limit) return error.RegexLimitExceeded;
-        try inverted.append(gpa, .{ .first = @intCast(next), .last = 0x10ffff });
+        inverted.appendAssumeCapacity(.{ .first = @intCast(next), .last = 0x10ffff });
     }
     return inverted.toOwnedSlice(gpa);
 }
