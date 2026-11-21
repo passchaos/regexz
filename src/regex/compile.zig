@@ -49,11 +49,27 @@ pub const LineHeadingShape = struct {
     byte: u8,
     min: u8,
     max: u8,
-    space: u8,
+    space: model.Set,
     set: model.Set,
 };
 
-pub const LineMarkerShape = struct { space: model.Set, marker: model.Set, literal: u8 };
+pub const LineMarkerShape = struct { space: model.Set, marker: model.Set, trailing: model.Set, trailing_run: bool };
+
+/// The separator element of a line-heading/marker shape: one ASCII set byte
+/// or a greedy `set+` run.
+const SpaceElement = struct { set: model.Set, run: bool };
+
+fn spaceElement(node: *const model.Node) ?SpaceElement {
+    if (nodeSet(node)) |set| {
+        if (set.ranges.len != 1 or set.ranges[0].first != set.ranges[0].last or set.ranges[0].first >= 0x80) return null;
+        return .{ .set = set, .run = false };
+    }
+    const repeat = (repeatOf(node) orelse return null).repeat;
+    if (repeat.lazy or repeat.possessive or repeat.maximum != null or repeat.minimum < 1) return null;
+    const set = nodeSet(repeat.child) orelse return null;
+    if (!set.ascii_only or set.ranges.len == 0) return null;
+    return .{ .set = set, .run = true };
+}
 
 pub const EscapedDelimitedShape = struct { quote: u8, escape: u8 };
 
@@ -1054,12 +1070,8 @@ fn detectLineHeading(root: *const model.Node) ?LineHeadingShape {
     {
         return null;
     }
-    const space_set = nodeSet(nodes[2]) orelse return null;
-    if (space_set.ranges.len != 1 or space_set.ranges[0].first != space_set.ranges[0].last or
-        space_set.ranges[0].first >= 0x80)
-    {
-        return null;
-    }
+    const space = spaceElement(nodes[2]) orelse return null;
+    const space_set = space.set;
     const body_repeat = (repeatOf(nodes[3]) orelse return null).repeat;
     if (body_repeat.lazy or body_repeat.possessive or body_repeat.maximum != null or body_repeat.minimum != 0) return null;
     const body_set = nodeSet(body_repeat.child) orelse return null;
@@ -1071,7 +1083,7 @@ fn detectLineHeading(root: *const model.Node) ?LineHeadingShape {
         .byte = @intCast(heading_set.ranges[0].first),
         .min = @intCast(heading_repeat.minimum),
         .max = @intCast(heading_repeat.maximum.?),
-        .space = @intCast(space_set.ranges[0].first),
+        .space = space_set,
         .set = body_set,
     };
 }
@@ -1141,45 +1153,82 @@ fn isComplementOfBytes(set: model.Set, a: u8, b: u8) bool {
 
 /// `quote (?: escape any | [^quote escape] )* quote` in LF mode. The body set
 /// is exactly the complement of the quote and escape bytes, and the escaped
-/// branch accepts any rune except the newline.
+/// branch accepts any rune except the newline. Both the alternate form and
+/// the equivalent loop form `quote body* (?: escape any body* )* quote` are
+/// recognized.
 fn detectEscapedDelimited(root: *const model.Node) ?EscapedDelimitedShape {
-    var nodes: [3]*const model.Node = undefined;
+    var nodes: [4]*const model.Node = undefined;
     var count: usize = 0;
-    if (!flattenUpTo(root, &nodes, &count) or count != 3) return null;
+    if (!flattenUpTo(root, &nodes, &count) or (count != 3 and count != 4)) return null;
     const quote = literalByteOf(nodes[0]) orelse return null;
-    const close = literalByteOf(nodes[2]) orelse return null;
+    const close = literalByteOf(nodes[count - 1]) orelse return null;
     if (quote != close) return null;
-    const star_node = repeatOf(nodes[1]) orelse return null;
-    const star = star_node.repeat;
-    if (star.lazy or star.possessive or star.maximum != null or star.minimum != 0) return null;
-    var alt = star.child;
-    while (alt.* == .group) alt = alt.group;
-    if (alt.* != .alternate) return null;
     var escape: ?u8 = null;
     var body: ?model.Set = null;
-    const branches = [_]*const model.Node{ alt.alternate.left, alt.alternate.right };
-    for (branches) |branch| {
-        var node = branch;
-        while (node.* == .group) node = node.group;
-        switch (node.*) {
-            .pair => |pair| {
-                if (escape != null) return null;
-                const esc = literalByteOf(pair.left) orelse return null;
-                const any = nodeSet(pair.right) orelse return null;
-                if (!isComplementOfByte(any, '\n')) return null;
-                escape = esc;
-            },
-            .set => |set| {
-                if (body != null) return null;
-                body = set;
-            },
-            else => return null,
+    if (count == 3) {
+        const star_node = repeatOf(nodes[1]) orelse return null;
+        if (!emptyStar(star_node.repeat)) return null;
+        var alt = star_node.repeat.child;
+        while (alt.* == .group) alt = alt.group;
+        if (alt.* != .alternate) return null;
+        const branches = [_]*const model.Node{ alt.alternate.left, alt.alternate.right };
+        for (branches) |branch| {
+            var node = branch;
+            while (node.* == .group) node = node.group;
+            switch (node.*) {
+                .pair => |pair| {
+                    if (escape != null) return null;
+                    const esc = literalByteOf(pair.left) orelse return null;
+                    const any = nodeSet(pair.right) orelse return null;
+                    if (!isComplementOfByte(any, '\n')) return null;
+                    escape = esc;
+                },
+                .set => |set| {
+                    if (body != null) return null;
+                    body = set;
+                },
+                else => return null,
+            }
         }
+    } else {
+        // quote body* (?: escape any body* )* quote
+        const body_star = repeatOf(nodes[1]) orelse return null;
+        if (!emptyStar(body_star.repeat)) return null;
+        const first_body = nodeSet(body_star.repeat.child) orelse return null;
+        const escape_star = repeatOf(nodes[2]) orelse return null;
+        if (!emptyStar(escape_star.repeat)) return null;
+        var group = escape_star.repeat.child;
+        while (group.* == .group) group = group.group;
+        if (group.* != .pair) return null;
+        const esc = literalByteOf(group.pair.left) orelse return null;
+        var rest = group.pair.right;
+        while (rest.* == .group) rest = rest.group;
+        if (rest.* != .pair) return null;
+        const any = nodeSet(rest.pair.left) orelse return null;
+        if (!isComplementOfByte(any, '\n')) return null;
+        const tail_star = repeatOf(rest.pair.right) orelse return null;
+        if (!emptyStar(tail_star.repeat)) return null;
+        const third_body = nodeSet(tail_star.repeat.child) orelse return null;
+        if (!setsEqual(first_body, third_body)) return null;
+        escape = esc;
+        body = first_body;
     }
     const esc = escape orelse return null;
     const set = body orelse return null;
     if (!isComplementOfBytes(set, quote, esc)) return null;
     return .{ .quote = quote, .escape = esc };
+}
+
+fn emptyStar(repeat: anytype) bool {
+    return !repeat.lazy and !repeat.possessive and repeat.maximum == null and repeat.minimum == 0;
+}
+
+fn setsEqual(a: model.Set, b: model.Set) bool {
+    if (a.ranges.len != b.ranges.len) return false;
+    for (a.ranges, b.ranges) |left, right| {
+        if (left.first != right.first or left.last != right.last) return false;
+    }
+    return true;
 }
 
 /// `(?m)^space* marker literal` in LF mode: a line-start assertion, a
@@ -1199,16 +1248,12 @@ fn detectLineMarker(root: *const model.Node) ?LineMarkerShape {
     if (!space_set.ascii_only or space_set.ranges.len == 0) return null;
     const marker_set = nodeSet(nodes[2]) orelse return null;
     if (!marker_set.ascii_only or marker_set.ranges.len == 0) return null;
-    const literal_set = nodeSet(nodes[3]) orelse return null;
-    if (literal_set.ranges.len != 1 or literal_set.ranges[0].first != literal_set.ranges[0].last or
-        literal_set.ranges[0].first >= 0x80)
-    {
-        return null;
-    }
+    const trailing = spaceElement(nodes[3]) orelse return null;
     return .{
         .space = space_set,
         .marker = marker_set,
-        .literal = @intCast(literal_set.ranges[0].first),
+        .trailing = trailing.set,
+        .trailing_run = trailing.run,
     };
 }
 

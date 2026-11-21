@@ -452,7 +452,7 @@ pub const Workspace = struct {
                 .byte = shape.byte,
                 .min = shape.min,
                 .max = shape.max,
-                .space = shape.space,
+                .space = byte_table.init(256, shape.space),
                 .run = deferred_utf8.Run.init(shape.set),
             };
             state.run.prepare_after = std.math.maxInt(u16);
@@ -469,7 +469,8 @@ pub const Workspace = struct {
             state.* = .{
                 .space = byte_table.init(256, shape.space),
                 .marker = byte_table.init(256, shape.marker),
-                .literal = shape.literal,
+                .trailing = byte_table.init(256, shape.trailing),
+                .trailing_run = shape.trailing_run,
             };
             break :blk state;
         };
@@ -2140,10 +2141,14 @@ pub const Workspace = struct {
         while (line < input.len) {
             var pos = line;
             while (pos < input.len and state.space[input[pos]]) pos += 1;
-            if (pos + 1 < input.len and state.marker[input[pos]] and input[pos + 1] == state.literal) {
+            if (pos + 1 < input.len and state.marker[input[pos]] and state.trailing[input[pos + 1]]) {
+                var end = pos + 2;
+                if (state.trailing_run) {
+                    while (end < input.len and state.trailing[input[end]]) end += 1;
+                }
                 self.slots[0] = line;
-                self.slots[1] = pos + 2;
-                return .{ .start = line, .end = pos + 2, .slots = self.slots };
+                self.slots[1] = end;
+                return .{ .start = line, .end = end, .slots = self.slots };
             }
             if (pos >= input.len) return null;
             line = nextLineStart(input, pos) orelse return null;
@@ -2983,7 +2988,7 @@ pub const Workspace = struct {
             var heading = count;
             while (heading >= state.min) : (heading -= 1) {
                 const pos = line + heading;
-                if (pos < input.len and input[pos] == state.space) {
+                if (pos < input.len and state.space[input[pos]]) {
                     body_start = pos + 1;
                     break;
                 }
@@ -4529,14 +4534,15 @@ const EscapedDelimitedState = struct { quote: u8, escape: u8 };
 const LineMarkerState = struct {
     space: [256]bool,
     marker: [256]bool,
-    literal: u8,
+    trailing: [256]bool,
+    trailing_run: bool,
 };
 
 const LineHeadingState = struct {
     byte: u8 = 0,
     min: u8 = 1,
     max: u8 = 1,
-    space: u8 = 0,
+    space: [256]bool = .{false} ** 256,
     run: deferred_utf8.Run,
 };
 

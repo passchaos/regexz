@@ -1224,6 +1224,40 @@ test "escaped delimited fast path honors escapes" {
     try expectFastSpans(pattern, "x\"a\"y\"b\"", &.{ .{ 1, 4 }, .{ 5, 8 } });
 }
 
+test "escaped delimited loop form shares the scanner" {
+    const pattern = "\"[^\"\\\\]*(?:\\\\.[^\"\\\\]*)*\"";
+    var value = try regex.Regex.init(gpa, pattern, .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind == .escaped_delimited);
+
+    try expectFastSpans(pattern, "\"abc\" \"a\\\"b\" \"a\\\\\" x", &.{ .{ 0, 5 }, .{ 6, 12 }, .{ 13, 18 } });
+    try expectFastSpans(pattern, "\"abc", &.{});
+    try expectFastSpans(pattern, "\"a\\\"", &.{});
+    try expectFastSpans(pattern, "\"a\\\nbc", &.{});
+    try expectFastSpans(pattern, "\"猫\"", &.{.{ 0, 5 }});
+    try expectFastSpans(pattern, "x\"a\"y\"b\"", &.{ .{ 1, 4 }, .{ 5, 8 } });
+}
+
+test "line shapes accept whitespace runs" {
+    var heading = try regex.Regex.init(gpa, "(?m)^#{1,6}\\s+.*$", .{});
+    defer heading.deinit();
+    var heading_workspace = try regex.ReplaceWorkspace.init(gpa, heading.program, .{});
+    defer heading_workspace.deinit();
+    try std.testing.expect(heading_workspace.fast_kind == .line_heading);
+    try expectFastSpans("(?m)^#{1,6}\\s+.*$", "# Title\n##  Section\ntext\n###\tSub\n", &.{ .{ 0, 7 }, .{ 8, 19 }, .{ 25, 32 } });
+    try expectFastSpans("(?m)^#{1,6}\\s+.*$", "#nospace\n#  ok\n", &.{.{ 9, 14 }});
+
+    var marker = try regex.Regex.init(gpa, "(?m)^\\s*[-*+]\\s+", .{});
+    defer marker.deinit();
+    var marker_workspace = try regex.ReplaceWorkspace.init(gpa, marker.program, .{});
+    defer marker_workspace.deinit();
+    try std.testing.expect(marker_workspace.fast_kind == .line_marker);
+    try expectFastSpans("(?m)^\\s*[-*+]\\s+", "- a\n  *   b\n\t+ c\nx", &.{ .{ 0, 2 }, .{ 4, 10 }, .{ 12, 15 } });
+    try expectFastSpans("(?m)^\\s*[-*+]\\s+", "-\n* x\n", &.{ .{ 0, 2 }, .{ 2, 4 } });
+}
+
 test "line marker fast path scans list prefixes" {
     var value = try regex.Regex.init(gpa, "(?m)^\\s*[-*+] ", .{});
     defer value.deinit();
