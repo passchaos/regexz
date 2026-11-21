@@ -27,7 +27,7 @@ text, and small full-match subjects.
 
 | Case | regexz, ns/iter | Rust, ns/iter | Rust / regexz |
 | --- | ---: | ---: | ---: |
-| compile Qwen tokenizer | 37,100.0 | 714,453.8 | 19.26x |
+| compile Qwen tokenizer | 36,370.0 | 714,453.8 | 19.64x |
 | compile xDS-like | 5,900.0 | 31,649.2 | 5.36x |
 | find Qwen tokenizer | 49,760.6 | 106,195.8 | 2.13x |
 | findAll Qwen (borrowed) | 58,364.1 | 105,801.2 | 1.81x |
@@ -134,16 +134,16 @@ losses are the one-character alternation (`a|b|c`, 0.88x), currency
 (`\$\d+(?:\.\d{2})?`, 0.92x) and HTML tags (`<[^>]+>`, 0.92x); IPv6 is at
 parity (1.01x). The largest leads are `replaceAll` with edge assertions
 (39.00x), blank-line scans (33.15x), capitalized-word scans (28.39x),
-`RegexSet` no-match scans (16.22x) and compile time (19.26x); the tokenizer
+`RegexSet` no-match scans (16.22x) and compile time (19.64x); the tokenizer
 searches are 2.13x and 2.16x ahead. The geometric-mean ratio is 2.30x. The
 currency and HTML-tag rows are small absolute gaps (about 26 ns and 15 us
 respectively); the one-character alternation is dominated by the per-match
 dispatch call.
 
-The compile rows were re-measured after the class-sort, workspace-pointer and
-complement-fill changes, and the `find log level` and `find (?i) alternation`
-rows after the 32-lane caseless scan; the materialized sets are identical, so
-the other search rows are unchanged.
+The compile rows were re-measured after the class-sort, workspace-pointer,
+complement-fill and in-place-operand changes, and the `find log level` and
+`find (?i) alternation` rows after the 32-lane caseless scan; the materialized
+sets are identical, so the other search rows are unchanged.
 
 ## What changed in this round
 
@@ -192,8 +192,9 @@ widens the hot scans:
   maximum end of adjacent ranges with the same start, so the end tie-break
   was redundant; removing it avoids a mispredicting branch on the many equal
   starts produced by Unicode property unions. The complement list is sized
-  once and filled without per-append capacity checks. Qwen compile improves
-  about 17% across these class-normalization changes.
+  once and filled without per-append capacity checks, and the parser's class
+  operand is normalized in place instead of copied. Qwen compile improves
+  about 25% across these class-normalization changes.
 - Caseless literal alternations use the same 32-lane nibble scan as word
   alternations, with `vzeroupper` before returning. `(?i)error|warn|info`
   improves about 1.9x in the comparison harness.

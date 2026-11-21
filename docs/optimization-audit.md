@@ -1072,7 +1072,8 @@ only, removing a mispredicting end tie-break on the many equal starts from
 Unicode property unions. Caseless literal alternations reuse the 32-lane
 nibble scan, improving `(?i)error|warn|info` about 1.9x. Persistent
 workspaces moved behind pointers, shrinking `Regex` from about 33 KiB to
-3 KiB and cutting xDS-like compile 2.1x and Qwen 1.16x. The latest eight-execution order-balanced
+3 KiB and cutting xDS-like compile 2.1x and Qwen 1.16x. The parser's class
+operand is normalized in place, avoiding a copy before the sort. The latest eight-execution order-balanced
 sweep covers 101 cases: 98 are faster, IPv6 is at parity (1.01x), and the
 remaining losses are the one-character alternation (0.88x), currency (0.92x)
 and HTML tags (0.92x). The geometric-mean ratio is 2.30x. See
@@ -1080,7 +1081,7 @@ and HTML tags (0.92x). The geometric-mean ratio is 2.30x. See
 
 The same 100-case workload (minus `RegexSet`) was also run against PCRE2
 10.42 with JIT on the same host. regexz is faster on 97 of 100 cases, with a
-geometric-mean PCRE2/regexz ratio of 2.13x. PCRE2 wins compile Qwen (0.44x)
+geometric-mean PCRE2/regexz ratio of 2.13x. PCRE2 wins compile Qwen (0.45x)
 and the small ASCII case-insensitive literal (0.95x); regexz now also wins
 compile xDS-like (1.21x);
 regexz materializes Unicode property sets at compile time, while PCRE2
