@@ -936,3 +936,10 @@ followed by per-candidate verification) was screened and reverted: the
 shared-prefix alternation regressed 1.39x because the four-splat block
 filter amortizes across the 16-byte block while the byte scan re-scans
 overlapping regions at every hit. The shared-prefix block filter stays.
+
+Inlining the literal-set scan loops into the scanner functions (removing one
+call per match) measured 0.97-0.99x on the 10/20-word alternations and 0.95x
+on shared-prefix in one isolated batch, but 0.99-1.01x with shared-prefix
+1.05x in the comparison harness, while unrelated cases moved by up to 1.13x.
+The effect is below the shared host's noise floor and the change is
+reverted; the scan loops stay as separate functions.
