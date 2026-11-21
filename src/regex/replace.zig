@@ -640,6 +640,7 @@ pub const Workspace = struct {
                         .tail = if (later.tail) |set| deferred_utf8.Run.init(set) else null,
                         .newline_branch = later.newline_branch,
                         .lookahead_branch = later.lookahead_branch,
+                        .bare_branch = later.bare_branch,
                     };
                     initialized += 1;
                 }
@@ -2821,13 +2822,16 @@ pub const Workspace = struct {
                         return .{ .start = search_start, .end = end, .slots = self.slots };
                     },
                     .whitespace => {
-                        // `\s*[\r\n]+` matches through the last newline in
-                        // the whitespace run; `\s+(?!\S)` backtracks one
-                        // space when the run is followed by text, and the
-                        // bare `\s+` takes the whole run otherwise.
+                        // Try the collapsed whitespace branches in source
+                        // order: `\s*[\r\n]+` through the last newline,
+                        // `\s+(?!\S)` with one space of backtracking, then
+                        // the bare `\s+`. A branch that cannot match falls
+                        // through to the next one, and the plan ends in the
+                        // general engine when none can.
                         const end = later.run.runEnd(self.allocator, input, search_start);
                         if (end == search_start) continue;
-                        var match_end = end;
+                        var match_end: usize = 0;
+                        var matched = false;
                         if (later.newline_branch) {
                             var last_newline: ?usize = null;
                             var scan = search_start;
@@ -2836,12 +2840,25 @@ pub const Workspace = struct {
                             }
                             if (last_newline) |at| {
                                 match_end = at + 1;
-                            } else if (later.lookahead_branch and end < input.len and end - search_start >= 2) {
-                                match_end = end - 1;
+                                matched = true;
                             }
-                        } else if (later.lookahead_branch and end < input.len and end - search_start >= 2) {
-                            match_end = end - 1;
                         }
+                        if (!matched and later.lookahead_branch) {
+                            // At the text end the lookahead succeeds; before
+                            // text it needs a spare space to backtrack over.
+                            if (end == input.len) {
+                                match_end = end;
+                                matched = true;
+                            } else if (end - search_start >= 2) {
+                                match_end = end - 1;
+                                matched = true;
+                            }
+                        }
+                        if (!matched and later.bare_branch) {
+                            match_end = end;
+                            matched = true;
+                        }
+                        if (!matched) continue;
                         self.slots[0] = search_start;
                         self.slots[1] = match_end;
                         return .{ .start = search_start, .end = match_end, .slots = self.slots };
@@ -3859,6 +3876,7 @@ const LaterRun = struct {
     tail: ?deferred_utf8.Run,
     newline_branch: bool = false,
     lookahead_branch: bool = false,
+    bare_branch: bool = false,
 
     fn deinit(self: *LaterRun, allocator: std.mem.Allocator) void {
         if (self.prefix) |*prefix| prefix.deinit(allocator);

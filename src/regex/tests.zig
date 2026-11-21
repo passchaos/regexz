@@ -876,6 +876,53 @@ test "fast branch scans digit and punctuation fallbacks" {
     }
 }
 
+test "later whitespace plans model lookaround branches" {
+    // `A?\s+(?!\S)` is not a pure whitespace branch. The direct plan must
+    // leave it to the engine instead of matching the bare run, and a
+    // whitespace run that cannot satisfy `\s+(?!\S)` (a single space before
+    // text) must fall through instead of matching.
+    const patterns = [_][]const u8{
+        "\\d+|\\s+(?!\\S)",
+        "\\d+|A?\\s+(?!\\S)",
+        "\\w+|\\s*[\\r\\n]+",
+        "\\w+|\\s*[\\r\\n]+|\\s+(?!\\S)|\\s+",
+    };
+    const inputs = [_][]const u8{
+        " 猫",
+        " a ",
+        "  ",
+        "   x",
+        " !",
+        " \n",
+        "a \n ",
+        "a  b",
+        "\n\n",
+        "x",
+        " 猫AA ",
+    };
+    for (patterns) |pattern| {
+        var value = try regex.Regex.init(gpa, pattern, .{});
+        defer value.deinit();
+        var reference_program = value.program;
+        reference_program.fast_branch = null;
+        var reference = try regex.ReplaceWorkspace.init(gpa, reference_program, .{});
+        defer reference.deinit();
+        var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+        defer workspace.deinit();
+        for (inputs) |input| {
+            for (0..input.len + 1) |from| {
+                const expected = try reference.find(input, from);
+                const actual = try workspace.find(input, from);
+                try std.testing.expectEqual(expected != null, actual != null);
+                if (expected) |match| {
+                    try std.testing.expectEqual(match.start, actual.?.start);
+                    try std.testing.expectEqual(match.end, actual.?.end);
+                }
+            }
+        }
+    }
+}
+
 test "prefix loop requires a full-coverage loop set" {
     // `(b)*` cannot skip `a`, so a fresh start at offset 1 can match even
     // though the scan from offset 0 died later.

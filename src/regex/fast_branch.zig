@@ -29,6 +29,9 @@ pub const Later = struct {
     /// `\s+(?!\S)` before the bare `\s+` run.
     newline_branch: bool = false,
     lookahead_branch: bool = false,
+    /// A bare `\s+` branch follows the newline/lookahead branches, so a
+    /// failed earlier branch may still match the whole run.
+    bare_branch: bool = false,
 };
 
 pub const Plan = struct {
@@ -145,7 +148,25 @@ fn branchPlan(branch: *const model.Node) ?Plan {
 
 /// A branch after the dominant one, or null when it is not one of the shapes
 /// that can be scanned directly (`set`, `set+`, or `prefix? set+ set*`).
+/// Whether the subtree contains a lookaround. The direct later-branch scans
+/// cannot model lookaround side conditions, so such branches must stay on
+/// the general engine. Pure whitespace branches are handled separately by
+/// `whitespacePlan`, which does model `\s+(?!\S)`.
+fn hasLookaround(node: *const model.Node) bool {
+    return switch (node.*) {
+        .lookahead_set, .lookaround => true,
+        .group => |child| hasLookaround(child),
+        .capture => |capture| hasLookaround(capture.child),
+        .atomic => |child| hasLookaround(child),
+        .pair => |pair| hasLookaround(pair.left) or hasLookaround(pair.right),
+        .alternate => |pair| hasLookaround(pair.left) or hasLookaround(pair.right),
+        .repeat => |repeat| hasLookaround(repeat.child),
+        else => false,
+    };
+}
+
 fn laterPlan(branch: *const model.Node) ?Later {
+    if (hasLookaround(branch)) return null;
     const node = strip(branch);
     return switch (node.*) {
         .set => |set| .{ .kind = .single, .run = set },
@@ -291,9 +312,12 @@ fn whitespacePlan(rest: []const *const model.Node) ?Later {
             if (rest.len != 3) return null;
             const third = whitespaceShape(rest[2]) orelse return null;
             if (third.newline or third.lookahead or !sameSet(first.set, third.set)) return null;
+            plan.bare_branch = true;
             return plan;
         }
-        return if (rest.len == 2) plan else null;
+        if (rest.len != 2) return null;
+        plan.bare_branch = true;
+        return plan;
     }
     if (first.lookahead) {
         plan.lookahead_branch = true;
@@ -301,9 +325,12 @@ fn whitespacePlan(rest: []const *const model.Node) ?Later {
         if (rest.len != 2) return null;
         const second = whitespaceShape(rest[1]) orelse return null;
         if (second.newline or second.lookahead or !sameSet(first.set, second.set)) return null;
+        plan.bare_branch = true;
         return plan;
     }
-    return if (rest.len == 1) plan else null;
+    if (rest.len != 1) return null;
+    plan.bare_branch = true;
+    return plan;
 }
 
 fn optionalPrefix(node: *const model.Node) ?model.Set {
