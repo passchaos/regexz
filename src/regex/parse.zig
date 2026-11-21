@@ -1070,7 +1070,11 @@ pub const Parser = struct {
         while (self.peek()) |_| {
             if (self.flags.extended_more) self.skipClassSpace();
             if (!first and self.take(']')) {
-                const right = try classes.normalize(self.allocator, operand.items, false, self.foldMode(), self.limits.max_ranges);
+                const right = classes.normalizeOwned(self.allocator, operand, false, self.foldMode(), self.limits.max_ranges) catch |err| {
+                    operand = .empty;
+                    return err;
+                };
+                operand = .empty;
                 const combined = if (accumulator) |left|
                     try classes.combine(self.allocator, left, pending, right, self.limits.max_ranges)
                 else
@@ -1079,8 +1083,11 @@ pub const Parser = struct {
             }
             if (!first) {
                 if (self.takeClassOp()) |op| {
-                    const right = try classes.normalize(self.allocator, operand.items, false, self.foldMode(), self.limits.max_ranges);
-                    operand.clearRetainingCapacity();
+                    const right = classes.normalizeOwned(self.allocator, operand, false, self.foldMode(), self.limits.max_ranges) catch |err| {
+                        operand = .empty;
+                        return err;
+                    };
+                    operand = .empty;
                     accumulator = if (accumulator) |left|
                         try classes.combine(self.allocator, left, pending, right, self.limits.max_ranges)
                     else

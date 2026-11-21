@@ -158,6 +158,40 @@ pub fn fromRanges(ranges: []const m.Range) m.Set {
     return .{ .ranges = ranges, .ascii = bitmap, .ascii_only = ascii_only };
 }
 
+/// Normalize an owned range list in place. The parser's class operand is
+/// already allocated from the compile arena; taking ownership avoids the
+/// copy that `normalize` makes before sorting.
+pub fn normalizeOwned(gpa: std.mem.Allocator, list: std.ArrayList(m.Range), negate: bool, fold: m.Fold, limit: usize) m.Error!m.Set {
+    var ranges = list;
+    errdefer ranges.deinit(gpa);
+    if (ranges.items.len > limit) return error.RegexLimitExceeded;
+    if (fold != .none) {
+        switch (fold) {
+            .ascii => try appendAsciiFolded(gpa, &ranges),
+            .turkish => try appendTurkishFolded(gpa, &ranges),
+            else => try appendFolded(gpa, &ranges),
+        }
+    }
+    if (!sorted(ranges.items)) std.mem.sort(m.Range, ranges.items, {}, lessThan);
+    var count: usize = 0;
+    for (ranges.items) |range| {
+        if (range.first > range.last) return error.InvalidRegex;
+        if (count != 0 and @as(u32, range.first) <= @as(u32, ranges.items[count - 1].last) + 1) {
+            ranges.items[count - 1].last = @max(ranges.items[count - 1].last, range.last);
+        } else {
+            ranges.items[count] = range;
+            count += 1;
+        }
+    }
+    if (count > limit) return error.RegexLimitExceeded;
+    if (negate) {
+        const result = try complement(gpa, ranges.items[0..count], limit);
+        ranges.deinit(gpa);
+        return fromRanges(result);
+    }
+    return fromRanges(ranges.items[0..count]);
+}
+
 pub fn normalize(gpa: std.mem.Allocator, raw: []const m.Range, negate: bool, fold: m.Fold, limit: usize) m.Error!m.Set {
     if (raw.len > limit) return error.RegexLimitExceeded;
     var ranges: std.ArrayList(m.Range) = .empty;
