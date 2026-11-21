@@ -1028,3 +1028,31 @@ blank lines and blockquotes are at parity within host noise (0.98x, 1.00x,
 0.95x and 0.91x), HTTP methods measured 0.81x after 1.03x in the previous
 sweep (about 25% host variance at this scale), and the geometric-mean ratio
 is 2.38x. See [Rust comparison](benchmarks/rust-comparison.md).
+
+A third expansion brought the suite to 93 cases. Markdown links
+(`\[[^\]]+\]\([^)]+\)`) get a paired-delimiter scanner that walks the
+bracket body, the `](` pair and the paren body (0.03x to 1.10x). Template
+interpolation (`\$\{[^}]+\}`) gets a multi-byte open/run/close wrapper
+(0.90x to 1.48x). YAML keys and TOML tables scan for their `:` or `[`
+literal and verify the surrounding line context instead of walking every
+line, so the key and space runs can cross line breaks without a per-line
+scan (YAML 0.26x to 1.66x, TOML 0.40x to 1.40x). Windows paths scan for the
+colon and check the drive letter and separator before consuming the run
+(0.49x to 2.99x). MAC addresses, base64 runs, slash dates and HTTP request
+lines already used existing walks and are 1.50x, 1.89x, 2.98x and 1.63x
+ahead; CSS selectors are 1.14x ahead.
+
+The single-byte prefilter was split by gap length. A 128-byte unroll helps
+one-shot scans over large inputs, but it regressed short line-walk gaps
+(blank lines 3.5 us to 7.5 us) because the larger hot loop no longer inlined.
+Long scans now use the 128-byte loop, short scans keep the 64-byte loop, and
+the width dispatch is inline, so `nextLineStart` keeps its small loop. Blank
+lines moved from 0.87x to 1.94x and currency reached 1.03x. A 64-byte unroll
+of the word-alternation scan remains rejected (see the previous section).
+
+The latest six-execution interleaved sweep covers 93 cases: 89 are faster,
+HTTP methods, hashtags and mentions are at parity within host noise
+(0.95x, 0.94x and 0.95x), and the case-insensitive log level measured 3.17 us
+in this batch versus about 2.1 us in isolation, so its 0.68x is a host
+outlier. The geometric-mean ratio is 2.21x. See
+[Rust comparison](benchmarks/rust-comparison.md).
