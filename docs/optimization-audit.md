@@ -954,7 +954,44 @@ now has an AST-detected `set_run_min` scanner (`\s{2,}` 5.0x, from 0.24x to
 with three pairs now use the nibble pair filter instead of splats, cutting
 the case-insensitive three-literal no-match scan from 5.7 us to 2.2 us
 (0.36x to 0.93x). A two-byte SIMD pair filter then took runs of two or more
-spaces from 10.4 us to 4.9 us (2.1x, 0.86x to about 1.9x). The suite covers
-63 cases and all are ahead in the latest sweep; the case-insensitive log
-level is at parity within host noise (1.08x). See
+spaces from 10.4 us to 4.9 us (2.1x, 0.86x to about 1.9x). All 63 cases
+were ahead in that sweep; the case-insensitive log level was at parity within
+host noise (1.08x). See
+[Rust comparison](benchmarks/rust-comparison.md).
+
+An expanded 71-case comparison suite exposed eight real-world patterns.
+Markdown headings and list markers now accept a greedy `set+` separator in
+the line shapes, so `(?m)^#{1,6}\s+.*$` and `(?m)^\s*[-*+] ` use the line
+scanners (heading 249.1 us -> 37.7 us, list 106.5 us -> 2.6 us). The
+escaped-delimited detector also recognizes the loop form
+`quote body* (?: escape any body* )* quote`, sharing the escape-aware scanner
+with the alternate form (JSON loop strings 36.4 us -> 9.1 us, 1.87x ahead of
+Rust). A bounded word alternation with ASCII word boundaries
+(`\b(?:get|post|put|delete)\b`) scans a case-folded two-byte pair filter in
+one 32-byte-unrolled pass and verifies the boundaries and alternatives
+locally; verification accepts the non-ASCII simple-fold peers U+017F and
+U+212A, and a literal with a peer in its first two bytes falls back to the
+engine because the pair filter folds ASCII only (HTTP methods 22.5 us ->
+1.8 us, 0.97x of Rust, from 0.07x). Full email addresses scan around each
+`@`: the local run starts at the first boundary inside it and the domain
+walks dots from the end, mirroring the greedy `domain+ \.` backtracking
+(50.4 us -> 14.0 us, 1.78x ahead). The number shape now covers an optional
+exponent (`\d+(?:\.\d+)?(?:[eE][+-]?\d+)?`, 168.5 us -> 38.5 us, 1.59x
+ahead), `(?m)^\s*$` scans line runs directly (1.83x ahead), and the
+single-byte prefilter scans 64 bytes per iteration (currency no-match 679 ns
+-> 342 ns, parity with Rust). The Zig loop-form harness pattern had one less
+backslash level than the Rust pattern; the escaping is fixed so both sides
+benchmark the same regex.
+
+Three refinements were screened and reverted. A third-byte lane filter for
+word alternations rejects pair collisions before verification, but the extra
+vector compares and the per-chunk optional check made the HTTP-method scan
+2.2x slower (1.75 us -> 3.8 us), so the pair filter stays. A first-byte
+candidate scan built on `FirstFilter` measured 8.8 us on the 25 KiB text
+because every hit restarts the 16-byte filter loop; the single-pass nibble
+pair scan is retained.
+
+The latest six-execution interleaved sweep covers 71 cases: 69 are ahead,
+the case-insensitive log level and HTTP methods are at parity within host
+noise (1.00x and 0.97x), and the geometric-mean ratio is 2.63x. See
 [Rust comparison](benchmarks/rust-comparison.md).
