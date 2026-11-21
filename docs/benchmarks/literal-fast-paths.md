@@ -281,6 +281,15 @@ passed the caseless-literal detector, so `find` accepted the other case even
 though full match rejected it. Such patterns now fall back to the general
 engine.
 
+## Dot-star runs
+
+`.*literal` scans the dot run up to the last literal occurrence in the line.
+The run is now found with a 16-byte vector scan that stops at the first line
+break or non-ASCII byte; non-ASCII input defers to the UTF-8 run scan, which
+validates the sequence and continues through valid runes. ASCII lines end the
+run after a handful of vector steps instead of one byte-table lookup per
+byte. The nullable-prefix case improves 2.7x and is 3.83x ahead.
+
 The comparison now covers 58 cases and regexz is faster on all of them; the
-thinnest margins are the semver scan at 1.04x and the camelCase scan at
+thinnest margins are the camelCase scan at 1.14x and the semver scan at
 1.16x.

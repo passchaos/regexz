@@ -525,7 +525,10 @@ pub const Workspace = struct {
             const shape = detectStarLiteral(program) orelse break :blk null;
             const state = try allocator.create(StarLiteralState);
             errdefer allocator.destroy(state);
-            state.* = .{ .run = deferred_utf8.Run.init(shape.set) };
+            state.* = .{
+                .run = deferred_utf8.Run.init(shape.set),
+                .dot = shapes.isDotExceptNewline(shape.set),
+            };
             state.run.prepare_after = std.math.maxInt(u16);
             state.literal = shape.literal;
             state.literal_len = shape.literal_len;
@@ -2368,9 +2371,13 @@ pub const Workspace = struct {
     /// skips the whole run.
     fn findStarLiteral(self: *Workspace, state: *StarLiteralState, input: []const u8, search_start: usize) ?Match {
         const literal = state.literal[0..state.literal_len];
+        const dot = state.dot;
         var start = search_start;
         while (start < input.len) {
-            const run_end = state.run.runEnd(self.allocator, input, start);
+            const run_end = if (dot)
+                self.dotRunEnd(state, input, start)
+            else
+                state.run.runEnd(self.allocator, input, start);
             if (lastLiteralInRange(input, start, run_end, literal)) |occurrence| {
                 self.slots[0] = start;
                 self.slots[1] = occurrence + literal.len;
@@ -2379,6 +2386,30 @@ pub const Workspace = struct {
             start = run_end + 1;
         }
         return null;
+    }
+
+    /// Dot-set run end: ASCII bytes are members except `\n`, so a SIMD scan
+    /// finds the first line break or non-ASCII byte. Non-ASCII input defers
+    /// to the general run scan, which validates UTF-8.
+    fn dotRunEnd(self: *Workspace, state: *StarLiteralState, input: []const u8, start: usize) usize {
+        const Vec = @Vector(16, u8);
+        const line_break: Vec = @splat('\n');
+        const nonascii: Vec = @splat(0x80);
+        var end = start;
+        while (end + 16 <= input.len) {
+            const chunk: Vec = input[end..][0..16].*;
+            const stop = (chunk == line_break) | (chunk >= nonascii);
+            const bits: u16 = @bitCast(stop);
+            if (bits != 0) {
+                end += @ctz(bits);
+                if (input[end] == '\n') return end;
+                return state.run.runEnd(self.allocator, input, end);
+            }
+            end += 16;
+        }
+        while (end < input.len and input[end] < 0x80 and input[end] != '\n') end += 1;
+        if (end >= input.len or input[end] == '\n') return end;
+        return state.run.runEnd(self.allocator, input, end);
     }
 
     /// Last occurrence of `literal` starting in `[start, run_end]`. The
@@ -4086,6 +4117,8 @@ const StarLiteralState = struct {
     run: deferred_utf8.Run,
     literal: [64]u8 = undefined,
     literal_len: u8 = 0,
+    /// The star set is the dot set, so the run ends at the next line break.
+    dot: bool = false,
 };
 
 fn detectStarLiteral(program: Program) ?StarLiteralShape {

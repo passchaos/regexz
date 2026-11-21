@@ -646,7 +646,7 @@ fn asciiExcept(except: []const u8) [2]u64 {
 }
 
 /// Whether `set` is the dot set: every rune except `\n`.
-fn isDotExceptNewline(set: model.Set) bool {
+pub fn isDotExceptNewline(set: model.Set) bool {
     const expected = asciiExcept("\n");
     if (set.ascii[0] != expected[0] or set.ascii[1] != expected[1]) return false;
     // All non-ASCII runes must be members.

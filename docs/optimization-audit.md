@@ -814,5 +814,10 @@ alternations (`(?i)alpha|gamma`) now scan folded lanes and return the
 matching branch, improving 1.58x (2.34x ahead). The caseless detector now
 requires both ASCII cases per letter, which also fixes a pre-existing false
 positive for case-sensitive scopes inside a caseless pattern (`(?i:ab)c`
-must not match `ABC`). The comparison covers 58 cases and all of them are
-faster. See [literal fast paths](benchmarks/literal-fast-paths.md).
+must not match `ABC`). Dot-star literals find the line end with a vector scan that stops at the
+first line break or non-ASCII byte, moving the nullable-prefix case from
+1.30x to 3.83x. A CJK-specific three-byte shortcut in the fast-branch run
+scan was measured and reverted: branchy per-rune checks were 62% slower than
+the UTF-8 automaton's hot table lookup. The comparison covers 58 cases and
+all of them are faster. See
+[literal fast paths](benchmarks/literal-fast-paths.md).
