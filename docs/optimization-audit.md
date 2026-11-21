@@ -1072,3 +1072,10 @@ sweep covers 101 cases: 99 are faster, IPv6 is at parity (1.01x), and the
 remaining losses are HTML tags (0.88x) and the one-character alternation
 (0.90x). The geometric-mean ratio is 2.26x. See
 [Rust comparison](benchmarks/rust-comparison.md).
+
+The same 100-case workload (minus `RegexSet`) was also run against PCRE2
+10.42 with JIT on the same host. regexz is faster on 97 of 100 cases, with a
+geometric-mean PCRE2/regexz ratio of 2.31x. PCRE2 wins the two compile rows
+(0.32x and 0.59x) and IPv6 (0.86x); regexz materializes Unicode property
+sets at compile time, while PCRE2 defers them. See
+[PCRE2 comparison](benchmarks/pcre2-comparison.md).

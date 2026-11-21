@@ -4,6 +4,8 @@ Linux x86_64 (Intel Raptor Lake), Zig 0.16.0 ReleaseFast, Rust `regex`
 1.13.2, November 2026. The harnesses live in [`tools/compare`](../tools/compare):
 `zig_regex.zig` runs regexz and `rust_regex` runs the same inputs and patterns
 through Rust's `regex` crate. Both report the median of five batches per case.
+A companion [PCRE2 comparison](pcre2-comparison.md) covers the same search,
+split, replace and full-match workloads against PCRE2 10.42 with JIT.
 
 Method: the current sweep executed the two binaries alternately, six times
 (three rounds in each order), with both processes pinned to CPU 0 with

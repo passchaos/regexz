@@ -1,0 +1,3670 @@
+{
+  "baseline": "02e53a8",
+  "method": "three interleaved executions (regexz then PCRE2 each round); the table reports medians",
+  "host": "Linux x86_64 (Intel Raptor Lake), shared host; both binaries pinned to CPU 0 with taskset",
+  "executables": {
+    "zig": {
+      "path": "/tmp/regexz-compare",
+      "sha256": "8e60d35fd8ccc3e511c07f07939894ff23d7b106145beeb08980efb3b0370061"
+    },
+    "pcre2": {
+      "path": "/tmp/regexz-pcre2",
+      "sha256": "a048aaa9462c0f3c136bcf571336b6ceecbd017ba7058985f92dfb78526824bb"
+    }
+  },
+  "rounds": [
+    {
+      "order": [
+        "zig",
+        "pcre2"
+      ],
+      "runs": {
+        "zig": {
+          "compile Qwen tokenizer": {
+            "ns": 106432.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compile xDS-like": {
+            "ns": 24500.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find Qwen tokenizer": {
+            "ns": 111475.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "findAll Qwen (borrowed)": {
+            "ns": 123653.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "findAll Qwen (owning)": {
+            "ns": 123009.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find CJK tokenizer": {
+            "ns": 465237.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find HTML tag": {
+            "ns": 397088.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find URL": {
+            "ns": 145571.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find JSON string literal": {
+            "ns": 29818.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find JSON number": {
+            "ns": 148023.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find word boundary": {
+            "ns": 387818.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find (?i) literal": {
+            "ns": 144091.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find alternation (5 words)": {
+            "ns": 186230.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find (?i) alternation": {
+            "ns": 180612.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find 10-word alternation": {
+            "ns": 420631.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find Greek class": {
+            "ns": 193197.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find prefix+suffix": {
+            "ns": 30447.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "replaceAll email captures": {
+            "ns": 63532.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find IPv4": {
+            "ns": 233790.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find date": {
+            "ns": 176986.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find 20-word alternation": {
+            "ns": 420666.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find anchored line": {
+            "ns": 4317.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find (?i) Unicode literal": {
+            "ns": 245218.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find shared-prefix alternation": {
+            "ns": 89476.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find one-char alternation": {
+            "ns": 27544.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find hex color": {
+            "ns": 155476.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find version": {
+            "ns": 205265.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find nullable prefix": {
+            "ns": 38938.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find identifier": {
+            "ns": 243063.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find thousands": {
+            "ns": 173253.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find domain": {
+            "ns": 122172.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find percent": {
+            "ns": 149060.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find time": {
+            "ns": 176198.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find end-anchored word": {
+            "ns": 32636.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find UUID": {
+            "ns": 94731.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find semver": {
+            "ns": 207505.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find email TLD": {
+            "ns": 33275.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find CIDR": {
+            "ns": 239091.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find line full": {
+            "ns": 4178.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find optional prefix run": {
+            "ns": 116237.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find repeated literal group": {
+            "ns": 236631.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find camelCase": {
+            "ns": 215353.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find key-value": {
+            "ns": 331851.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find IP port": {
+            "ns": 268406.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find (?i) class": {
+            "ns": 93821.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find prefix alternation": {
+            "ns": 396160.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find signed number": {
+            "ns": 183347.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find html attribute": {
+            "ns": 172928.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown heading": {
+            "ns": 146170.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find mixed alternation": {
+            "ns": 903940.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find capitalized words": {
+            "ns": 5057.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown list": {
+            "ns": 4992.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find JSON escaped string": {
+            "ns": 32316.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find double spaces": {
+            "ns": 20280.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find log level": {
+            "ns": 2996.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown heading ws": {
+            "ns": 146147.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown list ws": {
+            "ns": 5000.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find escaped string loop": {
+            "ns": 32240.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find HTTP methods": {
+            "ns": 1442.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find full email": {
+            "ns": 34527.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find blank lines": {
+            "ns": 1146.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find floats": {
+            "ns": 151412.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find currency": {
+            "ns": 346.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find ISO timestamp": {
+            "ns": 148724.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find JSON key": {
+            "ns": 30750.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find HTML comment": {
+            "ns": 1173.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find hashtag": {
+            "ns": 1404.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find mention": {
+            "ns": 1095.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find CSS unit": {
+            "ns": 94476.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find function call": {
+            "ns": 234476.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find SQL keyword": {
+            "ns": 1062.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find JSON literal": {
+            "ns": 549.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find blockquote": {
+            "ns": 369.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find ordered list": {
+            "ns": 369.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find query param": {
+            "ns": 56129.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find MAC address": {
+            "ns": 140995.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find base64 run": {
+            "ns": 154707.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown link": {
+            "ns": 371.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find YAML key": {
+            "ns": 63848.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find TOML table": {
+            "ns": 63831.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find template": {
+            "ns": 156378.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find Windows path": {
+            "ns": 91547.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find CSS selector": {
+            "ns": 173992.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find slash date": {
+            "ns": 175966.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find HTTP request": {
+            "ns": 807.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find IPv6": {
+            "ns": 229115.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find C comment": {
+            "ns": 176694.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown image": {
+            "ns": 369.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find HTML tag name": {
+            "ns": 289114.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find shell var": {
+            "ns": 240927.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "split whitespace (22 KiB)": {
+            "ns": 61507.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "split commas (29 KiB)": {
+            "ns": 49563.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "split lines": {
+            "ns": 1299.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "split semicolons": {
+            "ns": 41379.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "fullmatch literal": {
+            "ns": 3.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "fullmatch class": {
+            "ns": 20.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "fullmatch xDS-like": {
+            "ns": 33.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "replaceAll a+ -> x": {
+            "ns": 60220.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "replaceAll \\A|\\z -> X": {
+            "ns": 1004.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "replaceAll digits -> N": {
+            "ns": 121478.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "RegexSet 9 no-match patterns": {
+            "ns": 2980.5,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        },
+        "pcre2": {
+          "compile Qwen tokenizer": {
+            "ns": 34249.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compile xDS-like": {
+            "ns": 14407.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find Qwen tokenizer": {
+            "ns": 355081.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "findAll Qwen (borrowed)": {
+            "ns": 353784.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "findAll Qwen (owning)": {
+            "ns": 355350.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find CJK tokenizer": {
+            "ns": 1087478.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find HTML tag": {
+            "ns": 387070.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find URL": {
+            "ns": 205698.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find JSON string literal": {
+            "ns": 56798.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find JSON number": {
+            "ns": 240659.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find word boundary": {
+            "ns": 752604.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find (?i) literal": {
+            "ns": 123686.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find alternation (5 words)": {
+            "ns": 422310.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find (?i) alternation": {
+            "ns": 304669.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find 10-word alternation": {
+            "ns": 570667.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find Greek class": {
+            "ns": 328707.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find prefix+suffix": {
+            "ns": 37146.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "replaceAll email captures": {
+            "ns": 83774.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find IPv4": {
+            "ns": 329498.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find date": {
+            "ns": 276946.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find 20-word alternation": {
+            "ns": 571611.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find anchored line": {
+            "ns": 5737.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find (?i) Unicode literal": {
+            "ns": 235878.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find shared-prefix alternation": {
+            "ns": 152971.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find one-char alternation": {
+            "ns": 64578.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find hex color": {
+            "ns": 246288.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find version": {
+            "ns": 273865.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find nullable prefix": {
+            "ns": 82145.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find identifier": {
+            "ns": 393524.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find thousands": {
+            "ns": 296001.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find domain": {
+            "ns": 268464.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find percent": {
+            "ns": 266460.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find time": {
+            "ns": 267024.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find end-anchored word": {
+            "ns": 35377.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find UUID": {
+            "ns": 155303.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find semver": {
+            "ns": 247811.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find email TLD": {
+            "ns": 58646.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find CIDR": {
+            "ns": 328103.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find line full": {
+            "ns": 31419.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find optional prefix run": {
+            "ns": 938674.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find repeated literal group": {
+            "ns": 332655.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find camelCase": {
+            "ns": 365935.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find key-value": {
+            "ns": 477524.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find IP port": {
+            "ns": 326493.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find (?i) class": {
+            "ns": 152612.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find prefix alternation": {
+            "ns": 389751.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find signed number": {
+            "ns": 261801.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find html attribute": {
+            "ns": 232397.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown heading": {
+            "ns": 209596.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find mixed alternation": {
+            "ns": 904928.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find capitalized words": {
+            "ns": 53508.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown list": {
+            "ns": 58993.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find JSON escaped string": {
+            "ns": 64793.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find double spaces": {
+            "ns": 30999.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find log level": {
+            "ns": 34793.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown heading ws": {
+            "ns": 240386.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown list ws": {
+            "ns": 55584.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find escaped string loop": {
+            "ns": 59709.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find HTTP methods": {
+            "ns": 32941.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find full email": {
+            "ns": 63871.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find blank lines": {
+            "ns": 1551.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find floats": {
+            "ns": 239247.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find currency": {
+            "ns": 929.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find ISO timestamp": {
+            "ns": 211596.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find JSON key": {
+            "ns": 37468.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find HTML comment": {
+            "ns": 2074.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find hashtag": {
+            "ns": 1530.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find mention": {
+            "ns": 1533.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find CSS unit": {
+            "ns": 326601.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find function call": {
+            "ns": 307645.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find SQL keyword": {
+            "ns": 53307.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find JSON literal": {
+            "ns": 26399.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find blockquote": {
+            "ns": 1179.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find ordered list": {
+            "ns": 1174.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find query param": {
+            "ns": 63541.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find MAC address": {
+            "ns": 240904.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find base64 run": {
+            "ns": 239595.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown link": {
+            "ns": 1173.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find YAML key": {
+            "ns": 126955.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find TOML table": {
+            "ns": 94436.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find template": {
+            "ns": 234381.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find Windows path": {
+            "ns": 219789.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find CSS selector": {
+            "ns": 205888.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find slash date": {
+            "ns": 271371.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find HTTP request": {
+            "ns": 1146.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find IPv6": {
+            "ns": 185326.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find C comment": {
+            "ns": 266801.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown image": {
+            "ns": 1418.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find HTML tag name": {
+            "ns": 394373.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find shell var": {
+            "ns": 397440.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "split whitespace (22 KiB)": {
+            "ns": 207093.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "split commas (29 KiB)": {
+            "ns": 268995.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "split lines": {
+            "ns": 4643.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "split semicolons": {
+            "ns": 228888.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "fullmatch literal": {
+            "ns": 39.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "fullmatch class": {
+            "ns": 54.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "fullmatch xDS-like": {
+            "ns": 54.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "replaceAll a+ -> x": {
+            "ns": 219676.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "replaceAll \\A|\\z -> X": {
+            "ns": 57938.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "replaceAll digits -> N": {
+            "ns": 539953.7,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        }
+      }
+    },
+    {
+      "order": [
+        "zig",
+        "pcre2"
+      ],
+      "runs": {
+        "zig": {
+          "compile Qwen tokenizer": {
+            "ns": 106133.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compile xDS-like": {
+            "ns": 24364.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find Qwen tokenizer": {
+            "ns": 113946.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "findAll Qwen (borrowed)": {
+            "ns": 123654.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "findAll Qwen (owning)": {
+            "ns": 122193.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find CJK tokenizer": {
+            "ns": 466059.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find HTML tag": {
+            "ns": 396897.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find URL": {
+            "ns": 145577.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find JSON string literal": {
+            "ns": 29827.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find JSON number": {
+            "ns": 147964.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find word boundary": {
+            "ns": 387658.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find (?i) literal": {
+            "ns": 144022.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find alternation (5 words)": {
+            "ns": 185036.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find (?i) alternation": {
+            "ns": 180569.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find 10-word alternation": {
+            "ns": 420488.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find Greek class": {
+            "ns": 187819.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find prefix+suffix": {
+            "ns": 30115.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "replaceAll email captures": {
+            "ns": 63510.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find IPv4": {
+            "ns": 233882.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find date": {
+            "ns": 176996.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find 20-word alternation": {
+            "ns": 419730.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find anchored line": {
+            "ns": 4307.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find (?i) Unicode literal": {
+            "ns": 245974.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find shared-prefix alternation": {
+            "ns": 89917.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find one-char alternation": {
+            "ns": 27449.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find hex color": {
+            "ns": 155458.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find version": {
+            "ns": 203728.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find nullable prefix": {
+            "ns": 34819.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find identifier": {
+            "ns": 243062.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find thousands": {
+            "ns": 158528.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find domain": {
+            "ns": 122353.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find percent": {
+            "ns": 149063.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find time": {
+            "ns": 171290.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find end-anchored word": {
+            "ns": 32685.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find UUID": {
+            "ns": 94640.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find semver": {
+            "ns": 206952.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find email TLD": {
+            "ns": 32910.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find CIDR": {
+            "ns": 238627.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find line full": {
+            "ns": 4214.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find optional prefix run": {
+            "ns": 116084.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find repeated literal group": {
+            "ns": 236732.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find camelCase": {
+            "ns": 215343.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find key-value": {
+            "ns": 331823.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find IP port": {
+            "ns": 266852.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find (?i) class": {
+            "ns": 93589.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find prefix alternation": {
+            "ns": 395216.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find signed number": {
+            "ns": 183304.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find html attribute": {
+            "ns": 157646.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown heading": {
+            "ns": 146222.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find mixed alternation": {
+            "ns": 903113.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find capitalized words": {
+            "ns": 5048.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown list": {
+            "ns": 4973.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find JSON escaped string": {
+            "ns": 32215.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find double spaces": {
+            "ns": 24220.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find log level": {
+            "ns": 3002.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown heading ws": {
+            "ns": 146175.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown list ws": {
+            "ns": 4989.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find escaped string loop": {
+            "ns": 32219.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find HTTP methods": {
+            "ns": 1444.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find full email": {
+            "ns": 34757.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find blank lines": {
+            "ns": 1160.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find floats": {
+            "ns": 151324.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find currency": {
+            "ns": 318.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find ISO timestamp": {
+            "ns": 148738.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find JSON key": {
+            "ns": 30749.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find HTML comment": {
+            "ns": 1172.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find hashtag": {
+            "ns": 1195.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find mention": {
+            "ns": 1094.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find CSS unit": {
+            "ns": 94446.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find function call": {
+            "ns": 233746.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find SQL keyword": {
+            "ns": 1063.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find JSON literal": {
+            "ns": 549.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find blockquote": {
+            "ns": 369.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find ordered list": {
+            "ns": 366.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find query param": {
+            "ns": 55231.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find MAC address": {
+            "ns": 126095.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find base64 run": {
+            "ns": 154866.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown link": {
+            "ns": 416.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find YAML key": {
+            "ns": 63947.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find TOML table": {
+            "ns": 63595.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find template": {
+            "ns": 156615.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find Windows path": {
+            "ns": 91545.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find CSS selector": {
+            "ns": 173813.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find slash date": {
+            "ns": 175736.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find HTTP request": {
+            "ns": 807.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find IPv6": {
+            "ns": 217018.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find C comment": {
+            "ns": 175517.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown image": {
+            "ns": 416.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find HTML tag name": {
+            "ns": 292484.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find shell var": {
+            "ns": 240627.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "split whitespace (22 KiB)": {
+            "ns": 61619.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "split commas (29 KiB)": {
+            "ns": 54137.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "split lines": {
+            "ns": 1290.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "split semicolons": {
+            "ns": 36486.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "fullmatch literal": {
+            "ns": 3.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "fullmatch class": {
+            "ns": 9.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "fullmatch xDS-like": {
+            "ns": 33.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "replaceAll a+ -> x": {
+            "ns": 59511.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "replaceAll \\A|\\z -> X": {
+            "ns": 1026.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "replaceAll digits -> N": {
+            "ns": 101326.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "RegexSet 9 no-match patterns": {
+            "ns": 2953.2,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        },
+        "pcre2": {
+          "compile Qwen tokenizer": {
+            "ns": 34103.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compile xDS-like": {
+            "ns": 14389.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find Qwen tokenizer": {
+            "ns": 359440.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "findAll Qwen (borrowed)": {
+            "ns": 360448.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "findAll Qwen (owning)": {
+            "ns": 358330.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find CJK tokenizer": {
+            "ns": 1085828.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find HTML tag": {
+            "ns": 398396.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find URL": {
+            "ns": 207006.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find JSON string literal": {
+            "ns": 59499.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find JSON number": {
+            "ns": 274995.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find word boundary": {
+            "ns": 776666.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find (?i) literal": {
+            "ns": 147783.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find alternation (5 words)": {
+            "ns": 448318.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find (?i) alternation": {
+            "ns": 324500.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find 10-word alternation": {
+            "ns": 666880.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find Greek class": {
+            "ns": 354693.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find prefix+suffix": {
+            "ns": 51965.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "replaceAll email captures": {
+            "ns": 83820.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find IPv4": {
+            "ns": 330400.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find date": {
+            "ns": 303225.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find 20-word alternation": {
+            "ns": 666860.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find anchored line": {
+            "ns": 5877.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find (?i) Unicode literal": {
+            "ns": 274414.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find shared-prefix alternation": {
+            "ns": 152500.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find one-char alternation": {
+            "ns": 68661.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find hex color": {
+            "ns": 295861.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find version": {
+            "ns": 303089.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find nullable prefix": {
+            "ns": 83226.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find identifier": {
+            "ns": 474739.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find thousands": {
+            "ns": 299865.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find domain": {
+            "ns": 273937.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find percent": {
+            "ns": 294828.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find time": {
+            "ns": 294481.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find end-anchored word": {
+            "ns": 49918.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find UUID": {
+            "ns": 155316.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find semver": {
+            "ns": 262460.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find email TLD": {
+            "ns": 58760.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find CIDR": {
+            "ns": 329415.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find line full": {
+            "ns": 31410.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find optional prefix run": {
+            "ns": 1101827.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find repeated literal group": {
+            "ns": 388153.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find camelCase": {
+            "ns": 423482.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find key-value": {
+            "ns": 483830.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find IP port": {
+            "ns": 331537.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find (?i) class": {
+            "ns": 171566.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find prefix alternation": {
+            "ns": 447964.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find signed number": {
+            "ns": 296489.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find html attribute": {
+            "ns": 233542.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown heading": {
+            "ns": 217846.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find mixed alternation": {
+            "ns": 1068817.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find capitalized words": {
+            "ns": 38491.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown list": {
+            "ns": 59022.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find JSON escaped string": {
+            "ns": 64395.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find double spaces": {
+            "ns": 30596.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find log level": {
+            "ns": 34786.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown heading ws": {
+            "ns": 241004.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown list ws": {
+            "ns": 55610.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find escaped string loop": {
+            "ns": 60842.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find HTTP methods": {
+            "ns": 32965.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find full email": {
+            "ns": 64039.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find blank lines": {
+            "ns": 1521.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find floats": {
+            "ns": 275826.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find currency": {
+            "ns": 928.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find ISO timestamp": {
+            "ns": 228496.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find JSON key": {
+            "ns": 38000.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find HTML comment": {
+            "ns": 2100.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find hashtag": {
+            "ns": 1529.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find mention": {
+            "ns": 1559.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find CSS unit": {
+            "ns": 364419.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find function call": {
+            "ns": 327111.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find SQL keyword": {
+            "ns": 38291.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find JSON literal": {
+            "ns": 26410.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find blockquote": {
+            "ns": 1519.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find ordered list": {
+            "ns": 1176.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find query param": {
+            "ns": 81981.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find MAC address": {
+            "ns": 243239.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find base64 run": {
+            "ns": 239507.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown link": {
+            "ns": 1176.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find YAML key": {
+            "ns": 141847.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find TOML table": {
+            "ns": 98957.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find template": {
+            "ns": 231840.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find Windows path": {
+            "ns": 218605.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find CSS selector": {
+            "ns": 214200.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find slash date": {
+            "ns": 300339.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find HTTP request": {
+            "ns": 1149.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find IPv6": {
+            "ns": 185593.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find C comment": {
+            "ns": 266342.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown image": {
+            "ns": 1287.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find HTML tag name": {
+            "ns": 403067.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find shell var": {
+            "ns": 413004.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "split whitespace (22 KiB)": {
+            "ns": 227798.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "split commas (29 KiB)": {
+            "ns": 298122.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "split lines": {
+            "ns": 5380.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "split semicolons": {
+            "ns": 242686.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "fullmatch literal": {
+            "ns": 39.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "fullmatch class": {
+            "ns": 58.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "fullmatch xDS-like": {
+            "ns": 57.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "replaceAll a+ -> x": {
+            "ns": 265651.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "replaceAll \\A|\\z -> X": {
+            "ns": 57648.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "replaceAll digits -> N": {
+            "ns": 626438.1,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        }
+      }
+    },
+    {
+      "order": [
+        "zig",
+        "pcre2"
+      ],
+      "runs": {
+        "zig": {
+          "compile Qwen tokenizer": {
+            "ns": 106280.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compile xDS-like": {
+            "ns": 24374.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find Qwen tokenizer": {
+            "ns": 113257.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "findAll Qwen (borrowed)": {
+            "ns": 120571.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "findAll Qwen (owning)": {
+            "ns": 123454.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find CJK tokenizer": {
+            "ns": 460266.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find HTML tag": {
+            "ns": 412654.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find URL": {
+            "ns": 145812.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find JSON string literal": {
+            "ns": 29006.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find JSON number": {
+            "ns": 149411.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find word boundary": {
+            "ns": 383658.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find (?i) literal": {
+            "ns": 142424.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find alternation (5 words)": {
+            "ns": 185200.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find (?i) alternation": {
+            "ns": 180755.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find 10-word alternation": {
+            "ns": 422907.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find Greek class": {
+            "ns": 206808.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find prefix+suffix": {
+            "ns": 28886.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "replaceAll email captures": {
+            "ns": 63865.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find IPv4": {
+            "ns": 234153.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find date": {
+            "ns": 156278.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find 20-word alternation": {
+            "ns": 423224.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find anchored line": {
+            "ns": 4241.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find (?i) Unicode literal": {
+            "ns": 261705.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find shared-prefix alternation": {
+            "ns": 91010.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find one-char alternation": {
+            "ns": 27641.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find hex color": {
+            "ns": 154912.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find version": {
+            "ns": 206555.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find nullable prefix": {
+            "ns": 35114.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find identifier": {
+            "ns": 245577.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find thousands": {
+            "ns": 157231.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find domain": {
+            "ns": 120782.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find percent": {
+            "ns": 144699.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find time": {
+            "ns": 175697.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find end-anchored word": {
+            "ns": 32774.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find UUID": {
+            "ns": 94277.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find semver": {
+            "ns": 211099.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find email TLD": {
+            "ns": 33124.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find CIDR": {
+            "ns": 238894.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find line full": {
+            "ns": 4146.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find optional prefix run": {
+            "ns": 116739.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find repeated literal group": {
+            "ns": 238978.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find camelCase": {
+            "ns": 216089.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find key-value": {
+            "ns": 333202.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find IP port": {
+            "ns": 268202.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find (?i) class": {
+            "ns": 94265.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find prefix alternation": {
+            "ns": 416523.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find signed number": {
+            "ns": 182037.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find html attribute": {
+            "ns": 173261.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown heading": {
+            "ns": 147531.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find mixed alternation": {
+            "ns": 923815.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find capitalized words": {
+            "ns": 5061.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown list": {
+            "ns": 4971.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find JSON escaped string": {
+            "ns": 32672.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find double spaces": {
+            "ns": 25096.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find log level": {
+            "ns": 3010.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown heading ws": {
+            "ns": 147334.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown list ws": {
+            "ns": 5000.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find escaped string loop": {
+            "ns": 32617.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find HTTP methods": {
+            "ns": 1444.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find full email": {
+            "ns": 34516.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find blank lines": {
+            "ns": 1160.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find floats": {
+            "ns": 150136.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find currency": {
+            "ns": 294.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find ISO timestamp": {
+            "ns": 143722.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find JSON key": {
+            "ns": 31330.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find HTML comment": {
+            "ns": 1174.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find hashtag": {
+            "ns": 1148.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find mention": {
+            "ns": 1245.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find CSS unit": {
+            "ns": 95388.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find function call": {
+            "ns": 234266.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find SQL keyword": {
+            "ns": 1063.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find JSON literal": {
+            "ns": 542.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find blockquote": {
+            "ns": 370.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find ordered list": {
+            "ns": 382.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find query param": {
+            "ns": 55070.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find MAC address": {
+            "ns": 124562.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find base64 run": {
+            "ns": 155062.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown link": {
+            "ns": 360.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find YAML key": {
+            "ns": 63395.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find TOML table": {
+            "ns": 62310.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find template": {
+            "ns": 171737.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find Windows path": {
+            "ns": 91130.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find CSS selector": {
+            "ns": 168631.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find slash date": {
+            "ns": 154539.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find HTTP request": {
+            "ns": 807.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find IPv6": {
+            "ns": 212427.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find C comment": {
+            "ns": 176815.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown image": {
+            "ns": 370.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find HTML tag name": {
+            "ns": 275916.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find shell var": {
+            "ns": 242850.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "split whitespace (22 KiB)": {
+            "ns": 61625.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "split commas (29 KiB)": {
+            "ns": 44645.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "split lines": {
+            "ns": 1301.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "split semicolons": {
+            "ns": 51612.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "fullmatch literal": {
+            "ns": 3.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "fullmatch class": {
+            "ns": 24.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "fullmatch xDS-like": {
+            "ns": 33.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "replaceAll a+ -> x": {
+            "ns": 60282.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "replaceAll \\A|\\z -> X": {
+            "ns": 1031.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "replaceAll digits -> N": {
+            "ns": 116053.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "RegexSet 9 no-match patterns": {
+            "ns": 2994.9,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        },
+        "pcre2": {
+          "compile Qwen tokenizer": {
+            "ns": 34119.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "compile xDS-like": {
+            "ns": 14351.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find Qwen tokenizer": {
+            "ns": 363317.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "findAll Qwen (borrowed)": {
+            "ns": 362939.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "findAll Qwen (owning)": {
+            "ns": 362554.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find CJK tokenizer": {
+            "ns": 1086520.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find HTML tag": {
+            "ns": 420205.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find URL": {
+            "ns": 207181.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find JSON string literal": {
+            "ns": 60840.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find JSON number": {
+            "ns": 297607.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find word boundary": {
+            "ns": 808297.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find (?i) literal": {
+            "ns": 151139.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find alternation (5 words)": {
+            "ns": 459465.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find (?i) alternation": {
+            "ns": 328297.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find 10-word alternation": {
+            "ns": 714742.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find Greek class": {
+            "ns": 361970.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find prefix+suffix": {
+            "ns": 52547.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "replaceAll email captures": {
+            "ns": 84088.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find IPv4": {
+            "ns": 333212.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find date": {
+            "ns": 324237.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find 20-word alternation": {
+            "ns": 716249.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find anchored line": {
+            "ns": 5823.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find (?i) Unicode literal": {
+            "ns": 296772.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find shared-prefix alternation": {
+            "ns": 153917.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find one-char alternation": {
+            "ns": 85431.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find hex color": {
+            "ns": 303493.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find version": {
+            "ns": 325032.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find nullable prefix": {
+            "ns": 83132.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find identifier": {
+            "ns": 502853.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find thousands": {
+            "ns": 306058.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find domain": {
+            "ns": 293297.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find percent": {
+            "ns": 301970.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find time": {
+            "ns": 301306.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find end-anchored word": {
+            "ns": 34733.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find UUID": {
+            "ns": 155591.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find semver": {
+            "ns": 265223.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find email TLD": {
+            "ns": 58694.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find CIDR": {
+            "ns": 333395.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find line full": {
+            "ns": 31431.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find optional prefix run": {
+            "ns": 1158087.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find repeated literal group": {
+            "ns": 410983.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find camelCase": {
+            "ns": 449657.9,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find key-value": {
+            "ns": 507463.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find IP port": {
+            "ns": 337522.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find (?i) class": {
+            "ns": 176051.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find prefix alternation": {
+            "ns": 474049.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find signed number": {
+            "ns": 303855.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find html attribute": {
+            "ns": 235418.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown heading": {
+            "ns": 237303.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find mixed alternation": {
+            "ns": 1117904.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find capitalized words": {
+            "ns": 53498.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown list": {
+            "ns": 59130.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find JSON escaped string": {
+            "ns": 64826.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find double spaces": {
+            "ns": 30766.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find log level": {
+            "ns": 34814.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown heading ws": {
+            "ns": 243985.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown list ws": {
+            "ns": 55725.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find escaped string loop": {
+            "ns": 61859.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find HTTP methods": {
+            "ns": 32952.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find full email": {
+            "ns": 64348.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find blank lines": {
+            "ns": 1576.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find floats": {
+            "ns": 297713.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find currency": {
+            "ns": 929.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find ISO timestamp": {
+            "ns": 217817.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find JSON key": {
+            "ns": 53160.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find HTML comment": {
+            "ns": 2079.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find hashtag": {
+            "ns": 1530.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find mention": {
+            "ns": 1548.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find CSS unit": {
+            "ns": 389194.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find function call": {
+            "ns": 332601.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find SQL keyword": {
+            "ns": 53309.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find JSON literal": {
+            "ns": 26408.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find blockquote": {
+            "ns": 1180.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find ordered list": {
+            "ns": 1180.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find query param": {
+            "ns": 83733.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find MAC address": {
+            "ns": 256006.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find base64 run": {
+            "ns": 239939.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown link": {
+            "ns": 1180.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find YAML key": {
+            "ns": 143792.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find TOML table": {
+            "ns": 116846.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find template": {
+            "ns": 237237.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find Windows path": {
+            "ns": 230125.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find CSS selector": {
+            "ns": 233309.7,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find slash date": {
+            "ns": 307513.0,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find HTTP request": {
+            "ns": 1149.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find IPv6": {
+            "ns": 185612.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find C comment": {
+            "ns": 266643.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find markdown image": {
+            "ns": 1289.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find HTML tag name": {
+            "ns": 425789.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "find shell var": {
+            "ns": 415096.2,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "split whitespace (22 KiB)": {
+            "ns": 241385.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "split commas (29 KiB)": {
+            "ns": 303030.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "split lines": {
+            "ns": 5369.8,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "split semicolons": {
+            "ns": 245941.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "fullmatch literal": {
+            "ns": 54.5,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "fullmatch class": {
+            "ns": 58.3,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "fullmatch xDS-like": {
+            "ns": 57.6,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "replaceAll a+ -> x": {
+            "ns": 268348.1,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "replaceAll \\A|\\z -> X": {
+            "ns": 57595.4,
+            "unit": "ns/iter",
+            "counters": {}
+          },
+          "replaceAll digits -> N": {
+            "ns": 650607.2,
+            "unit": "ns/iter",
+            "counters": {}
+          }
+        }
+      }
+    }
+  ],
+  "medians": {
+    "compile Qwen tokenizer": {
+      "zig": 106280.3,
+      "pcre2": 34119.1,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 0.321029391147748
+    },
+    "compile xDS-like": {
+      "zig": 24374.5,
+      "pcre2": 14389.4,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 0.5903464686455107
+    },
+    "find Qwen tokenizer": {
+      "zig": 113257.7,
+      "pcre2": 359440.7,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 3.1736535352563227
+    },
+    "findAll Qwen (borrowed)": {
+      "zig": 123653.7,
+      "pcre2": 360448.7,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 2.9149851561255344
+    },
+    "findAll Qwen (owning)": {
+      "zig": 123009.8,
+      "pcre2": 358330.3,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 2.9130223770788994
+    },
+    "find CJK tokenizer": {
+      "zig": 465237.8,
+      "pcre2": 1086520.0,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 2.335407827996779
+    },
+    "find HTML tag": {
+      "zig": 397088.8,
+      "pcre2": 398396.6,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.003293469873741
+    },
+    "find URL": {
+      "zig": 145577.0,
+      "pcre2": 207006.1,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.421969816660599
+    },
+    "find JSON string literal": {
+      "zig": 29818.0,
+      "pcre2": 59499.5,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.9954222281843181
+    },
+    "find JSON number": {
+      "zig": 148023.6,
+      "pcre2": 274995.7,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.8577828130108982
+    },
+    "find word boundary": {
+      "zig": 387658.4,
+      "pcre2": 776666.3,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 2.003481157637755
+    },
+    "find (?i) literal": {
+      "zig": 144022.7,
+      "pcre2": 147783.3,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.0261111616432685
+    },
+    "find alternation (5 words)": {
+      "zig": 185200.7,
+      "pcre2": 448318.5,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 2.420717092322005
+    },
+    "find (?i) alternation": {
+      "zig": 180612.3,
+      "pcre2": 324500.2,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.7966672258755358
+    },
+    "find 10-word alternation": {
+      "zig": 420631.0,
+      "pcre2": 666880.0,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.585427607570531
+    },
+    "find Greek class": {
+      "zig": 193197.4,
+      "pcre2": 354693.2,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.8359108352389837
+    },
+    "find prefix+suffix": {
+      "zig": 30115.9,
+      "pcre2": 51965.9,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.7255303676795313
+    },
+    "replaceAll email captures": {
+      "zig": 63532.0,
+      "pcre2": 83820.9,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.319349304287603
+    },
+    "find IPv4": {
+      "zig": 233882.1,
+      "pcre2": 330400.8,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.4126810046600402
+    },
+    "find date": {
+      "zig": 176986.9,
+      "pcre2": 303225.2,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.7132635240235294
+    },
+    "find 20-word alternation": {
+      "zig": 420666.8,
+      "pcre2": 666860.5,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.5852463279726379
+    },
+    "find anchored line": {
+      "zig": 4307.2,
+      "pcre2": 5823.4,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.3520152303120356
+    },
+    "find (?i) Unicode literal": {
+      "zig": 245974.4,
+      "pcre2": 274414.1,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.1156205686445417
+    },
+    "find shared-prefix alternation": {
+      "zig": 89917.1,
+      "pcre2": 152971.3,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.7012481496845426
+    },
+    "find one-char alternation": {
+      "zig": 27544.5,
+      "pcre2": 68661.0,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 2.4927299460872407
+    },
+    "find hex color": {
+      "zig": 155458.1,
+      "pcre2": 295861.6,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.9031597581599156
+    },
+    "find version": {
+      "zig": 205265.1,
+      "pcre2": 303089.8,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.476577362639825
+    },
+    "find nullable prefix": {
+      "zig": 35114.2,
+      "pcre2": 83132.4,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 2.367486657819344
+    },
+    "find identifier": {
+      "zig": 243063.4,
+      "pcre2": 474739.4,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.9531504948914564
+    },
+    "find thousands": {
+      "zig": 158528.1,
+      "pcre2": 299865.5,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.891560549833121
+    },
+    "find domain": {
+      "zig": 122172.9,
+      "pcre2": 273937.8,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 2.2422141080386893
+    },
+    "find percent": {
+      "zig": 149060.3,
+      "pcre2": 294828.9,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.9779169906407008
+    },
+    "find time": {
+      "zig": 175697.3,
+      "pcre2": 294481.6,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.6760735651600793
+    },
+    "find end-anchored word": {
+      "zig": 32685.4,
+      "pcre2": 35377.5,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.0823639912621537
+    },
+    "find UUID": {
+      "zig": 94640.2,
+      "pcre2": 155316.3,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.6411239621218043
+    },
+    "find semver": {
+      "zig": 207505.2,
+      "pcre2": 262460.7,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.2648391461997097
+    },
+    "find email TLD": {
+      "zig": 33124.2,
+      "pcre2": 58694.4,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.7719492093393956
+    },
+    "find CIDR": {
+      "zig": 238894.3,
+      "pcre2": 329415.1,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.378915696188649
+    },
+    "find line full": {
+      "zig": 4178.7,
+      "pcre2": 31419.0,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 7.51884557398234
+    },
+    "find optional prefix run": {
+      "zig": 116237.3,
+      "pcre2": 1101827.9,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 9.47912503129374
+    },
+    "find repeated literal group": {
+      "zig": 236732.1,
+      "pcre2": 388153.3,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.6396310428539262
+    },
+    "find camelCase": {
+      "zig": 215353.2,
+      "pcre2": 423482.5,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.9664555715912277
+    },
+    "find key-value": {
+      "zig": 331851.1,
+      "pcre2": 483830.1,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.4579734706318588
+    },
+    "find IP port": {
+      "zig": 268202.6,
+      "pcre2": 331537.0,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.2361438703427932
+    },
+    "find (?i) class": {
+      "zig": 93821.7,
+      "pcre2": 171566.0,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.8286387903864458
+    },
+    "find prefix alternation": {
+      "zig": 396160.5,
+      "pcre2": 447964.4,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.1307649298705955
+    },
+    "find signed number": {
+      "zig": 183304.2,
+      "pcre2": 296489.7,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.61747357671019
+    },
+    "find html attribute": {
+      "zig": 172928.7,
+      "pcre2": 233542.7,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.350514402756743
+    },
+    "find markdown heading": {
+      "zig": 146222.0,
+      "pcre2": 217846.0,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.489830531657343
+    },
+    "find mixed alternation": {
+      "zig": 903940.0,
+      "pcre2": 1068817.4,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.1823986105272473
+    },
+    "find capitalized words": {
+      "zig": 5057.7,
+      "pcre2": 53498.3,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 10.577594558791546
+    },
+    "find markdown list": {
+      "zig": 4973.1,
+      "pcre2": 59022.5,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 11.86835173231988
+    },
+    "find JSON escaped string": {
+      "zig": 32316.9,
+      "pcre2": 64793.4,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 2.004938592501137
+    },
+    "find double spaces": {
+      "zig": 24220.4,
+      "pcre2": 30766.8,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.2702845535168699
+    },
+    "find log level": {
+      "zig": 3002.9,
+      "pcre2": 34793.9,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 11.586766126078125
+    },
+    "find markdown heading ws": {
+      "zig": 146175.1,
+      "pcre2": 241004.4,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.6487377125105438
+    },
+    "find markdown list ws": {
+      "zig": 5000.0,
+      "pcre2": 55610.3,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 11.122060000000001
+    },
+    "find escaped string loop": {
+      "zig": 32240.9,
+      "pcre2": 60842.3,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.8871154341224965
+    },
+    "find HTTP methods": {
+      "zig": 1444.3,
+      "pcre2": 32952.7,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 22.815689261233814
+    },
+    "find full email": {
+      "zig": 34527.7,
+      "pcre2": 64039.2,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.854719544018281
+    },
+    "find blank lines": {
+      "zig": 1160.1,
+      "pcre2": 1551.1,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.3370399103525559
+    },
+    "find floats": {
+      "zig": 151324.5,
+      "pcre2": 275826.2,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.8227464818981725
+    },
+    "find currency": {
+      "zig": 318.9,
+      "pcre2": 929.3,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 2.914079648792725
+    },
+    "find ISO timestamp": {
+      "zig": 148724.3,
+      "pcre2": 217817.0,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.4645690045271689
+    },
+    "find JSON key": {
+      "zig": 30750.2,
+      "pcre2": 38000.0,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.2357643202320634
+    },
+    "find HTML comment": {
+      "zig": 1173.5,
+      "pcre2": 2079.8,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.772305070302514
+    },
+    "find hashtag": {
+      "zig": 1195.7,
+      "pcre2": 1530.2,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.2797524462657857
+    },
+    "find mention": {
+      "zig": 1095.5,
+      "pcre2": 1548.3,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.4133272478320402
+    },
+    "find CSS unit": {
+      "zig": 94476.0,
+      "pcre2": 364419.4,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 3.8572695711080067
+    },
+    "find function call": {
+      "zig": 234266.6,
+      "pcre2": 327111.3,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.396320687626832
+    },
+    "find SQL keyword": {
+      "zig": 1063.1,
+      "pcre2": 53307.6,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 50.14354247013451
+    },
+    "find JSON literal": {
+      "zig": 549.3,
+      "pcre2": 26408.7,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 48.07700709994539
+    },
+    "find blockquote": {
+      "zig": 369.9,
+      "pcre2": 1180.5,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 3.191403081914031
+    },
+    "find ordered list": {
+      "zig": 369.4,
+      "pcre2": 1176.1,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 3.1838115863562533
+    },
+    "find query param": {
+      "zig": 55231.9,
+      "pcre2": 81981.3,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.484310697260098
+    },
+    "find MAC address": {
+      "zig": 126095.0,
+      "pcre2": 243239.6,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.929018597089496
+    },
+    "find base64 run": {
+      "zig": 154866.3,
+      "pcre2": 239595.9,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.5471145110330653
+    },
+    "find markdown link": {
+      "zig": 371.8,
+      "pcre2": 1176.3,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 3.1637977407208173
+    },
+    "find YAML key": {
+      "zig": 63848.8,
+      "pcre2": 141847.4,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 2.221614188520379
+    },
+    "find TOML table": {
+      "zig": 63595.2,
+      "pcre2": 98957.8,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.5560576898885452
+    },
+    "find template": {
+      "zig": 156615.4,
+      "pcre2": 234381.4,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.4965412085912368
+    },
+    "find Windows path": {
+      "zig": 91545.6,
+      "pcre2": 219789.2,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 2.400871259787472
+    },
+    "find CSS selector": {
+      "zig": 173813.8,
+      "pcre2": 214200.0,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.232353242377763
+    },
+    "find slash date": {
+      "zig": 175736.2,
+      "pcre2": 300339.3,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.7090349057280172
+    },
+    "find HTTP request": {
+      "zig": 807.6,
+      "pcre2": 1149.1,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.4228578504210003
+    },
+    "find IPv6": {
+      "zig": 217018.5,
+      "pcre2": 185593.8,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 0.855198059151639
+    },
+    "find C comment": {
+      "zig": 176694.1,
+      "pcre2": 266643.8,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.5090701953262728
+    },
+    "find markdown image": {
+      "zig": 370.2,
+      "pcre2": 1289.3,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 3.4827120475418694
+    },
+    "find HTML tag name": {
+      "zig": 289114.4,
+      "pcre2": 403067.6,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.3941457084116182
+    },
+    "find shell var": {
+      "zig": 240927.2,
+      "pcre2": 413004.2,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.7142281983935397
+    },
+    "split whitespace (22 KiB)": {
+      "zig": 61619.5,
+      "pcre2": 227798.8,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 3.696862194597489
+    },
+    "split commas (29 KiB)": {
+      "zig": 49563.6,
+      "pcre2": 298122.8,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 6.01495452307742
+    },
+    "split lines": {
+      "zig": 1299.0,
+      "pcre2": 5369.8,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 4.133795227097767
+    },
+    "split semicolons": {
+      "zig": 41379.8,
+      "pcre2": 242686.6,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 5.864856765861604
+    },
+    "fullmatch literal": {
+      "zig": 3.5,
+      "pcre2": 39.5,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 11.285714285714286
+    },
+    "fullmatch class": {
+      "zig": 20.0,
+      "pcre2": 58.2,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 2.91
+    },
+    "fullmatch xDS-like": {
+      "zig": 33.8,
+      "pcre2": 57.6,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 1.7041420118343198
+    },
+    "replaceAll a+ -> x": {
+      "zig": 60220.7,
+      "pcre2": 265651.7,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 4.411302093798312
+    },
+    "replaceAll \\A|\\z -> X": {
+      "zig": 1026.9,
+      "pcre2": 57648.6,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 56.1384750219106
+    },
+    "replaceAll digits -> N": {
+      "zig": 116053.8,
+      "pcre2": 626438.1,
+      "unit": "ns/iter",
+      "pcre2_over_zig": 5.39782497427917
+    }
+  }
+}
