@@ -907,3 +907,15 @@ dominates two-to-four-byte runs. The alternation scanners keep their current
 shape; the profile attributes about 28% of the 20-word scan to `matchesAt`
 and 34% to the nibble scan, so a bucket-bit candidate dispatch remains the
 next candidate.
+
+Three further refinements were screened and reverted. A Greek-block vector
+scan cannot be exact: `\p{Script=Greek}` excludes Common codepoints inside
+U+0370-U+03FF (U+037E, U+0387) and its per-lead continuation sets are
+non-contiguous, so a block or rectangle check would overmatch, and the exact
+256-entry automaton cannot be vectorized with NEON `tbl`. Splitting
+`findOnce` into a tiny entry plus a never-inlined one-shot dispatcher changed
+the `findAll` Qwen cases by only 0.98-0.99x with mixed find-case movements in
+the same noisy batch, so the duplicate switch stays. Forwarding the literal
+scanner return slot with `@call(.always_tail)` is rejected by LLVM ("musttail
+call must precede a ret") for Zig error-union returns, so the ~56-byte
+`Match` copy at the dispatch boundary remains.
