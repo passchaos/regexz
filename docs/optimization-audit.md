@@ -919,3 +919,14 @@ the same noisy batch, so the duplicate switch stays. Forwarding the literal
 scanner return slot with `@call(.always_tail)` is rejected by LLVM ("musttail
 call must precede a ret") for Zig error-union returns, so the ~56-byte
 `Match` copy at the dispatch boundary remains.
+
+Two dispatch-entry refinements were screened and reverted. Adding a
+whole-pattern literal-set branch to the small `find` entry (a dedicated
+never-inlined `findLiteralSet`) regressed the alternation scans 1.10-1.11x
+and `\d+` 1.16x: the extra branch pushes the entry past the inliner's
+threshold, so the per-call inlining that the `set+` and tokenizer paths rely
+on is lost. Moving the general prefilter/DFA tail out of `findDispatch` into
+a never-inlined `findGeneric` shrank the dispatch frame by 80 bytes but
+measured neutral across the isolated cases (alternation 10/20-word 0.97-0.98x,
+shared-prefix 1.03x, version 1.04x), so the tail stays inline. The small
+`find` entry and the dispatch shape remain unchanged.
