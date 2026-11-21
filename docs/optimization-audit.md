@@ -1079,17 +1079,24 @@ keeping the operand sorted so `normalize` skips its sort. Non-negated
 classes return the normalized set directly; negated classes complement the
 normalized ranges without a copy. Precomputed unions are merged directly
 from the generated table without an intermediate set, and coalesced range
-lists skip the merge loop. Case-folded literal filters use a 32-lane pair
+lists skip the merge loop. Sorted range lists fill their ASCII bitmap only up
+to the first non-ASCII range. A short out-of-order class prefix is sorted
+before merging a precomputed union, avoiding a block sort of the combined
+list, and the parser's sortedness witness skips the redundant scan. Adjacent
+positive properties stay unmaterialized until a union misses, canonical
+property tables are validated in place, and negated union classes emit their
+complement directly from the generated table. These changes cut Qwen compile
+from 23.3 us to 16.4 us. Case-folded literal filters use a 32-lane pair
 scan on AVX2 hosts. The latest eight-execution order-balanced
 sweep covers 101 cases: 98 are faster, IPv6 is at parity (1.01x), and the
 remaining losses are the one-character alternation (0.88x), currency (0.92x)
-and HTML tags (0.92x). The geometric-mean ratio is 2.30x. See
+and HTML tags (0.92x). The geometric-mean ratio is 2.31x. See
 [Rust comparison](benchmarks/rust-comparison.md).
 
 The same 100-case workload (minus `RegexSet`) was also run against PCRE2
 10.42 with JIT on the same host. regexz is faster or at parity on 98 of 100
-cases, with a geometric-mean PCRE2/regexz ratio of 2.13x. PCRE2 wins compile
-Qwen (0.69x); the small ASCII case-insensitive literal is at parity (0.99x).
-regexz now also wins compile xDS-like (1.21x). regexz materializes Unicode
-property sets at compile time, while PCRE2 defers them. See
-[PCRE2 comparison](benchmarks/pcre2-comparison.md).
+cases, with a geometric-mean PCRE2/regexz ratio of 2.14x. Compile Qwen is at
+parity (0.99x, down from 0.69x); the small ASCII case-insensitive literal is
+also at parity (0.99x). regexz wins compile xDS-like (1.23x). regexz
+materializes Unicode property sets at compile time, while PCRE2 defers them.
+See [PCRE2 comparison](benchmarks/pcre2-comparison.md).

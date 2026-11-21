@@ -11,23 +11,26 @@ valid UTF-8; without it PCRE2 revalidates the whole subject on every
 `pcre2_match` call, which turns a find loop into quadratic work. UCP is left
 off so `\b` and `\w` stay ASCII like the Rust `(?-u:...)` comparison case.
 
-Method: three interleaved executions (regexz then PCRE2 each round), with
+Method: seven interleaved executions (regexz then PCRE2 each round), with
 both processes pinned to CPU 0 with `taskset`; the table reports medians.
 The suite covers 100 cases: the same cases as the Rust comparison minus the
 `RegexSet` row, because PCRE2 has no combined-set API. The compile rows
 measure PCRE2's compile plus JIT compilation against regexz's compile. The
 compile rows were re-measured after the class-sort, workspace-pointer,
-complement-fill, in-place-operand, precomputed-union, direct-negation and
-direct-union-append and coalesced-skip changes and the `find log level` and
+complement-fill, in-place-operand, precomputed-union, direct-negation,
+direct-union-append and coalesced-skip changes, the sorted-range ASCII-mask,
+class-normalization, direct-complement and deferred-property changes listed
+in the [Rust comparison](rust-comparison.md), and the `find log level` and
 `find (?i) literal` rows after the 32-lane caseless scans; the materialized
 sets are identical, so the other search rows are unchanged. Raw samples and
-executable identities are in
-[`pcre2-comparison-current.json`](pcre2-comparison-current.json).
+executable identities for the latest full sweep are in
+[`pcre2-comparison-current.json`](pcre2-comparison-current.json); its search
+rows differ from the table only by shared-host noise.
 
 | Case | regexz, ns/iter | PCRE2, ns/iter | PCRE2 / regexz |
 | --- | ---: | ---: | ---: |
-| compile Qwen tokenizer | 23,300.0 | 16,184.1 | 0.69x |
-| compile xDS-like | 5,900.0 | 7,148.6 | 1.21x |
+| compile Qwen tokenizer | 16,361.2 | 16,125.1 | 0.99x |
+| compile xDS-like | 5,803.3 | 7,159.8 | 1.23x |
 | find Qwen tokenizer | 49,740.3 | 177,575.5 | 3.57x |
 | findAll Qwen (borrowed) | 58,493.8 | 177,547.2 | 3.04x |
 | findAll Qwen (owning) | 58,303.3 | 177,425.6 | 3.04x |
@@ -128,16 +131,17 @@ executable identities are in
 | replaceAll digits -> N | 54,994.1 | 307,631.7 | 5.59x |
 
 regexz is faster or at parity on 98 of the 100 measured cases, with a
-geometric-mean PCRE2/regexz ratio of 2.13x. The remaining PCRE2 lead is
-compile Qwen; the ASCII case-insensitive literal is at parity:
+geometric-mean PCRE2/regexz ratio of 2.14x. The two rows below 1.00x are
+within host noise:
 
-- `compile Qwen tokenizer` (0.69x):
+- `compile Qwen tokenizer` (0.99x):
   PCRE2 parses the pattern and stores property references; regexz
   materializes the Unicode property sets at compile time so searches can use
   range lists directly. The compile rows include PCRE2's JIT pass, while
-  regexz has no JIT.
+  regexz has no JIT. After the class-construction changes the two are at
+  parity, down from a 0.69x ratio.
 - `find (?i) literal` (0.99x): parity within host noise after the 32-lane
-  case-folded scan. Compile xDS-like is 1.21x ahead of PCRE2 after the
+  case-folded scan. Compile xDS-like is 1.23x ahead of PCRE2 after the
   workspace-pointer change; HTML tags and the case-insensitive Unicode
   literal are at parity (1.00x).
 

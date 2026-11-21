@@ -27,8 +27,8 @@ text, and small full-match subjects.
 
 | Case | regexz, ns/iter | Rust, ns/iter | Rust / regexz |
 | --- | ---: | ---: | ---: |
-| compile Qwen tokenizer | 23,300.0 | 714,453.8 | 30.66x |
-| compile xDS-like | 5,900.0 | 31,649.2 | 5.36x |
+| compile Qwen tokenizer | 16,360.8 | 715,325.0 | 43.72x |
+| compile xDS-like | 5,759.1 | 31,562.3 | 5.48x |
 | find Qwen tokenizer | 49,760.6 | 106,195.8 | 2.13x |
 | findAll Qwen (borrowed) | 58,364.1 | 105,801.2 | 1.81x |
 | findAll Qwen (owning) | 58,294.2 | 105,031.1 | 1.80x |
@@ -134,18 +134,37 @@ losses are the one-character alternation (`a|b|c`, 0.88x), currency
 (`\$\d+(?:\.\d{2})?`, 0.92x) and HTML tags (`<[^>]+>`, 0.92x); IPv6 is at
 parity (1.01x). The largest leads are `replaceAll` with edge assertions
 (39.00x), blank-line scans (33.15x), capitalized-word scans (28.39x),
-`RegexSet` no-match scans (16.22x) and compile time (30.66x); the tokenizer
-searches are 2.13x and 2.16x ahead. The geometric-mean ratio is 2.30x. The
+`RegexSet` no-match scans (16.22x) and compile time (43.72x); the tokenizer
+searches are 2.13x and 2.16x ahead. The geometric-mean ratio is 2.31x. The
 currency and HTML-tag rows are small absolute gaps (about 26 ns and 15 us
 respectively); the one-character alternation is dominated by the per-match
 dispatch call.
 
 The compile rows were re-measured after the class-sort, workspace-pointer,
 complement-fill, in-place-operand, precomputed-union, direct-negation and
-direct-union-append and coalesced-skip changes, and the `find log level`,
-`find (?i) alternation` and `find (?i) literal` rows after the 32-lane
-caseless scans; the materialized sets are identical, so the other search
-rows are unchanged.
+direct-union-append and coalesced-skip changes, the sorted-range ASCII-mask,
+class-normalization, direct-complement and deferred-property changes listed
+below, and the `find log level`, `find (?i) alternation` and `find (?i)
+literal` rows after the 32-lane caseless scans; the materialized sets are
+identical, so the other search rows are unchanged. The companion JSON holds
+the latest full sweep; its search rows differ from the table only by
+shared-host noise.
+
+The compile path gained four more class-construction changes:
+
+- Materialized sets are built from a sorted-range entry point that stops
+  filling the ASCII bitmap at the first non-ASCII range. Unsorted callers
+  keep the general builder.
+- The parser sorts a short out-of-order literal prefix (for example `\r\n`)
+  before merging a precomputed property union, instead of appending the union
+  and block-sorting the combined list; the sortedness scan is skipped when
+  the parser already vouches for the operand order.
+- Adjacent positive property atoms stay unmaterialized until a precomputed
+  union misses, and canonical property tables are validated in place rather
+  than copied through `normalize`.
+- A negated class made of a property union plus a short prefix emits its
+  complement directly from the union table, without materializing the union
+  range list first.
 
 ## What changed in this round
 
