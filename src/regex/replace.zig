@@ -595,10 +595,22 @@ pub const Workspace = struct {
         };
         const wrapped_run: ?WrappedRunState = if (limits.longest) null else blk: {
             const shape = program.wrapped_run orelse break :blk null;
+            const body = byte_table.init(256, shape.body);
+            var body_excludes_close = false;
+            if (shape.close.len == 1) {
+                body_excludes_close = true;
+                for (0..256) |byte| {
+                    if (body[byte] != (byte != shape.close[0])) {
+                        body_excludes_close = false;
+                        break;
+                    }
+                }
+            }
             break :blk .{
                 .open = shape.open,
                 .close = shape.close,
-                .body = byte_table.init(256, shape.body),
+                .body = body,
+                .body_excludes_close = body_excludes_close,
             };
         };
         const paired: ?PairedState = if (limits.longest) null else blk: {
@@ -2645,8 +2657,21 @@ pub const Workspace = struct {
         var search = search_start;
         while (search < input.len) {
             const open = indexOfBytes(input, search, state.open) orelse return null;
-            var pos = open + state.open.len;
-            const body_start = pos;
+            const body_start = open + state.open.len;
+            if (state.body_excludes_close) {
+                // The body is every byte except the close, so the body end is
+                // exactly the next close occurrence; the vector byte scanner
+                // replaces the scalar body walk.
+                const close = prefilter.indexOfByte(input, body_start, state.close[0]) orelse return null;
+                if (close > body_start) {
+                    self.slots[0] = open;
+                    self.slots[1] = close + 1;
+                    return .{ .start = open, .end = close + 1, .slots = self.slots };
+                }
+                search = open + 1;
+                continue;
+            }
+            var pos = body_start;
             while (pos < input.len and state.body[input[pos]]) pos += 1;
             if (pos > body_start and pos + state.close.len <= input.len and
                 std.mem.eql(u8, input[pos..][0..state.close.len], state.close))
@@ -5329,6 +5354,9 @@ const WrappedRunState = struct {
     open: []const u8,
     close: []const u8,
     body: [256]bool,
+    /// The body is every byte except a single-byte close, so the body end is
+    /// the next close occurrence and can use the vector byte scanner.
+    body_excludes_close: bool = false,
 };
 
 const PairedState = struct {
