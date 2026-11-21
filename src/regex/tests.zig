@@ -1173,6 +1173,51 @@ test "run literal and delimited shapes scan real-world tails" {
     try expectFastSpans("\"[^\"]+\"\\s*:", "\"\" \"a\": \"b\" : 2", &.{ .{ 3, 7 }, .{ 8, 13 } });
 }
 
+test "paired, wrapped and line shapes scan config text" {
+    const link_pattern = "\\[[^\\]]+\\]\\([^)]+\\)";
+    var link = try regex.Regex.init(gpa, link_pattern, .{});
+    defer link.deinit();
+    var link_workspace = try regex.ReplaceWorkspace.init(gpa, link.program, .{});
+    defer link_workspace.deinit();
+    try std.testing.expect(link_workspace.fast_kind == .paired);
+    try expectFastSpans(link_pattern, "[a](b) [a](b c) [x[y]](z)", &.{ .{ 0, 6 }, .{ 7, 15 } });
+    try expectFastSpans(link_pattern, "[](x) [a](b", &.{});
+
+    const key_pattern = "(?m)^\\s*[\\w-]+:";
+    var key = try regex.Regex.init(gpa, key_pattern, .{});
+    defer key.deinit();
+    var key_workspace = try regex.ReplaceWorkspace.init(gpa, key.program, .{});
+    defer key_workspace.deinit();
+    try std.testing.expect(key_workspace.fast_kind == .line_key);
+    try expectFastSpans(key_pattern, "name: value\nkey = 1\n  spaced: x\n: empty\n- item: x\n", &.{ .{ 0, 5 }, .{ 20, 29 } });
+
+    const table_pattern = "(?m)^\\[[\\w.]+\\]$";
+    var table = try regex.Regex.init(gpa, table_pattern, .{});
+    defer table.deinit();
+    var table_workspace = try regex.ReplaceWorkspace.init(gpa, table.program, .{});
+    defer table_workspace.deinit();
+    try std.testing.expect(table_workspace.fast_kind == .line_bracket);
+    try expectFastSpans(table_pattern, "[section]\n[a.b]\n[ a ]\n[]\n[x]y\n[section]\n", &.{ .{ 0, 9 }, .{ 10, 15 }, .{ 30, 39 } });
+
+    const template_pattern = "\\$\\{[^}]+\\}";
+    var template = try regex.Regex.init(gpa, template_pattern, .{});
+    defer template.deinit();
+    var template_workspace = try regex.ReplaceWorkspace.init(gpa, template.program, .{});
+    defer template_workspace.deinit();
+    try std.testing.expect(template_workspace.fast_kind == .wrapped_run);
+    try expectFastSpans(template_pattern, "hello ${name} and ${user.id} ", &.{ .{ 6, 13 }, .{ 18, 28 } });
+    try expectFastSpans(template_pattern, "$${a} ${}", &.{.{ 1, 5 }});
+
+    const path_pattern = "[A-Za-z]:\\\\[^:*?\"<>|]+";
+    var path = try regex.Regex.init(gpa, path_pattern, .{});
+    defer path.deinit();
+    var path_workspace = try regex.ReplaceWorkspace.init(gpa, path.program, .{});
+    defer path_workspace.deinit();
+    try std.testing.expect(path_workspace.fast_kind == .windows_path);
+    try expectFastSpans(path_pattern, "C:\\Users\\dev\\file.txt D:\\data\\x.csv ", &.{.{ 0, 23 }});
+    try expectFastSpans(path_pattern, "1:\\x 22:\\y", &.{});
+}
+
 test "signed number fast path scans sign and fraction" {
     var value = try regex.Regex.init(gpa, "[+-]?\\d+(?:\\.\\d+)?", .{});
     defer value.deinit();

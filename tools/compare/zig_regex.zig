@@ -382,6 +382,34 @@ pub fn main() !void {
     defer call_text.deinit(gpa);
     for (0..2000) |_| try call_text.appendSlice(gpa, "foo(1) bar_baz(x) qux () ");
 
+    var mac_text: std.ArrayList(u8) = .empty;
+    defer mac_text.deinit(gpa);
+    for (0..2000) |_| try mac_text.appendSlice(gpa, "00:1A:2B:3C:4D:5E aa:bb:cc:dd:ee:ff ");
+
+    var b64_text: std.ArrayList(u8) = .empty;
+    defer b64_text.deinit(gpa);
+    for (0..2000) |_| try b64_text.appendSlice(gpa, "SGVsbG8gV29ybGQhIFRoaXMgaXMgYSBiYXNlNjQgc3RyaW5nIQ== ");
+
+    var config_text: std.ArrayList(u8) = .empty;
+    defer config_text.deinit(gpa);
+    for (0..2000) |_| try config_text.appendSlice(gpa, "name: value\n[section]\nkey = 1\n");
+
+    var template_text: std.ArrayList(u8) = .empty;
+    defer template_text.deinit(gpa);
+    for (0..2000) |_| try template_text.appendSlice(gpa, "hello ${name} and ${user.id} ");
+
+    var path_text: std.ArrayList(u8) = .empty;
+    defer path_text.deinit(gpa);
+    for (0..2000) |_| try path_text.appendSlice(gpa, "C:\\Users\\dev\\file.txt D:\\data\\x.csv ");
+
+    var css_text: std.ArrayList(u8) = .empty;
+    defer css_text.deinit(gpa);
+    for (0..2000) |_| try css_text.appendSlice(gpa, ".button { color: red; } #main { margin: 0; } ");
+
+    var slash_text: std.ArrayList(u8) = .empty;
+    defer slash_text.deinit(gpa);
+    for (0..2000) |_| try slash_text.appendSlice(gpa, "11/21/2026 01/05/2025 12/31/1999 ");
+
     const qwen = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+";
     const ucp = regexz.Limits{ .unicode_perl_space = true, .max_execution_steps = 16_000_000 };
 
@@ -460,6 +488,16 @@ pub fn main() !void {
     try benchFind(io, out, "find blockquote", "(?m)^>.*$", md_text.items, 200, .{});
     try benchFind(io, out, "find ordered list", "(?m)^\\d+\\.\\s", md_text.items, 200, .{});
     try benchFind(io, out, "find query param", "[?&]\\w+=", url_text.items, 200, .{});
+    try benchFind(io, out, "find MAC address", "(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}", mac_text.items, 200, .{});
+    try benchFind(io, out, "find base64 run", "[A-Za-z0-9+/]{20,}", b64_text.items, 200, .{});
+    try benchFind(io, out, "find markdown link", "\\[[^\\]]+\\]\\([^)]+\\)", md_text.items, 200, .{});
+    try benchFind(io, out, "find YAML key", "(?m)^\\s*[\\w-]+:", config_text.items, 200, .{});
+    try benchFind(io, out, "find TOML table", "(?m)^\\[[\\w.]+\\]$", config_text.items, 200, .{});
+    try benchFind(io, out, "find template", "\\$\\{[^}]+\\}", template_text.items, 200, .{});
+    try benchFind(io, out, "find Windows path", "[A-Za-z]:\\\\[^:*?\"<>|]+", path_text.items, 200, .{});
+    try benchFind(io, out, "find CSS selector", "[.#][\\w-]+\\s*\\{", css_text.items, 200, .{});
+    try benchFind(io, out, "find slash date", "\\d{2}/\\d{2}/\\d{4}", slash_text.items, 200, .{});
+    try benchFind(io, out, "find HTTP request", "(?:GET|POST) /[^ ]+ HTTP/1\\.[01]", ascii_text.items, 200, .{});
     try benchSplit(io, out, "split whitespace (22 KiB)", "\\s+", ascii_text.items, 200);
     try benchSplit(io, out, "split commas (29 KiB)", ",", csv_text.items, 200);
     try benchMatches(io, out, "fullmatch literal", "hello, world!", "hello, world!", 200000, .{});

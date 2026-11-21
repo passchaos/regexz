@@ -180,6 +180,18 @@ pub const Program = struct {
     delimited_any: ?DelimitedAnyShape = null,
     /// `quote body+ quote space* literal` (`"[^"]+"\s*:`). Not serialized.
     delimited_tail: ?DelimitedTailShape = null,
+    /// `open body+ close` with multi-byte literals (`\$\{[^}]+\}`).
+    /// Not serialized.
+    wrapped_run: ?WrappedRunShape = null,
+    /// `open1 body1+ close1 open2 body2+ close2` (markdown links).
+    /// Not serialized.
+    paired: ?PairedShape = null,
+    /// `(?m)^space* run+ literal` (YAML keys). Not serialized.
+    line_key: ?LineKeyShape = null,
+    /// `(?m)^\[ run+ \]$` (TOML tables). Not serialized.
+    line_bracket: ?LineBracketShape = null,
+    /// `letters : \ run+` (Windows paths). Not serialized.
+    windows_path: ?WindowsPathShape = null,
     /// `x? set+` where `x` is a member of the set, which matches exactly the
     /// same spans as `set+`. Not serialized.
     optional_run: ?model.Set = null,
@@ -1427,6 +1439,152 @@ fn detectDelimitedTail(root: *const model.Node) ?DelimitedTailShape {
     return .{ .quote = quote, .body = body, .space = space, .literal = literal };
 }
 
+/// `open body+ close` with multi-byte literals, for example
+/// `\$\{[^}]+\}`. The body excludes the close's first byte.
+pub const WrappedRunShape = struct { open: []const u8, close: []const u8, body: model.Set };
+
+/// `open1 body1+ close1 open2 body2+ close2`, for example a markdown link
+/// `\[[^\]]+\]\([^)]+\)`.
+pub const PairedShape = struct {
+    open1: u8,
+    close1: u8,
+    open2: u8,
+    close2: u8,
+    body1: model.Set,
+    body2: model.Set,
+};
+
+/// `(?m)^space* run+ literal`, for example a YAML key `(?m)^\s*[\w-]+:`.
+pub const LineKeyShape = struct { space: model.Set, run: model.Set, literal: u8 };
+
+/// `(?m)^\[ run+ \]$`, for example a TOML table header.
+pub const LineBracketShape = struct { run: model.Set };
+
+/// `letters : \ run+`, for example a Windows path `[A-Za-z]:\\[^:*?"<>|]+`.
+pub const WindowsPathShape = struct { letters: model.Set, run: model.Set };
+
+/// Whether a body set can be represented by a byte table: either every
+/// non-ASCII rune is a member, or the set is ASCII-only.
+fn bodyRepresentable(set: model.Set) bool {
+    return set.ascii_only or set.covers(0x80, 0x10FFFF);
+}
+
+fn detectWrappedRun(allocator: std.mem.Allocator, root: *const model.Node) model.Error!?WrappedRunShape {
+    var nodes: [16]*const model.Node = undefined;
+    var count: usize = 0;
+    if (!flattenUpTo(root, &nodes, &count) or count < 3) return null;
+    var repeat_index: ?usize = null;
+    for (nodes[0..count], 0..) |node, index| {
+        if (repeatOf(node) == null) continue;
+        if (repeat_index != null) return null;
+        repeat_index = index;
+    }
+    const split = repeat_index orelse return null;
+    if (split == 0 or split + 1 == count) return null;
+    var open_buf: [16]u8 = undefined;
+    var open_len: usize = 0;
+    for (nodes[0..split]) |node| {
+        const byte = literalByteOf(node) orelse return null;
+        if (open_len == open_buf.len) return null;
+        open_buf[open_len] = byte;
+        open_len += 1;
+    }
+    var close_buf: [16]u8 = undefined;
+    var close_len: usize = 0;
+    for (nodes[split + 1 .. count]) |node| {
+        const byte = literalByteOf(node) orelse return null;
+        if (close_len == close_buf.len) return null;
+        close_buf[close_len] = byte;
+        close_len += 1;
+    }
+    const repeat = (repeatOf(nodes[split]) orelse return null).repeat;
+    if (repeat.lazy or repeat.possessive or repeat.maximum != null or repeat.minimum == 0) return null;
+    const body = nodeSet(repeat.child) orelse return null;
+    if (body.ranges.len == 0 or body.matches(close_buf[0])) return null;
+    if (!bodyRepresentable(body)) return null;
+    return .{
+        .open = try allocator.dupe(u8, open_buf[0..open_len]),
+        .close = try allocator.dupe(u8, close_buf[0..close_len]),
+        .body = body,
+    };
+}
+
+fn detectPaired(root: *const model.Node) ?PairedShape {
+    var nodes: [6]*const model.Node = undefined;
+    var count: usize = 0;
+    if (!flattenUpTo(root, &nodes, &count) or count != 6) return null;
+    const open1 = literalByteOf(nodes[0]) orelse return null;
+    const body1_repeat = (repeatOf(nodes[1]) orelse return null).repeat;
+    if (body1_repeat.lazy or body1_repeat.possessive or body1_repeat.maximum != null or body1_repeat.minimum == 0) return null;
+    const body1 = nodeSet(body1_repeat.child) orelse return null;
+    const close1 = literalByteOf(nodes[2]) orelse return null;
+    const open2 = literalByteOf(nodes[3]) orelse return null;
+    const body2_repeat = (repeatOf(nodes[4]) orelse return null).repeat;
+    if (body2_repeat.lazy or body2_repeat.possessive or body2_repeat.maximum != null or body2_repeat.minimum == 0) return null;
+    const body2 = nodeSet(body2_repeat.child) orelse return null;
+    const close2 = literalByteOf(nodes[5]) orelse return null;
+    if (body1.ranges.len == 0 or body2.ranges.len == 0) return null;
+    if (body1.matches(close1) or body2.matches(close2)) return null;
+    if (!bodyRepresentable(body1) or !bodyRepresentable(body2)) return null;
+    return .{
+        .open1 = open1,
+        .close1 = close1,
+        .open2 = open2,
+        .close2 = close2,
+        .body1 = body1,
+        .body2 = body2,
+    };
+}
+
+fn detectLineKey(root: *const model.Node) ?LineKeyShape {
+    var nodes: [4]*const model.Node = undefined;
+    var count: usize = 0;
+    if (!flattenUpTo(root, &nodes, &count) or count != 4) return null;
+    if (nodes[0].* != .assertion or nodes[0].assertion != .start_line) return null;
+    const space_repeat = (repeatOf(nodes[1]) orelse return null).repeat;
+    if (space_repeat.lazy or space_repeat.possessive or space_repeat.maximum != null or space_repeat.minimum != 0) return null;
+    const space = nodeSet(space_repeat.child) orelse return null;
+    const run_repeat = (repeatOf(nodes[2]) orelse return null).repeat;
+    if (run_repeat.lazy or run_repeat.possessive or run_repeat.maximum != null or run_repeat.minimum == 0) return null;
+    const run = nodeSet(run_repeat.child) orelse return null;
+    const literal = literalByteOf(nodes[3]) orelse return null;
+    if (!space.ascii_only or space.ranges.len == 0) return null;
+    if (!run.ascii_only or run.ranges.len == 0) return null;
+    if (run.matches(literal)) return null;
+    return .{ .space = space, .run = run, .literal = literal };
+}
+
+fn detectLineBracket(root: *const model.Node) ?LineBracketShape {
+    var nodes: [5]*const model.Node = undefined;
+    var count: usize = 0;
+    if (!flattenUpTo(root, &nodes, &count) or count != 5) return null;
+    if (nodes[0].* != .assertion or nodes[0].assertion != .start_line) return null;
+    if (literalByteOf(nodes[1]) != '[') return null;
+    const run_repeat = (repeatOf(nodes[2]) orelse return null).repeat;
+    if (run_repeat.lazy or run_repeat.possessive or run_repeat.maximum != null or run_repeat.minimum == 0) return null;
+    const run = nodeSet(run_repeat.child) orelse return null;
+    if (literalByteOf(nodes[3]) != ']') return null;
+    if (nodes[4].* != .assertion or nodes[4].assertion != .end_line) return null;
+    if (!run.ascii_only or run.ranges.len == 0 or run.matches(']')) return null;
+    return .{ .run = run };
+}
+
+fn detectWindowsPath(root: *const model.Node) ?WindowsPathShape {
+    var nodes: [4]*const model.Node = undefined;
+    var count: usize = 0;
+    if (!flattenUpTo(root, &nodes, &count) or count != 4) return null;
+    const letters = nodeSet(nodes[0]) orelse return null;
+    if (literalByteOf(nodes[1]) != ':') return null;
+    if (literalByteOf(nodes[2]) != '\\') return null;
+    const run_repeat = (repeatOf(nodes[3]) orelse return null).repeat;
+    if (run_repeat.lazy or run_repeat.possessive or run_repeat.maximum != null or run_repeat.minimum == 0) return null;
+    const run = nodeSet(run_repeat.child) orelse return null;
+    if (!letters.ascii_only or letters.ranges.len == 0) return null;
+    if (run.ranges.len == 0 or run.matches(':')) return null;
+    if (!bodyRepresentable(run)) return null;
+    return .{ .letters = letters, .run = run };
+}
+
 fn detectRunLiterals(allocator: std.mem.Allocator, root: *const model.Node) model.Error!?RunLiteralsShape {
     var nodes: [2]*const model.Node = undefined;
     var count: usize = 0;
@@ -2428,6 +2586,31 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         detectDelimitedTail(parsed.root)
     else
         null;
+    const wrapped_run: ?WrappedRunShape = if (literal == null and caseless_literal == null and
+        literal_set == null and !limits.auto_callout)
+        try detectWrappedRun(allocator, parsed.root)
+    else
+        null;
+    const paired: ?PairedShape = if (literal == null and caseless_literal == null and
+        literal_set == null and !limits.auto_callout)
+        detectPaired(parsed.root)
+    else
+        null;
+    const line_key: ?LineKeyShape = if (literal == null and caseless_literal == null and
+        literal_set == null and !limits.auto_callout and parsed.newline == .lf)
+        detectLineKey(parsed.root)
+    else
+        null;
+    const line_bracket: ?LineBracketShape = if (literal == null and caseless_literal == null and
+        literal_set == null and !limits.auto_callout and parsed.newline == .lf)
+        detectLineBracket(parsed.root)
+    else
+        null;
+    const windows_path: ?WindowsPathShape = if (literal == null and caseless_literal == null and
+        literal_set == null and !limits.auto_callout)
+        detectWindowsPath(parsed.root)
+    else
+        null;
     const optional_run: ?model.Set = if (literal == null and caseless_literal == null and
         literal_set == null and !limits.auto_callout) detectOptionalRun(parsed.root) else null;
     var unbounded_builder = UnboundedSequenceBuilder{ .allocator = allocator, .literal_bytes = unbounded_storage };
@@ -2502,6 +2685,11 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         .prefix_run_literal = prefix_run_literal,
         .delimited_any = delimited_any,
         .delimited_tail = delimited_tail,
+        .wrapped_run = wrapped_run,
+        .paired = paired,
+        .line_key = line_key,
+        .line_bracket = line_bracket,
+        .windows_path = windows_path,
         .optional_run = optional_run,
         .dfa_eligible = dfa_eligible,
         .extended = extended,

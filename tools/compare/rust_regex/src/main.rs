@@ -159,6 +159,13 @@ fn main() {
     let stamp_text = "2026-11-21T13:29:29 2025-01-05T00:00:00 ".repeat(2000);
     let unit_text = "12px 3.5em 100% 2rem ".repeat(2000);
     let call_text = "foo(1) bar_baz(x) qux () ".repeat(2000);
+    let mac_text = "00:1A:2B:3C:4D:5E aa:bb:cc:dd:ee:ff ".repeat(2000);
+    let b64_text = "SGVsbG8gV29ybGQhIFRoaXMgaXMgYSBiYXNlNjQgc3RyaW5nIQ== ".repeat(2000);
+    let config_text = "name: value\n[section]\nkey = 1\n".repeat(2000);
+    let template_text = "hello ${name} and ${user.id} ".repeat(2000);
+    let path_text = "C:\\Users\\dev\\file.txt D:\\data\\x.csv ".repeat(2000);
+    let css_text = ".button { color: red; } #main { margin: 0; } ".repeat(2000);
+    let slash_text = "11/21/2026 01/05/2025 12/31/1999 ".repeat(2000);
 
     let qwen = "(?i:'s|'t|'re|'ve|'m|'ll|'d)|[^\\r\\n\\p{L}\\p{N}]?[\\p{L}\\p{M}]+|\\p{N}| ?[^\\s\\p{L}\\p{M}\\p{N}]+[\\r\\n]*|\\s*[\\r\\n]+|\\s+";
 
@@ -322,6 +329,31 @@ fn main() {
     bench_find("find blockquote", r"(?m)^>.*$", &md_text, 200);
     bench_find("find ordered list", r"(?m)^\d+\.\s", &md_text, 200);
     bench_find("find query param", r"[?&]\w+=", &url_text, 200);
+    bench_find(
+        "find MAC address",
+        r"(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}",
+        &mac_text,
+        200,
+    );
+    bench_find("find base64 run", r"[A-Za-z0-9+/]{20,}", &b64_text, 200);
+    bench_find("find markdown link", r"\[[^\]]+\]\([^)]+\)", &md_text, 200);
+    bench_find("find YAML key", r"(?m)^\s*[\w-]+:", &config_text, 200);
+    bench_find("find TOML table", r"(?m)^\[[\w.]+\]$", &config_text, 200);
+    bench_find("find template", r"\$\{[^}]+\}", &template_text, 200);
+    bench_find(
+        "find Windows path",
+        r#"[A-Za-z]:\\[^:*?"<>|]+"#,
+        &path_text,
+        200,
+    );
+    bench_find("find CSS selector", r"[.#][\w-]+\s*\{", &css_text, 200);
+    bench_find("find slash date", r"\d{2}/\d{2}/\d{4}", &slash_text, 200);
+    bench_find(
+        "find HTTP request",
+        r"(?:GET|POST) /[^ ]+ HTTP/1\.[01]",
+        &ascii_text,
+        200,
+    );
     bench_split("split whitespace (22 KiB)", "\\s+", &ascii_text, 200);
     bench_split("split commas (29 KiB)", ",", &csv_text, 200);
     bench_fullmatch(

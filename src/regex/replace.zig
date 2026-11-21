@@ -90,6 +90,11 @@ pub const FastKind = enum {
     prefix_run_literal,
     delimited_any,
     delimited_tail,
+    wrapped_run,
+    paired,
+    line_key,
+    line_bracket,
+    windows_path,
 };
 pub const Error = model.Error;
 
@@ -285,6 +290,16 @@ pub const Workspace = struct {
     delimited_any: ?DelimitedAnyState = null,
     /// `quote body+ quote space* literal` (`"[^"]+"\s*:`).
     delimited_tail: ?DelimitedTailState = null,
+    /// `open body+ close` with multi-byte literals (`\$\{[^}]+\}`).
+    wrapped_run: ?WrappedRunState = null,
+    /// `open1 body1+ close1 open2 body2+ close2` (markdown links).
+    paired: ?PairedState = null,
+    /// `(?m)^space* run+ literal` (YAML keys).
+    line_key: ?LineKeyState = null,
+    /// `(?m)^\[ run+ \]$` (TOML tables).
+    line_bracket: ?LineBracketState = null,
+    /// `letters : \ run+` (Windows paths).
+    windows_path: ?WindowsPathState = null,
     /// Byte membership tables for the chain fast path. `Set.matches` is a
     /// binary search over rune ranges; the per-byte chain scans run several
     /// lookups per input byte, so cache the answers once per workspace.
@@ -568,6 +583,44 @@ pub const Workspace = struct {
                 .literal = shape.literal,
             };
         };
+        const wrapped_run: ?WrappedRunState = if (limits.longest) null else blk: {
+            const shape = program.wrapped_run orelse break :blk null;
+            break :blk .{
+                .open = shape.open,
+                .close = shape.close,
+                .body = byte_table.init(256, shape.body),
+            };
+        };
+        const paired: ?PairedState = if (limits.longest) null else blk: {
+            const shape = program.paired orelse break :blk null;
+            break :blk .{
+                .open1 = shape.open1,
+                .close1 = shape.close1,
+                .open2 = shape.open2,
+                .close2 = shape.close2,
+                .body1 = byte_table.init(256, shape.body1),
+                .body2 = byte_table.init(256, shape.body2),
+            };
+        };
+        const line_key: ?LineKeyState = if (limits.longest) null else blk: {
+            const shape = program.line_key orelse break :blk null;
+            break :blk .{
+                .space = byte_table.init(256, shape.space),
+                .run = byte_table.init(256, shape.run),
+                .literal = shape.literal,
+            };
+        };
+        const line_bracket: ?LineBracketState = if (limits.longest) null else blk: {
+            const shape = program.line_bracket orelse break :blk null;
+            break :blk .{ .run = byte_table.init(256, shape.run) };
+        };
+        const windows_path: ?WindowsPathState = if (limits.longest) null else blk: {
+            const shape = program.windows_path orelse break :blk null;
+            break :blk .{
+                .letters = byte_table.init(256, shape.letters),
+                .run = byte_table.init(256, shape.run),
+            };
+        };
         const anchored_table: [256]bool = if (simple_anchored) |anchored|
             (if (anchored.set.ascii_only) byte_table.init(256, anchored.set) else .{false} ** 256)
         else
@@ -707,6 +760,8 @@ pub const Workspace = struct {
             .repeated_literal
         else if (utf8_run != null)
             .utf8_run
+        else if (windows_path != null)
+            .windows_path
         else if (simple_chain != null)
             .chain
         else if (run_then_literal != null)
@@ -731,6 +786,14 @@ pub const Workspace = struct {
             .delimited_any
         else if (delimited_tail != null)
             .delimited_tail
+        else if (wrapped_run != null)
+            .wrapped_run
+        else if (paired != null)
+            .paired
+        else if (line_key != null)
+            .line_key
+        else if (line_bracket != null)
+            .line_bracket
         else if (run_literals != null)
             .run_literals
         else if (prefix_run_literal != null)
@@ -887,6 +950,11 @@ pub const Workspace = struct {
             .prefix_run_literal = prefix_run_literal,
             .delimited_any = delimited_any,
             .delimited_tail = delimited_tail,
+            .wrapped_run = wrapped_run,
+            .paired = paired,
+            .line_key = line_key,
+            .line_bracket = line_bracket,
+            .windows_path = windows_path,
         };
     }
 
@@ -1044,6 +1112,11 @@ pub const Workspace = struct {
             .prefix_run_literal => return self.findPrefixRunLiteral(&self.prefix_run_literal.?, input, search_start),
             .delimited_any => return self.findDelimitedAny(&self.delimited_any.?, input, search_start),
             .delimited_tail => return self.findDelimitedTail(&self.delimited_tail.?, input, search_start),
+            .wrapped_run => return self.findWrappedRun(&self.wrapped_run.?, input, search_start),
+            .paired => return self.findPaired(&self.paired.?, input, search_start),
+            .line_key => return self.findLineKey(&self.line_key.?, input, search_start),
+            .line_bracket => return self.findLineBracket(&self.line_bracket.?, input, search_start),
+            .windows_path => return self.findWindowsPath(&self.windows_path.?, input, search_start),
         }
         // Every match must start at a start-literal occurrence, so the first
         // occurrence bounds the leftmost match start and the DFA can skip
@@ -1668,6 +1741,11 @@ pub const Workspace = struct {
             .prefix_run_literal => return self.findPrefixRunLiteral(&self.prefix_run_literal.?, input, search_start),
             .delimited_any => return self.findDelimitedAny(&self.delimited_any.?, input, search_start),
             .delimited_tail => return self.findDelimitedTail(&self.delimited_tail.?, input, search_start),
+            .wrapped_run => return self.findWrappedRun(&self.wrapped_run.?, input, search_start),
+            .paired => return self.findPaired(&self.paired.?, input, search_start),
+            .line_key => return self.findLineKey(&self.line_key.?, input, search_start),
+            .line_bracket => return self.findLineBracket(&self.line_bracket.?, input, search_start),
+            .windows_path => return self.findWindowsPath(&self.windows_path.?, input, search_start),
         }
         var from = search_start;
         if (self.pair_filter) |filter| {
@@ -2508,6 +2586,124 @@ pub const Workspace = struct {
             }
             // The body end may itself be the next opening quote.
             search = body_end;
+        }
+        return null;
+    }
+
+    /// `open body+ close`: the body excludes the close's first byte, so a
+    /// failed close check rejects the run and the scan resumes after the open.
+    fn findWrappedRun(self: *Workspace, state: *const WrappedRunState, input: []const u8, search_start: usize) ?Match {
+        var search = search_start;
+        while (search < input.len) {
+            const open = indexOfBytes(input, search, state.open) orelse return null;
+            var pos = open + state.open.len;
+            const body_start = pos;
+            while (pos < input.len and state.body[input[pos]]) pos += 1;
+            if (pos > body_start and pos + state.close.len <= input.len and
+                std.mem.eql(u8, input[pos..][0..state.close.len], state.close))
+            {
+                self.slots[0] = open;
+                self.slots[1] = pos + state.close.len;
+                return .{ .start = open, .end = pos + state.close.len, .slots = self.slots };
+            }
+            search = open + 1;
+        }
+        return null;
+    }
+
+    /// `open1 body1+ close1 open2 body2+ close2`: both bodies exclude their
+    /// closer, so each candidate needs one local check.
+    fn findPaired(self: *Workspace, state: *const PairedState, input: []const u8, search_start: usize) ?Match {
+        var search = search_start;
+        while (search < input.len) {
+            const open = prefilter.indexOfByte(input, search, state.open1) orelse return null;
+            var pos = open + 1;
+            const body1_start = pos;
+            while (pos < input.len and state.body1[input[pos]]) pos += 1;
+            if (pos > body1_start and pos + 2 <= input.len and input[pos] == state.close1 and
+                input[pos + 1] == state.open2)
+            {
+                var tail = pos + 2;
+                const body2_start = tail;
+                while (tail < input.len and state.body2[input[tail]]) tail += 1;
+                if (tail > body2_start and tail < input.len and input[tail] == state.close2) {
+                    self.slots[0] = open;
+                    self.slots[1] = tail + 1;
+                    return .{ .start = open, .end = tail + 1, .slots = self.slots };
+                }
+            }
+            search = open + 1;
+        }
+        return null;
+    }
+
+    /// `(?m)^space* run+ literal`: each line start skips the space run, then
+    /// the key run must be followed directly by the literal.
+    fn findLineKey(self: *Workspace, state: *const LineKeyState, input: []const u8, search_start: usize) ?Match {
+        if (search_start > input.len) return null;
+        var line = search_start;
+        if (line > 0 and input[line - 1] != '\n') line = nextLineStart(input, line) orelse return null;
+        while (line < input.len) {
+            var pos = line;
+            while (pos < input.len and state.space[input[pos]]) pos += 1;
+            const run_start = pos;
+            while (pos < input.len and state.run[input[pos]]) pos += 1;
+            if (pos > run_start and pos < input.len and input[pos] == state.literal) {
+                self.slots[0] = line;
+                self.slots[1] = pos + 1;
+                return .{ .start = line, .end = pos + 1, .slots = self.slots };
+            }
+            if (pos >= input.len) return null;
+            line = nextLineStart(input, pos) orelse return null;
+        }
+        return null;
+    }
+
+    /// `(?m)^\[ run+ \]$`: each line start checks the bracket, the run and the
+    /// line end.
+    fn findLineBracket(self: *Workspace, state: *const LineBracketState, input: []const u8, search_start: usize) ?Match {
+        if (search_start > input.len) return null;
+        var line = search_start;
+        if (line > 0 and input[line - 1] != '\n') line = nextLineStart(input, line) orelse return null;
+        while (line < input.len) {
+            var pos = line;
+            if (input[pos] == '[') {
+                pos += 1;
+                const run_start = pos;
+                while (pos < input.len and state.run[input[pos]]) pos += 1;
+                if (pos > run_start and pos < input.len and input[pos] == ']' and
+                    (pos + 1 == input.len or input[pos + 1] == '\n'))
+                {
+                    self.slots[0] = line;
+                    self.slots[1] = pos + 1;
+                    return .{ .start = line, .end = pos + 1, .slots = self.slots };
+                }
+            }
+            if (pos >= input.len) return null;
+            line = nextLineStart(input, pos) orelse return null;
+        }
+        return null;
+    }
+
+    /// `letters : \ run+`: each colon checks the drive letter before it and
+    /// the separator after it, then consumes the path run.
+    fn findWindowsPath(self: *Workspace, state: *const WindowsPathState, input: []const u8, search_start: usize) ?Match {
+        var search = search_start;
+        while (search < input.len) {
+            const colon = prefilter.indexOfByte(input, search, ':') orelse return null;
+            if (colon > search and state.letters[input[colon - 1]] and colon + 1 < input.len and
+                input[colon + 1] == '\\')
+            {
+                var pos = colon + 2;
+                const run_start = pos;
+                while (pos < input.len and state.run[input[pos]]) pos += 1;
+                if (pos > run_start) {
+                    self.slots[0] = colon - 1;
+                    self.slots[1] = pos;
+                    return .{ .start = colon - 1, .end = pos, .slots = self.slots };
+                }
+            }
+            search = colon + 1;
         }
         return null;
     }
@@ -4988,6 +5184,34 @@ const DelimitedTailState = struct {
     body: [256]bool,
     space: [256]bool,
     literal: u8,
+};
+
+const WrappedRunState = struct {
+    open: []const u8,
+    close: []const u8,
+    body: [256]bool,
+};
+
+const PairedState = struct {
+    open1: u8,
+    close1: u8,
+    open2: u8,
+    close2: u8,
+    body1: [256]bool,
+    body2: [256]bool,
+};
+
+const LineKeyState = struct {
+    space: [256]bool,
+    run: [256]bool,
+    literal: u8,
+};
+
+const LineBracketState = struct { run: [256]bool };
+
+const WindowsPathState = struct {
+    letters: [256]bool,
+    run: [256]bool,
 };
 
 const LineMarkerState = struct {
