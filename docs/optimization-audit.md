@@ -930,3 +930,9 @@ a never-inlined `findGeneric` shrank the dispatch frame by 80 bytes but
 measured neutral across the isolated cases (alternation 10/20-word 0.97-0.98x,
 shared-prefix 1.03x, version 1.04x), so the tail stays inline. The small
 `find` entry and the dispatch shape remain unchanged.
+
+A first-byte SIMD byte scan for shared-prefix `MultiFilter`s (one splat
+followed by per-candidate verification) was screened and reverted: the
+shared-prefix alternation regressed 1.39x because the four-splat block
+filter amortizes across the 16-byte block while the byte scan re-scans
+overlapping regions at every hit. The shared-prefix block filter stays.
