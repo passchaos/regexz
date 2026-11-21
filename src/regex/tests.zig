@@ -1098,7 +1098,7 @@ test "wide distinct-first literal alternation scans pairs" {
     defer value.deinit();
     var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
     defer workspace.deinit();
-    try std.testing.expect(workspace.fast_kind == .literal_multi);
+    try std.testing.expect(workspace.fast_kind == .literal_multi_distinct);
 
     try expectFastSpans(
         "alpha|gamma|epsilon|zeta|theta",

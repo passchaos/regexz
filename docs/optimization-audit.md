@@ -852,7 +852,16 @@ entry into caller match loops, so match-dense scans stop paying a call plus a
 percent 1.10x, one-char alternation 1.10x and word boundary 1.09x faster;
 unrelated non-`find` cases moved 1.10-1.26x in the same noisy sweep, and
 unbounded-chain shapes pay the one dispatch call (1.06-1.10x) while staying
-ahead of Rust. See
+ahead of Rust. Whole-pattern literal alternations now split the distinct-first
+kind from the shared-first kind at construction, so the dispatch no longer
+tests `shared_first` per search; the distinct, pair-set, single-byte and
+case-folded scanners return a `bool` after writing the slots and the dispatch
+builds the `Match` directly, removing a stack temporary and a ~56-byte copy
+per match. An order-balanced sweep measured the 5-word alternation 1.17x,
+10-word 1.13x, 20-word 1.13x, `(?i)` alternation 1.12x, shared-prefix 1.08x
+and one-char 1.06x faster; unrelated non-scanner cases moved up to 1.09x in
+the same noisy sweep. See
+[literal-set scanner spans](benchmarks/literal-set-spans.md),
 [find hot-path dispatch](benchmarks/find-hot-dispatch.md),
 [unbounded chain fusion](benchmarks/unbounded-chain-fusion.md) and
 [literal fast paths](benchmarks/literal-fast-paths.md).

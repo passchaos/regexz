@@ -58,6 +58,7 @@ pub const FastKind = enum {
     literal_run,
     caseless_literal,
     literal_multi,
+    literal_multi_distinct,
     literal_pair,
     literal_bytes,
     literal_first,
@@ -560,8 +561,8 @@ pub const Workspace = struct {
         else if (program.literal_set != null and program.capture_count == 0 and !limits.longest)
             (if (literal_set_single)
                 .literal_bytes
-            else if (literal_set_multi != null)
-                .literal_multi
+            else if (literal_set_multi) |filter|
+                (if (filter.shared_first) .literal_multi else .literal_multi_distinct)
             else if (literal_set_pair != null)
                 .literal_pair
             else
@@ -837,11 +838,24 @@ pub const Workspace = struct {
                 .absent => return null,
                 .fallback => {},
             },
-            .literal_multi => return self.findLiteralMulti(input, search_start),
-            .literal_pair => return self.findLiteralPair(input, search_start),
-            .literal_bytes => return self.findLiteralBytes(input, search_start),
+            .literal_multi => return self.findLiteralMultiShared(input, search_start),
+            .literal_multi_distinct => {
+                if (!self.findLiteralMultiDistinct(input, search_start)) return null;
+                return .{ .start = self.slots[0], .end = self.slots[1], .slots = self.slots };
+            },
+            .literal_pair => {
+                if (!self.findLiteralPair(input, search_start)) return null;
+                return .{ .start = self.slots[0], .end = self.slots[1], .slots = self.slots };
+            },
+            .literal_bytes => {
+                if (!self.findLiteralBytes(input, search_start)) return null;
+                return .{ .start = self.slots[0], .end = self.slots[1], .slots = self.slots };
+            },
             .literal_first => return self.findLiteralFirst(input, search_start),
-            .caseless_literal_set => return self.findCaselessLiteralSet(input, search_start),
+            .caseless_literal_set => {
+                if (!self.findCaselessLiteralSet(input, search_start)) return null;
+                return .{ .start = self.slots[0], .end = self.slots[1], .slots = self.slots };
+            },
             .repeated_literal => return self.findRepeatedLiteral(&self.repeated_literal.?, input, search_start),
             .run_then_literal => return self.findRunThenLiteral(&self.run_then_literal.?, input, search_start),
             .fixed_sequence => return self.findFixedSequence(self.fixed_sequence.?, input, search_start),
@@ -1438,11 +1452,24 @@ pub const Workspace = struct {
                 .absent => return null,
                 .fallback => {},
             },
-            .literal_multi => return self.findLiteralMulti(input, search_start),
-            .literal_pair => return self.findLiteralPair(input, search_start),
-            .literal_bytes => return self.findLiteralBytes(input, search_start),
+            .literal_multi => return self.findLiteralMultiShared(input, search_start),
+            .literal_multi_distinct => {
+                if (!self.findLiteralMultiDistinct(input, search_start)) return null;
+                return .{ .start = self.slots[0], .end = self.slots[1], .slots = self.slots };
+            },
+            .literal_pair => {
+                if (!self.findLiteralPair(input, search_start)) return null;
+                return .{ .start = self.slots[0], .end = self.slots[1], .slots = self.slots };
+            },
+            .literal_bytes => {
+                if (!self.findLiteralBytes(input, search_start)) return null;
+                return .{ .start = self.slots[0], .end = self.slots[1], .slots = self.slots };
+            },
             .literal_first => return self.findLiteralFirst(input, search_start),
-            .caseless_literal_set => return self.findCaselessLiteralSet(input, search_start),
+            .caseless_literal_set => {
+                if (!self.findCaselessLiteralSet(input, search_start)) return null;
+                return .{ .start = self.slots[0], .end = self.slots[1], .slots = self.slots };
+            },
             .repeated_literal => return self.findRepeatedLiteral(&self.repeated_literal.?, input, search_start),
             .run_then_literal => return self.findRunThenLiteral(&self.run_then_literal.?, input, search_start),
             .fixed_sequence => return self.findFixedSequence(self.fixed_sequence.?, input, search_start),
@@ -2061,64 +2088,66 @@ pub const Workspace = struct {
 
     /// A small pure literal alternation. The splat filter reports the matching
     /// branch, so the span is returned without a second verification pass.
-    fn findLiteralMulti(self: *Workspace, input: []const u8, search_start: usize) ?Match {
+    fn findLiteralMultiShared(self: *Workspace, input: []const u8, search_start: usize) ?Match {
+        // Shared-prefix candidates pin the first byte, so the few branches
+        // verify cheaply at the candidate.
         const filter = &self.literal_set_multi.?;
-        if (filter.shared_first) {
-            // Shared-prefix candidates pin the first byte, so the few
-            // branches verify cheaply at the candidate.
-            const literals = self.program.literal_set.?;
-            var search = search_start;
-            while (search < input.len) {
-                const start = filter.indexOf(input, search) orelse return null;
-                for (literals) |literal| {
-                    if (start + literal.len <= input.len and std.mem.eql(u8, input[start..][0..literal.len], literal)) {
-                        self.slots[0] = start;
-                        self.slots[1] = start + literal.len;
-                        return .{ .start = start, .end = start + literal.len, .slots = self.slots };
-                    }
+        const literals = self.program.literal_set.?;
+        var search = search_start;
+        while (search < input.len) {
+            const start = filter.indexOf(input, search) orelse return null;
+            for (literals) |literal| {
+                if (start + literal.len <= input.len and std.mem.eql(u8, input[start..][0..literal.len], literal)) {
+                    self.slots[0] = start;
+                    self.slots[1] = start + literal.len;
+                    return .{ .start = start, .end = start + literal.len, .slots = self.slots };
                 }
-                search = start + 1;
             }
-            return null;
+            search = start + 1;
         }
+        return null;
+    }
+
+    fn findLiteralMultiDistinct(self: *Workspace, input: []const u8, search_start: usize) bool {
+        const filter = &self.literal_set_multi.?;
         var literal_index: usize = undefined;
-        const start = filter.indexOfMatch(input, search_start, &literal_index) orelse return null;
+        const start = filter.indexOfMatch(input, search_start, &literal_index) orelse return false;
         const literal = filter.literals[literal_index];
         self.slots[0] = start;
         self.slots[1] = start + literal.len;
-        return .{ .start = start, .end = start + literal.len, .slots = self.slots };
+        return true;
     }
 
     /// A wide pure literal alternation. The nibble filter reports the matching
     /// branch, so the span is returned without a second verification pass.
-    fn findLiteralPair(self: *Workspace, input: []const u8, search_start: usize) ?Match {
+    fn findLiteralPair(self: *Workspace, input: []const u8, search_start: usize) bool {
         const filter = self.literal_set_pair.?;
         var literal_index: usize = undefined;
-        const start = filter.indexOfAnyMatch(input, search_start, &literal_index) orelse return null;
+        const start = filter.indexOfAnyMatch(input, search_start, &literal_index) orelse return false;
         const literal = filter.literals[literal_index];
         self.slots[0] = start;
         self.slots[1] = start + literal.len;
-        return .{ .start = start, .end = start + literal.len, .slots = self.slots };
+        return true;
     }
 
     /// Every branch is one byte, so the first-byte scan is the match.
-    fn findLiteralBytes(self: *Workspace, input: []const u8, search_start: usize) ?Match {
-        const start = self.first_filter.indexOf(input, search_start) orelse return null;
+    fn findLiteralBytes(self: *Workspace, input: []const u8, search_start: usize) bool {
+        const start = self.first_filter.indexOf(input, search_start) orelse return false;
         self.slots[0] = start;
         self.slots[1] = start + 1;
-        return .{ .start = start, .end = start + 1, .slots = self.slots };
+        return true;
     }
 
     /// A whole-pattern case-folded literal alternation. The folded filter
     /// reports the matching branch, so the span is returned directly.
-    fn findCaselessLiteralSet(self: *Workspace, input: []const u8, search_start: usize) ?Match {
+    fn findCaselessLiteralSet(self: *Workspace, input: []const u8, search_start: usize) bool {
         const filter = &self.caseless_literal_set.?;
         var literal_index: usize = undefined;
-        const start = filter.indexOfCaseless(input, search_start, &literal_index) orelse return null;
+        const start = filter.indexOfCaseless(input, search_start, &literal_index) orelse return false;
         const literal = filter.literals[literal_index];
         self.slots[0] = start;
         self.slots[1] = start + literal.len;
-        return .{ .start = start, .end = start + literal.len, .slots = self.slots };
+        return true;
     }
 
     /// `(?:literal)+`: find the literal, then consume greedy repetitions.

@@ -197,6 +197,13 @@ word boundary 1.09x faster; unbounded-chain shapes pay the one dispatch call
 (1.06-1.10x) and remain ahead. See
 [find hot-path dispatch](find-hot-dispatch.md).
 
+Whole-pattern literal alternations now split the distinct-first kind from the
+shared-first kind at construction and return register-sized scanner results,
+removing a stack temporary and a ~56-byte `Match` copy per match. An
+order-balanced sweep measured the 5-word alternation 1.17x, 10-word 1.13x,
+20-word 1.13x, `(?i)` alternation 1.12x, shared-prefix 1.08x and one-char
+1.06x faster. See [literal-set scanner spans](literal-set-spans.md).
+
 Caveats: the iteration APIs are the natural ones for each library
 (`Workspace.find` in a loop versus `Regex::find_iter`), full match is
 `Regex::find` plus a bounds check on the Rust side, the word-boundary case
