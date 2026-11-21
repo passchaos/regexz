@@ -1070,10 +1070,15 @@ pub const Parser = struct {
         sets: []const m.Set,
         operand: *std.ArrayList(m.Range),
         operand_sorted: *bool,
+        operand_union: *?m.unicode.Union,
     ) m.Error!void {
         if (names.len == 0) return;
         if (names.len >= 2) {
             if (m.unicode.lookupUnion(names)) |table| {
+                if (operand_union.*) |previous| {
+                    try classes.appendUnionSorted(operand, self.allocator, previous, self.limits.max_ranges);
+                    operand_union.* = null;
+                }
                 if (!operand_sorted.* and operand.items.len <= 32) {
                     // A short literal prefix (for example `\r\n`) is cheaper
                     // to sort on its own than to append the union out of
@@ -1082,19 +1087,28 @@ pub const Parser = struct {
                     operand_sorted.* = true;
                 }
                 if (operand_sorted.*) {
-                    try classes.appendUnionSorted(operand, self.allocator, table, self.limits.max_ranges);
+                    // Defer the union; a negated class can then complement it
+                    // without materializing the ranges first.
+                    operand_union.* = table;
                 } else {
                     try classes.appendUnion(operand, self.allocator, table, self.limits.max_ranges);
                 }
                 return;
             }
         }
+        try self.materializePendingUnion(operand, operand_union);
         for (sets) |set| {
             if (operand_sorted.*) {
                 try classes.appendSorted(operand, self.allocator, set, self.limits.max_ranges);
             } else {
                 try classes.append(operand, self.allocator, set, self.limits.max_ranges);
             }
+        }
+    }
+    fn materializePendingUnion(self: *Parser, operand: *std.ArrayList(m.Range), operand_union: *?m.unicode.Union) m.Error!void {
+        if (operand_union.*) |table| {
+            try classes.appendUnionSorted(operand, self.allocator, table, self.limits.max_ranges);
+            operand_union.* = null;
         }
     }
     fn characterClass(self: *Parser) m.Error!*const m.Node {
@@ -1104,6 +1118,7 @@ pub const Parser = struct {
         var operand: std.ArrayList(m.Range) = .empty;
         defer operand.deinit(self.allocator);
         var operand_sorted = true;
+        var operand_union: ?m.unicode.Union = null;
         var property_names: [8][]const u8 = undefined;
         var property_sets: [8]m.Set = undefined;
         var property_count: usize = 0;
@@ -1111,8 +1126,18 @@ pub const Parser = struct {
         while (self.peek()) |_| {
             if (self.flags.extended_more) self.skipClassSpace();
             if (!first and self.take(']')) {
-                try self.flushClassProperties(property_names[0..property_count], property_sets[0..property_count], &operand, &operand_sorted);
+                try self.flushClassProperties(property_names[0..property_count], property_sets[0..property_count], &operand, &operand_sorted, &operand_union);
                 property_count = 0;
+                if (operand_union) |table| {
+                    operand_union = null;
+                    // Without an accumulator or fold the operand is exactly
+                    // the prefix plus the union, so build the final set (and
+                    // its complement) directly.
+                    if (accumulator == null and self.foldMode() == .none) {
+                        return self.node(.{ .set = try classes.setFromUnion(self.allocator, operand.items, table, negate, self.limits.max_ranges) });
+                    }
+                    try classes.appendUnionSorted(&operand, self.allocator, table, self.limits.max_ranges);
+                }
                 const right = classes.normalizeOwned(self.allocator, operand, false, self.foldMode(), self.limits.max_ranges, operand_sorted) catch |err| {
                     operand = .empty;
                     return err;
@@ -1127,8 +1152,9 @@ pub const Parser = struct {
             }
             if (!first) {
                 if (self.takeClassOp()) |op| {
-                    try self.flushClassProperties(property_names[0..property_count], property_sets[0..property_count], &operand, &operand_sorted);
+                    try self.flushClassProperties(property_names[0..property_count], property_sets[0..property_count], &operand, &operand_sorted, &operand_union);
                     property_count = 0;
+                    try self.materializePendingUnion(&operand, &operand_union);
                     const right = classes.normalizeOwned(self.allocator, operand, false, self.foldMode(), self.limits.max_ranges, operand_sorted) catch |err| {
                         operand = .empty;
                         return err;
@@ -1157,8 +1183,9 @@ pub const Parser = struct {
                 const end = try self.element(.none);
                 if (start.negate or end.negate or start.ranges.len != 1 or end.ranges.len != 1 or start.ranges[0].first != start.ranges[0].last or end.ranges[0].first != end.ranges[0].last) return error.InvalidRegex;
                 if (operand.items.len >= self.limits.max_ranges) return error.RegexLimitExceeded;
-                try self.flushClassProperties(property_names[0..property_count], property_sets[0..property_count], &operand, &operand_sorted);
+                try self.flushClassProperties(property_names[0..property_count], property_sets[0..property_count], &operand, &operand_sorted, &operand_union);
                 property_count = 0;
+                try self.materializePendingUnion(&operand, &operand_union);
                 const range = m.Range{ .first = start.ranges[0].first, .last = end.ranges[0].first };
                 if (operand_sorted and operand.items.len != 0 and range.first < operand.items[operand.items.len - 1].first) operand_sorted = false;
                 try operand.append(self.allocator, range);
@@ -1166,15 +1193,16 @@ pub const Parser = struct {
                 // Positive, unfolded property: buffer it so adjacent
                 // properties can use a precomputed union.
                 if (property_count == property_names.len) {
-                    try self.flushClassProperties(property_names[0..property_count], property_sets[0..property_count], &operand, &operand_sorted);
+                    try self.flushClassProperties(property_names[0..property_count], property_sets[0..property_count], &operand, &operand_sorted, &operand_union);
                     property_count = 0;
                 }
                 property_names[property_count] = start.property_name.?;
                 property_sets[property_count] = start.materialized.?;
                 property_count += 1;
             } else {
-                try self.flushClassProperties(property_names[0..property_count], property_sets[0..property_count], &operand, &operand_sorted);
+                try self.flushClassProperties(property_names[0..property_count], property_sets[0..property_count], &operand, &operand_sorted, &operand_union);
                 property_count = 0;
+                try self.materializePendingUnion(&operand, &operand_union);
                 // A cached property set is already canonical and carries the
                 // property's own negation; the class fold is applied here, so
                 // the cache is only reusable without one.

@@ -438,6 +438,103 @@ pub fn appendUnionSorted(list: *std.ArrayList(m.Range), gpa: std.mem.Allocator, 
     }
 }
 
+/// Materialize a class operand made of a sorted literal prefix plus a
+/// precomputed property union. Negated classes emit their complement
+/// directly, so the union never becomes an intermediate range list.
+/// `prefix` must be sorted by `first`.
+pub fn setFromUnion(gpa: std.mem.Allocator, prefix: []const m.Range, table: m.unicode.Union, negate: bool, limit: usize) m.Error!m.Set {
+    if (prefix.len + table.count > limit) return error.RegexLimitExceeded;
+    for (prefix) |range| {
+        if (range.first > range.last) return error.InvalidRegex;
+    }
+    if (!negate) {
+        var list: std.ArrayList(m.Range) = .empty;
+        errdefer list.deinit(gpa);
+        try list.ensureTotalCapacity(gpa, prefix.len + table.count);
+        if (prefix.len == 0) {
+            // The union table is already canonical; copy it as is.
+            var index: usize = 0;
+            while (index < table.count) : (index += 1) list.appendAssumeCapacity(table.range(index));
+            return fromSortedRanges(list.items);
+        }
+        var i: usize = 0;
+        var j: usize = 0;
+        while (i < prefix.len or j < table.count) {
+            appendCoalesced(&list, nextUnionRange(prefix, table, &i, &j));
+        }
+        return fromSortedRanges(list.items);
+    }
+    var out: std.ArrayList(m.Range) = .empty;
+    errdefer out.deinit(gpa);
+    try out.ensureTotalCapacity(gpa, prefix.len + table.count + 1);
+    var next: u32 = 0;
+    var i: usize = 0;
+    var j: usize = 0;
+    var pending: ?m.Range = null;
+    while (i < prefix.len or j < table.count) {
+        const range = nextUnionRange(prefix, table, &i, &j);
+        if (pending) |*current| {
+            if (@as(u32, range.first) <= @as(u32, current.last) + 1) {
+                if (range.last > current.last) current.last = range.last;
+                continue;
+            }
+            try emitComplementGap(&out, &next, current.first, limit);
+            next = @as(u32, current.last) + 1;
+            current.* = range;
+        } else {
+            pending = range;
+        }
+    }
+    if (pending) |current| {
+        try emitComplementGap(&out, &next, current.first, limit);
+        next = @as(u32, current.last) + 1;
+    }
+    if (next <= 0x10ffff) {
+        if (out.items.len >= limit) return error.RegexLimitExceeded;
+        out.appendAssumeCapacity(.{ .first = @intCast(next), .last = 0x10ffff });
+    }
+    return fromSortedRanges(out.items);
+}
+
+fn nextUnionRange(prefix: []const m.Range, table: m.unicode.Union, i: *usize, j: *usize) m.Range {
+    if (i.* < prefix.len) {
+        if (j.* >= table.count) {
+            const range = prefix[i.*];
+            i.* += 1;
+            return range;
+        }
+        const table_range = table.range(j.*);
+        if (prefix[i.*].first <= table_range.first) {
+            const range = prefix[i.*];
+            i.* += 1;
+            return range;
+        }
+        j.* += 1;
+        return table_range;
+    }
+    const range = table.range(j.*);
+    j.* += 1;
+    return range;
+}
+
+fn appendCoalesced(list: *std.ArrayList(m.Range), range: m.Range) void {
+    if (list.items.len != 0) {
+        const last = &list.items[list.items.len - 1];
+        if (@as(u32, range.first) <= @as(u32, last.last) + 1) {
+            if (range.last > last.last) last.last = range.last;
+            return;
+        }
+    }
+    list.appendAssumeCapacity(range);
+}
+
+fn emitComplementGap(out: *std.ArrayList(m.Range), next: *u32, first: u21, limit: usize) m.Error!void {
+    if (next.* < first) {
+        if (out.items.len >= limit) return error.RegexLimitExceeded;
+        out.appendAssumeCapacity(.{ .first = @intCast(next.*), .last = first - 1 });
+    }
+}
+
 /// Append a precomputed union to an unsorted operand.
 pub fn appendUnion(list: *std.ArrayList(m.Range), gpa: std.mem.Allocator, table: m.unicode.Union, limit: usize) m.Error!void {
     if (list.items.len + table.count > limit) return error.RegexLimitExceeded;
