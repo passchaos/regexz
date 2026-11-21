@@ -18,23 +18,24 @@ The suite covers 100 cases: the same cases as the Rust comparison minus the
 measure PCRE2's compile plus JIT compilation against regexz's compile. The
 compile rows were re-measured after the class-sort, workspace-pointer,
 complement-fill, in-place-operand, precomputed-union, direct-negation,
-direct-union-append and coalesced-skip changes, the class-construction
-changes listed in the [Rust comparison](rust-comparison.md), and the `find
-log level` and `find (?i) literal` rows after the 32-lane caseless scans; the
-materialized sets are identical, so the other search rows are unchanged. Raw
-samples and executable identities for the latest full sweep are in
+direct-union-append and coalesced-skip changes, the class-construction and
+wrapped-run changes listed in the [Rust comparison](rust-comparison.md), and
+the `find log level` and `find (?i) literal` rows after the 32-lane caseless
+scans; the materialized sets are identical, so the other search rows are
+unchanged. Raw samples and executable identities for the latest full sweep
+are in
 [`pcre2-comparison-current.json`](pcre2-comparison-current.json); its search
 rows differ from the table only by shared-host noise.
 
 | Case | regexz, ns/iter | PCRE2, ns/iter | PCRE2 / regexz |
 | --- | ---: | ---: | ---: |
-| compile Qwen tokenizer | 11,707.0 | 16,264.8 | 1.39x |
-| compile xDS-like | 5,794.9 | 7,203.4 | 1.24x |
+| compile Qwen tokenizer | 11,654.6 | 16,240.7 | 1.39x |
+| compile xDS-like | 5,792.3 | 7,171.6 | 1.24x |
 | find Qwen tokenizer | 49,740.3 | 177,575.5 | 3.57x |
 | findAll Qwen (borrowed) | 58,493.8 | 177,547.2 | 3.04x |
 | findAll Qwen (owning) | 58,303.3 | 177,425.6 | 3.04x |
 | find CJK tokenizer | 227,278.7 | 540,483.3 | 2.38x |
-| find HTML tag | 192,158.4 | 192,927.9 | 1.00x |
+| find HTML tag | 140,323.3 | 198,088.2 | 1.41x |
 | find URL | 71,148.4 | 101,895.0 | 1.43x |
 | find JSON string literal | 13,975.4 | 26,930.7 | 1.93x |
 | find JSON number | 74,288.9 | 122,707.2 | 1.65x |
@@ -108,7 +109,7 @@ rows differ from the table only by shared-host noise.
 | find markdown link | 361.4 | 1,175.3 | 3.25x |
 | find YAML key | 33,449.6 | 66,457.8 | 1.99x |
 | find TOML table | 32,113.0 | 49,837.8 | 1.55x |
-| find template | 76,334.7 | 114,529.4 | 1.50x |
+| find template | 68,672.0 | 113,969.4 | 1.66x |
 | find Windows path | 46,065.4 | 112,768.1 | 2.45x |
 | find CSS selector | 80,985.7 | 103,253.9 | 1.27x |
 | find slash date | 79,495.9 | 137,677.4 | 1.73x |
@@ -130,7 +131,7 @@ rows differ from the table only by shared-host noise.
 | replaceAll digits -> N | 54,994.1 | 307,631.7 | 5.59x |
 
 regexz is faster or at parity on 99 of the 100 measured cases, with a
-geometric-mean PCRE2/regexz ratio of 2.15x. The remaining row below 1.00x is
+geometric-mean PCRE2/regexz ratio of 2.16x. The remaining row below 1.00x is
 within host noise:
 
 - `find (?i) literal` (0.99x): parity within host noise after the 32-lane
@@ -140,8 +141,9 @@ Compile Qwen is now 1.39x ahead of PCRE2, up from a 0.69x ratio: PCRE2 parses
 the pattern and stores property references, while regexz materializes the
 Unicode property sets at compile time so searches can use range lists
 directly. The compile rows include PCRE2's JIT pass, while regexz has no JIT.
-Compile xDS-like is 1.24x ahead; HTML tags and the case-insensitive Unicode
-literal are at parity (1.00x).
+Compile xDS-like is 1.24x ahead; HTML tags are 1.41x ahead after the
+wrapped-run probes, and the case-insensitive Unicode literal is at parity
+(1.00x).
 
 The largest leads are on literal-heavy scans and alternations: the nibble
 filter, required-literal prefilters and counted split paths avoid PCRE2's
