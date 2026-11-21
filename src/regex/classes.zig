@@ -48,6 +48,27 @@ fn appendFolded(gpa: std.mem.Allocator, ranges: *std.ArrayList(m.Range)) m.Error
     const fold_count = m.unicode.fold_range_count;
     for (0..original_len) |range_index| {
         const range = ranges.items[range_index];
+        if (range.last < 128) {
+            // ASCII peers are a direct case flip plus the long-s and Kelvin
+            // members of the `s`/`k` fold classes; skip the table search.
+            const upper_low = @max(range.first, 'A');
+            const upper_high = @min(range.last, 'Z');
+            var rune: u32 = upper_low;
+            while (rune <= upper_high) : (rune += 1) {
+                try ranges.append(gpa, .{ .first = @intCast(rune + 32), .last = @intCast(rune + 32) });
+                if (rune == 'S') try ranges.append(gpa, .{ .first = 0x17f, .last = 0x17f });
+                if (rune == 'K') try ranges.append(gpa, .{ .first = 0x212a, .last = 0x212a });
+            }
+            const lower_low = @max(range.first, 'a');
+            const lower_high = @min(range.last, 'z');
+            rune = lower_low;
+            while (rune <= lower_high) : (rune += 1) {
+                try ranges.append(gpa, .{ .first = @intCast(rune - 32), .last = @intCast(rune - 32) });
+                if (rune == 's') try ranges.append(gpa, .{ .first = 0x17f, .last = 0x17f });
+                if (rune == 'k') try ranges.append(gpa, .{ .first = 0x212a, .last = 0x212a });
+            }
+            continue;
+        }
         // Fold entries are sorted, so binary-search the first entry that can
         // intersect this class range and walk only the overlapping entries.
         // Small classes such as case-insensitive literals then touch one or
