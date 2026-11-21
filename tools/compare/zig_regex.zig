@@ -428,6 +428,14 @@ pub fn main() !void {
     try benchFind(io, out, "find JSON escaped string", "\"(?:\\\\.|[^\"\\\\])*\"", json_text.items, 200, .{});
     try benchFind(io, out, "find double spaces", "\\s{2,}", ascii_text.items, 200, .{});
     try benchFind(io, out, "find log level", "(?i)error|warn|info", ascii_text.items, 200, .{});
+    try benchFind(io, out, "find markdown heading ws", "(?m)^#{1,6}\\s+.*$", md_text.items, 200, .{});
+    try benchFind(io, out, "find markdown list ws", "(?m)^\\s*[-*+]\\s+", md_text.items, 200, .{});
+    try benchFind(io, out, "find escaped string loop", "\"[^\"\\\\]*(?:\\\\.[^\"\\\\]*)*\"", json_text.items, 200, .{});
+    try benchFind(io, out, "find HTTP methods", "(?i)\\b(?:get|post|put|delete)\\b", ascii_text.items, 200, .{});
+    try benchFind(io, out, "find full email", "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b", email_text.items, 200, .{});
+    try benchFind(io, out, "find blank lines", "(?m)^\\s*$", ascii_text.items, 200, .{});
+    try benchFind(io, out, "find floats", "\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?", number_text.items, 200, .{});
+    try benchFind(io, out, "find currency", "\\$\\d+(?:\\.\\d{2})?", number_text.items, 200, .{});
     try benchSplit(io, out, "split whitespace (22 KiB)", "\\s+", ascii_text.items, 200);
     try benchSplit(io, out, "split commas (29 KiB)", ",", csv_text.items, 200);
     try benchMatches(io, out, "fullmatch literal", "hello, world!", "hello, world!", 200000, .{});

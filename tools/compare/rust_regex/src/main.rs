@@ -289,6 +289,14 @@ fn main() {
     bench_find("find JSON escaped string", r#""(?:\\.|[^"\\])*""#, &json_text, 200);
     bench_find("find double spaces", r"\s{2,}", &ascii_text, 200);
     bench_find("find log level", "(?i)error|warn|info", &ascii_text, 200);
+    bench_find("find markdown heading ws", r"(?m)^#{1,6}\s+.*$", &md_text, 200);
+    bench_find("find markdown list ws", r"(?m)^\s*[-*+]\s+", &md_text, 200);
+    bench_find("find escaped string loop", r#""[^"\\]*(?:\\.[^"\\]*)*""#, &json_text, 200);
+    bench_find("find HTTP methods", r"(?i)\b(?:get|post|put|delete)\b", &ascii_text, 200);
+    bench_find("find full email", r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b", &email_text, 200);
+    bench_find("find blank lines", r"(?m)^\s*$", &ascii_text, 200);
+    bench_find("find floats", r"\d+(?:\.\d+)?(?:[eE][+-]?\d+)?", &number_text, 200);
+    bench_find("find currency", r"\$\d+(?:\.\d{2})?", &number_text, 200);
     bench_split("split whitespace (22 KiB)", "\\s+", &ascii_text, 200);
     bench_split("split commas (29 KiB)", ",", &csv_text, 200);
     bench_fullmatch(
