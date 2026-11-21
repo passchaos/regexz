@@ -6,16 +6,20 @@
 const std = @import("std");
 const m = @import("model.zig");
 
+/// Sorting only by `first` is enough: the merge loop takes the maximum
+/// `last` of adjacent ranges with the same start, so the tie order is
+/// irrelevant. Dropping the `last` comparison removes a branch that
+/// mispredicts on the many equal starts produced by property unions.
 fn lessThan(_: void, a: m.Range, b: m.Range) bool {
-    return a.first < b.first or (a.first == b.first and a.last < b.last);
+    return a.first < b.first;
 }
 
-/// Whether the ranges are already in `lessThan` order. Property groups and
+/// Whether the ranges are already sorted by `first`. Property groups and
 /// most parsed classes arrive sorted, so the full sort only runs for unions
 /// that concatenate them out of order.
 fn sorted(ranges: []const m.Range) bool {
     for (ranges[1..], 1..) |range, index| {
-        if (lessThan({}, range, ranges[index - 1])) return false;
+        if (range.first < ranges[index - 1].first) return false;
     }
     return true;
 }
