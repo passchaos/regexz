@@ -1056,3 +1056,19 @@ HTTP methods, hashtags and mentions are at parity within host noise
 in this batch versus about 2.1 us in isolation, so its 0.68x is a host
 outlier. The geometric-mean ratio is 2.21x. See
 [Rust comparison](benchmarks/rust-comparison.md).
+
+A fourth expansion brought the suite to 101 cases (IPv6, C comments,
+markdown images, HTML tag names, shell variables, and split lines and
+semicolons) and moved the measured host to Linux x86_64 (Intel Raptor
+Lake). The two-byte nibble filter now emits VEX-encoded `vpshufb` on x86_64
+and runs 32 lanes at a time on AVX2, with `vzeroupper` before returning to
+legacy SSE code. Candidate lanes are walked inside a chunk for word
+alternations, sparse pair sets and single-byte prefix runs; first-byte scans
+use `@ctz` of the lane mask; the pair filter keeps its third-byte check for
+small allowed sets; and single-byte splits always use the counted mask
+fill. CSS units take a direct dispatch path in `find`, and the suffix table
+maps a first byte to one literal. The latest six-execution order-balanced
+sweep covers 101 cases: 99 are faster, IPv6 is at parity (1.01x), and the
+remaining losses are HTML tags (0.88x) and the one-character alternation
+(0.90x). The geometric-mean ratio is 2.26x. See
+[Rust comparison](benchmarks/rust-comparison.md).
