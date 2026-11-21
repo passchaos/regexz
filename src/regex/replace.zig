@@ -12,6 +12,7 @@ const model = @import("model.zig");
 const Program = @import("compile.zig").Program;
 const BoundedElement = @import("compile.zig").BoundedElement;
 const UnboundedElement = @import("compile.zig").UnboundedElement;
+const RunShape = @import("compile.zig").RunShape;
 const PrefixRunShape = @import("compile.zig").PrefixRunShape;
 const ChainLoopShape = @import("compile.zig").ChainLoopShape;
 const OptionalTailShape = @import("compile.zig").OptionalTailShape;
@@ -41,6 +42,7 @@ const AnchoredRun = struct { kind: model.Assertion, set: model.Set };
 pub const FastKind = enum {
     none,
     set_run,
+    set_run_min,
     utf8_run,
     utf8_run_prepared,
     chain,
@@ -192,6 +194,8 @@ pub const Workspace = struct {
     /// A `set+` program over an ASCII-only set scans runs directly instead of
     /// entering the DFA.
     simple_set: ?model.Set = null,
+    /// Minimum count for a `set{min,}` program (1 for a plain `set+`).
+    simple_set_min: u8 = 1,
     /// ASCII set runs whose capture saves have fixed start/end positions.
     capture_run: ?capture_run_mod.Plan = null,
     /// Lazily prove deterministic capture replay once per immutable program.
@@ -404,7 +408,14 @@ pub const Workspace = struct {
             (if (set.ascii_only) null else deferred_utf8.CompactRun.init(set))
         else
             null;
-        const simple_set: ?model.Set = if (set_run) |set| (if (set.ascii_only) set else null) else null;
+        const simple_run: ?RunShape = if (limits.longest) null else program.simple_run;
+        const simple_set: ?model.Set = if (simple_run) |plan|
+            plan.set
+        else if (set_run) |set|
+            (if (set.ascii_only) set else null)
+        else
+            null;
+        const simple_set_min: u8 = if (simple_run) |plan| plan.min else 1;
         const simple_anchored = if (limits.longest) null else detectAnchoredRun(program);
         const line_run = shapes.lineRun(program);
         const delimited_run = shapes.delimitedRun(program);
@@ -549,7 +560,7 @@ pub const Workspace = struct {
         };
         errdefer if (fixed_sequence) |state| allocator.destroy(state);
         const fast_kind: FastKind = if (simple_set != null)
-            .set_run
+            (if (simple_set_min == 1) .set_run else .set_run_min)
         else if (capture_run) |plan|
             (if (plan.set.ascii_only) .capture_run else .capture_unicode)
         else if (run_chain != null)
@@ -667,10 +678,11 @@ pub const Workspace = struct {
             .best_slots = best_slots,
             .pike_eligible = pike.eligible(program),
             .simple_set = simple_set,
+            .simple_set_min = simple_set_min,
             .capture_run = capture_run,
             .simple_set_table = blk: {
                 var table: [256]bool = .{false} ** 256;
-                if (set_run orelse (if (capture_run) |plan| plan.set else null)) |set| {
+                if (simple_set orelse set_run orelse (if (capture_run) |plan| plan.set else null)) |set| {
                     if (set.ascii_only) {
                         table = byte_table.init(256, set);
                     } else if (utf8_run != null) {
@@ -807,6 +819,7 @@ pub const Workspace = struct {
     ) Error!?Match {
         switch (self.fast_kind) {
             .set_run => unreachable,
+            .set_run_min => return self.findSetRunMin(input, search_start),
             // `find` already tried the dominant branch; a miss falls through
             // to the general engine.
             .none => {},
@@ -1424,6 +1437,7 @@ pub const Workspace = struct {
                 }
             },
             .set_run => return self.findSetRun(self.simple_set.?, input, search_start),
+            .set_run_min => return self.findSetRunMin(input, search_start),
             .utf8_run => return self.findSetRunUtf8(&self.utf8_run.?, input, search_start),
             .utf8_run_prepared => return self.findPreparedSetRunUtf8(&self.utf8_run.?, input, search_start),
             .chain => return self.findChain(&self.simple_chain.?, input, search_start),
@@ -1928,6 +1942,33 @@ pub const Workspace = struct {
         self.slots[0] = start;
         self.slots[1] = offset;
         return .{ .start = start, .end = offset, .slots = self.slots };
+    }
+
+    /// `set{min,}` with `min > 1`: maximal runs shorter than the minimum are
+    /// skipped whole, because every start inside them fails too.
+    fn findSetRunMin(self: *Workspace, input: []const u8, search_start: usize) ?Match {
+        const table = &self.simple_set_table;
+        const min = self.simple_set_min;
+        var search = search_start;
+        while (search < input.len) {
+            var offset = search;
+            const scalar_limit = @min(input.len, offset + 32);
+            while (offset < scalar_limit and !table[input[offset]]) offset += 1;
+            if (offset >= scalar_limit) {
+                if (offset >= input.len) return null;
+                offset = self.first_filter.indexOf(input, offset) orelse return null;
+            }
+            const start = offset;
+            offset += 1;
+            while (offset < input.len and table[input[offset]]) offset += 1;
+            if (offset - start >= min) {
+                self.slots[0] = start;
+                self.slots[1] = offset;
+                return .{ .start = start, .end = offset, .slots = self.slots };
+            }
+            search = offset;
+        }
+        return null;
     }
 
     /// Try the dominant alternation branch at `search_start`. Returns null

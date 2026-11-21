@@ -558,11 +558,19 @@ test "set-run fast path scans ASCII runs directly" {
     var captured_workspace = try regex.ReplaceWorkspace.init(allocator, captured.program, .{});
     defer captured_workspace.deinit();
     try std.testing.expect(captured_workspace.simple_set == null);
+    // `set{min,}` with min > 1 also scans directly; a bounded maximum still
+    // keeps the general engine.
     var bounded = try regex.Regex.init(allocator, "a{2,}", .{});
     defer bounded.deinit();
     var bounded_workspace = try regex.ReplaceWorkspace.init(allocator, bounded.program, .{});
     defer bounded_workspace.deinit();
-    try std.testing.expect(bounded_workspace.simple_set == null);
+    try std.testing.expect(bounded_workspace.simple_set != null);
+    try std.testing.expectEqual(@as(u8, 2), bounded_workspace.simple_set_min);
+    var bounded_max = try regex.Regex.init(allocator, "a{2,4}", .{});
+    defer bounded_max.deinit();
+    var bounded_max_workspace = try regex.ReplaceWorkspace.init(allocator, bounded_max.program, .{});
+    defer bounded_max_workspace.deinit();
+    try std.testing.expect(bounded_max_workspace.simple_set == null);
 }
 
 test "byte-level DFA searches non-ASCII sets" {

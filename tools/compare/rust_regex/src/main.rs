@@ -284,6 +284,11 @@ fn main() {
     );
     bench_find("find markdown heading", "(?m)^#{1,6} .*$", &md_text, 200);
     bench_find("find mixed alternation", "a|bb|ccc", &mixed_text, 200);
+    bench_find("find capitalized words", r"\b[A-Z][a-z]+\b", &word_text, 200);
+    bench_find("find markdown list", r"(?m)^\s*[-*+] ", &md_text, 200);
+    bench_find("find JSON escaped string", r#""(?:\\.|[^"\\])*""#, &json_text, 200);
+    bench_find("find double spaces", r"\s{2,}", &ascii_text, 200);
+    bench_find("find log level", "(?i)error|warn|info", &ascii_text, 200);
     bench_split("split whitespace (22 KiB)", "\\s+", &ascii_text, 200);
     bench_split("split commas (29 KiB)", ",", &csv_text, 200);
     bench_fullmatch(

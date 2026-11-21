@@ -1207,6 +1207,21 @@ test "bounded loop fast path repeats bounded groups" {
     try expectFastSpans("\\d{1,3}(?:,\\d{3})+", "1,234,56", &.{.{ 0, 5 }});
 }
 
+test "bounded-minimum set run scans maximal runs" {
+    var value = try regex.Regex.init(gpa, "\\s{2,}", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind == .set_run_min);
+
+    try expectFastSpans("\\s{2,}", "a  b   c ", &.{ .{ 1, 3 }, .{ 4, 7 } });
+    try expectFastSpans("\\s{2,}", "a b", &.{});
+    try expectFastSpans("\\s{2,}", "    x", &.{.{ 0, 4 }});
+    try expectFastSpans("\\s{3,}", "a  b   c", &.{.{ 4, 7 }});
+    try expectFastSpans("\\w{2,}", "a bb ccc", &.{ .{ 2, 4 }, .{ 5, 8 } });
+    try expectFastSpans("\\w{2,}", "a b c", &.{});
+}
+
 test "optional prefix run matches the plain run spans" {
     var value = try regex.Regex.init(gpa, "v?\\w+", .{});
     defer value.deinit();

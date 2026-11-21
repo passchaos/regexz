@@ -28,6 +28,8 @@ pub const UnboundedElement = union(enum) {
     alternation: []const []const u8,
 };
 
+pub const RunShape = struct { set: model.Set, min: u8 };
+
 pub const PrefixRunShape = struct { set_a: model.Set, set_b: model.Set, min_b: u8 };
 
 pub const OptionalTailShape = struct {
@@ -109,6 +111,9 @@ pub const Program = struct {
     /// Whole-pattern alternation of unbounded ASCII runs and literal
     /// separators (`v?\d+\.\d+\.\d+`). Not serialized.
     unbounded_sequence: ?[]const UnboundedElement = null,
+    /// Whole-pattern `set{min,}` over an ASCII set with a greedy unbounded
+    /// repeat (`\s{2,}`). Not serialized.
+    simple_run: ?RunShape = null,
     /// One ASCII set byte followed by a greedy unbounded run
     /// (`[A-Za-z_]\w*`). Not serialized.
     prefix_run: ?PrefixRunShape = null,
@@ -1244,6 +1249,24 @@ fn detectChainLoop(root: *const model.Node) ?ChainLoopShape {
 }
 
 /// One ASCII set byte followed by a greedy unbounded ASCII run.
+/// Whole-pattern `set{min,}` with a greedy unbounded repeat over an ASCII
+/// set. The compiled form has extra mandatory consume instructions, so the
+/// instruction-based `setRun` detector rejects it.
+fn detectSimpleRun(root: *const model.Node) ?RunShape {
+    var node = root;
+    while (node.* == .group) node = node.group;
+    if (node.* != .repeat) return null;
+    const repeat = node.repeat;
+    if (repeat.lazy or repeat.possessive or repeat.maximum != null) return null;
+    if (repeat.minimum < 1 or repeat.minimum > std.math.maxInt(u8)) return null;
+    var child = repeat.child;
+    while (child.* == .group) child = child.group;
+    if (child.* != .set) return null;
+    const set = child.set;
+    if (!set.ascii_only or set.ranges.len == 0) return null;
+    return .{ .set = set, .min = @intCast(repeat.minimum) };
+}
+
 fn detectPrefixRun(root: *const model.Node) ?PrefixRunShape {
     var node = root;
     while (node.* == .group) node = node.group;
@@ -1789,6 +1812,8 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
     else
         null;
     const unbounded_storage = try allocator.alloc(u8, UnboundedSequenceBuilder.max_literal_bytes);
+    const simple_run: ?RunShape = if (literal == null and caseless_literal == null and
+        literal_set == null and !limits.auto_callout) detectSimpleRun(parsed.root) else null;
     const prefix_run: ?PrefixRunShape = if (literal == null and caseless_literal == null and
         literal_set == null and !limits.auto_callout) detectPrefixRun(parsed.root) else null;
     const chain_loop: ?ChainLoopShape = if (literal == null and caseless_literal == null and
@@ -1862,6 +1887,7 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         .caseless_literal_set = caseless_literal_set,
         .bounded_sequence = bounded_sequence,
         .unbounded_sequence = unbounded_sequence,
+        .simple_run = simple_run,
         .prefix_run = prefix_run,
         .chain_loop = chain_loop,
         .optional_tail = optional_tail,

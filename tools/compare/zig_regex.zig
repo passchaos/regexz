@@ -423,6 +423,11 @@ pub fn main() !void {
     try benchFind(io, out, "find html attribute", "\\w+=\"[^\"]*\"", attr_text.items, 200, .{});
     try benchFind(io, out, "find markdown heading", "(?m)^#{1,6} .*$", md_text.items, 200, .{});
     try benchFind(io, out, "find mixed alternation", "a|bb|ccc", mixed_text.items, 200, .{});
+    try benchFind(io, out, "find capitalized words", "\\b[A-Z][a-z]+\\b", word_text.items, 200, .{});
+    try benchFind(io, out, "find markdown list", "(?m)^\\s*[-*+] ", md_text.items, 200, .{});
+    try benchFind(io, out, "find JSON escaped string", "\"(?:\\\\.|[^\"\\\\])*\"", json_text.items, 200, .{});
+    try benchFind(io, out, "find double spaces", "\\s{2,}", ascii_text.items, 200, .{});
+    try benchFind(io, out, "find log level", "(?i)error|warn|info", ascii_text.items, 200, .{});
     try benchSplit(io, out, "split whitespace (22 KiB)", "\\s+", ascii_text.items, 200);
     try benchSplit(io, out, "split commas (29 KiB)", ",", csv_text.items, 200);
     try benchMatches(io, out, "fullmatch literal", "hello, world!", "hello, world!", 200000, .{});
