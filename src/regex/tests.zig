@@ -1061,6 +1061,79 @@ fn expectFastSpans(pattern: []const u8, input: []const u8, spans: []const [2]usi
     try std.testing.expectEqual(spans.len, index);
 }
 
+test "word alternation fast path scans boundaries" {
+    var value = try regex.Regex.init(gpa, "(?i)\\b(?:get|post|put|delete)\\b", .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind == .word_alternation);
+
+    const pattern = "(?i)\\b(?:get|post|put|delete)\\b";
+    try expectFastSpans(pattern, "GET post PUT delete getter", &.{ .{ 0, 3 }, .{ 4, 8 }, .{ 9, 12 }, .{ 13, 19 } });
+    try expectFastSpans(pattern, "xget get_ get-get", &.{ .{ 10, 13 }, .{ 14, 17 } });
+    try expectFastSpans(pattern, "deleted undelete", &.{});
+    // U+017F is a simple-fold peer of `s`, so `poſt` matches `post`.
+    try expectFastSpans(pattern, "poſt get", &.{ .{ 0, 5 }, .{ 6, 9 } });
+    try expectFastSpans(pattern, "ſet", &.{});
+    // A non-ASCII byte is not a word byte under the ASCII assertion.
+    try expectFastSpans(pattern, "éget é get", &.{ .{ 2, 5 }, .{ 9, 12 } });
+
+    var strict = try regex.Regex.init(gpa, "\\b(?:get|post)\\b", .{});
+    defer strict.deinit();
+    var strict_workspace = try regex.ReplaceWorkspace.init(gpa, strict.program, .{});
+    defer strict_workspace.deinit();
+    try std.testing.expect(strict_workspace.fast_kind == .word_alternation);
+    try expectFastSpans("\\b(?:get|post)\\b", "get GET post Post", &.{.{ 0, 3 }});
+
+    // A fold peer in the first two bytes cannot use the pair filter, so the
+    // shape is rejected and the general engine matches U+017F.
+    var peer = try regex.Regex.init(gpa, "(?i)\\b(?:ask|get)\\b", .{});
+    defer peer.deinit();
+    var peer_workspace = try regex.ReplaceWorkspace.init(gpa, peer.program, .{});
+    defer peer_workspace.deinit();
+    try std.testing.expect(peer_workspace.fast_kind != .word_alternation);
+    try expectFastSpans("(?i)\\b(?:ask|get)\\b", "aſk get", &.{ .{ 0, 4 }, .{ 5, 8 } });
+}
+
+test "email fast path resolves local and domain runs" {
+    const pattern = "\\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\\b";
+    var value = try regex.Regex.init(gpa, pattern, .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind == .email);
+
+    try expectFastSpans(pattern, "user.name@example.com user@x.org", &.{ .{ 0, 21 }, .{ 22, 32 } });
+    try expectFastSpans(pattern, "a@b.co", &.{.{ 0, 6 }});
+    try expectFastSpans(pattern, "a@b.c", &.{});
+    try expectFastSpans(pattern, "a@b..com", &.{.{ 0, 8 }});
+    try expectFastSpans(pattern, "a@b.com.", &.{.{ 0, 7 }});
+    try expectFastSpans(pattern, "a@b.com_", &.{});
+    try expectFastSpans(pattern, ".a@b.com", &.{.{ 1, 8 }});
+    try expectFastSpans(pattern, "a..b@c.com", &.{.{ 0, 10 }});
+    try expectFastSpans(pattern, "a@b.c0m", &.{});
+    try expectFastSpans(pattern, "a@b.com a@c.org", &.{ .{ 0, 7 }, .{ 8, 15 } });
+    try expectFastSpans(pattern, "a@b.com@c.org", &.{.{ 0, 7 }});
+    try expectFastSpans(pattern, "a_b@c.d.e.f.gg", &.{.{ 0, 14 }});
+    try expectFastSpans(pattern, "éa@b.com", &.{.{ 2, 9 }});
+}
+
+test "blank line fast path matches line runs" {
+    const pattern = "(?m)^\\s*$";
+    var value = try regex.Regex.init(gpa, pattern, .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind == .blank_lines);
+
+    try expectFastSpans(pattern, "abc\n\n", &.{ .{ 4, 5 }, .{ 5, 5 } });
+    try expectFastSpans(pattern, "a\n \n\t\nb", &.{.{ 2, 5 }});
+    try expectFastSpans(pattern, " \n \n- x", &.{.{ 0, 3 }});
+    try expectFastSpans(pattern, "abc", &.{});
+    try expectFastSpans(pattern, "abc\n", &.{.{ 4, 4 }});
+    try expectFastSpans(pattern, "", &.{.{ 0, 0 }});
+}
+
 test "signed number fast path scans sign and fraction" {
     var value = try regex.Regex.init(gpa, "[+-]?\\d+(?:\\.\\d+)?", .{});
     defer value.deinit();
@@ -1078,6 +1151,24 @@ test "signed number fast path scans sign and fraction" {
     var number_workspace = try regex.ReplaceWorkspace.init(gpa, number.program, .{});
     defer number_workspace.deinit();
     try std.testing.expect(number_workspace.fast_kind == .number);
+}
+
+test "float fast path scans exponents" {
+    const pattern = "\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?";
+    var value = try regex.Regex.init(gpa, pattern, .{});
+    defer value.deinit();
+    var workspace = try regex.ReplaceWorkspace.init(gpa, value.program, .{});
+    defer workspace.deinit();
+    try std.testing.expect(workspace.fast_kind == .signed_number);
+
+    try expectFastSpans(pattern, "1 1.5 2e10 3.5E-2 4e+7", &.{
+        .{ 0, 1 }, .{ 2, 5 }, .{ 6, 10 }, .{ 11, 17 }, .{ 18, 22 },
+    });
+    // A fraction or exponent without digits is not consumed.
+    try expectFastSpans(pattern, "5. 6e 7e+ 8.5.6", &.{
+        .{ 0, 1 }, .{ 3, 4 }, .{ 6, 7 }, .{ 10, 13 }, .{ 14, 15 },
+    });
+    try expectFastSpans(pattern, "1e++5", &.{ .{ 0, 1 }, .{ 4, 5 } });
 }
 
 test "line heading fast path matches markdown headings" {

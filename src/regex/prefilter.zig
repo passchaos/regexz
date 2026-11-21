@@ -25,12 +25,23 @@ inline fn laneMask(mask: @Vector(16, bool)) u16 {
     return @bitCast(mask);
 }
 
-/// First offset at or after `start` holding `byte`, scanned 16 bytes at a
+/// First offset at or after `start` holding `byte`, scanned 64 bytes at a
 /// time. Returns null when the byte is absent.
 pub fn indexOfByte(input: []const u8, start: usize, byte: u8) ?usize {
     if (start >= input.len) return null;
     const needle: Vec = @splat(byte);
     var offset = start;
+    while (offset + 64 <= input.len) : (offset += 64) {
+        const a: Vec = input[offset..][0..16].*;
+        const b: Vec = input[offset + 16 ..][0..16].*;
+        const c: Vec = input[offset + 32 ..][0..16].*;
+        const d: Vec = input[offset + 48 ..][0..16].*;
+        const hits = ((a == needle) | (b == needle)) | ((c == needle) | (d == needle));
+        if (@reduce(.Or, hits)) {
+            while (input[offset] != byte) offset += 1;
+            return offset;
+        }
+    }
     while (offset + 16 <= input.len) : (offset += 16) {
         const chunk: Vec = input[offset..][0..16].*;
         if (@reduce(.Or, chunk == needle)) {
@@ -724,6 +735,65 @@ pub const MultiFilter = struct {
     pub inline fn indexOfCaseless(self: *const MultiFilter, input: []const u8, start: usize, literal_index: *usize) ?usize {
         if (self.pair_nibble) |*nibble| return self.scan(true, true, true, nibble, input, start, literal_index);
         return self.scan(true, true, false, undefined, input, start, literal_index);
+    }
+
+    /// First offset whose folded first two bytes match a literal pair,
+    /// without verifying the remaining bytes. Callers with custom literal
+    /// semantics (non-ASCII fold peers) verify the candidate themselves.
+    pub fn indexOfPairCandidate(self: *const MultiFilter, input: []const u8, start: usize) ?usize {
+        if (self.pair_nibble) |*nibble| return self.pairCandidateScan(true, nibble, input, start);
+        return self.pairCandidateScan(false, undefined, input, start);
+    }
+
+    fn pairCandidateScan(
+        self: *const MultiFilter,
+        comptime use_nibble: bool,
+        nibble: *const nibble_filter.Filter,
+        input: []const u8,
+        start: usize,
+    ) ?usize {
+        if (start >= input.len or input.len - start < 2) return null;
+        const count: usize = self.pair_count;
+        const fold: Vec = @splat(0x20);
+        var offset = start;
+        while (offset + 17 <= input.len) : (offset += 16) {
+            const raw: [16]u8 = input[offset..][0..16].*;
+            const base: Vec = @bitCast(raw);
+            const chunk: Vec = base | fold;
+            const next_raw: [16]u8 = input[offset + 1 ..][0..16].*;
+            const next_base: Vec = @bitCast(next_raw);
+            const next: Vec = next_base | fold;
+            var mask: @Vector(16, bool) = undefined;
+            if (use_nibble) {
+                mask = nibble.candidates(chunk, next);
+            } else {
+                var first_mask = chunk == self.first;
+                if (!self.shared_first) {
+                    var pair_index: usize = 0;
+                    while (pair_index < count) : (pair_index += 1) {
+                        first_mask = first_mask | (chunk == self.first_splats[pair_index]);
+                    }
+                }
+                if (!@reduce(.Or, first_mask)) continue;
+                var seconds = @as(@Vector(16, bool), @splat(false));
+                var pair_index: usize = 0;
+                while (pair_index < count) : (pair_index += 1) {
+                    seconds = seconds | (next == self.second_splats[pair_index]);
+                }
+                mask = first_mask & seconds;
+            }
+            const bits: u16 = @bitCast(mask);
+            if (bits != 0) return offset + @ctz(bits);
+        }
+        while (offset + 1 < input.len) : (offset += 1) {
+            const first = foldByte(input[offset]);
+            const second = foldByte(input[offset + 1]);
+            for (self.pairs[0..self.pair_count]) |pair| {
+                if (@as(u8, @intCast(pair >> 8)) == first and
+                    @as(u8, @intCast(pair & 0xFF)) == second) return offset;
+            }
+        }
+        return null;
     }
 
     fn scan(

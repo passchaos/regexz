@@ -83,6 +83,9 @@ pub const FastKind = enum {
     line_heading,
     line_marker,
     escaped_delimited,
+    word_alternation,
+    email,
+    blank_lines,
 };
 pub const Error = model.Error;
 
@@ -264,6 +267,12 @@ pub const Workspace = struct {
     line_marker: ?*LineMarkerState = null,
     /// `quote (?: escape any | [^quote escape])* quote`.
     escaped_delimited: ?EscapedDelimitedState = null,
+    /// `\b (?:word|word|...) \b` with ASCII word boundaries.
+    word_alternation: ?WordAlternationState = null,
+    /// `\b local+ @ domain+ \. tld{min,} \b`.
+    email: ?EmailState = null,
+    /// `(?m)^\s*$` in LF mode.
+    blank_lines: ?BlankLinesState = null,
     /// Byte membership tables for the chain fast path. `Set.matches` is a
     /// binary search over rune ranges; the per-byte chain scans run several
     /// lookups per input byte, so cache the answers once per workspace.
@@ -466,11 +475,19 @@ pub const Workspace = struct {
             const shape = program.line_marker orelse break :blk null;
             const state = try allocator.create(LineMarkerState);
             errdefer allocator.destroy(state);
+            var marker_first = model.FirstSet{};
+            for (shape.marker.ranges) |range| {
+                var byte: u32 = range.first;
+                while (byte <= range.last and byte < 0x80) : (byte += 1) {
+                    marker_first.ascii[byte >> 6] |= @as(u64, 1) << @intCast(byte & 63);
+                }
+            }
             state.* = .{
                 .space = byte_table.init(256, shape.space),
                 .marker = byte_table.init(256, shape.marker),
                 .trailing = byte_table.init(256, shape.trailing),
                 .trailing_run = shape.trailing_run,
+                .marker_filter = prefilter.FirstFilter.init(marker_first),
             };
             break :blk state;
         };
@@ -479,6 +496,32 @@ pub const Workspace = struct {
             null
         else if (program.escaped_delimited) |shape|
             .{ .quote = shape.quote, .escape = shape.escape }
+        else
+            null;
+        const word_alternation: ?WordAlternationState = if (limits.longest)
+            null
+        else if (program.word_alternation) |shape| blk: {
+            const filter = prefilter.MultiFilter.initAny(shape.literals) orelse break :blk null;
+            break :blk .{
+                .filter = filter,
+                .literals = shape.literals,
+                .caseless = shape.caseless,
+            };
+        } else null;
+        const email: ?EmailState = if (limits.longest) null else blk: {
+            const shape = program.email orelse break :blk null;
+            break :blk .{
+                .local = byte_table.init(256, shape.local),
+                .domain = byte_table.init(256, shape.domain),
+                .tld = byte_table.init(256, shape.tld),
+                .tld_min = shape.tld_min,
+            };
+        };
+        const blank_lines: ?BlankLinesState = if (limits.longest or program.notempty or
+            program.notempty_atstart)
+            null
+        else if (program.blank_lines) |shape|
+            .{ .space = byte_table.init(256, shape.space) }
         else
             null;
         const anchored_table: [256]bool = if (simple_anchored) |anchored|
@@ -519,7 +562,13 @@ pub const Workspace = struct {
             break :blk .{
                 .table_sign = byte_table.init(256, shape.sign),
                 .table_digits = byte_table.init(256, shape.digits),
+                .table_exponent_marker = byte_table.init(256, shape.exponent_marker),
+                .table_exponent_sign = byte_table.init(256, shape.exponent_sign),
+                .table_exponent_digits = byte_table.init(256, shape.exponent_digits),
                 .fraction = shape.fraction,
+                .exponent = shape.exponent,
+                .optional_sign = shape.optional_sign,
+                .exponent_has_sign = shape.exponent_has_sign,
             };
         };
         const bounded_loop: ?BoundedLoopState = if (limits.longest) null else blk: {
@@ -625,6 +674,12 @@ pub const Workspace = struct {
             .line_marker
         else if (escaped_delimited != null)
             .escaped_delimited
+        else if (word_alternation != null)
+            .word_alternation
+        else if (email != null)
+            .email
+        else if (blank_lines != null)
+            .blank_lines
         else if (bounded_sequence != null)
             .bounded_sequence
         else if (unbounded_sequence) |state|
@@ -770,6 +825,9 @@ pub const Workspace = struct {
             .line_heading = line_heading,
             .line_marker = line_marker,
             .escaped_delimited = escaped_delimited,
+            .word_alternation = word_alternation,
+            .email = email,
+            .blank_lines = blank_lines,
         };
     }
 
@@ -920,6 +978,9 @@ pub const Workspace = struct {
             .line_heading => return self.findLineHeading(self.line_heading.?, input, search_start),
             .line_marker => return self.findLineMarker(self.line_marker.?, input, search_start),
             .escaped_delimited => return self.findEscapedDelimited(&self.escaped_delimited.?, input, search_start),
+            .word_alternation => return self.findWordAlternation(&self.word_alternation.?, input, search_start),
+            .email => return self.findEmail(&self.email.?, input, search_start),
+            .blank_lines => return self.findBlankLines(&self.blank_lines.?, input, search_start),
         }
         // Every match must start at a start-literal occurrence, so the first
         // occurrence bounds the leftmost match start and the DFA can skip
@@ -1537,6 +1598,9 @@ pub const Workspace = struct {
             .line_heading => return self.findLineHeading(self.line_heading.?, input, search_start),
             .line_marker => return self.findLineMarker(self.line_marker.?, input, search_start),
             .escaped_delimited => return self.findEscapedDelimited(&self.escaped_delimited.?, input, search_start),
+            .word_alternation => return self.findWordAlternation(&self.word_alternation.?, input, search_start),
+            .email => return self.findEmail(&self.email.?, input, search_start),
+            .blank_lines => return self.findBlankLines(&self.blank_lines.?, input, search_start),
         }
         var from = search_start;
         if (self.pair_filter) |filter| {
@@ -2131,17 +2195,193 @@ pub const Workspace = struct {
         return null;
     }
 
-    /// `(?m)^space* marker literal`: the whitespace run is maximal, so the
-    /// marker must follow it directly. Line starts whose run reaches the same
-    /// failure point are skipped together.
-    fn findLineMarker(self: *Workspace, state: *const LineMarkerState, input: []const u8, search_start: usize) ?Match {
+    /// `\b (?:word|word|...) \b`: a folded two-byte pair scan proposes the
+    /// next candidate start, then the shared word boundaries and the
+    /// alternatives are verified in source order. Pair candidates are rare,
+    /// and verification handles non-ASCII fold peers exactly.
+    fn findWordAlternation(self: *Workspace, state: *const WordAlternationState, input: []const u8, search_start: usize) ?Match {
+        const Vec = @Vector(16, u8);
+        const fold: Vec = @splat(0x20);
+        var offset = search_start;
+        if (state.filter.pair_nibble) |*nibble| {
+            // One pass over the text; failed candidates do not restart the
+            // scan, so dense pair collisions stay cheap. Two chunks per
+            // iteration overlap their table lookups.
+            while (offset + 33 <= input.len) : (offset += 32) {
+                const a_first: Vec = @as(Vec, @bitCast(@as([16]u8, input[offset..][0..16].*))) | fold;
+                const a_second: Vec = @as(Vec, @bitCast(@as([16]u8, input[offset + 1 ..][0..16].*))) | fold;
+                const b_first: Vec = @as(Vec, @bitCast(@as([16]u8, input[offset + 16 ..][0..16].*))) | fold;
+                const b_second: Vec = @as(Vec, @bitCast(@as([16]u8, input[offset + 17 ..][0..16].*))) | fold;
+                const a_bits: u16 = @bitCast(nibble.candidates(a_first, a_second));
+                const b_bits: u16 = @bitCast(nibble.candidates(b_first, b_second));
+                if (a_bits != 0) {
+                    var bits = a_bits;
+                    while (bits != 0) {
+                        const lane = @ctz(bits);
+                        bits &= bits - 1;
+                        if (self.matchWordAlternation(state, input, offset + lane)) |match| return match;
+                    }
+                }
+                if (b_bits != 0) {
+                    var bits = b_bits;
+                    while (bits != 0) {
+                        const lane = @ctz(bits);
+                        bits &= bits - 1;
+                        if (self.matchWordAlternation(state, input, offset + 16 + lane)) |match| return match;
+                    }
+                }
+            }
+            while (offset + 17 <= input.len) : (offset += 16) {
+                const first_raw: [16]u8 = input[offset..][0..16].*;
+                const second_raw: [16]u8 = input[offset + 1 ..][0..16].*;
+                const first: Vec = @as(Vec, @bitCast(first_raw)) | fold;
+                const second: Vec = @as(Vec, @bitCast(second_raw)) | fold;
+                var bits: u16 = @bitCast(nibble.candidates(first, second));
+                while (bits != 0) {
+                    const lane = @ctz(bits);
+                    bits &= bits - 1;
+                    if (self.matchWordAlternation(state, input, offset + lane)) |match| return match;
+                }
+            }
+        }
+        while (offset < input.len) {
+            const at = state.filter.indexOfPairCandidate(input, offset) orelse return null;
+            if (self.matchWordAlternation(state, input, at)) |match| return match;
+            offset = at + 1;
+        }
+        return null;
+    }
+
+    inline fn matchWordAlternation(self: *Workspace, state: *const WordAlternationState, input: []const u8, at: usize) ?Match {
+        if (!wordBoundaryAt(input, at)) return null;
+        for (state.literals) |literal| {
+            const end = wordLiteralEnd(input, at, literal, state.caseless) orelse continue;
+            if (!wordBoundaryAt(input, end)) continue;
+            self.slots[0] = at;
+            self.slots[1] = end;
+            return .{ .start = at, .end = end, .slots = self.slots };
+        }
+        return null;
+    }
+
+    inline fn asciiWordByte(byte: u8) bool {
+        return (byte >= 'a' and byte <= 'z') or (byte >= 'A' and byte <= 'Z') or
+            (byte >= '0' and byte <= '9') or byte == '_';
+    }
+
+    /// ASCII `\b` at `pos`: exactly one side is a word byte. A non-ASCII
+    /// byte is not a word byte under the ASCII assertion.
+    inline fn wordBoundaryAt(input: []const u8, pos: usize) bool {
+        const before = pos > 0 and asciiWordByte(input[pos - 1]);
+        const after = pos < input.len and asciiWordByte(input[pos]);
+        return before != after;
+    }
+
+    /// End offset of `literal` at `offset`, folding ASCII case and accepting
+    /// the non-ASCII simple-fold peers U+017F (s) and U+212A (k).
+    inline fn wordLiteralEnd(input: []const u8, offset: usize, literal: []const u8, caseless: bool) ?usize {
+        var pos = offset;
+        for (literal) |expected| {
+            if (pos >= input.len) return null;
+            if (caseless) {
+                if (expected == 's' and pos + 2 <= input.len and input[pos] == 0xC5 and input[pos + 1] == 0xBF) {
+                    pos += 2;
+                    continue;
+                }
+                if (expected == 'k' and pos + 3 <= input.len and input[pos] == 0xE2 and
+                    input[pos + 1] == 0x84 and input[pos + 2] == 0xAA)
+                {
+                    pos += 3;
+                    continue;
+                }
+                if (foldAsciiByte(input[pos]) != expected) return null;
+            } else if (input[pos] != expected) return null;
+            pos += 1;
+        }
+        return pos;
+    }
+
+    /// `\b local+ @ domain+ \. tld{min,} \b`: each `@` bounds one candidate
+    /// local run. The match starts at the first boundary inside the run, and
+    /// the domain is resolved by walking dots from the end, which mirrors the
+    /// greedy `domain+ \.` backtracking.
+    fn findEmail(self: *Workspace, state: *const EmailState, input: []const u8, search_start: usize) ?Match {
+        var search = search_start;
+        while (search < input.len) {
+            const at = prefilter.indexOfByte(input, search, '@') orelse return null;
+            var start = at;
+            while (start > search and state.local[input[start - 1]]) start -= 1;
+            while (start < at and !wordBoundaryAt(input, start)) start += 1;
+            if (start < at) {
+                var end = at + 1;
+                while (end < input.len and state.domain[input[end]]) end += 1;
+                var dot = end;
+                while (dot > at + 2) {
+                    dot -= 1;
+                    if (input[dot] != '.') continue;
+                    var tail = dot + 1;
+                    while (tail < input.len and state.tld[input[tail]]) tail += 1;
+                    if (tail - (dot + 1) < state.tld_min) continue;
+                    if (!wordBoundaryAt(input, tail)) continue;
+                    self.slots[0] = start;
+                    self.slots[1] = tail;
+                    return .{ .start = start, .end = tail, .slots = self.slots };
+                }
+            }
+            search = at + 1;
+        }
+        return null;
+    }
+
+    /// `(?m)^\s*$` in LF mode: at each line start the greedy whitespace run
+    /// either reaches the text end or ends at the last line break inside the
+    /// run, which is the final `$` position the engine backtracks to.
+    fn findBlankLines(self: *Workspace, state: *const BlankLinesState, input: []const u8, search_start: usize) ?Match {
         if (search_start > input.len) return null;
         var line = search_start;
         if (line > 0 and input[line - 1] != '\n') line = nextLineStart(input, line) orelse return null;
-        while (line < input.len) {
+        while (line <= input.len) {
             var pos = line;
             while (pos < input.len and state.space[input[pos]]) pos += 1;
-            if (pos + 1 < input.len and state.marker[input[pos]] and state.trailing[input[pos + 1]]) {
+            if (pos == input.len) {
+                self.slots[0] = line;
+                self.slots[1] = pos;
+                return .{ .start = line, .end = pos, .slots = self.slots };
+            }
+            var end = pos;
+            while (end > line) {
+                end -= 1;
+                if (input[end] == '\n') {
+                    self.slots[0] = line;
+                    self.slots[1] = end;
+                    return .{ .start = line, .end = end, .slots = self.slots };
+                }
+            }
+            line = nextLineStart(input, pos) orelse return null;
+        }
+        return null;
+    }
+
+    /// `(?m)^space* marker literal`: the whitespace run is maximal, so the
+    /// marker must follow it directly. Line starts whose run reaches the same
+    /// failure point are skipped together.
+    /// `(?m)^space* marker trailing`: any match contains a marker byte, so
+    /// scan for the next marker and walk back over the maximal space run.
+    /// The run may cross line breaks, so the match starts at the first line
+    /// start inside it that is not before `search_start`.
+    fn findLineMarker(self: *Workspace, state: *const LineMarkerState, input: []const u8, search_start: usize) ?Match {
+        var search = search_start;
+        while (search < input.len) {
+            const pos = state.marker_filter.indexOf(input, search) orelse return null;
+            var run_start = pos;
+            while (run_start > 0 and state.space[input[run_start - 1]]) run_start -= 1;
+            var line = @max(run_start, search_start);
+            while (line < pos and line != 0 and input[line - 1] != '\n') line += 1;
+            if (line != 0 and input[line - 1] != '\n') {
+                search = pos + 1;
+                continue;
+            }
+            if (pos + 1 < input.len and state.trailing[input[pos + 1]]) {
                 var end = pos + 2;
                 if (state.trailing_run) {
                     while (end < input.len and state.trailing[input[end]]) end += 1;
@@ -2150,8 +2390,7 @@ pub const Workspace = struct {
                 self.slots[1] = end;
                 return .{ .start = line, .end = end, .slots = self.slots };
             }
-            if (pos >= input.len) return null;
-            line = nextLineStart(input, pos) orelse return null;
+            search = pos + 1;
         }
         return null;
     }
@@ -2951,7 +3190,7 @@ pub const Workspace = struct {
         var start = search_start;
         while (start < input.len) {
             var pos = start;
-            if (sign[input[pos]]) pos += 1;
+            if (state.optional_sign and sign[input[pos]]) pos += 1;
             const digit_start = pos;
             while (pos < input.len and digits[input[pos]]) pos += 1;
             if (pos == digit_start) {
@@ -2961,6 +3200,15 @@ pub const Workspace = struct {
             if (state.fraction and pos + 1 < input.len and input[pos] == '.' and digits[input[pos + 1]]) {
                 pos += 1;
                 while (pos < input.len and digits[input[pos]]) pos += 1;
+            }
+            if (state.exponent and pos < input.len and state.table_exponent_marker[input[pos]]) {
+                var tail = pos + 1;
+                if (state.exponent_has_sign and tail < input.len and state.table_exponent_sign[input[tail]]) {
+                    tail += 1;
+                }
+                const exponent_start = tail;
+                while (tail < input.len and state.table_exponent_digits[input[tail]]) tail += 1;
+                if (tail > exponent_start) pos = tail;
             }
             self.slots[0] = start;
             self.slots[1] = pos;
@@ -4531,11 +4779,27 @@ const UnboundedSequenceState = struct {
 
 const EscapedDelimitedState = struct { quote: u8, escape: u8 };
 
+const WordAlternationState = struct {
+    filter: prefilter.MultiFilter,
+    literals: []const []const u8,
+    caseless: bool,
+};
+
+const EmailState = struct {
+    local: [256]bool,
+    domain: [256]bool,
+    tld: [256]bool,
+    tld_min: usize,
+};
+
+const BlankLinesState = struct { space: [256]bool };
+
 const LineMarkerState = struct {
     space: [256]bool,
     marker: [256]bool,
     trailing: [256]bool,
     trailing_run: bool,
+    marker_filter: prefilter.FirstFilter,
 };
 
 const LineHeadingState = struct {
@@ -4549,7 +4813,13 @@ const LineHeadingState = struct {
 const SignedNumberState = struct {
     table_sign: [256]bool = undefined,
     table_digits: [256]bool = undefined,
+    table_exponent_marker: [256]bool = undefined,
+    table_exponent_sign: [256]bool = undefined,
+    table_exponent_digits: [256]bool = undefined,
     fraction: bool = false,
+    exponent: bool = false,
+    optional_sign: bool = false,
+    exponent_has_sign: bool = false,
 };
 
 const BoundedLoopState = struct {

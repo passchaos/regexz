@@ -41,8 +41,14 @@ pub const OptionalTailShape = struct {
 
 pub const NumberShape = struct {
     sign: model.Set,
+    optional_sign: bool,
     digits: model.Set,
     fraction: bool,
+    exponent: bool,
+    exponent_marker: model.Set,
+    exponent_sign: model.Set,
+    exponent_has_sign: bool,
+    exponent_digits: model.Set,
 };
 
 pub const LineHeadingShape = struct {
@@ -146,8 +152,9 @@ pub const Program = struct {
     /// A bounded run followed by a greedy repetition of a bounded
     /// `separator run` group (`\d{1,3}(?:,\d{3})+`). Not serialized.
     bounded_loop: ?BoundedLoopShape = null,
-    /// A sign set followed by digits and an optional fraction
-    /// (`[+-]?\d+(?:\.\d+)?`). Not serialized.
+    /// A sign set followed by digits, an optional fraction and an optional
+    /// exponent (`[+-]?\d+(?:\.\d+)?`, `\d+(?:\.\d+)?(?:[eE][+-]?\d+)?`).
+    /// Not serialized.
     signed_number: ?NumberShape = null,
     /// `(?m)^X{min,max} Y.*$` with a literal heading byte and space. Not
     /// serialized.
@@ -158,6 +165,13 @@ pub const Program = struct {
     /// `quote (?: escape any | [^quote escape] )* quote` with a single-byte
     /// quote and escape (`"(?:\\.|[^"\\])*"`). Not serialized.
     escaped_delimited: ?EscapedDelimitedShape = null,
+    /// `\b (?:word|word|...) \b` with ASCII word boundaries. Not serialized.
+    word_alternation: ?WordAlternationShape = null,
+    /// `\b local+ @ domain+ \. tld{min,} \b` with ASCII word boundaries.
+    /// Not serialized.
+    email: ?EmailShape = null,
+    /// `(?m)^\s*$` in LF mode. Not serialized.
+    blank_lines: ?BlankLinesShape = null,
     /// `x? set+` where `x` is a member of the set, which matches exactly the
     /// same spans as `set+`. Not serialized.
     optional_run: ?model.Set = null,
@@ -699,6 +713,9 @@ const LiteralExpander = struct {
     allocator: std.mem.Allocator,
     /// Every leaf is one complete ASCII case-fold class, stored lowercase.
     caseless: bool = false,
+    /// Accept fold classes with non-ASCII peers (`s`, `k`). Only scanners
+    /// that verify those peers explicitly may set this.
+    allow_peers: bool = false,
     total_bytes: usize = 0,
 
     fn single(self: *LiteralExpander, bytes: []const u8) model.Error![]const []const u8 {
@@ -717,8 +734,10 @@ const LiteralExpander = struct {
                 if (self.caseless) {
                     // A non-ASCII peer means a byte-wise folded scan cannot
                     // represent the branch exactly.
-                    for (set.ranges) |range| {
-                        if (range.first >= 0x80) break :blk null;
+                    if (!self.allow_peers) {
+                        for (set.ranges) |range| {
+                            if (range.first >= 0x80) break :blk null;
+                        }
                     }
                     const canonical = caselessCanonical(set) orelse break :blk null;
                     const byte = [1]u8{canonical};
@@ -764,6 +783,10 @@ const LiteralExpander = struct {
 
 fn expandLiteralSet(allocator: std.mem.Allocator, root: *const model.Node, caseless: bool) model.Error!?[]const []const u8 {
     var expander = LiteralExpander{ .allocator = allocator, .caseless = caseless };
+    return expandBranches(&expander, root);
+}
+
+fn expandBranches(expander: *LiteralExpander, root: *const model.Node) model.Error!?[]const []const u8 {
     const branches = try expander.expand(root) orelse return null;
     if (branches.len < 2) return null;
     for (branches) |branch| {
@@ -975,7 +998,7 @@ fn sameRanges(a: model.Set, b: model.Set) bool {
     return true;
 }
 
-fn flattenN(node: *const model.Node, out: *[3]*const model.Node, count: *usize) bool {
+fn flattenN(node: *const model.Node, out: []*const model.Node, count: *usize) bool {
     var current = node;
     while (current.* == .group) current = current.group;
     switch (current.*) {
@@ -991,46 +1014,115 @@ fn flattenN(node: *const model.Node, out: *[3]*const model.Node, count: *usize) 
     return true;
 }
 
-/// A sign set followed by digits and an optional fraction, for example
-/// `[+-]?\d+(?:\.\d+)?`. The sign set must be disjoint from the digits.
-fn detectSignedNumber(root: *const model.Node) ?NumberShape {
-    var nodes: [3]*const model.Node = undefined;
+/// A sign set followed by digits, an optional fraction and an optional
+/// exponent, for example `[+-]?\d+(?:\.\d+)?` or
+/// `\d+(?:\.\d+)?(?:[eE][+-]?\d+)?`. The sign set must be disjoint from the
+/// digits.
+fn detectNumber(root: *const model.Node) ?NumberShape {
+    var nodes: [4]*const model.Node = undefined;
     var count: usize = 0;
-    if (!flattenN(root, &nodes, &count) or count < 2) return null;
-    const sign_repeat = (repeatOf(nodes[0]) orelse return null).repeat;
-    if (sign_repeat.lazy or sign_repeat.possessive or sign_repeat.minimum != 0 or
-        sign_repeat.maximum == null or sign_repeat.maximum.? != 1)
-    {
-        return null;
+    if (!flattenN(root, &nodes, &count) or count == 0 or count > 4) return null;
+    const empty = model.Set{ .ranges = &.{} };
+    var shape = NumberShape{
+        .sign = empty,
+        .optional_sign = false,
+        .digits = empty,
+        .fraction = false,
+        .exponent = false,
+        .exponent_marker = empty,
+        .exponent_sign = empty,
+        .exponent_has_sign = false,
+        .exponent_digits = empty,
+    };
+    var index: usize = 0;
+    if (count >= 2) blk: {
+        const sign_node = repeatOf(nodes[0]) orelse break :blk;
+        const sign_repeat = sign_node.repeat;
+        if (!optionalRepeat(sign_repeat)) break :blk;
+        const sign = nodeSet(sign_repeat.child) orelse break :blk;
+        const digits = digitsRepeat(nodes[1]) orelse break :blk;
+        shape.sign = sign;
+        shape.optional_sign = true;
+        shape.digits = digits;
+        index = 2;
     }
-    const sign = nodeSet(sign_repeat.child) orelse return null;
-    const digits_repeat = (repeatOf(nodes[1]) orelse return null).repeat;
-    if (digits_repeat.lazy or digits_repeat.possessive or digits_repeat.maximum != null or digits_repeat.minimum == 0) return null;
-    const digits = nodeSet(digits_repeat.child) orelse return null;
-    var fraction = false;
-    if (count == 3) {
-        const group = (repeatOf(nodes[2]) orelse return null).repeat;
-        if (group.lazy or group.possessive or group.minimum != 0 or group.maximum == null or group.maximum.? != 1) return null;
+    if (index == 0) {
+        shape.digits = digitsRepeat(nodes[0]) orelse return null;
+        index = 1;
+    }
+    if (index < count) {
+        const group_node = repeatOf(nodes[index]) orelse return null;
+        const group = group_node.repeat;
+        if (!optionalRepeat(group)) return null;
         var child = group.child;
         while (child.* == .group) child = child.group;
         if (child.* != .pair) return null;
-        var dot = child.pair.left;
-        while (dot.* == .group) dot = dot.group;
-        if (dot.* != .set or dot.set.ranges.len != 1 or dot.set.ranges[0].first != dot.set.ranges[0].last or
-            dot.set.ranges[0].first != '.')
-        {
-            return null;
-        }
+        const dot = nodeSet(child.pair.left) orelse return null;
+        if (!literalByteSet(dot, '.')) return null;
         const fraction_repeat = (repeatOf(child.pair.right) orelse return null).repeat;
-        if (fraction_repeat.lazy or fraction_repeat.possessive or fraction_repeat.maximum != null or fraction_repeat.minimum == 0) return null;
+        if (fraction_repeat.lazy or fraction_repeat.possessive or fraction_repeat.maximum != null or
+            fraction_repeat.minimum == 0) return null;
         const fraction_digits = nodeSet(fraction_repeat.child) orelse return null;
-        if (!sameRanges(digits, fraction_digits)) return null;
-        fraction = true;
-    } else if (count > 3) return null;
-    if (!sign.ascii_only or sign.ranges.len == 0) return null;
-    if (!digits.ascii_only or digits.ranges.len == 0) return null;
-    if (setOverlaps(sign, digits)) return null;
-    return .{ .sign = sign, .digits = digits, .fraction = fraction };
+        if (!sameRanges(shape.digits, fraction_digits)) return null;
+        shape.fraction = true;
+        index += 1;
+    }
+    if (index < count) {
+        const group_node = repeatOf(nodes[index]) orelse return null;
+        const group = group_node.repeat;
+        if (!optionalRepeat(group)) return null;
+        var child = group.child;
+        while (child.* == .group) child = child.group;
+        if (child.* != .pair) return null;
+        const marker = nodeSet(child.pair.left) orelse return null;
+        var rest = child.pair.right;
+        while (rest.* == .group) rest = rest.group;
+        var exponent_digits: model.Set = undefined;
+        if (rest.* == .pair) {
+            const sign_node = repeatOf(rest.pair.left) orelse return null;
+            if (!optionalRepeat(sign_node.repeat)) return null;
+            shape.exponent_sign = nodeSet(sign_node.repeat.child) orelse return null;
+            shape.exponent_has_sign = true;
+            exponent_digits = digitsRepeat(rest.pair.right) orelse return null;
+        } else {
+            exponent_digits = digitsRepeat(rest) orelse return null;
+        }
+        shape.exponent_marker = marker;
+        shape.exponent_digits = exponent_digits;
+        shape.exponent = true;
+        index += 1;
+    }
+    if (index != count) return null;
+    if (!shape.digits.ascii_only or shape.digits.ranges.len == 0) return null;
+    if (shape.optional_sign) {
+        if (!shape.sign.ascii_only or shape.sign.ranges.len == 0) return null;
+        if (setOverlaps(shape.sign, shape.digits)) return null;
+    }
+    if (shape.exponent) {
+        if (!shape.exponent_marker.ascii_only or shape.exponent_marker.ranges.len == 0) return null;
+        if (!shape.exponent_digits.ascii_only or shape.exponent_digits.ranges.len == 0) return null;
+        if (setOverlaps(shape.exponent_marker, shape.digits)) return null;
+        if (shape.exponent_has_sign) {
+            if (!shape.exponent_sign.ascii_only or shape.exponent_sign.ranges.len == 0) return null;
+            if (setOverlaps(shape.exponent_sign, shape.exponent_digits)) return null;
+        }
+    }
+    return shape;
+}
+
+fn optionalRepeat(repeat: anytype) bool {
+    return !repeat.lazy and !repeat.possessive and repeat.minimum == 0 and
+        repeat.maximum != null and repeat.maximum.? == 1;
+}
+
+fn digitsRepeat(node: *const model.Node) ?model.Set {
+    const repeat = (repeatOf(node) orelse return null).repeat;
+    if (repeat.lazy or repeat.possessive or repeat.maximum != null or repeat.minimum == 0) return null;
+    return nodeSet(repeat.child);
+}
+
+fn literalByteSet(set: model.Set, byte: u8) bool {
+    return set.ranges.len == 1 and set.ranges[0].first == byte and set.ranges[0].last == byte;
 }
 
 fn flattenUpTo(node: *const model.Node, out: []*const model.Node, count: *usize) bool {
@@ -1255,6 +1347,119 @@ fn detectLineMarker(root: *const model.Node) ?LineMarkerShape {
         .trailing = trailing.set,
         .trailing_run = trailing.run,
     };
+}
+
+pub const WordAlternationShape = struct {
+    literals: []const []const u8,
+    caseless: bool,
+};
+
+/// `\b local+ @ domain+ \. tld{min,} \b` with ASCII word boundaries. The
+/// local set must exclude `@`, the domain set must include `.`, and the TLD
+/// set must be a subset of the domain set so the trailing run stays inside
+/// the domain run.
+pub const EmailShape = struct {
+    local: model.Set,
+    domain: model.Set,
+    tld: model.Set,
+    tld_min: usize,
+};
+
+/// `(?m)^\s*$` in LF mode: a line start, a greedy whitespace run and a line
+/// end. The match ends at the last line break inside the run, or at the text
+/// end when the run reaches it.
+pub const BlankLinesShape = struct { space: model.Set };
+
+fn detectBlankLines(root: *const model.Node) ?BlankLinesShape {
+    var nodes: [3]*const model.Node = undefined;
+    var count: usize = 0;
+    if (!flattenUpTo(root, &nodes, &count) or count != 3) return null;
+    if (nodes[0].* != .assertion or nodes[0].assertion != .start_line) return null;
+    if (nodes[2].* != .assertion or nodes[2].assertion != .end_line) return null;
+    const repeat = (repeatOf(nodes[1]) orelse return null).repeat;
+    if (repeat.lazy or repeat.possessive or repeat.maximum != null or repeat.minimum != 0) return null;
+    const space = nodeSet(repeat.child) orelse return null;
+    if (!space.ascii_only or space.ranges.len == 0) return null;
+    return .{ .space = space };
+}
+
+fn detectEmail(root: *const model.Node) ?EmailShape {
+    var nodes: [7]*const model.Node = undefined;
+    var count: usize = 0;
+    if (!flattenUpTo(root, &nodes, &count) or count != 7) return null;
+    if (nodes[0].* != .assertion or nodes[0].assertion != .word_boundary) return null;
+    if (nodes[6].* != .assertion or nodes[6].assertion != .word_boundary) return null;
+    const local = runSetExact(nodes[1], 1) orelse return null;
+    const at = nodeSet(nodes[2]) orelse return null;
+    if (!literalByteSet(at, '@')) return null;
+    const domain = runSetExact(nodes[3], 1) orelse return null;
+    const dot = nodeSet(nodes[4]) orelse return null;
+    if (!literalByteSet(dot, '.')) return null;
+    const tld_repeat = (repeatOf(nodes[5]) orelse return null).repeat;
+    if (tld_repeat.lazy or tld_repeat.possessive or tld_repeat.maximum != null or tld_repeat.minimum == 0) return null;
+    const tld = nodeSet(tld_repeat.child) orelse return null;
+    if (!local.ascii_only or local.ranges.len == 0) return null;
+    if (!domain.ascii_only or domain.ranges.len == 0) return null;
+    if (!tld.ascii_only or tld.ranges.len == 0) return null;
+    if (local.matches('@')) return null;
+    if (!domain.matches('.')) return null;
+    if (!setSubsetAscii(tld, domain)) return null;
+    return .{ .local = local, .domain = domain, .tld = tld, .tld_min = tld_repeat.minimum };
+}
+
+/// A greedy unbounded `set+` run with exactly `minimum`.
+fn runSetExact(node: *const model.Node, minimum: usize) ?model.Set {
+    const repeat = (repeatOf(node) orelse return null).repeat;
+    if (repeat.lazy or repeat.possessive or repeat.maximum != null or repeat.minimum != minimum) return null;
+    return nodeSet(repeat.child);
+}
+
+fn setSubsetAscii(a: model.Set, b: model.Set) bool {
+    var byte: u8 = 0;
+    while (true) {
+        if (a.matches(byte) and !b.matches(byte)) return false;
+        if (byte == 0x7F) break;
+        byte += 1;
+    }
+    return true;
+}
+
+/// `\b (?:word|word|...) \b` with ASCII word boundaries and a bounded
+/// literal alternation. Every match starts at one of the literals, so a
+/// multi-literal scan proposes candidates and the boundaries are verified
+/// locally.
+fn detectWordAlternation(allocator: std.mem.Allocator, root: *const model.Node) model.Error!?WordAlternationShape {
+    var nodes: [3]*const model.Node = undefined;
+    var count: usize = 0;
+    if (!flattenUpTo(root, &nodes, &count) or count != 3) return null;
+    if (nodes[0].* != .assertion or nodes[0].assertion != .word_boundary) return null;
+    if (nodes[2].* != .assertion or nodes[2].assertion != .word_boundary) return null;
+    var body = nodes[1];
+    while (body.* == .group) body = body.group;
+    if (body.* != .alternate) return null;
+    // A full case-fold class expands caselessly; singleton sets (a
+    // case-sensitive scope) only expand in the second attempt. The scanner
+    // verifies non-ASCII fold peers (`s`, `k`) itself, so allow them here.
+    var caseless_expander = LiteralExpander{ .allocator = allocator, .caseless = true, .allow_peers = true };
+    if (try expandBranches(&caseless_expander, body)) |literals| {
+        // The candidate filter folds ASCII bytes only, so a fold peer in the
+        // first two bytes (the pair filter's inputs) would never be proposed.
+        for (literals) |literal| {
+            if (foldPeerByte(literal[0])) return null;
+            if (literal.len >= 2 and foldPeerByte(literal[1])) return null;
+        }
+        return .{ .literals = literals, .caseless = true };
+    }
+    if (try expandLiteralSet(allocator, body, false)) |literals| {
+        return .{ .literals = literals, .caseless = false };
+    }
+    return null;
+}
+
+/// ASCII letters with a non-ASCII simple-fold peer (`s` -> U+017F,
+/// `k` -> U+212A).
+fn foldPeerByte(byte: u8) bool {
+    return byte == 's' or byte == 'k';
 }
 
 /// A bounded run followed by a greedy repetition of a bounded
@@ -2014,7 +2219,7 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
     const bounded_loop: ?BoundedLoopShape = if (literal == null and caseless_literal == null and
         literal_set == null and !limits.auto_callout) detectBoundedLoop(parsed.root) else null;
     const signed_number: ?NumberShape = if (literal == null and caseless_literal == null and
-        literal_set == null and !limits.auto_callout) detectSignedNumber(parsed.root) else null;
+        literal_set == null and !limits.auto_callout) detectNumber(parsed.root) else null;
     const line_heading: ?LineHeadingShape = if (literal == null and caseless_literal == null and
         literal_set == null and !limits.auto_callout and parsed.newline == .lf)
         detectLineHeading(parsed.root)
@@ -2028,6 +2233,21 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
     const line_marker: ?LineMarkerShape = if (literal == null and caseless_literal == null and
         literal_set == null and !limits.auto_callout and parsed.newline == .lf)
         detectLineMarker(parsed.root)
+    else
+        null;
+    const word_alternation: ?WordAlternationShape = if (literal == null and caseless_literal == null and
+        literal_set == null and !limits.auto_callout)
+        try detectWordAlternation(allocator, parsed.root)
+    else
+        null;
+    const email: ?EmailShape = if (literal == null and caseless_literal == null and
+        literal_set == null and !limits.auto_callout)
+        detectEmail(parsed.root)
+    else
+        null;
+    const blank_lines: ?BlankLinesShape = if (literal == null and caseless_literal == null and
+        literal_set == null and !limits.auto_callout and parsed.newline == .lf)
+        detectBlankLines(parsed.root)
     else
         null;
     const optional_run: ?model.Set = if (literal == null and caseless_literal == null and
@@ -2097,6 +2317,9 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         .line_heading = line_heading,
         .line_marker = line_marker,
         .escaped_delimited = escaped_delimited,
+        .word_alternation = word_alternation,
+        .email = email,
+        .blank_lines = blank_lines,
         .optional_run = optional_run,
         .dfa_eligible = dfa_eligible,
         .extended = extended,
