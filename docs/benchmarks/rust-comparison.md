@@ -283,8 +283,11 @@ Reproduce:
 zig build-exe -O ReleaseFast --dep regexz \
     -Mroot=tools/compare/zig_regex.zig -Mregexz=src/root.zig \
     -femit-bin=/tmp/regexz-compare
-/tmp/regexz-compare
 
 cd tools/compare/rust_regex
-cargo run --release
+cargo build --release
+
+# One fresh process per case, implementations interleaved.
+python3 tools/compare/isolated_sweep.py --rounds 5 --out /tmp/compare.json
+python3 tools/compare/isolated.py 5 "find IPv4" "find IPv6"
 ```

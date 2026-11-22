@@ -164,7 +164,12 @@ not, and vice versa.
 Reproduce:
 
 ```sh
+zig build-exe -O ReleaseFast --dep regexz \
+    -Mroot=tools/compare/zig_regex.zig -Mregexz=src/root.zig \
+    -femit-bin=/tmp/regexz-compare
 zig build-exe -O ReleaseFast -lc -lpcre2-8 \
     tools/compare/pcre2_regex.zig -femit-bin=/tmp/regexz-pcre2
-/tmp/regexz-pcre2
+
+# One fresh process per case, implementations interleaved.
+python3 tools/compare/isolated_sweep.py --rounds 5 --out /tmp/compare.json
 ```
