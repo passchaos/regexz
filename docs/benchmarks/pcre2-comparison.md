@@ -38,7 +38,7 @@ for the same isolated sweep are in
 | find JSON string literal | 15,047.0 | 27,232.6 | 1.81x |
 | find JSON number | 74,461.9 | 123,429.7 | 1.66x |
 | find word boundary | 189,440.6 | 381,938.9 | 2.02x |
-| find (?i) literal | 65,778.2 | 63,588.1 | 0.97x |
+| find (?i) literal | 65,005.4 | 64,236.7 | 0.99x |
 | find alternation (5 words) | 95,379.0 | 211,841.6 | 2.22x |
 | find (?i) alternation | 87,516.6 | 153,303.8 | 1.75x |
 | find 10-word alternation | 210,308.8 | 287,684.0 | 1.37x |
@@ -49,7 +49,7 @@ for the same isolated sweep are in
 | find date | 87,964.9 | 142,757.6 | 1.62x |
 | find 20-word alternation | 211,120.5 | 288,205.8 | 1.37x |
 | find anchored line | 4,279.4 | 5,675.2 | 1.33x |
-| find (?i) Unicode literal | 121,000.9 | 117,351.2 | 0.97x |
+| find (?i) Unicode literal | 123,203.7 | 119,744.8 | 0.97x |
 | find shared-prefix alternation | 45,095.5 | 78,312.3 | 1.74x |
 | find one-char alternation | 12,822.8 | 35,507.2 | 2.77x |
 | find hex color | 79,679.9 | 127,145.0 | 1.60x |
@@ -72,7 +72,7 @@ for the same isolated sweep are in
 | find key-value | 165,328.4 | 245,896.6 | 1.49x |
 | find IP port | 122,495.6 | 162,445.6 | 1.33x |
 | find (?i) class | 49,197.5 | 79,479.8 | 1.62x |
-| find prefix alternation | 200,642.6 | 196,264.5 | 0.98x |
+| find prefix alternation | 205,256.0 | 198,343.4 | 0.97x |
 | find signed number | 93,348.9 | 129,343.2 | 1.39x |
 | find html attribute | 85,238.8 | 114,327.0 | 1.34x |
 | find markdown heading | 72,319.5 | 106,850.1 | 1.48x |
@@ -89,7 +89,7 @@ for the same isolated sweep are in
 | find full email | 19,625.3 | 34,309.5 | 1.75x |
 | find blank lines | 1,153.4 | 1,559.0 | 1.35x |
 | find floats | 75,587.9 | 121,968.9 | 1.61x |
-| find currency | 347.1 | 930.4 | 2.68x |
+| find currency | 306.6 | 954.4 | 3.11x |
 | find ISO timestamp | 73,595.3 | 107,938.6 | 1.47x |
 | find JSON key | 15,770.9 | 22,681.6 | 1.44x |
 | find HTML comment | 1,173.3 | 2,080.7 | 1.77x |
@@ -132,8 +132,9 @@ regexz is faster or at parity on 97 of the 100 measured cases, with a
 geometric-mean PCRE2/regexz ratio of 2.21x. The three rows below 1.00x are
 within host noise:
 
-- `find prefix alternation` (0.98x), `find (?i) Unicode literal` (0.97x) and
-  `find (?i) literal` (0.97x): parity within host noise.
+- `find prefix alternation` (0.97x), `find (?i) Unicode literal` (0.97x) and
+  `find (?i) literal` (0.99x): parity within host noise. These rows were
+  re-measured with 15 isolated rounds.
 
 Compile Qwen is now 1.41x ahead of PCRE2, up from a 0.69x ratio: PCRE2 parses
 the pattern and stores property references, while regexz materializes the

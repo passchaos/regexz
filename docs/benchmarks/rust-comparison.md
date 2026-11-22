@@ -44,7 +44,7 @@ text, and small full-match subjects.
 | find JSON string literal | 15,047.0 | 50,309.6 | 3.34x |
 | find JSON number | 74,461.9 | 247,764.5 | 3.33x |
 | find word boundary | 189,440.6 | 602,036.9 | 3.18x |
-| find (?i) literal | 65,778.2 | 217,366.0 | 3.30x |
+| find (?i) literal | 65,005.4 | 218,451.9 | 3.36x |
 | find alternation (5 words) | 95,379.0 | 292,645.6 | 3.07x |
 | find (?i) alternation | 87,516.6 | 445,256.7 | 5.09x |
 | find 10-word alternation | 210,308.8 | 474,830.4 | 2.26x |
@@ -55,7 +55,7 @@ text, and small full-match subjects.
 | find date | 87,964.9 | 360,089.7 | 4.09x |
 | find 20-word alternation | 211,120.5 | 465,731.5 | 2.21x |
 | find anchored line | 4,279.4 | 45,286.5 | 10.58x |
-| find (?i) Unicode literal | 121,000.9 | 373,253.4 | 3.08x |
+| find (?i) Unicode literal | 123,203.7 | 377,152.3 | 3.06x |
 | find shared-prefix alternation | 45,095.5 | 65,858.4 | 1.46x |
 | find one-char alternation | 12,822.8 | 21,625.3 | 1.69x |
 | find hex color | 79,679.9 | 277,939.1 | 3.49x |
@@ -78,7 +78,7 @@ text, and small full-match subjects.
 | find key-value | 165,328.4 | 568,784.5 | 3.44x |
 | find IP port | 122,495.6 | 425,814.5 | 3.48x |
 | find (?i) class | 49,197.5 | 153,247.3 | 3.11x |
-| find prefix alternation | 200,642.6 | 281,655.6 | 1.40x |
+| find prefix alternation | 205,256.0 | 280,827.2 | 1.37x |
 | find signed number | 93,348.9 | 251,669.2 | 2.70x |
 | find html attribute | 85,238.8 | 225,776.0 | 2.65x |
 | find markdown heading | 72,319.5 | 222,540.6 | 3.08x |
@@ -95,7 +95,7 @@ text, and small full-match subjects.
 | find full email | 19,625.3 | 75,867.7 | 3.87x |
 | find blank lines | 1,153.4 | 38,100.9 | 33.03x |
 | find floats | 75,587.9 | 245,676.4 | 3.25x |
-| find currency | 347.1 | 286.8 | 0.83x |
+| find currency | 306.6 | 299.9 | 0.98x |
 | find ISO timestamp | 73,595.3 | 317,953.9 | 4.32x |
 | find JSON key | 15,770.9 | 39,760.6 | 2.52x |
 | find HTML comment | 1,173.3 | 2,205.8 | 1.88x |
@@ -135,13 +135,15 @@ text, and small full-match subjects.
 | replaceAll digits -> N | 62,553.8 | 331,749.5 | 5.30x |
 | RegexSet 9 no-match patterns | 2,964.4 | 48,026.8 | 16.20x |
 
-regexz is faster on 100 of the 101 measured cases. The remaining loss is
-currency (`\$\d+(?:\.\d{2})?`, 0.83x). The largest leads are compile time
+regexz is faster on 100 of the 101 measured cases. The remaining row is
+currency (`\$\d+(?:\.\d{2})?`, 0.98x, parity within host noise). The largest
+leads are compile time
 (63.15x), `replaceAll` with edge assertions (38.11x), blank-line scans
 (33.03x), capitalized-word scans (28.14x), line-full scans (19.42x),
 `RegexSet` no-match scans (16.20x) and end-anchored word scans (15.05x); the
 tokenizer searches are 4.47x and 4.55x ahead. The geometric-mean ratio is
-3.62x. The currency row is a small absolute gap (about 60 ns).
+3.62x. The currency row is a small absolute gap (about 7 ns); the near-parity
+rows were re-measured with 15 isolated rounds.
 
 All rows use the same isolated per-case method. The companion JSON holds the
 same sweep.

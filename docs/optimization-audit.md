@@ -467,8 +467,8 @@ block sizes of 128, 192 and 384 KiB were also screened: Qwen find and compile
 stayed within noise, so the 256 KiB headroom is kept for large Unicode
 patterns. The existing `prefilter.indexOfByte` was compared with
 `std.mem.indexOfScalarPos` over 42 KiB: 287-334 ns versus 462-487 ns, so the
-custom AVX2 byte scan is kept; the currency row's 0.83x isolated ratio is
-noise at that 300 ns scale.
+custom AVX2 byte scan is kept; the currency row measures 0.98x with 15
+isolated rounds, noise at that 300 ns scale.
 
 `replaceAll` for an edge-only zero-width plan (`\A|\z`, `$`) now computes the
 exact output length and writes into one allocation instead of growing an
@@ -1125,16 +1125,16 @@ each case in a fresh process (five interleaved rounds), removing the
 cross-case heap and code-layout interference that moved unrelated rows by
 10-50% in the earlier single-process sweep; `find` rows use each library's
 per-position API and `findAll` rows use the iterators. The isolated sweep
-covers 101 cases: 100 are faster, and the only loss is currency (0.83x). The
-geometric-mean ratio is 3.62x.
+covers 101 cases: 100 are faster, and currency is at parity (0.98x, within
+host noise). The geometric-mean ratio is 3.62x.
 See [Rust comparison](benchmarks/rust-comparison.md).
 
 The same 100-case workload (minus `RegexSet`) was also run against PCRE2
 10.42 with JIT on the same host with the isolated method. regexz is faster or
 at parity on 97 of 100 cases, with a geometric-mean PCRE2/regexz ratio of
 2.21x. Compile Qwen is now 1.41x ahead (up from 0.69x); prefix alternation
-(0.98x), the case-insensitive Unicode literal (0.97x) and the small ASCII
-case-insensitive literal (0.97x) are within host noise. regexz wins compile
+(0.97x), the case-insensitive Unicode literal (0.97x) and the small ASCII
+case-insensitive literal (0.99x) are within host noise. regexz wins compile
 xDS-like (1.24x), HTML tags (2.16x) and end-anchored word scans (8.13x).
 regexz materializes Unicode property sets at compile time, while PCRE2 defers
 them. See [PCRE2 comparison](benchmarks/pcre2-comparison.md).
