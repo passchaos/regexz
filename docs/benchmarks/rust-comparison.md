@@ -76,7 +76,7 @@ text, and small full-match subjects.
 | find signed number | 93,700.2 | 96,100.2 | 1.03x |
 | find html attribute | 87,506.1 | 151,685.7 | 1.73x |
 | find markdown heading | 71,222.2 | 104,135.1 | 1.46x |
-| find mixed alternation | 380,000.0 | 483,240.0 | 1.27x |
+| find mixed alternation | 382,421.9 | 483,847.5 | 1.27x |
 | find capitalized words | 4,942.3 | 140,318.0 | 28.39x |
 | find markdown list | 4,916.4 | 41,381.8 | 8.42x |
 | find JSON escaped string | 17,421.3 | 22,508.3 | 1.29x |
