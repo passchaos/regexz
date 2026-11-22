@@ -451,6 +451,19 @@ the redundant `runeAt` check before `runEnd` in the fast branch, were both
 screened and reverted: the replacement writers were neutral across the four
 `a+` cases, and Qwen find/findAll measured 1.01x/0.99x.
 
+Six further micro-optimizations were screened and reverted after the isolated
+per-case method made their trade-offs measurable. Exact UTF-8 case variants
+for `(?i)café` cut that row by 18% but moved Qwen find by +27%; a direct
+`.literal_bytes` branch in `find` moved one-character alternation by +73% and
+Qwen find by +69%; unrolled 2-4 byte splat probes left one-character
+alternation neutral and moved Qwen find by +10%; 64-byte alignment of
+`FirstFilter` moved Qwen find by +11%; a 256-byte `indexOfByteLongWide`
+unroll cut currency by 10% but moved Qwen find by +6%; and a u64 masked
+compare for ASCII caseless literals cut `(?i)alpha` by 8% but moved Qwen find
+by +4-7%. These shifts are not semantic: each change moved the layout of the
+Qwen fast-branch code in the same binary. The isolated runner was added so
+these trade-offs can be measured without cross-case interference.
+
 `replaceAll` for an edge-only zero-width plan (`\A|\z`, `$`) now computes the
 exact output length and writes into one allocation instead of growing an
 ArrayList through several reallocations. A controlled fixed-workspace harness
