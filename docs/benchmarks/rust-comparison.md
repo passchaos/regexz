@@ -115,7 +115,7 @@ text, and small full-match subjects.
 | find IPv6 | 83,384.1 | 109,750.3 | 1.32x |
 | find C comment | 85,927.3 | 121,603.0 | 1.42x |
 | find markdown image | 385.6 | 805.6 | 2.09x |
-| find HTML tag name | 142,525.3 | 150,357.5 | 1.05x |
+| find HTML tag name | 125,400.0 | 150,357.5 | 1.20x |
 | find shell var | 121,435.4 | 173,716.0 | 1.43x |
 | split whitespace (22 KiB) | 31,598.6 | 137,633.5 | 4.36x |
 | split commas (29 KiB) | 24,883.5 | 63,820.9 | 2.56x |
@@ -144,8 +144,9 @@ complement-fill, in-place-operand, precomputed-union, direct-negation and
 direct-union-append and coalesced-skip changes, the class-construction
 changes listed below, the `find log level`, `find (?i) alternation` and
 `find (?i) literal` rows after the 32-lane caseless scans, and the HTML-tag
-and template rows after the wrapped-run probes below; the materialized sets
-are identical, so the other search rows are unchanged. The companion JSON
+and template rows after the wrapped-run probes below, and the HTML-tag-name
+row after the short `<` probe below; the materialized sets are identical, so
+the other search rows are unchanged. The companion JSON
 holds the latest full sweep; its search rows differ from the table only by
 shared-host noise.
 
@@ -181,6 +182,8 @@ The search paths gained two contained changes:
 - A whole-pattern ASCII set with at most 64 single-byte members reuses the
   literal-byte fast path (`[abc]`, `[0-9]`, `[a-z]`), bypassing the general VM
   per match while keeping the set's range-based first-byte scan.
+- Tag-name scans probe an 8-byte window for the next `<` before the vector
+  byte scanner, cutting `</?([a-z][a-z0-9]*)\b` by about 12%.
 
 ## What changed in this round
 

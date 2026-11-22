@@ -117,7 +117,7 @@ rows differ from the table only by shared-host noise.
 | find IPv6 | 82,914.7 | 95,547.0 | 1.15x |
 | find C comment | 86,418.2 | 131,103.6 | 1.52x |
 | find markdown image | 369.5 | 1,324.9 | 3.59x |
-| find HTML tag name | 140,348.0 | 202,518.8 | 1.44x |
+| find HTML tag name | 125,400.0 | 202,518.8 | 1.61x |
 | find shell var | 122,632.5 | 201,145.6 | 1.64x |
 | split whitespace (22 KiB) | 31,459.2 | 106,576.3 | 3.39x |
 | split commas (29 KiB) | 24,831.8 | 139,232.7 | 5.61x |
