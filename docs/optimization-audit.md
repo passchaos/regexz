@@ -1104,17 +1104,18 @@ at most 64 single-byte members reuses the literal-byte fast path, so `[abc]`,
 filters use a 32-lane pair scan on AVX2 hosts. The comparison now measures
 each case in a fresh process (five interleaved rounds), removing the
 cross-case heap and code-layout interference that moved unrelated rows by
-10-50% in the earlier single-process sweep. The isolated sweep covers 101
-cases: 99 are faster, and the remaining losses are the one-character
-alternation (0.87x) and currency (0.96x). The geometric-mean ratio is 2.40x.
+10-50% in the earlier single-process sweep; `find` rows use each library's
+per-position API and `findAll` rows use the iterators. The isolated sweep
+covers 101 cases: 100 are faster, and the only loss is currency (0.83x). The
+geometric-mean ratio is 3.62x.
 See [Rust comparison](benchmarks/rust-comparison.md).
 
 The same 100-case workload (minus `RegexSet`) was also run against PCRE2
 10.42 with JIT on the same host with the isolated method. regexz is faster or
 at parity on 97 of 100 cases, with a geometric-mean PCRE2/regexz ratio of
-2.21x. Compile Qwen is now 1.42x ahead (up from 0.69x); prefix alternation
-(0.95x), the case-insensitive Unicode literal (0.96x) and the small ASCII
-case-insensitive literal (0.99x) are within host noise. regexz wins compile
-xDS-like (1.23x), HTML tags (2.16x) and end-anchored word scans (7.92x).
+2.21x. Compile Qwen is now 1.41x ahead (up from 0.69x); prefix alternation
+(0.98x), the case-insensitive Unicode literal (0.97x) and the small ASCII
+case-insensitive literal (0.97x) are within host noise. regexz wins compile
+xDS-like (1.24x), HTML tags (2.16x) and end-anchored word scans (8.13x).
 regexz materializes Unicode property sets at compile time, while PCRE2 defers
 them. See [PCRE2 comparison](benchmarks/pcre2-comparison.md).

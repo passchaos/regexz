@@ -11,7 +11,11 @@ Method: each case runs in a fresh process for both binaries, five interleaved
 rounds, with every process pinned to CPU 0 with `taskset`. The table reports
 medians. One case per process removes cross-case heap and code-layout
 interference: in the earlier single-process sweep, unrelated rows moved by
-10-50% when one case's code changed. The suite covers 101 cases, including
+10-50% when one case's code changed. The `find` rows use each library's
+per-position API (`find_at` for Rust, `Workspace.find` for regexz); the
+`findAll` rows use each library's iterator (`find_iter`, `findAllWith`). An
+earlier harness used `find_iter` for both, which credited Rust's iterator on
+the per-position rows. The suite covers 101 cases, including
 markdown headings/list markers, escaped strings,
 HTTP/SQL keywords, emails, blank lines, floats, currency, CSS
 units/selectors, HTML comments, query parameters, JSON keys, hashtags and
@@ -29,117 +33,115 @@ text, and small full-match subjects.
 
 | Case | regexz, ns/iter | Rust, ns/iter | Rust / regexz |
 | --- | ---: | ---: | ---: |
-| compile Qwen tokenizer | 11,428.8 | 720,848.3 | 63.07x |
-| compile xDS-like | 5,852.0 | 31,746.7 | 5.42x |
-| find Qwen tokenizer | 56,469.6 | 99,285.5 | 1.76x |
-| findAll Qwen (borrowed) | 55,777.6 | 99,069.5 | 1.78x |
-| findAll Qwen (owning) | 55,832.4 | 98,887.3 | 1.77x |
-| find CJK tokenizer | 216,811.9 | 387,253.7 | 1.79x |
-| find HTML tag | 91,409.2 | 177,757.4 | 1.94x |
-| find URL | 71,011.7 | 134,602.8 | 1.90x |
-| find JSON string literal | 15,038.3 | 22,750.4 | 1.51x |
-| find JSON number | 74,348.2 | 95,043.2 | 1.28x |
-| find word boundary | 192,874.5 | 202,221.7 | 1.05x |
-| find (?i) literal | 64,685.4 | 138,864.4 | 2.15x |
-| find alternation (5 words) | 95,442.2 | 234,203.9 | 2.45x |
-| find (?i) alternation | 87,241.6 | 304,464.6 | 3.49x |
-| find 10-word alternation | 210,661.8 | 381,788.2 | 1.81x |
-| find Greek class | 103,060.0 | 144,152.6 | 1.40x |
-| find prefix+suffix | 15,269.0 | 47,626.1 | 3.12x |
-| replaceAll email captures | 33,917.3 | 113,913.2 | 3.36x |
-| find IPv4 | 96,518.9 | 202,833.8 | 2.10x |
-| find date | 82,260.1 | 201,346.3 | 2.45x |
-| find 20-word alternation | 210,402.1 | 367,257.1 | 1.75x |
-| find anchored line | 4,191.1 | 43,003.4 | 10.26x |
-| find (?i) Unicode literal | 121,477.0 | 208,665.0 | 1.72x |
-| find shared-prefix alternation | 46,802.2 | 53,061.6 | 1.13x |
-| find one-char alternation | 12,824.9 | 11,190.3 | 0.87x |
-| find hex color | 79,065.3 | 120,087.7 | 1.52x |
-| find version | 98,730.1 | 168,590.4 | 1.71x |
-| find nullable prefix | 19,720.9 | 65,791.7 | 3.34x |
-| find identifier | 125,544.0 | 160,091.8 | 1.28x |
-| find thousands | 83,431.0 | 178,816.4 | 2.14x |
-| find domain | 62,510.6 | 201,321.9 | 3.22x |
-| find percent | 69,504.8 | 177,439.5 | 2.55x |
-| find time | 84,074.0 | 170,600.5 | 2.03x |
-| find end-anchored word | 2,567.8 | 38,059.5 | 14.82x |
-| find UUID | 56,613.8 | 155,251.8 | 2.74x |
-| find semver | 101,425.4 | 164,844.6 | 1.63x |
-| find email TLD | 18,458.2 | 35,095.0 | 1.90x |
-| find CIDR | 100,115.9 | 202,591.7 | 2.02x |
-| find line full | 4,127.0 | 43,231.7 | 10.48x |
-| find optional prefix run | 60,864.2 | 291,510.9 | 4.79x |
-| find repeated literal group | 118,200.4 | 199,016.8 | 1.68x |
-| find camelCase | 110,745.1 | 155,822.4 | 1.41x |
-| find key-value | 165,034.1 | 321,011.0 | 1.95x |
-| find IP port | 122,096.5 | 235,897.9 | 1.93x |
-| find (?i) class | 49,184.5 | 64,587.8 | 1.31x |
-| find prefix alternation | 206,712.6 | 226,071.3 | 1.09x |
-| find signed number | 92,789.8 | 96,551.8 | 1.04x |
-| find html attribute | 85,048.7 | 152,146.5 | 1.79x |
-| find markdown heading | 72,255.5 | 105,847.2 | 1.46x |
-| find mixed alternation | 382,281.7 | 485,667.6 | 1.27x |
-| find capitalized words | 4,958.9 | 140,410.1 | 28.31x |
-| find markdown list | 4,921.9 | 38,362.9 | 7.79x |
-| find JSON escaped string | 17,645.4 | 22,832.9 | 1.29x |
-| find double spaces | 8,913.3 | 42,786.8 | 4.80x |
-| find log level | 1,468.8 | 3,086.9 | 2.10x |
-| find markdown heading ws | 72,407.5 | 105,524.0 | 1.46x |
-| find markdown list ws | 4,913.9 | 72,500.0 | 14.75x |
-| find escaped string loop | 17,648.4 | 22,822.4 | 1.29x |
-| find HTTP methods | 1,410.3 | 2,356.6 | 1.67x |
-| find full email | 19,608.0 | 46,357.3 | 2.36x |
-| find blank lines | 1,153.0 | 38,107.9 | 33.05x |
-| find floats | 76,445.4 | 94,776.1 | 1.24x |
-| find currency | 299.4 | 288.6 | 0.96x |
-| find ISO timestamp | 69,458.4 | 185,845.5 | 2.68x |
-| find JSON key | 15,855.6 | 19,621.1 | 1.24x |
-| find HTML comment | 1,187.6 | 2,172.8 | 1.83x |
-| find hashtag | 1,311.4 | 1,605.5 | 1.22x |
-| find mention | 1,317.2 | 1,601.7 | 1.22x |
-| find CSS unit | 49,720.2 | 105,239.1 | 2.12x |
-| find function call | 114,155.1 | 188,603.9 | 1.65x |
-| find SQL keyword | 1,089.0 | 2,332.1 | 2.14x |
-| find JSON literal | 547.5 | 875.5 | 1.60x |
-| find blockquote | 375.5 | 398.8 | 1.06x |
-| find ordered list | 375.7 | 386.0 | 1.03x |
-| find query param | 25,225.0 | 31,868.1 | 1.26x |
-| find MAC address | 66,618.3 | 99,196.2 | 1.49x |
-| find base64 run | 80,537.7 | 234,300.5 | 2.91x |
-| find markdown link | 367.4 | 398.8 | 1.09x |
-| find YAML key | 33,549.0 | 58,602.4 | 1.75x |
-| find TOML table | 32,285.1 | 47,791.1 | 1.48x |
-| find template | 69,196.5 | 98,436.5 | 1.42x |
-| find Windows path | 46,593.8 | 167,178.1 | 3.59x |
-| find CSS selector | 83,621.9 | 86,805.4 | 1.04x |
-| find slash date | 79,928.4 | 190,074.1 | 2.38x |
-| find HTTP request | 809.9 | 1,771.8 | 2.19x |
-| find IPv6 | 73,211.7 | 110,660.1 | 1.51x |
-| find C comment | 87,057.6 | 122,425.0 | 1.41x |
-| find markdown image | 378.6 | 831.4 | 2.20x |
-| find HTML tag name | 126,883.3 | 155,598.4 | 1.23x |
-| find shell var | 120,841.4 | 175,276.7 | 1.45x |
-| split whitespace (22 KiB) | 30,961.3 | 138,267.1 | 4.47x |
-| split commas (29 KiB) | 24,329.3 | 62,721.6 | 2.58x |
-| split lines | 1,285.5 | 2,901.5 | 2.26x |
-| split semicolons | 21,414.7 | 49,686.4 | 2.32x |
-| fullmatch literal | 3.6 | 14.2 | 3.94x |
-| fullmatch class | 9.9 | 58.5 | 5.91x |
-| fullmatch xDS-like | 19.0 | 69.2 | 3.64x |
-| replaceAll a+ -> x | 28,758.6 | 167,007.0 | 5.81x |
-| replaceAll \A\|\z -> X | 1,026.7 | 38,898.0 | 37.89x |
-| replaceAll digits -> N | 63,033.8 | 332,877.0 | 5.28x |
-| RegexSet 9 no-match patterns | 2,942.9 | 47,980.9 | 16.30x |
+| compile Qwen tokenizer | 11,435.2 | 722,139.8 | 63.15x |
+| compile xDS-like | 5,816.8 | 31,606.7 | 5.43x |
+| find Qwen tokenizer | 56,045.8 | 250,556.8 | 4.47x |
+| findAll Qwen (borrowed) | 56,329.5 | 108,792.5 | 1.93x |
+| findAll Qwen (owning) | 56,034.8 | 107,573.7 | 1.92x |
+| find CJK tokenizer | 219,085.3 | 995,747.4 | 4.55x |
+| find HTML tag | 91,587.1 | 392,768.3 | 4.29x |
+| find URL | 70,617.7 | 278,944.3 | 3.95x |
+| find JSON string literal | 15,047.0 | 50,309.6 | 3.34x |
+| find JSON number | 74,461.9 | 247,764.5 | 3.33x |
+| find word boundary | 189,440.6 | 602,036.9 | 3.18x |
+| find (?i) literal | 65,778.2 | 217,366.0 | 3.30x |
+| find alternation (5 words) | 95,379.0 | 292,645.6 | 3.07x |
+| find (?i) alternation | 87,516.6 | 445,256.7 | 5.09x |
+| find 10-word alternation | 210,308.8 | 474,830.4 | 2.26x |
+| find Greek class | 103,462.0 | 335,271.9 | 3.24x |
+| find prefix+suffix | 14,069.4 | 53,388.3 | 3.79x |
+| replaceAll email captures | 33,687.3 | 114,338.2 | 3.39x |
+| find IPv4 | 96,425.6 | 363,519.4 | 3.77x |
+| find date | 87,964.9 | 360,089.7 | 4.09x |
+| find 20-word alternation | 211,120.5 | 465,731.5 | 2.21x |
+| find anchored line | 4,279.4 | 45,286.5 | 10.58x |
+| find (?i) Unicode literal | 121,000.9 | 373,253.4 | 3.08x |
+| find shared-prefix alternation | 45,095.5 | 65,858.4 | 1.46x |
+| find one-char alternation | 12,822.8 | 21,625.3 | 1.69x |
+| find hex color | 79,679.9 | 277,939.1 | 3.49x |
+| find version | 98,701.5 | 299,412.1 | 3.03x |
+| find nullable prefix | 19,828.5 | 84,526.6 | 4.26x |
+| find identifier | 125,570.5 | 393,785.6 | 3.14x |
+| find thousands | 82,777.1 | 321,298.3 | 3.88x |
+| find domain | 61,140.6 | 367,047.2 | 6.00x |
+| find percent | 69,385.7 | 318,817.7 | 4.59x |
+| find time | 82,680.6 | 306,012.4 | 3.70x |
+| find end-anchored word | 2,528.5 | 38,057.6 | 15.05x |
+| find UUID | 56,515.7 | 270,577.4 | 4.79x |
+| find semver | 102,077.5 | 274,223.3 | 2.69x |
+| find email TLD | 18,627.9 | 45,089.9 | 2.42x |
+| find CIDR | 100,196.2 | 362,281.5 | 3.62x |
+| find line full | 4,172.6 | 81,013.7 | 19.42x |
+| find optional prefix run | 60,608.3 | 799,264.2 | 13.19x |
+| find repeated literal group | 118,521.6 | 358,203.5 | 3.02x |
+| find camelCase | 110,175.9 | 415,049.6 | 3.77x |
+| find key-value | 165,328.4 | 568,784.5 | 3.44x |
+| find IP port | 122,495.6 | 425,814.5 | 3.48x |
+| find (?i) class | 49,197.5 | 153,247.3 | 3.11x |
+| find prefix alternation | 200,642.6 | 281,655.6 | 1.40x |
+| find signed number | 93,348.9 | 251,669.2 | 2.70x |
+| find html attribute | 85,238.8 | 225,776.0 | 2.65x |
+| find markdown heading | 72,319.5 | 222,540.6 | 3.08x |
+| find mixed alternation | 382,236.7 | 639,944.8 | 1.67x |
+| find capitalized words | 4,988.6 | 140,386.1 | 28.14x |
+| find markdown list | 4,948.4 | 41,610.7 | 8.41x |
+| find JSON escaped string | 17,626.2 | 50,488.2 | 2.86x |
+| find double spaces | 8,946.9 | 46,660.4 | 5.22x |
+| find log level | 1,566.8 | 3,092.4 | 1.97x |
+| find markdown heading ws | 72,351.0 | 222,734.7 | 3.08x |
+| find markdown list ws | 4,924.6 | 72,442.7 | 14.71x |
+| find escaped string loop | 17,610.8 | 50,267.2 | 2.85x |
+| find HTTP methods | 1,428.1 | 2,367.9 | 1.66x |
+| find full email | 19,625.3 | 75,867.7 | 3.87x |
+| find blank lines | 1,153.4 | 38,100.9 | 33.03x |
+| find floats | 75,587.9 | 245,676.4 | 3.25x |
+| find currency | 347.1 | 286.8 | 0.83x |
+| find ISO timestamp | 73,595.3 | 317,953.9 | 4.32x |
+| find JSON key | 15,770.9 | 39,760.6 | 2.52x |
+| find HTML comment | 1,173.3 | 2,205.8 | 1.88x |
+| find hashtag | 1,282.0 | 1,663.7 | 1.30x |
+| find mention | 1,297.8 | 1,667.1 | 1.28x |
+| find CSS unit | 49,781.0 | 304,330.4 | 6.11x |
+| find function call | 114,254.0 | 241,777.8 | 2.12x |
+| find SQL keyword | 1,065.7 | 2,357.1 | 2.21x |
+| find JSON literal | 554.4 | 877.0 | 1.58x |
+| find blockquote | 376.6 | 433.1 | 1.15x |
+| find ordered list | 375.4 | 381.2 | 1.02x |
+| find query param | 25,590.1 | 60,980.0 | 2.38x |
+| find MAC address | 64,998.9 | 248,797.7 | 3.83x |
+| find base64 run | 80,000.9 | 461,822.0 | 5.77x |
+| find markdown link | 377.4 | 461.5 | 1.22x |
+| find YAML key | 33,801.0 | 79,940.4 | 2.37x |
+| find TOML table | 33,749.8 | 101,879.3 | 3.02x |
+| find template | 69,139.1 | 214,386.4 | 3.10x |
+| find Windows path | 46,479.9 | 184,437.3 | 3.97x |
+| find CSS selector | 84,047.2 | 190,782.4 | 2.27x |
+| find slash date | 80,056.9 | 343,000.2 | 4.28x |
+| find HTTP request | 825.4 | 1,832.6 | 2.22x |
+| find IPv6 | 73,283.5 | 257,220.2 | 3.51x |
+| find C comment | 86,892.4 | 262,755.7 | 3.02x |
+| find markdown image | 378.5 | 821.4 | 2.17x |
+| find HTML tag name | 126,814.5 | 334,291.1 | 2.64x |
+| find shell var | 120,906.5 | 362,741.1 | 3.00x |
+| split whitespace (22 KiB) | 30,939.6 | 136,699.0 | 4.42x |
+| split commas (29 KiB) | 24,330.8 | 62,751.1 | 2.58x |
+| split lines | 1,304.3 | 2,927.1 | 2.24x |
+| split semicolons | 21,504.0 | 50,240.6 | 2.34x |
+| fullmatch literal | 3.6 | 15.0 | 4.17x |
+| fullmatch class | 9.9 | 60.4 | 6.10x |
+| fullmatch xDS-like | 19.2 | 74.4 | 3.88x |
+| replaceAll a+ -> x | 28,917.9 | 163,952.3 | 5.67x |
+| replaceAll \A\|\z -> X | 1,021.5 | 38,925.3 | 38.11x |
+| replaceAll digits -> N | 62,553.8 | 331,749.5 | 5.30x |
+| RegexSet 9 no-match patterns | 2,964.4 | 48,026.8 | 16.20x |
 
-regexz is faster on 99 of the 101 measured cases. The two remaining losses
-are the one-character alternation (`a|b|c`, 0.87x) and currency
-(`\$\d+(?:\.\d{2})?`, 0.96x). The largest leads are compile time (63.07x),
-`replaceAll` with edge assertions (37.89x), blank-line scans (33.05x),
-capitalized-word scans (28.31x), `RegexSet` no-match scans (16.30x) and
-end-anchored word scans (14.82x); the tokenizer searches are 1.76x and 1.79x
-ahead. The geometric-mean ratio is 2.40x. The currency row is a small
-absolute gap (about 11 ns); the one-character alternation is dominated by the
-per-match dispatch call.
+regexz is faster on 100 of the 101 measured cases. The remaining loss is
+currency (`\$\d+(?:\.\d{2})?`, 0.83x). The largest leads are compile time
+(63.15x), `replaceAll` with edge assertions (38.11x), blank-line scans
+(33.03x), capitalized-word scans (28.14x), line-full scans (19.42x),
+`RegexSet` no-match scans (16.20x) and end-anchored word scans (15.05x); the
+tokenizer searches are 4.47x and 4.55x ahead. The geometric-mean ratio is
+3.62x. The currency row is a small absolute gap (about 60 ns).
 
 All rows use the same isolated per-case method. The companion JSON holds the
 same sweep.
