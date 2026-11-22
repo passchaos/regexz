@@ -2863,6 +2863,17 @@ pub const Workspace = struct {
     /// use the SIMD pair scan; longer needles scan for their rarest byte and
     /// verify the full window, which is much faster than a two-byte prefix
     /// when the prefix is common.
+    /// Compare a short literal branch directly; longer branches use `eql`.
+    inline fn literalAt(literal: []const u8, input: []const u8, start: usize) bool {
+        return switch (literal.len) {
+            1 => input[start] == literal[0],
+            2 => start + 2 <= input.len and input[start] == literal[0] and input[start + 1] == literal[1],
+            3 => start + 3 <= input.len and input[start] == literal[0] and
+                input[start + 1] == literal[1] and input[start + 2] == literal[2],
+            else => start + literal.len <= input.len and std.mem.eql(u8, input[start..][0..literal.len], literal),
+        };
+    }
+
     fn probeShortByte(input: []const u8, start: usize, byte: u8) ?usize {
         var probe = start;
         const probe_end = @min(input.len, start + 8);
@@ -3199,7 +3210,7 @@ pub const Workspace = struct {
         while (search < input.len) {
             const start = self.first_filter.indexOf(input, search) orelse return null;
             for (literals) |literal| {
-                if (start + literal.len <= input.len and std.mem.eql(u8, input[start..][0..literal.len], literal)) {
+                if (literalAt(literal, input, start)) {
                     self.slots[0] = start;
                     self.slots[1] = start + literal.len;
                     return .{ .start = start, .end = start + literal.len, .slots = self.slots };
