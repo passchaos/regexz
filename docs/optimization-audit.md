@@ -462,7 +462,10 @@ unroll cut currency by 10% but moved Qwen find by +6%; and a u64 masked
 compare for ASCII caseless literals cut `(?i)alpha` by 8% but moved Qwen find
 by +4-7%. These shifts are not semantic: each change moved the layout of the
 Qwen fast-branch code in the same binary. The isolated runner was added so
-these trade-offs can be measured without cross-case interference.
+these trade-offs can be measured without cross-case interference. Compile
+block sizes of 128, 192 and 384 KiB were also screened: Qwen find and compile
+stayed within noise, so the 256 KiB headroom is kept for large Unicode
+patterns.
 
 `replaceAll` for an edge-only zero-width plan (`\A|\z`, `$`) now computes the
 exact output length and writes into one allocation instead of growing an
