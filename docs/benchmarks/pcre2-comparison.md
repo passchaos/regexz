@@ -35,7 +35,7 @@ rows differ from the table only by shared-host noise.
 | findAll Qwen (borrowed) | 58,493.8 | 177,547.2 | 3.04x |
 | findAll Qwen (owning) | 58,303.3 | 177,425.6 | 3.04x |
 | find CJK tokenizer | 227,278.7 | 540,483.3 | 2.38x |
-| find HTML tag | 140,323.3 | 198,088.2 | 1.41x |
+| find HTML tag | 90,400.0 | 190,888.1 | 2.11x |
 | find URL | 71,148.4 | 101,895.0 | 1.43x |
 | find JSON string literal | 13,975.4 | 26,930.7 | 1.93x |
 | find JSON number | 74,288.9 | 122,707.2 | 1.65x |
@@ -109,7 +109,7 @@ rows differ from the table only by shared-host noise.
 | find markdown link | 361.4 | 1,175.3 | 3.25x |
 | find YAML key | 33,449.6 | 66,457.8 | 1.99x |
 | find TOML table | 32,113.0 | 49,837.8 | 1.55x |
-| find template | 68,672.0 | 113,969.4 | 1.66x |
+| find template | 69,500.0 | 114,079.0 | 1.64x |
 | find Windows path | 46,065.4 | 112,768.1 | 2.45x |
 | find CSS selector | 80,985.7 | 103,253.9 | 1.27x |
 | find slash date | 79,495.9 | 137,677.4 | 1.73x |
@@ -131,7 +131,7 @@ rows differ from the table only by shared-host noise.
 | replaceAll digits -> N | 54,994.1 | 307,631.7 | 5.59x |
 
 regexz is faster or at parity on 99 of the 100 measured cases, with a
-geometric-mean PCRE2/regexz ratio of 2.16x. The remaining row below 1.00x is
+geometric-mean PCRE2/regexz ratio of 2.17x. The remaining row below 1.00x is
 within host noise:
 
 - `find (?i) literal` (0.99x): parity within host noise after the 32-lane
@@ -141,7 +141,7 @@ Compile Qwen is now 1.42x ahead of PCRE2, up from a 0.69x ratio: PCRE2 parses
 the pattern and stores property references, while regexz materializes the
 Unicode property sets at compile time so searches can use range lists
 directly. The compile rows include PCRE2's JIT pass, while regexz has no JIT.
-Compile xDS-like is 1.24x ahead; HTML tags are 1.41x ahead after the
+Compile xDS-like is 1.24x ahead; HTML tags are 2.11x ahead after the
 wrapped-run probes, and the case-insensitive Unicode literal is at parity
 (1.00x).
 
