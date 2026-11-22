@@ -35,7 +35,16 @@ fn propertyAlias(name: []const u8) []const u8 {
     if (std.ascii.eqlIgnoreCase(name, "WSpace")) return "White_Space";
     if (std.ascii.eqlIgnoreCase(name, "ExtPict")) return "Extended_Pictographic";
     if (std.ascii.eqlIgnoreCase(name, "Hex")) return "Hex_Digit";
+    // PCRE2/Perl alias for the derived Cased_Letter category.
+    if (std.mem.eql(u8, name, "L&")) return "Cased_Letter";
     return name;
+}
+/// Skip the space/tab run that PCRE2 allows just inside brace delimiters.
+fn skipBraceSpace(p: anytype) void {
+    while (p.peek()) |byte| {
+        if (byte != ' ' and byte != '\t') break;
+        p.cursor += 1;
+    }
 }
 fn scalar(value: u32) m.Error!u21 {
     if (value > 0x10ffff) return error.InvalidRegex;
@@ -49,6 +58,7 @@ pub fn literal(p: anytype, value: u21, fold: m.Fold) m.Error!m.ParsedSet {
 fn hexadecimal(p: anytype) m.Error!u21 {
     var value: u32 = 0;
     if (p.take('{')) {
+        skipBraceSpace(p);
         const start = p.cursor;
         while (p.peek()) |byte| {
             const digit = std.fmt.charToDigit(byte, 16) catch break;
@@ -56,7 +66,9 @@ fn hexadecimal(p: anytype) m.Error!u21 {
             value = std.math.add(u32, value, digit) catch return error.InvalidRegex;
             p.cursor += 1;
         }
-        if (p.cursor == start or !p.take('}')) return error.InvalidRegex;
+        if (p.cursor == start) return error.InvalidRegex;
+        skipBraceSpace(p);
+        if (!p.take('}')) return error.InvalidRegex;
     } else {
         for (0..2) |_| {
             const byte = p.peek() orelse return error.InvalidRegex;
@@ -83,11 +95,12 @@ fn property(p: anytype, negative: bool, fold: m.Fold) m.Error!m.ParsedSet {
         p.cursor += 1;
         name = p.pattern[start..p.cursor];
     }
+    // PCRE2 ignores space/tab around the whole name and after `^`.
+    name = std.mem.trim(u8, name, " \t");
     if (name.len != 0 and name[0] == '^') {
         negate = !negate;
-        name = name[1..];
+        name = std.mem.trim(u8, name[1..], " \t");
     }
-    name = std.mem.trim(u8, name, " \t\n\r\x0b\x0c");
     const property_name: ?[]const u8 = if (!negate and fold == .none) name else null;
     if (p.cachedProperty(name, negate, fold)) |cached| {
         var parsed = cached;
@@ -103,7 +116,33 @@ fn property(p: anytype, negative: bool, fold: m.Fold) m.Error!m.ParsedSet {
     return parsed;
 }
 
+/// PCRE2 10.45: under caseless matching Lu, Ll, and Lt all behave as the
+/// derived LC (Cased_Letter) property instead of being case-folded.
+fn caselessCasedLetter(name: []const u8) bool {
+    var value = name;
+    if (std.mem.indexOfAny(u8, value, "=:")) |separator| {
+        const prefix = std.mem.trim(u8, value[0..separator], " \t");
+        if (!(nameEqual(prefix, "general_category") or
+            std.ascii.eqlIgnoreCase(prefix, "gc") or
+            nameEqual(prefix, "category"))) return false;
+        value = std.mem.trim(u8, value[separator + 1 ..], " \t");
+    } else if (std.mem.startsWith(u8, value, "Is") and value.len > 2) {
+        value = value[2..];
+    }
+    const canonical = m.unicode.lookupGcAlias(value) orelse value;
+    return std.mem.eql(u8, canonical, "Lu") or
+        std.mem.eql(u8, canonical, "Ll") or
+        std.mem.eql(u8, canonical, "Lt");
+}
+
 fn propertyRanges(p: anytype, name: []const u8, negate: bool, fold: m.Fold) m.Error!m.ParsedSet {
+    if (fold != .none and caselessCasedLetter(name)) {
+        return .{
+            .ranges = try classes.unicodePropertyUnion(p.allocator, &.{ "Lu", "Ll", "Lt" }, p.limits.max_ranges),
+            .negate = negate,
+            .fold = .none,
+        };
+    }
     if (std.mem.eql(u8, name, "Any")) return .{ .ranges = &any_range, .negate = negate, .fold = fold };
     if (nameEqual(name, "ASCII")) return .{ .ranges = &ascii_range, .negate = negate, .fold = fold };
     if (nameEqual(name, "Assigned")) {
@@ -301,7 +340,9 @@ fn namedBackref(p: anytype, open: u8) m.Error!Atom {
         if (byte == close) break;
         p.cursor += 1;
     }
-    const name = p.pattern[start..p.cursor];
+    const raw = p.pattern[start..p.cursor];
+    // PCRE2 ignores space/tab just inside `\k{...}` (but not the other forms).
+    const name = if (open == '{') std.mem.trim(u8, raw, " \t") else raw;
     if (!p.take(close)) return error.InvalidRegex;
     // PCRE2/Oniguruma: a number inside `\k<...>` names a group by number.
     switch (try parseGroupSpec(name)) {
@@ -413,7 +454,8 @@ pub fn parse(p: anytype, in_class: bool, fold: m.Fold) m.Error!Atom {
             var end = start;
             while (end < p.pattern.len and p.pattern[end] != '}') end += 1;
             if (end < p.pattern.len) {
-                const name = p.pattern[start..end];
+                const raw = p.pattern[start..end];
+                const name = std.mem.trim(u8, raw, " \t");
                 const quantifier = name.len > 0 and (std.ascii.isDigit(name[0]) or name[0] == ',');
                 if (!quantifier) {
                     p.cursor = end + 1;
@@ -445,16 +487,19 @@ pub fn parse(p: anytype, in_class: bool, fold: m.Fold) m.Error!Atom {
     if (byte == 'o') {
         // PCRE2 `\o{ddd}`: octal code point.
         if (!p.take('{')) return error.InvalidRegex;
+        skipBraceSpace(p);
         var value: u32 = 0;
         const start = p.cursor;
         while (p.peek()) |digit| {
             if (digit == '}') break;
-            const parsed = std.fmt.charToDigit(digit, 8) catch return error.InvalidRegex;
+            const parsed = std.fmt.charToDigit(digit, 8) catch break;
             value = std.math.mul(u32, value, 8) catch return error.InvalidRegex;
             value = std.math.add(u32, value, parsed) catch return error.InvalidRegex;
             p.cursor += 1;
         }
-        if (p.cursor == start or !p.take('}')) return error.InvalidRegex;
+        if (p.cursor == start) return error.InvalidRegex;
+        skipBraceSpace(p);
+        if (!p.take('}')) return error.InvalidRegex;
         return .{ .set = try literal(p, try scalar(value), fold) };
     }
     if ((byte == 'v' or byte == 'V') and p.limits.pcre_vertical_whitespace) {
@@ -547,7 +592,8 @@ pub fn parse(p: anytype, in_class: bool, fold: m.Fold) m.Error!Atom {
                 if (next == '}') break;
                 p.cursor += 1;
             }
-            const name = p.pattern[start..p.cursor];
+            // PCRE2 ignores space/tab just inside `\g{...}`.
+            const name = std.mem.trim(u8, p.pattern[start..p.cursor], " \t");
             if (!p.take('}')) return error.InvalidRegex;
             switch (try parseGroupSpec(name)) {
                 .absolute => |index| {

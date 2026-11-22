@@ -57,9 +57,11 @@ Implemented functionality:
 - Numeric and string callouts `(?C...)` through `Limits.callout`, plus
   `Limits.auto_callout` (callout 255 before consuming atoms).
 - Extended mode `(?x)`, extended-more `(?xx)`, ungreedy mode `(?U)`,
-  no-auto-capture `(?n)`, ASCII option letters, `(?r)` caseless-restrict,
+  no-auto-capture `(?n)`, ASCII option letters, `(?r)` caseless-restrict
+  (ASCII and non-ASCII case pairs stay separate),
   `(?^)` option reset, `(*NO_START_OPT)`/`(*NO_AUTO_POSSESS)`/
-  `(*NO_DOTSTAR_ANCHOR)` start-up directives, and `(?#...)` comments.
+  `(*NO_DOTSTAR_ANCHOR)` start-up directives (`(*NO_START_OPT)` disables the
+  literal start-position skip), and `(?#...)` comments.
 - UCP `\d`/`\w`/`\s` and Unicode `\b`/`\B`; POSIX classes follow PCRE2
   UCP replacements (`(?aP)`/`(?aT)` restore ASCII); `Bidi_Class`
   (`\p{BC:AL}`); property aliases
@@ -77,13 +79,21 @@ Implemented functionality:
   `\p{RGI_Emoji_Flag_Sequence}`, `\p{RGI_Emoji_Tag_Sequence}`,
   `\p{RGI_Emoji_Modifier_Sequence}`, and `\p{RGI_Emoji_ZWJ_Sequence}`.
 - PCRE2 `\v`/`\V` vertical whitespace via `Limits.pcre_vertical_whitespace`.
-- Character-class set operations `&&`, `--`, and `~~`, including nested
-  classes such as `[a-z&&[^aeiou]]`.
+- Character-class set operations `&&`, `||`, `--`, and `~~`, including
+  nested classes such as `[a-z&&[^aeiou]]`, plus PCRE2 10.45 Perl-style
+  extended classes `(?[[a-z]&[^aeiou]])` with `!`, `&`, `|`/`+`, `-`, `^`,
+  grouping, and PCRE2 precedence. POSIX.2 `[[:<:]]`/`[[:>:]]` word
+  boundaries are accepted.
 - Numeric/relative backreferences and subroutine calls via `\g{1}`,
   `\g{-1}`, `\g<1>`, `\g<-1>`, and `\g<+1>`.
 - `\N{U+hhhh}` explicit code points, `\N{NAME}` Unicode character names,
   `\cX` control characters, `\o{...}` octal code points, and class-aware
   `\Q...\E` quoting.
+- PCRE2 10.43-10.45 syntax details: `{,n}` quantifiers, space/tab just
+  inside quantifier and `\x{}`/`\o{}`/`\g{}`/`\k{}` braces, `(*UTF8)`,
+  quantified `(*ACCEPT)`, and CRLF-mode dot/`\N` excluding both halves of a
+  CRLF pair while still matching a lone CR or LF. Under caseless matching
+  `\p{Lu}`/`\p{Ll}`/`\p{Lt}` behave as `\p{LC}`.
 - UAX #29 boundary assertions: grapheme clusters `\b{gcb}` / `\B{gcb}`
   (alias `\b{g}`), word boundaries `\b{wb}` / `\B{wb}`, sentence
   boundaries `\b{sb}` / `\B{sb}`, and Oniguruma/Java word-start/end
@@ -98,10 +108,11 @@ Implemented functionality:
 - Versioned `Program.serialize`/`deserialize` with index/slot validation for
   cross-process compiled-pattern caches.
 - Replacement syntax: `\0`..`\9`, `$0`..`$99`, `$&`, `$$`, `${name}`,
-  case transforms `\U`/`\L`/`\E`/`\u`/`\l` (simple Unicode by default;
+  `$<name>`, `\g<name>`/`\g<number>`, case transforms
+  `\U`/`\L`/`\E`/`\u`/`\l` (simple Unicode by default;
   `Limits.full_case_mapping` enables full SpecialCasing), and callback
   replacement via `replaceAllWithFn`.
-- 209 tests, including recursion, branch reset, conditional assertions,
+- 401 tests, including recursion, branch reset, conditional assertions,
   grapheme clusters, binary properties, Unicode blocks, partial matching,
   control verbs, thread safety, allocation-failure, and differential coverage
   against V8 for the supported subset.
@@ -137,7 +148,9 @@ Strengths:
 | Duplicate group names | yes (`(?J)`) | yes | no | no |
 | Ungreedy `(?U)` | yes | yes | no | no |
 | No-auto-capture `(?n)` | yes | yes | no | no |
-| Class set ops `&&`/`--`/`~~` | yes | partial (10.45+) | yes | no |
+| Class set ops `&&`/`||`/`--`/`~~` | yes | yes (`PCRE2_ALT_EXTENDED_CLASS`) | yes | no |
+| Perl extended classes `(?[...])` | yes | yes (10.45+) | no | no |
+| POSIX.2 `[[:<:]]`/`[[:>:]]` | yes | yes | no | no |
 | Relative subroutines `(?+1)`/`(?-1)` | yes | yes | no | no |
 | `(?(R))` recursion condition | yes | yes | no | no |
 | `\X` grapheme cluster | yes (extended) | yes | no | no |
@@ -159,12 +172,17 @@ Strengths:
 | Multi-pattern `RegexSet` | yes | no (separate calls) | yes | no |
 | `\C` in DFA/Pike | yes (byte mode) | yes | no | no |
 | Newline conventions `(*CR)`/`(*CRLF)`/`(*ANY)`/`(*NUL)` | yes | yes | no | no |
-| `(?r)`/`(*CASELESS_RESTRICT)` caseless-restrict | yes | yes | no | no |
+| `(?r)`/`(*CASELESS_RESTRICT)` caseless-restrict | yes (ASCII/non-ASCII separation) | yes | no | no |
+| Caseless `\p{Lu}`/`\p{Ll}`/`\p{Lt}` as `LC` | yes | yes (10.45+) | no | no |
 | `(?aD)`/`(?aS)`/`(?aW)`/`(?aP)`/`(?aT)` | yes | yes | no | no |
 | `(?xx)` extended-more | yes | yes | no | no |
 | `(*NOTEMPTY)`/`(*NOTEMPTY_ATSTART)` | yes | yes | no | no |
 | `(*LIMIT_MATCH/DEPTH/HEAP=...)` | yes (heap is a choice/trail proxy) | yes | no | no |
 | Turkish/Azeri casing `(*TURKISH_CASING)` | yes | yes (10.45+) | no | no |
+| `{,n}` quantifiers and brace whitespace | yes | yes (10.43+) | no | no |
+| Quantified `(*ACCEPT)` | yes | yes | no | no |
+| `(*UTF8)` alias | yes | yes | no | no |
+| Replacement `\g<name>`/`\g<number>` | yes | yes (10.45+) | no | no |
 | Compile-time regex construction | yes (`comptime_regex`, codegen subset, captures) | no | no | no |
 
 ## 3. Performance gaps
@@ -266,7 +284,7 @@ smaller (`(?:[a-z0-9]+[ \n])+` 12 -> 9 instructions, `(?:foo|bar)+` 20 ->
 loop full match).
 The bench gate now covers 37 cases;
 `replaceAll` ~85 µs, compile ~1.5 µs with `smp_allocator`, and all
-209 tests plus the V8/Rust/extended/replacement differential fuzzers pass. On the
+401 tests plus the V8/Rust/extended/replacement differential fuzzers pass. On the
 feature side, PCRE2 forward numeric/named references, `\e` and isolated `\E`,
 the full substitution reference syntax (`$<name>`, `$+`, `$_`, `` $` ``, `$'`),
 `escape`/`splitn`/`replacen`, and compile diagnostics (`diagnose`) are covered.

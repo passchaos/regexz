@@ -119,6 +119,8 @@ The engine picks the execution strategy automatically:
     `(?U:...)`, `(?-U:...)`, `(?n:...)`, and `(?-n:...)` forms.
   - PCRE2 `(?^)` option reset, plus the `(*NO_START_OPT)`,
     `(*NO_AUTO_POSSESS)`, and `(*NO_DOTSTAR_ANCHOR)` start-up directives.
+    `(*NO_START_OPT)` disables the literal start-position skip so control
+    verbs observe the search from the requested offset.
   - `(?xx)` extended-more classes (space and tab ignored inside classes) and
     ASCII option letters `(?aD)`, `(?aS)`, `(?aW)`, `(?aP)`, `(?aT)`, and
     `(?a)` under UCP.
@@ -128,11 +130,18 @@ The engine picks the execution strategy automatically:
   - Empty-match locks `(*NOTEMPTY)` and `(*NOTEMPTY_ATSTART)`, and pattern
     resource caps `(*LIMIT_MATCH=...)`, `(*LIMIT_DEPTH=...)`
     (alias `(*LIMIT_RECURSION=...)`), and `(*LIMIT_HEAP=...)`.
-  - Character-class set operations `&&`, `--`, and `~~`, including nested
-    classes such as `[a-z&&[^aeiou]]`.
+  - PCRE2 10.43-10.45 syntax details: `{,n}` quantifiers, space/tab just
+    inside quantifier and `\x{}`/`\o{}`/`\g{}`/`\k{}` braces, `(*UTF8)`,
+    quantified `(*ACCEPT)`, and CRLF-mode dot/`\N` excluding both halves of a
+    CRLF pair while still matching a lone CR or LF.
+  - Character-class set operations `&&`, `||`, `--`, and `~~`, including
+    nested classes such as `[a-z&&[^aeiou]]`, plus PCRE2 10.45 Perl-style
+    extended classes `(?[[a-z]&[^aeiou]])` with `!`, `&`, `|`/`+`, `-`, `^`,
+    grouping, and PCRE2 precedence.
   - POSIX classes `[[:alpha:]]`, `[[:digit:]]`, `[[:word:]]`, ...; under UCP
     they follow PCRE2's Unicode replacements (including fullwidth `xdigit`),
-    and `(?aP)`/`(?aT)` restore ASCII behavior.
+    and `(?aP)`/`(?aT)` restore ASCII behavior. The POSIX.2 word-boundary
+    forms `[[:<:]]`/`[[:>:]]` are accepted.
   - UCP `\d`/`\w`/`\s` and Unicode `\b`/`\B` via
     `Limits.unicode_perl_classes`; property aliases such as
     `\p{Script=Greek}`, `\p{sc=Greek}`, `\p{gc=Nd}`, `\p{IsGreek}`,
@@ -147,8 +156,12 @@ The engine picks the execution strategy automatically:
     plus `\p{ASCII}`, `\p{Cn}` (unassigned), and `\p{Assigned}`.
   - Case-insensitive matching uses simple Unicode case folding; Unicode 17
     `CaseFolding.txt` pairs missing from RE2's pinned tables are supplemented.
-    `(?r)`/`(*CASELESS_RESTRICT)` restrict folding to ASCII, and `(*TURKISH_CASING)` enables
-    Turkish/Azeri `i`/`İ` and `I`/`ı` pairing.
+    `(?r)`/`(*CASELESS_RESTRICT)` keep ASCII and non-ASCII case pairs
+    separate (so `k` does not match the Kelvin sign, while `é`/`É` still
+    fold), and `(*TURKISH_CASING)` enables Turkish/Azeri `i`/`İ` and
+    `I`/`ı` pairing. Under caseless matching `\p{Lu}`, `\p{Ll}`, and
+    `\p{Lt}` behave as the cased-letter property `\p{LC}`, following PCRE2
+    10.45.
   - Unicode blocks: `\p{InBasic_Latin}`, `\p{InGreek}`, `\p{InEmoticons}`,
     `\p{Block=Basic_Latin}` (underscores are optional and case-insensitive).
   - Unicode string properties: `\p{RGI_Emoji}` (all RGI sequences) plus
@@ -169,7 +182,8 @@ The engine picks the execution strategy automatically:
     fail-closed. Extended programs (lookaround, backreferences, ...) remain
     fail-closed in all configurations.
   - Substitution syntax supports both RE2 `\0`..`\9`/`\\` and `$0`..`$99`,
-    `$&`, `$$`, `${name}`, `$<name>`, and PCRE2/Perl `$`` (before), `$'`
+    `$&`, `$$`, `${name}`, `$<name>`, PCRE2 extended `\g<name>`/`\g<number>`,
+    and PCRE2/Perl `$`` (before), `$'`
     (after), `$+` (highest captured group), `$_` (whole input), plus PCRE2
     case transforms `\U`, `\L`, `\E`,
     `\u`, and `\l` (simple Unicode case mapping by default). Set
@@ -415,7 +429,9 @@ the same-host Rust reference; the remaining differences are nanosecond-scale
 per-call overheads. Capture programs use DFA bounds plus a short replay
 (with backtracking/Pike fallback) and the Pike VM remains the linear-time
 guarantee; see [docs/roadmap.md](docs/roadmap.md) and
-[docs/architecture.md](docs/architecture.md).
+[docs/architecture.md](docs/architecture.md). Feature completeness is audited
+differentially against PCRE2 10.45; see
+[docs/feature-audit.md](docs/feature-audit.md).
 
 Extended patterns intentionally trade the linear guarantee for feature
 coverage. They still have hard step, choice, capture-trail, and

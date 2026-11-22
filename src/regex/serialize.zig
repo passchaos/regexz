@@ -413,7 +413,7 @@ fn readInstruction(reader: *Reader, allocator: std.mem.Allocator) !model.Instruc
         } },
         .assertion => blk: {
             const kind_value = try reader.byte();
-            if (kind_value > @intFromEnum(model.Assertion.no_word_end_unicode)) return error.InvalidRegex;
+            if (kind_value > @intFromEnum(model.Assertion.not_after_cr)) return error.InvalidRegex;
             break :blk .{ .assertion = .{
                 .kind = @enumFromInt(kind_value),
                 .next = @intCast(try reader.u32v()),
@@ -549,6 +549,7 @@ pub fn serialize(program: Program, allocator: std.mem.Allocator) model.Error![]u
     if (program.limit_match != std.math.maxInt(usize)) flags |= 1 << 8;
     if (program.limit_depth != std.math.maxInt(usize)) flags |= 1 << 9;
     if (program.limit_heap_choices != std.math.maxInt(usize)) flags |= 1 << 10;
+    if (program.no_start_opt) flags |= 1 << 11;
     try writer.u16v(flags);
     try writer.u32v(@intCast(program.instructions.len));
     try writer.u32v(@intCast(program.start));
@@ -684,6 +685,7 @@ pub fn deserialize(allocator: std.mem.Allocator, bytes: []const u8) model.Error!
         .newline = @enumFromInt(newline_value),
         .notempty = flags & (1 << 6) != 0,
         .notempty_atstart = flags & (1 << 7) != 0,
+        .no_start_opt = flags & (1 << 11) != 0,
         .limit_match = limit_match,
         .limit_depth = limit_depth,
         .limit_heap_choices = limit_heap_choices,

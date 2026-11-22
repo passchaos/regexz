@@ -11,7 +11,9 @@ test "non-atomic lookahead backtracks into alternatives" {
     const match = (try workspace.find("abc", 0)).?;
     try std.testing.expectEqual(@as(usize, 0), match.start);
     try std.testing.expectEqual(@as(usize, 3), match.end);
-    try std.testing.expectEqualStrings("ab", match.group("abc", 1).?);
+    // PCRE2 restores captures set by the subroutine call, so group 1
+    // keeps the value from the non-atomic lookahead.
+    try std.testing.expectEqualStrings("a", match.group("abc", 1).?);
     // Hidden position slots must not leak into user-visible groups.
     try std.testing.expect(match.group("abc", 2) == null);
 }
@@ -100,6 +102,7 @@ test "non-atomic lookbehind captures are visible" {
     const match = (try workspace.find("abc", 0)).?;
     try std.testing.expectEqual(@as(usize, 2), match.start);
     try std.testing.expectEqual(@as(usize, 3), match.end);
+    // Non-atomic lookbehind captures stay visible to the continuation.
     try std.testing.expectEqualStrings("ab", match.group("abc", 1).?);
     // Hidden slots must not leak into user-visible groups.
     try std.testing.expect(match.group("abc", 2) == null);

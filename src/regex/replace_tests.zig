@@ -321,6 +321,12 @@ test "substitution supports PCRE2 whole-input and angle-bracket forms" {
     try regex.validateSubstitutionFor(program, "$<n>");
     try std.testing.expectError(error.InvalidRegex, regex.validateSubstitutionFor(program, "$<missing>"));
     try std.testing.expectError(error.InvalidRegex, regex.validateSubstitutionFor(program, "$<2>"));
+    try regex.validateSubstitutionFor(program, "\\g<n>");
+    try regex.validateSubstitutionFor(program, "\\g<1>");
+    try regex.validateSubstitutionFor(program, "\\g<0>");
+    try std.testing.expectError(error.InvalidRegex, regex.validateSubstitutionFor(program, "\\g<missing>"));
+    try std.testing.expectError(error.InvalidRegex, regex.validateSubstitutionFor(program, "\\g<2>"));
+    try expectReplace("(?<first>a)(?<second>b)", "\\g<second>-\\g<first>-\\g<0>", "ab", "b-a-ab");
 }
 
 test "replacen single-byte literal honors every limit" {

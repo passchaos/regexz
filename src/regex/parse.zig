@@ -21,6 +21,7 @@ pub const Parser = struct {
     bsr_anycrlf: bool = false,
     notempty: bool = false,
     notempty_atstart: bool = false,
+    no_start_opt: bool = false,
     limit_match: usize = std.math.maxInt(usize),
     limit_depth: usize = std.math.maxInt(usize),
     limit_heap_kib: usize = std.math.maxInt(usize),
@@ -399,7 +400,7 @@ pub const Parser = struct {
             self.limits.unicode_perl_classes = true;
             return self.node(.empty);
         }
-        if (std.mem.eql(u8, name, "UTF") or std.mem.eql(u8, name, "NO_JIT")) return self.node(.empty);
+        if (std.mem.eql(u8, name, "UTF") or std.mem.eql(u8, name, "UTF8") or std.mem.eql(u8, name, "NO_JIT")) return self.node(.empty);
         if (std.mem.eql(u8, name, "CR")) {
             self.newline = .cr;
             return self.node(.empty);
@@ -448,9 +449,12 @@ pub const Parser = struct {
             self.notempty_atstart = true;
             return self.node(.empty);
         }
-        // Start-up optimization switches; they do not change match results.
+        if (std.mem.eql(u8, name, "NO_START_OPT")) {
+            self.no_start_opt = true;
+            return self.node(.empty);
+        }
+        // The other start-up switches do not change match results.
         if (std.mem.eql(u8, name, "NO_AUTO_POSSESS") or
-            std.mem.eql(u8, name, "NO_START_OPT") or
             std.mem.eql(u8, name, "NO_DOTSTAR_ANCHOR")) return self.node(.empty);
         if (limitDirective(name, "LIMIT_MATCH=")) |value| {
             self.limit_match = @min(self.limit_match, value);
@@ -626,6 +630,8 @@ pub const Parser = struct {
         var capture_index: ?u16 = null;
         var capture_name: ?[]const u8 = null;
         if (self.take('?')) {
+            // PCRE2 10.45 Perl extended character class `(?[...])`.
+            if (self.take('[')) return self.perlExtendedClass();
             if (self.take('C')) {
                 var spec = m.CalloutSpec{};
                 if (self.peek()) |byte| {
@@ -1055,14 +1061,20 @@ pub const Parser = struct {
             return self.node(.{ .set = try classes.normalize(self.allocator, &.{.{ .first = 0, .last = 0x10ffff }}, false, .none, self.limits.max_ranges) });
         }
         if (self.newline == .crlf) {
-            const not_cr = try self.node(.{ .set = try classes.normalize(self.allocator, &.{.{ .first = '\r', .last = '\r' }}, true, .none, self.limits.max_ranges) });
+            // PCRE2 CRLF mode: a lone CR or LF matches, but neither half of a
+            // CRLF pair does.
+            const other = try self.node(.{ .set = try classes.normalize(self.allocator, newline.excluded(.anycrlf), true, .none, self.limits.max_ranges) });
             const cr = try self.literalNode('\r');
             const not_lf = try self.node(.{ .lookahead_set = .{
                 .set = try classes.normalize(self.allocator, &.{.{ .first = '\n', .last = '\n' }}, false, .none, self.limits.max_ranges),
                 .negative = true,
             } });
             const cr_only = try self.node(.{ .pair = .{ .left = cr, .right = not_lf } });
-            return self.node(.{ .alternate = .{ .left = not_cr, .right = cr_only } });
+            const lf_assert = try self.node(.{ .assertion = .not_after_cr });
+            const lf = try self.literalNode('\n');
+            const lf_only = try self.node(.{ .pair = .{ .left = lf_assert, .right = lf } });
+            const without_lf = try self.node(.{ .alternate = .{ .left = other, .right = cr_only } });
+            return self.node(.{ .alternate = .{ .left = without_lf, .right = lf_only } });
         }
         return self.node(.{ .set = try classes.normalize(self.allocator, newline.excluded(self.newline), true, .none, self.limits.max_ranges) });
     }
@@ -1091,6 +1103,10 @@ pub const Parser = struct {
     fn takeClassOp(self: *Parser) ?classes.SetOp {
         if (self.cursor + 1 >= self.pattern.len) return null;
         const pair = self.pattern[self.cursor..][0..2];
+        if (std.mem.eql(u8, pair, "||")) {
+            self.cursor += 2;
+            return .union_op;
+        }
         if (std.mem.eql(u8, pair, "&&")) {
             self.cursor += 2;
             return .intersection;
@@ -1104,6 +1120,85 @@ pub const Parser = struct {
             return .symmetric_difference;
         }
         return null;
+    }
+    /// PCRE2 10.45 Perl extended character class `(?[...])`. The inner
+    /// expression always runs in /xx mode, uses `!` (complement), `&`
+    /// (intersection, tighter), and `|`/`+`/`-`/`^` (union, subtraction,
+    /// symmetric difference) with ordinary parentheses for grouping.
+    fn perlExtendedClass(self: *Parser) m.Error!*const m.Node {
+        const saved_flags = self.flags;
+        self.flags.extended = true;
+        self.flags.extended_more = true;
+        defer self.flags = saved_flags;
+        self.skipExtended();
+        const set = try self.perlUnion();
+        self.skipExtended();
+        if (!self.take(']')) return error.InvalidRegex;
+        if (!self.take(')')) return error.InvalidRegex;
+        return self.node(.{ .set = set });
+    }
+    const PerlClassOp = enum { union_op, difference, symmetric_difference };
+    fn perlUnion(self: *Parser) m.Error!m.Set {
+        var left = try self.perlIntersection();
+        while (true) {
+            self.skipExtended();
+            const op: PerlClassOp = switch (self.peek() orelse break) {
+                '|', '+' => blk: {
+                    self.cursor += 1;
+                    break :blk .union_op;
+                },
+                '-' => blk: {
+                    self.cursor += 1;
+                    break :blk .difference;
+                },
+                '^' => blk: {
+                    self.cursor += 1;
+                    break :blk .symmetric_difference;
+                },
+                else => break,
+            };
+            const right = try self.perlIntersection();
+            left = switch (op) {
+                .union_op => try classes.unionSets(self.allocator, left, right, self.limits.max_ranges),
+                .difference => try classes.combine(self.allocator, left, .difference, right, self.limits.max_ranges),
+                .symmetric_difference => try classes.combine(self.allocator, left, .symmetric_difference, right, self.limits.max_ranges),
+            };
+        }
+        return left;
+    }
+    fn perlIntersection(self: *Parser) m.Error!m.Set {
+        var left = try self.perlUnary();
+        while (true) {
+            self.skipExtended();
+            if (!self.take('&')) break;
+            const right = try self.perlUnary();
+            left = try classes.combine(self.allocator, left, .intersection, right, self.limits.max_ranges);
+        }
+        return left;
+    }
+    fn perlUnary(self: *Parser) m.Error!m.Set {
+        self.skipExtended();
+        if (self.take('!')) {
+            return classes.complementSet(self.allocator, try self.perlUnary(), self.limits.max_ranges);
+        }
+        return self.perlAtom();
+    }
+    fn perlAtom(self: *Parser) m.Error!m.Set {
+        self.skipExtended();
+        if (self.take('(')) {
+            const inner = try self.perlUnion();
+            self.skipExtended();
+            if (!self.take(')')) return error.InvalidRegex;
+            return inner;
+        }
+        // Only escapes (character types, properties, \x{...}) and nested
+        // ordinary classes are atoms; bare literals are not.
+        if (self.peek()) |byte| {
+            if (byte == '\\' or byte == '[') {
+                return self.materialize(try self.element(self.foldMode()));
+            }
+        }
+        return error.InvalidRegex;
     }
     fn skipClassSpace(self: *Parser) void {
         while (self.peek()) |byte| {
@@ -1286,7 +1381,23 @@ pub const Parser = struct {
         self.cursor += 1;
         return switch (byte) {
             '(' => if (self.peek() == '*') self.verb(depth) else self.group(depth),
-            '[' => self.characterClass(),
+            '[' => blk: {
+                // PCRE2's POSIX.2 compatibility forms `[[:<:]]` / `[[:>:]]`
+                // are word-start/word-end assertions, not classes.
+                if (std.mem.startsWith(u8, self.pattern[self.cursor..], "[:<:]]")) {
+                    self.cursor += 6;
+                    self.extended = true;
+                    const ucp = self.limits.unicode_perl_classes and !self.flags.ascii_word;
+                    break :blk self.node(.{ .assertion = if (ucp) .word_start_unicode else .word_start });
+                }
+                if (std.mem.startsWith(u8, self.pattern[self.cursor..], "[:>:]]")) {
+                    self.cursor += 6;
+                    self.extended = true;
+                    const ucp = self.limits.unicode_perl_classes and !self.flags.ascii_word;
+                    break :blk self.node(.{ .assertion = if (ucp) .word_end_unicode else .word_end });
+                }
+                break :blk self.characterClass();
+            },
             '.' => self.dotNode(),
             '^' => self.node(.{ .assertion = if (self.flags.multiline) .start_line else .start_text }),
             '$' => self.node(.{ .assertion = if (self.flags.multiline)
@@ -1336,20 +1447,46 @@ pub const Parser = struct {
         if (start == self.cursor) return null;
         return std.fmt.parseInt(usize, self.pattern[start..self.cursor], 10) catch std.math.maxInt(usize);
     }
+    /// PCRE2 ignores space and horizontal tab just inside quantifier braces
+    /// and around the comma (`a{ 2, 3 }`).
+    fn skipHspace(self: *Parser) void {
+        while (self.peek()) |byte| {
+            if (byte != ' ' and byte != '\t') break;
+            self.cursor += 1;
+        }
+    }
     fn counted(self: *Parser) m.Error!?struct { minimum: usize, maximum: ?usize } {
         const saved = self.cursor;
         if (!self.take('{')) return null;
-        const minimum = self.number() orelse {
-            self.cursor = saved;
-            return null;
-        };
+        self.skipHspace();
+        var minimum: usize = 0;
+        var saw_minimum = false;
+        if (self.number()) |value| {
+            minimum = value;
+            saw_minimum = true;
+        }
+        self.skipHspace();
         var maximum: ?usize = minimum;
-        if (self.take(',')) maximum = self.number();
+        var saw_comma = false;
+        if (self.take(',')) {
+            saw_comma = true;
+            self.skipHspace();
+            maximum = self.number();
+            self.skipHspace();
+        }
         if (!self.take('}')) {
             self.cursor = saved;
             return null;
         }
-        if (minimum > 1000 or (maximum != null and (maximum.? > 1000 or maximum.? < minimum))) return error.InvalidRegex;
+        // `{}` stays a literal brace pair; `{,n}` is PCRE2 10.43+ `{0,n}`.
+        if (!saw_minimum and !saw_comma) {
+            self.cursor = saved;
+            return null;
+        }
+        if (!saw_minimum and maximum == null) return error.InvalidRegex;
+        if (maximum != null and maximum.? < minimum) return error.InvalidRegex;
+        // PCRE2's absolute quantifier bound.
+        if (minimum > 65535 or (maximum != null and maximum.? > 65535)) return error.InvalidRegex;
         if (minimum > self.limits.max_repeat or (maximum != null and maximum.? > self.limits.max_repeat)) return error.RegexLimitExceeded;
         return .{ .minimum = minimum, .maximum = maximum };
     }
@@ -1377,7 +1514,8 @@ pub const Parser = struct {
             minimum = count.minimum;
             maximum = count.maximum;
         } else return child;
-        if (child.* == .flag_change or child.* == .fail or child.* == .accept_verb or child.* == .prune or child.* == .skip or child.* == .commit) return error.InvalidRegex;
+        // PCRE2 allows quantifying `(*ACCEPT)`; the other verbs may not be.
+        if (child.* == .flag_change or child.* == .fail or child.* == .prune or child.* == .skip or child.* == .commit) return error.InvalidRegex;
         var lazy = false;
         var possessive = false;
         if (self.take('?')) {
@@ -1535,6 +1673,7 @@ fn parsePass(
         .newline = parser.newline,
         .notempty = parser.notempty,
         .notempty_atstart = parser.notempty_atstart,
+        .no_start_opt = parser.no_start_opt,
         .limit_match = parser.limit_match,
         .limit_depth = parser.limit_depth,
         .limit_heap_kib = parser.limit_heap_kib,

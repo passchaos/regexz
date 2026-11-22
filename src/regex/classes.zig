@@ -148,6 +148,45 @@ fn appendAsciiFolded(gpa: std.mem.Allocator, ranges: *std.ArrayList(m.Range)) m.
     }
 }
 
+/// PCRE2 `(?r)` peers: ASCII letters pair only with ASCII letters, while
+/// non-ASCII characters keep their Unicode pairs as long as both sides stay
+/// non-ASCII (for example `é`/`É` still fold, but `k` does not match the
+/// Kelvin sign and `s` does not match long s).
+fn appendRestrictedFolded(gpa: std.mem.Allocator, ranges: *std.ArrayList(m.Range)) m.Error!void {
+    const original_len = ranges.items.len;
+    try appendAsciiFolded(gpa, ranges);
+    const fold_count = m.unicode.fold_range_count;
+    for (0..original_len) |range_index| {
+        const range = ranges.items[range_index];
+        if (range.last < 128) continue;
+        const first_non_ascii = @max(range.first, 128);
+        var low: usize = 0;
+        var high: usize = fold_count;
+        while (low < high) {
+            const middle = low + (high - low) / 2;
+            if (m.unicode.foldRange(middle).last < first_non_ascii) {
+                low = middle + 1;
+            } else {
+                high = middle;
+            }
+        }
+        while (low < fold_count) : (low += 1) {
+            const folded = m.unicode.foldRange(low);
+            if (folded.first > range.last) break;
+            const intersect_first = @max(first_non_ascii, folded.first);
+            const intersect_last = @min(range.last, folded.last);
+            if (intersect_first > intersect_last) continue;
+            var rune: u32 = intersect_first;
+            while (rune <= intersect_last) : (rune += 1) {
+                var peer: u32 = m.unicode.foldNext(@intCast(rune));
+                while (peer != rune) : (peer = m.unicode.foldNext(@intCast(peer))) {
+                    if (peer >= 128) try ranges.append(gpa, .{ .first = @intCast(peer), .last = @intCast(peer) });
+                }
+            }
+        }
+    }
+}
+
 fn complement(gpa: std.mem.Allocator, ranges: []const m.Range, limit: usize) m.Error![]const m.Range {
     var inverted: std.ArrayList(m.Range) = .empty;
     errdefer inverted.deinit(gpa);
@@ -276,7 +315,7 @@ pub fn normalizeOwned(gpa: std.mem.Allocator, list: std.ArrayList(m.Range), nega
     if (ranges.items.len > limit) return error.RegexLimitExceeded;
     if (fold != .none) {
         switch (fold) {
-            .ascii => try appendAsciiFolded(gpa, &ranges),
+            .ascii => try appendRestrictedFolded(gpa, &ranges),
             .turkish => try appendTurkishFolded(gpa, &ranges),
             else => try appendFolded(gpa, &ranges),
         }
@@ -313,7 +352,7 @@ pub fn normalize(gpa: std.mem.Allocator, raw: []const m.Range, negate: bool, fol
     try ranges.appendSlice(gpa, raw);
     if (fold != .none) {
         switch (fold) {
-            .ascii => try appendAsciiFolded(gpa, &ranges),
+            .ascii => try appendRestrictedFolded(gpa, &ranges),
             .turkish => try appendTurkishFolded(gpa, &ranges),
             else => try appendFolded(gpa, &ranges),
         }
@@ -625,7 +664,7 @@ pub fn ascii(name: []const u8) ?[]const m.Range {
 
 /// Character-class set operations. Inputs and outputs are normalized
 /// (sorted, disjoint) range lists.
-pub const SetOp = enum { intersection, difference, symmetric_difference };
+pub const SetOp = enum { union_op, intersection, difference, symmetric_difference };
 
 /// PCRE2 10.43+ `[:xdigit:]` under UCP: ASCII hex digits plus their fullwidth
 /// forms.
@@ -682,9 +721,11 @@ pub fn posixRanges(
     if (std.mem.eql(u8, name, "punct")) {
         const p = try normalize(gpa, try unicodePropertyRanges(gpa, "P"), false, .none, limit);
         const s = try normalize(gpa, try unicodePropertyRanges(gpa, "S"), false, .none, limit);
-        const below_256 = try normalize(gpa, &.{.{ .first = 0, .last = 255 }}, false, .none, limit);
-        const s_ascii = try combine(gpa, s, .intersection, below_256, limit);
-        return (try combine(gpa, p, .symmetric_difference, s_ascii, limit)).ranges;
+        // PCRE2 adds the ASCII symbols that Unicode classifies as S rather
+        // than P (`$+<=>^`|~`), not every symbol below U+0100.
+        const ascii_range = try normalize(gpa, &.{.{ .first = 0, .last = 127 }}, false, .none, limit);
+        const s_ascii = try combine(gpa, s, .intersection, ascii_range, limit);
+        return (try combine(gpa, p, .union_op, s_ascii, limit)).ranges;
     }
     return error.InvalidRegex;
 }
@@ -749,9 +790,15 @@ fn unionRanges(gpa: std.mem.Allocator, a: []const m.Range, b: []const m.Range, l
     return out.toOwnedSlice(gpa);
 }
 
+/// Union of two materialized sets.
+pub fn unionSets(gpa: std.mem.Allocator, left: m.Set, right: m.Set, limit: usize) m.Error!m.Set {
+    return fromSortedRanges(try unionRanges(gpa, left.ranges, right.ranges, limit));
+}
+
 /// Apply a set operation to two materialized sets.
 pub fn combine(gpa: std.mem.Allocator, left: m.Set, op: SetOp, right: m.Set, limit: usize) m.Error!m.Set {
     const ranges = switch (op) {
+        .union_op => try unionRanges(gpa, left.ranges, right.ranges, limit),
         .intersection => try intersectRanges(gpa, left.ranges, right.ranges, limit),
         .difference => try differenceRanges(gpa, left.ranges, right.ranges, limit),
         .symmetric_difference => blk: {

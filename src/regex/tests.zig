@@ -179,7 +179,10 @@ test "UCP Qwen pre-tokenizer matches PCRE2 on Unicode whitespace" {
     }
 }
 test "gRPC xDS safe regex rejects invalid syntax and bounds nested repetitions" {
-    for ([_][]const u8{ "(", "[a-z", "[z-a]", "a**", "(?=", "(?=[a-z)", "(?i-)a", "(?i)*", "{1}", "a{1}{2}", "\\p{Unknown}", "\\x{110000}", "a{2,1}", "a{1001}", "[a-\\d]", "\\" }) |pattern| try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, pattern, .{}));
+    for ([_][]const u8{ "(", "[a-z", "[z-a]", "a**", "(?=", "(?=[a-z)", "(?i-)a", "(?i)*", "{1}", "a{1}{2}", "\\p{Unknown}", "\\x{110000}", "a{2,1}", "a{65536}", "[a-\\d]", "\\" }) |pattern| try std.testing.expectError(error.InvalidRegex, regex.Regex.init(gpa, pattern, .{}));
+    try std.testing.expectError(error.RegexLimitExceeded, regex.Regex.init(gpa, "a{1001}", .{}));
+    var raised = try regex.Regex.init(gpa, "a{1001}", .{ .max_repeat = 1001 });
+    raised.deinit();
     try std.testing.expectError(error.RegexLimitExceeded, regex.Regex.init(gpa, "abcdef", .{ .max_pattern_bytes = 5 }));
     try std.testing.expectError(error.RegexLimitExceeded, regex.Regex.init(gpa, "a{5}", .{ .max_repeat = 4 }));
     try std.testing.expectError(error.RegexLimitExceeded, regex.Regex.init(gpa, "(a{100}){100}", .{ .max_instructions = 64 }));
@@ -403,7 +406,7 @@ test "extended-more classes and ASCII option letters" {
     }
 }
 
-test "caseless restrict folds only ASCII" {
+test "caseless restrict separates ASCII and non-ASCII" {
     const Case = struct { pattern: []const u8, input: []const u8, matches: bool };
     for ([_]Case{
         .{ .pattern = "(?i)k", .input = "\u{212a}", .matches = true },
@@ -413,7 +416,7 @@ test "caseless restrict folds only ASCII" {
         .{ .pattern = "(?i)s", .input = "\u{017f}", .matches = true },
         .{ .pattern = "(?ir)s", .input = "\u{017f}", .matches = false },
         .{ .pattern = "(?i)\u{00e9}", .input = "\u{00c9}", .matches = true },
-        .{ .pattern = "(?ir)\u{00e9}", .input = "\u{00c9}", .matches = false },
+        .{ .pattern = "(?ir)\u{00e9}", .input = "\u{00c9}", .matches = true },
         .{ .pattern = "(?i)[a-z]", .input = "\u{212a}", .matches = true },
         .{ .pattern = "(?ir)[a-z]", .input = "\u{212a}", .matches = false },
         .{ .pattern = "(?ir)[a-z]", .input = "A", .matches = true },

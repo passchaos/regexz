@@ -215,6 +215,8 @@ pub const Program = struct {
     notempty: bool = false,
     /// `(*NOTEMPTY_ATSTART)`: empty matches are not allowed at the start.
     notempty_atstart: bool = false,
+    /// `(*NO_START_OPT)`: bypass search prefilters that skip start positions.
+    no_start_opt: bool = false,
     /// Pattern-level resource caps.
     limit_match: usize = std.math.maxInt(usize),
     limit_depth: usize = std.math.maxInt(usize),
@@ -2868,6 +2870,7 @@ pub fn compile(allocator: std.mem.Allocator, parsed: model.ParseResult, limits: 
         .newline = parsed.newline,
         .notempty = parsed.notempty,
         .notempty_atstart = parsed.notempty_atstart,
+        .no_start_opt = parsed.no_start_opt,
         .limit_match = parsed.limit_match,
         .limit_depth = parsed.limit_depth,
         .limit_heap_choices = if (parsed.limit_heap_kib == std.math.maxInt(usize))

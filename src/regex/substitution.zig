@@ -75,6 +75,18 @@ fn parseSubstitutionGroup(
     return null;
 }
 
+fn resolveSubstitutionName(program: ?Program, name: []const u8, capture_count: u16) Error!u16 {
+    if (name.len == 0) return error.InvalidRegex;
+    if (std.fmt.parseInt(u16, name, 10)) |number| {
+        if (number > capture_count) return error.InvalidRegex;
+        return number;
+    } else |_| {}
+    // Without a compiled program named groups cannot be resolved, matching
+    // the `$<name>` validation behavior.
+    const value = program orelse return error.InvalidRegex;
+    return value.groupIndex(name) orelse error.InvalidRegex;
+}
+
 fn validateSubstitutionInternal(program: ?Program, substitution: []const u8, capture_count: u16) Error!void {
     var index: usize = 0;
     while (index < substitution.len) : (index += 1) {
@@ -85,6 +97,12 @@ fn validateSubstitutionInternal(program: ?Program, substitution: []const u8, cap
             const escaped = substitution[index];
             if (escaped >= '0' and escaped <= '9') {
                 if (escaped - '0' > capture_count) return error.InvalidRegex;
+            }
+            // PCRE2_SUBSTITUTE_EXTENDED `\g<name>`/`\g<number>`.
+            if (escaped == 'g' and index + 1 < substitution.len and substitution[index + 1] == '<') {
+                const close = std.mem.indexOfScalarPos(u8, substitution, index + 2, '>') orelse return error.InvalidRegex;
+                _ = try resolveSubstitutionName(program, substitution[index + 2 .. close], capture_count);
+                index = close;
             }
             continue;
         }
@@ -228,6 +246,21 @@ pub fn appendSubstitution(
                     if (groupText(input, slots, escaped - '0')) |text| {
                         try appendTransformed(writer, text, &state, full_case);
                     }
+                    continue;
+                },
+                'g' => {
+                    // PCRE2_SUBSTITUTE_EXTENDED `\g<name>` / `\g<number>`.
+                    if (index + 1 < substitution.len and substitution[index + 1] == '<') {
+                        const close = std.mem.indexOfScalarPos(u8, substitution, index + 2, '>') orelse return error.InvalidRegex;
+                        const group = try resolveSubstitutionName(program, substitution[index + 2 .. close], program.capture_count);
+                        if (groupText(input, slots, group)) |text| {
+                            try appendTransformed(writer, text, &state, full_case);
+                        }
+                        index = close;
+                        continue;
+                    }
+                    try writer.append('\\');
+                    try appendTransformed(writer, "g", &state, full_case);
                     continue;
                 },
                 '\\' => {

@@ -766,6 +766,7 @@ test {
     _ = @import("regex/deferred_search_tests.zig");
     _ = @import("regex/set_identity_tests.zig");
     _ = @import("regex/extended_tests.zig");
+    _ = @import("regex/pcre2_compat_tests.zig");
     _ = @import("regex/api_tests.zig");
     _ = @import("regex/set_tests.zig");
     _ = @import("regex/required_literals_tests.zig");

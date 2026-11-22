@@ -19,7 +19,7 @@ pub const Error = model.Error;
 
 const Choice = struct { pc: usize, pos: usize, trail_len: usize, call_depth: usize, alternation: bool = false, mark: ?u16 = null, mark_pos: usize = 0 };
 const Trail = struct { slot: u16, old: usize };
-const CallFrame = struct { next: usize, group: u16 };
+const CallFrame = struct { next: usize, group: u16, trail: usize };
 const Stop = union(enum) {
     /// Accept only when the whole input has been consumed.
     full,
@@ -90,6 +90,7 @@ const Position = struct {
             .no_word_start_unicode => !(!unicodeWord(ucp_word, self.previous_rune) and unicodeWord(ucp_word, self.next_rune)),
             .word_end_unicode => unicodeWord(ucp_word, self.previous_rune) and !unicodeWord(ucp_word, self.next_rune),
             .no_word_end_unicode => !(unicodeWord(ucp_word, self.previous_rune) and !unicodeWord(ucp_word, self.next_rune)),
+            .not_after_cr => self.previous_rune != '\r',
         };
     }
 };
@@ -147,6 +148,10 @@ pub const Workspace = struct {
     /// Frames returned by `.ret`; backtracking into a subroutine re-activates
     /// them. Both stacks are preallocated to `max_recursion_depth`.
     returns: std.ArrayList(CallFrame) = .empty,
+    /// Scratch for restoring captures at subroutine returns. `seen` marks
+    /// slots already recorded in `touched` for the current return.
+    scratch_seen: []bool,
+    scratch_touched: std.ArrayList(Trail) = .empty,
     steps: usize = 0,
     depth: usize = 0,
     partial: bool = false,
@@ -184,6 +189,12 @@ pub const Workspace = struct {
         var returns: std.ArrayList(CallFrame) = .empty;
         errdefer returns.deinit(allocator);
         try returns.ensureTotalCapacity(allocator, effective.max_recursion_depth);
+        const scratch_seen = try allocator.alloc(bool, slot_count);
+        errdefer allocator.free(scratch_seen);
+        @memset(scratch_seen, false);
+        var scratch_touched: std.ArrayList(Trail) = .empty;
+        errdefer scratch_touched.deinit(allocator);
+        try scratch_touched.ensureTotalCapacity(allocator, slot_count);
         return .{
             .allocator = allocator,
             .program = program,
@@ -193,6 +204,8 @@ pub const Workspace = struct {
             .best_slots = best_slots,
             .calls = calls,
             .returns = returns,
+            .scratch_seen = scratch_seen,
+            .scratch_touched = scratch_touched,
         };
     }
 
@@ -201,6 +214,8 @@ pub const Workspace = struct {
         self.trail.deinit(self.allocator);
         self.calls.deinit(self.allocator);
         self.returns.deinit(self.allocator);
+        self.scratch_touched.deinit(self.allocator);
+        self.allocator.free(self.scratch_seen);
         self.allocator.free(self.slots);
         self.allocator.free(self.best_slots);
         self.* = undefined;
@@ -211,6 +226,8 @@ pub const Workspace = struct {
         self.trail.clearRetainingCapacity();
         self.calls.clearRetainingCapacity();
         self.returns.clearRetainingCapacity();
+        self.scratch_touched.clearRetainingCapacity();
+        @memset(self.scratch_seen, false);
         @memset(self.slots, unset);
         self.slots[0] = start;
         self.depth = 0;
@@ -252,13 +269,41 @@ pub const Workspace = struct {
         try self.trail.append(self.allocator, .{ .slot = slot, .old = old });
     }
 
+    /// PCRE2: capturing parentheses set during a subroutine call revert to
+    /// their previous values when the call returns. Walk the trail records
+    /// added since the call started, remember each slot's first old value,
+    /// then push restore records so backtracking can re-enter the call.
+    fn restoreSubroutineCaptures(self: *Workspace, entry: usize) Error!void {
+        if (self.trail.items.len == entry) return;
+        self.scratch_touched.clearRetainingCapacity();
+        for (self.trail.items[entry..]) |record| {
+            if (self.scratch_seen[record.slot]) continue;
+            self.scratch_seen[record.slot] = true;
+            self.scratch_touched.appendAssumeCapacity(record);
+        }
+        for (self.scratch_touched.items) |record| {
+            const slot = record.slot;
+            self.scratch_seen[slot] = false;
+            const current = self.slots[slot];
+            try self.pushTrail(slot, current);
+            self.slots[slot] = record.old;
+        }
+    }
+
+    /// `(*ACCEPT)` skips the closing saves of the groups it is nested in, so
+    /// close every open capture at the accepted position.
+    fn closeOpenCaptures(self: *Workspace, pos: usize) void {
+        var group: usize = 0;
+        while (group <= self.program.capture_count) : (group += 1) {
+            if (self.slots[2 * group] != unset and self.slots[2 * group + 1] == unset) {
+                self.slots[2 * group + 1] = pos;
+            }
+        }
+    }
+
     /// Backtrack to the most recent choice above `choice_base`. Returns false
     /// when the run is exhausted.
     fn backtrack(self: *Workspace, choice_base: usize, trail_base: usize, prune_base: ?usize, barrier: Barrier) bool {
-        if (self.choices.items.len <= choice_base) {
-            self.restoreTrail(trail_base);
-            return false;
-        }
         if (prune_base) |base| {
             if (self.choices.items.len <= base) {
                 switch (barrier) {
@@ -269,6 +314,10 @@ pub const Workspace = struct {
                 self.restoreTrail(trail_base);
                 return false;
             }
+        }
+        if (self.choices.items.len <= choice_base) {
+            self.restoreTrail(trail_base);
+            return false;
         }
         const choice = self.choices.pop().?;
         self.restoreCallDepth(choice.call_depth);
@@ -456,16 +505,26 @@ pub const Workspace = struct {
     /// Caseless backreference comparison (`(?i)` active at the reference).
     fn caselessBackref(self: *Workspace, input: []const u8, captured: []const u8, fold: model.Fold, pos: usize) ?usize {
         if (fold == .ascii) {
+            // PCRE2 `(?r)`: ASCII pairs only match ASCII, and non-ASCII
+            // characters keep their Unicode pairs without crossing the
+            // ASCII boundary.
             var source: usize = 0;
             var target = pos;
+            const bounded = input[0..self.subject_end];
             while (source < captured.len) {
-                if (target >= self.subject_end) {
+                const a = runeAt(captured, source) orelse return null;
+                const b = runeAt(bounded, target) orelse {
                     self.partial = true;
                     return null;
-                }
-                if (asciiFold(captured[source]) != asciiFold(input[target])) return null;
-                source += 1;
-                target += 1;
+                };
+                const a_ascii = a.value < 128;
+                const b_ascii = b.value < 128;
+                if (a_ascii != b_ascii) return null;
+                if (a_ascii) {
+                    if (asciiFold(@intCast(a.value)) != asciiFold(@intCast(b.value))) return null;
+                } else if (!foldEqual(a.value, b.value)) return null;
+                source += a.len;
+                target += b.len;
             }
             return target;
         }
@@ -520,9 +579,26 @@ pub const Workspace = struct {
                     },
                     .sub => unreachable,
                 },
-                .accept_verb => switch (stop) {
-                    .full => if (pos == self.subject_end) return pos,
-                    .find, .sub => return pos,
+                .accept_verb => {
+                    if (self.calls.items.len > 0) {
+                        // PCRE2: (*ACCEPT) in a group called as a subroutine
+                        // ends that call and continues after it.
+                        const frame = self.calls.pop() orelse unreachable;
+                        try self.restoreSubroutineCaptures(frame.trail);
+                        self.returns.appendAssumeCapacity(frame);
+                        pc = frame.next;
+                        continue;
+                    }
+                    switch (stop) {
+                        .full => if (pos == self.subject_end) {
+                            self.closeOpenCaptures(pos);
+                            return pos;
+                        },
+                        .find, .sub => {
+                            self.closeOpenCaptures(pos);
+                            return pos;
+                        },
+                    }
                 },
                 .fail => {},
                 .sub_accept => switch (stop) {
@@ -841,12 +917,13 @@ pub const Workspace = struct {
                     if (self.calls.items.len >= self.limits.max_recursion_depth) {
                         return error.RegexLimitExceeded;
                     }
-                    self.calls.appendAssumeCapacity(.{ .next = call.next, .group = call.group });
+                    self.calls.appendAssumeCapacity(.{ .next = call.next, .group = call.group, .trail = self.trail.items.len });
                     pc = call.child;
                     continue;
                 },
                 .ret => {
                     const frame = self.calls.pop() orelse unreachable;
+                    try self.restoreSubroutineCaptures(frame.trail);
                     self.returns.appendAssumeCapacity(frame);
                     pc = frame.next;
                     continue;

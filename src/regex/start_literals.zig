@@ -57,13 +57,30 @@ fn singleRuneLiteral(allocator: std.mem.Allocator, set: model.Set) model.Error!?
     return list;
 }
 
+/// Zero-width nodes that do not consume input and do not invalidate the
+/// following literal as a match-start prefix. Control verbs are transparent
+/// for the same reason PCRE2's start-of-match optimization can skip to the
+/// literal before running them.
+fn transparent(node: *const model.Node) bool {
+    return switch (node.*) {
+        .empty, .flag_change, .prune, .skip, .skip_named, .commit, .then_verb, .mark, .callout, .reset_start => true,
+        .group => |child| transparent(child),
+        .capture => |capture| transparent(capture.child),
+        .atomic => |child| transparent(child),
+        else => false,
+    };
+}
+
 fn concat(
     allocator: std.mem.Allocator,
     left: *const model.Node,
     right: *const model.Node,
     depth: usize,
 ) model.Error!?[]const []const u8 {
-    const left_list = (try literalsOf(allocator, left, depth + 1)) orelse return null;
+    const left_list = (try literalsOf(allocator, left, depth + 1)) orelse {
+        if (transparent(left)) return literalsOf(allocator, right, depth + 1);
+        return null;
+    };
     // Combining a prefix list with the right side is only sound when the left
     // node matches exactly one of those literals. A variable-length left (for
     // example `(?:a|b)+`) matches longer text, so the right side does not
@@ -101,6 +118,7 @@ fn isFixedLiteral(node: *const model.Node) bool {
         .capture => |capture| isFixedLiteral(capture.child),
         .atomic => |child| isFixedLiteral(child),
         .repeat => |repeat| repeat.minimum == 1 and repeat.maximum == 1 and isFixedLiteral(repeat.child),
+        .empty, .flag_change, .prune, .skip, .skip_named, .commit, .then_verb, .mark, .callout, .reset_start => true,
         else => false,
     };
 }

@@ -88,7 +88,7 @@ pub const Flags = struct {
     no_auto_capture: bool = false,
     /// `(?J)`: allow duplicate capture-group names.
     duplicate_names: bool = false,
-    /// `(?r)`: restrict caseless matching to ASCII pairs.
+    /// `(?r)`: keep ASCII and non-ASCII case pairs separate.
     caseless_restrict: bool = false,
     /// `(?xx)`: also ignore space and horizontal tab inside character classes.
     extended_more: bool = false,
@@ -120,6 +120,9 @@ pub const ParseResult = struct {
     notempty: bool = false,
     /// `(*NOTEMPTY_ATSTART)`: empty matches are not allowed at the start.
     notempty_atstart: bool = false,
+    /// `(*NO_START_OPT)`: disable start-position prefilters so backtracking
+    /// verbs observe the search from the requested start offset.
+    no_start_opt: bool = false,
     /// Pattern-level resource caps from `(*LIMIT_MATCH/DEPTH/HEAP=...)`.
     limit_match: usize = std.math.maxInt(usize),
     limit_depth: usize = std.math.maxInt(usize),
@@ -130,7 +133,7 @@ pub const Range = unicode.Range;
 /// The parser keeps this form until a class is complete so folding happens
 /// before complementing.
 /// Case-folding mode for a parsed set. `ascii` is PCRE2 `(?r)`:
-/// only A-Z/a-z pairs fold, Unicode peers are ignored.
+/// ASCII and non-ASCII case pairs stay separate; both sides still fold.
 pub const Fold = enum(u8) { none, unicode, ascii, turkish };
 pub const ParsedSet = struct {
     ranges: []const Range,
@@ -276,6 +279,9 @@ pub const Assertion = enum {
     no_word_start_unicode,
     word_end_unicode,
     no_word_end_unicode,
+    /// True when the previous rune is not CR. Used by CRLF-mode `.` and `\N`
+    /// so a lone LF matches but the LF of a CRLF pair does not.
+    not_after_cr,
 };
 /// Condition for `(?(cond)yes|no)`.
 pub const Condition = union(enum) {

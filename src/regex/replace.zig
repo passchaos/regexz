@@ -1065,6 +1065,9 @@ pub const Workspace = struct {
         search_start: usize,
     ) Error!?Match {
         if (self.start_anchored and search_start != 0) return null;
+        // `(*NO_START_OPT)` makes verbs observe every start position, so the
+        // literal/pair/DFA prefilters must not skip ahead.
+        if (self.program.no_start_opt) return self.findInternal(input, search_start);
         if (self.fast_kind == .set_run) return self.findSetRun(self.simple_set.?, input, search_start);
         if (self.fast_kind == .run_literals) return self.findRunLiterals(&self.run_literals.?, input, search_start);
         if (self.fast_kind == .none) {
@@ -1709,6 +1712,9 @@ pub const Workspace = struct {
     ) Error!?Match {
         if (search_start > input.len) return null;
         if (self.start_anchored and search_start != 0) return null;
+        // `(*NO_START_OPT)`: verbs must see every start position, so skip
+        // the literal/pair prefilters below.
+        const no_start_opt = self.program.no_start_opt;
         switch (self.fast_kind) {
             .none => {
                 if (self.fast_branch) |*branch| {
@@ -1796,22 +1802,35 @@ pub const Workspace = struct {
             .dollar_var => return self.findDollarVar(&self.dollar_var.?, input, search_start),
         }
         var from = search_start;
-        if (self.pair_filter) |filter| {
-            from = filter.indexOfAny(input, search_start) orelse return null;
+        if (!no_start_opt) {
+            if (self.pair_filter) |filter| {
+                from = filter.indexOfAny(input, search_start) orelse return null;
+            }
+            if (self.fold_filter) |filter| {
+                from = filter.indexOf(input, from) orelse return null;
+            }
         }
-        if (self.fold_filter) |filter| {
-            from = filter.indexOf(input, from) orelse return null;
-        }
-        if (self.program.literal) |literal| {
-            if (self.program.capture_count == 0) {
-                const found = indexOfLiteral(input, from, literal) orelse return null;
-                self.slots[0] = found;
-                self.slots[1] = found + literal.len;
-                return .{ .start = found, .end = found + literal.len, .slots = self.slots };
+        if (!no_start_opt) {
+            if (self.program.literal) |literal| {
+                if (self.program.capture_count == 0) {
+                    const found = indexOfLiteral(input, from, literal) orelse return null;
+                    self.slots[0] = found;
+                    self.slots[1] = found + literal.len;
+                    return .{ .start = found, .end = found + literal.len, .slots = self.slots };
+                }
             }
         }
         if (self.program.extended) {
-            if (self.requiredLiteralMiss(input, from)) return null;
+            if (!no_start_opt) {
+                if (self.requiredLiteralMiss(input, from)) return null;
+                // A single start literal bounds the first possible match
+                // start, matching PCRE2's start-of-match optimization.
+                if (self.program.start_literals) |literals| {
+                    if (literals.len == 1 and literals[0].len != 0) {
+                        from = indexOfLiteral(input, from, literals[0]) orelse return null;
+                    }
+                }
+            }
             if (self.backtrack_workspace == null) {
                 self.backtrack_workspace = try backtrack.Workspace.init(self.allocator, self.program, self.limits);
             }
@@ -4711,6 +4730,7 @@ const Position = struct {
             // Grapheme boundary assertions are extended-only and evaluated by
             // the backtracking VM.
             .grapheme_boundary, .no_grapheme_boundary, .word_boundary_uax29, .no_word_boundary_uax29, .sentence_boundary, .no_sentence_boundary, .word_start, .no_word_start, .word_end, .no_word_end, .word_start_unicode, .no_word_start_unicode, .word_end_unicode, .no_word_end_unicode => false,
+            .not_after_cr => self.previous != '\r',
         };
     }
 };
