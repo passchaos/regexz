@@ -27,13 +27,13 @@ text, and small full-match subjects.
 
 | Case | regexz, ns/iter | Rust, ns/iter | Rust / regexz |
 | --- | ---: | ---: | ---: |
-| compile Qwen tokenizer | 11,380.6 | 715,107.2 | 62.84x |
-| compile xDS-like | 5,774.1 | 31,646.0 | 5.48x |
+| compile Qwen tokenizer | 11,383.3 | 715,179.6 | 62.83x |
+| compile xDS-like | 5,774.2 | 31,609.0 | 5.47x |
 | find Qwen tokenizer | 49,760.6 | 106,195.8 | 2.13x |
 | findAll Qwen (borrowed) | 58,364.1 | 105,801.2 | 1.81x |
 | findAll Qwen (owning) | 58,294.2 | 105,031.1 | 1.80x |
 | find CJK tokenizer | 219,859.6 | 475,876.2 | 2.16x |
-| find HTML tag | 90,400.0 | 177,440.2 | 1.96x |
+| find HTML tag | 90,894.8 | 177,304.4 | 1.95x |
 | find URL | 71,244.1 | 162,265.9 | 2.28x |
 | find JSON string literal | 14,645.4 | 22,634.2 | 1.55x |
 | find JSON number | 73,100.4 | 95,869.9 | 1.31x |
@@ -107,7 +107,7 @@ text, and small full-match subjects.
 | find markdown link | 361.1 | 410.9 | 1.14x |
 | find YAML key | 33,916.1 | 59,097.1 | 1.74x |
 | find TOML table | 33,913.7 | 47,849.8 | 1.41x |
-| find template | 69,500.0 | 98,396.4 | 1.42x |
+| find template | 69,124.3 | 97,933.3 | 1.42x |
 | find Windows path | 46,889.6 | 175,300.0 | 3.74x |
 | find CSS selector | 81,833.0 | 86,363.8 | 1.06x |
 | find slash date | 85,908.8 | 189,194.4 | 2.20x |
@@ -115,7 +115,7 @@ text, and small full-match subjects.
 | find IPv6 | 83,384.1 | 109,750.3 | 1.32x |
 | find C comment | 85,927.3 | 121,603.0 | 1.42x |
 | find markdown image | 385.6 | 805.6 | 2.09x |
-| find HTML tag name | 125,017.4 | 150,547.9 | 1.20x |
+| find HTML tag name | 124,830.5 | 150,533.3 | 1.21x |
 | find shell var | 121,435.4 | 173,716.0 | 1.43x |
 | split whitespace (22 KiB) | 31,598.6 | 137,633.5 | 4.36x |
 | split commas (29 KiB) | 24,883.5 | 63,820.9 | 2.56x |
@@ -134,7 +134,7 @@ are the one-character alternation (`a|b|c`, 0.88x) and currency
 (`\$\d+(?:\.\d{2})?`, 0.92x); IPv6 is at parity (1.01x). The largest leads
 are `replaceAll` with edge assertions (39.00x), blank-line scans (33.15x),
 capitalized-word scans (28.39x), `RegexSet` no-match scans (16.22x) and
-compile time (62.84x); the tokenizer searches are 2.13x and 2.16x ahead.
+compile time (62.83x); the tokenizer searches are 2.13x and 2.16x ahead.
 The geometric-mean ratio is 2.34x. The currency row is a small absolute gap
 (about 39 ns); the one-character alternation is dominated by the per-match
 dispatch call.

@@ -29,13 +29,13 @@ rows differ from the table only by shared-host noise.
 
 | Case | regexz, ns/iter | PCRE2, ns/iter | PCRE2 / regexz |
 | --- | ---: | ---: | ---: |
-| compile Qwen tokenizer | 11,421.3 | 16,193.7 | 1.42x |
-| compile xDS-like | 5,804.5 | 7,171.0 | 1.24x |
+| compile Qwen tokenizer | 11,342.9 | 16,133.7 | 1.42x |
+| compile xDS-like | 5,769.1 | 7,168.0 | 1.24x |
 | find Qwen tokenizer | 49,740.3 | 177,575.5 | 3.57x |
 | findAll Qwen (borrowed) | 58,493.8 | 177,547.2 | 3.04x |
 | findAll Qwen (owning) | 58,303.3 | 177,425.6 | 3.04x |
 | find CJK tokenizer | 227,278.7 | 540,483.3 | 2.38x |
-| find HTML tag | 90,400.0 | 190,888.1 | 2.11x |
+| find HTML tag | 90,920.5 | 190,702.5 | 2.10x |
 | find URL | 71,148.4 | 101,895.0 | 1.43x |
 | find JSON string literal | 13,975.4 | 26,930.7 | 1.93x |
 | find JSON number | 74,288.9 | 122,707.2 | 1.65x |
@@ -109,7 +109,7 @@ rows differ from the table only by shared-host noise.
 | find markdown link | 361.4 | 1,175.3 | 3.25x |
 | find YAML key | 33,449.6 | 66,457.8 | 1.99x |
 | find TOML table | 32,113.0 | 49,837.8 | 1.55x |
-| find template | 69,500.0 | 114,079.0 | 1.64x |
+| find template | 69,259.8 | 114,534.9 | 1.65x |
 | find Windows path | 46,065.4 | 112,768.1 | 2.45x |
 | find CSS selector | 80,985.7 | 103,253.9 | 1.27x |
 | find slash date | 79,495.9 | 137,677.4 | 1.73x |
@@ -117,7 +117,7 @@ rows differ from the table only by shared-host noise.
 | find IPv6 | 82,914.7 | 95,547.0 | 1.15x |
 | find C comment | 86,418.2 | 131,103.6 | 1.52x |
 | find markdown image | 369.5 | 1,324.9 | 3.59x |
-| find HTML tag name | 126,672.9 | 200,510.1 | 1.58x |
+| find HTML tag name | 124,905.5 | 200,851.2 | 1.61x |
 | find shell var | 122,632.5 | 201,145.6 | 1.64x |
 | split whitespace (22 KiB) | 31,459.2 | 106,576.3 | 3.39x |
 | split commas (29 KiB) | 24,831.8 | 139,232.7 | 5.61x |
@@ -141,7 +141,7 @@ Compile Qwen is now 1.42x ahead of PCRE2, up from a 0.69x ratio: PCRE2 parses
 the pattern and stores property references, while regexz materializes the
 Unicode property sets at compile time so searches can use range lists
 directly. The compile rows include PCRE2's JIT pass, while regexz has no JIT.
-Compile xDS-like is 1.24x ahead; HTML tags are 2.11x ahead after the
+Compile xDS-like is 1.24x ahead; HTML tags are 2.10x ahead after the
 wrapped-run probes, and the case-insensitive Unicode literal is at parity
 (1.00x).
 

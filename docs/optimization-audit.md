@@ -1106,6 +1106,6 @@ The same 100-case workload (minus `RegexSet`) was also run against PCRE2
 10.42 with JIT on the same host. regexz is faster or at parity on 99 of 100
 cases, with a geometric-mean PCRE2/regexz ratio of 2.17x. Compile Qwen is now
 1.42x ahead (up from 0.69x); the small ASCII case-insensitive literal is at
-parity (0.99x). regexz wins compile xDS-like (1.24x) and HTML tags (2.11x).
+parity (0.99x). regexz wins compile xDS-like (1.24x) and HTML tags (2.10x).
 regexz materializes Unicode property sets at compile time, while PCRE2 defers
 them. See [PCRE2 comparison](benchmarks/pcre2-comparison.md).
