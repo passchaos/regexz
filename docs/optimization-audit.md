@@ -1093,7 +1093,9 @@ instead of walking the fold table and sorting. These changes cut Qwen compile
 from 23.3 us to 11.4 us. Short wrapped runs
 probe the current open byte and a 16-byte close window before the vector
 scanners, cutting `<[^>]+>` find by about 35%; tag-name scans probe a short
-window for the next `<`, cutting that row by about 12%. A whole-pattern ASCII set with
+window for the next `<`, cutting that row by about 12%; mixed-length literal
+alternations compare short branches directly, cutting `a|bb|ccc` by about
+15%. A whole-pattern ASCII set with
 at most 64 single-byte members reuses the literal-byte fast path, so `[abc]`,
 `[0-9]` and `[a-z]` bypass the general VM per match. Case-folded literal
 filters use a 32-lane pair scan on AVX2 hosts. The latest eight-execution

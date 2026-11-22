@@ -78,7 +78,7 @@ rows differ from the table only by shared-host noise.
 | find signed number | 91,890.3 | 146,588.1 | 1.60x |
 | find html attribute | 87,362.2 | 112,752.4 | 1.29x |
 | find markdown heading | 72,026.4 | 112,803.8 | 1.57x |
-| find mixed alternation | 453,472.6 | 520,858.3 | 1.15x |
+| find mixed alternation | 380,000.0 | 520,858.3 | 1.37x |
 | find capitalized words | 4,935.8 | 23,594.9 | 4.78x |
 | find markdown list | 4,922.7 | 29,112.5 | 5.91x |
 | find JSON escaped string | 17,605.3 | 34,025.0 | 1.93x |

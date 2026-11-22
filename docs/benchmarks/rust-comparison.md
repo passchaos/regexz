@@ -76,7 +76,7 @@ text, and small full-match subjects.
 | find signed number | 93,700.2 | 96,100.2 | 1.03x |
 | find html attribute | 87,506.1 | 151,685.7 | 1.73x |
 | find markdown heading | 71,222.2 | 104,135.1 | 1.46x |
-| find mixed alternation | 449,617.1 | 483,240.0 | 1.07x |
+| find mixed alternation | 380,000.0 | 483,240.0 | 1.27x |
 | find capitalized words | 4,942.3 | 140,318.0 | 28.39x |
 | find markdown list | 4,916.4 | 41,381.8 | 8.42x |
 | find JSON escaped string | 17,421.3 | 22,508.3 | 1.29x |
@@ -144,9 +144,10 @@ complement-fill, in-place-operand, precomputed-union, direct-negation and
 direct-union-append and coalesced-skip changes, the class-construction
 changes listed below, the `find log level`, `find (?i) alternation` and
 `find (?i) literal` rows after the 32-lane caseless scans, and the HTML-tag
-and template rows after the wrapped-run probes below, and the HTML-tag-name
-row after the short `<` probe below; the materialized sets are identical, so
-the other search rows are unchanged. The companion JSON
+and template rows after the wrapped-run probes below, the HTML-tag-name row
+after the short `<` probe below, and the mixed-alternation row after the
+short-branch comparison below; the materialized sets are identical, so the
+other search rows are unchanged. The companion JSON
 holds the latest full sweep; its search rows differ from the table only by
 shared-host noise.
 
@@ -184,6 +185,8 @@ The search paths gained two contained changes:
   per match while keeping the set's range-based first-byte scan.
 - Tag-name scans probe an 8-byte window for the next `<` before the vector
   byte scanner, cutting `</?([a-z][a-z0-9]*)\b` by about 12%.
+- Mixed-length literal alternations compare 1-3 byte branches directly
+  instead of dispatching through `eql`, cutting `a|bb|ccc` by about 15%.
 
 ## What changed in this round
 
