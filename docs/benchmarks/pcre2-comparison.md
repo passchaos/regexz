@@ -29,8 +29,8 @@ rows differ from the table only by shared-host noise.
 
 | Case | regexz, ns/iter | PCRE2, ns/iter | PCRE2 / regexz |
 | --- | ---: | ---: | ---: |
-| compile Qwen tokenizer | 11,415.9 | 16,171.3 | 1.42x |
-| compile xDS-like | 5,774.3 | 7,162.7 | 1.24x |
+| compile Qwen tokenizer | 11,421.3 | 16,193.7 | 1.42x |
+| compile xDS-like | 5,804.5 | 7,171.0 | 1.24x |
 | find Qwen tokenizer | 49,740.3 | 177,575.5 | 3.57x |
 | findAll Qwen (borrowed) | 58,493.8 | 177,547.2 | 3.04x |
 | findAll Qwen (owning) | 58,303.3 | 177,425.6 | 3.04x |
@@ -117,7 +117,7 @@ rows differ from the table only by shared-host noise.
 | find IPv6 | 82,914.7 | 95,547.0 | 1.15x |
 | find C comment | 86,418.2 | 131,103.6 | 1.52x |
 | find markdown image | 369.5 | 1,324.9 | 3.59x |
-| find HTML tag name | 125,400.0 | 202,518.8 | 1.61x |
+| find HTML tag name | 126,672.9 | 200,510.1 | 1.58x |
 | find shell var | 122,632.5 | 201,145.6 | 1.64x |
 | split whitespace (22 KiB) | 31,459.2 | 106,576.3 | 3.39x |
 | split commas (29 KiB) | 24,831.8 | 139,232.7 | 5.61x |

@@ -27,8 +27,8 @@ text, and small full-match subjects.
 
 | Case | regexz, ns/iter | Rust, ns/iter | Rust / regexz |
 | --- | ---: | ---: | ---: |
-| compile Qwen tokenizer | 11,374.4 | 714,325.1 | 62.80x |
-| compile xDS-like | 5,780.1 | 31,644.4 | 5.47x |
+| compile Qwen tokenizer | 11,380.6 | 715,107.2 | 62.84x |
+| compile xDS-like | 5,774.1 | 31,646.0 | 5.48x |
 | find Qwen tokenizer | 49,760.6 | 106,195.8 | 2.13x |
 | findAll Qwen (borrowed) | 58,364.1 | 105,801.2 | 1.81x |
 | findAll Qwen (owning) | 58,294.2 | 105,031.1 | 1.80x |
@@ -115,7 +115,7 @@ text, and small full-match subjects.
 | find IPv6 | 83,384.1 | 109,750.3 | 1.32x |
 | find C comment | 85,927.3 | 121,603.0 | 1.42x |
 | find markdown image | 385.6 | 805.6 | 2.09x |
-| find HTML tag name | 125,400.0 | 150,357.5 | 1.20x |
+| find HTML tag name | 125,017.4 | 150,547.9 | 1.20x |
 | find shell var | 121,435.4 | 173,716.0 | 1.43x |
 | split whitespace (22 KiB) | 31,598.6 | 137,633.5 | 4.36x |
 | split commas (29 KiB) | 24,883.5 | 63,820.9 | 2.56x |
@@ -134,7 +134,7 @@ are the one-character alternation (`a|b|c`, 0.88x) and currency
 (`\$\d+(?:\.\d{2})?`, 0.92x); IPv6 is at parity (1.01x). The largest leads
 are `replaceAll` with edge assertions (39.00x), blank-line scans (33.15x),
 capitalized-word scans (28.39x), `RegexSet` no-match scans (16.22x) and
-compile time (62.80x); the tokenizer searches are 2.13x and 2.16x ahead.
+compile time (62.84x); the tokenizer searches are 2.13x and 2.16x ahead.
 The geometric-mean ratio is 2.33x. The currency row is a small absolute gap
 (about 39 ns); the one-character alternation is dominated by the per-match
 dispatch call.
