@@ -2657,12 +2657,12 @@ pub const Workspace = struct {
         var search = search_start;
         const single_open = state.open.len == 1;
         while (search < input.len) {
-            // Adjacent delimiters dominate tag-like inputs, so probe the
-            // current byte before paying the vector scanner's setup.
-            const open = if (single_open and input[search] == state.open[0])
-                search
-            else
-                indexOfBytes(input, search, state.open) orelse return null;
+            // Adjacent delimiters dominate tag-like inputs, so probe a short
+            // scalar window before paying the vector scanner's setup.
+            const open = if (single_open) blk: {
+                if (probeShortByte(input, search, state.open[0])) |found| break :blk found;
+                break :blk indexOfBytes(input, @min(input.len, search + 8), state.open) orelse return null;
+            } else indexOfBytes(input, search, state.open) orelse return null;
             const body_start = open + state.open.len;
             if (state.body_excludes_close) {
                 // The body is every byte except the close, so the body end is
@@ -2863,6 +2863,13 @@ pub const Workspace = struct {
     /// use the SIMD pair scan; longer needles scan for their rarest byte and
     /// verify the full window, which is much faster than a two-byte prefix
     /// when the prefix is common.
+    fn probeShortByte(input: []const u8, start: usize, byte: u8) ?usize {
+        var probe = start;
+        const probe_end = @min(input.len, start + 8);
+        while (probe < probe_end and input[probe] != byte) probe += 1;
+        return if (probe < probe_end) probe else null;
+    }
+
     fn indexOfBytes(input: []const u8, start: usize, needle: []const u8) ?usize {
         if (needle.len == 1) return prefilter.indexOfByte(input, start, needle[0]);
         const anchor = prefilter.rarestByte(needle);
