@@ -3352,6 +3352,10 @@ pub const Workspace = struct {
             while (count < limit and table[input[pos + count]]) count += 1;
             if (count < element.min) return null;
             pos += count;
+            if (element.has_fuse) {
+                if (pos >= input.len or input[pos] != element.fuse) return null;
+                pos += 1;
+            }
         }
         return pos;
     }
@@ -3377,7 +3381,12 @@ pub const Workspace = struct {
         while (count < limit and table[input[pos + count]]) count += 1;
         if (count < element.min) return null;
         while (count >= element.min) : (count -= 1) {
-            if (matchBounded(state, input, pos + count, index + 1, budget)) |end| return end;
+            var next_pos = pos + count;
+            if (element.has_fuse) {
+                if (next_pos >= input.len or input[next_pos] != element.fuse) continue;
+                next_pos += 1;
+            }
+            if (matchBounded(state, input, next_pos, index + 1, budget)) |end| return end;
         }
         return null;
     }
@@ -4167,6 +4176,25 @@ pub const Workspace = struct {
         const set = anchored.set;
         const kind = anchored.kind;
         const table = &self.anchored_table;
+        if (ascii and self.program.newline == .lf) {
+            var from = search_start;
+            while (true) {
+                const e = prefilter.indexOfByte(input, from, '\n') orelse input.len;
+                if (e > search_start and table[input[e - 1]] and
+                    position(input, e, self.program.newline).allows(kind))
+                {
+                    var start = e;
+                    while (start > search_start and table[input[start - 1]]) start -= 1;
+                    if (start < e) {
+                        self.slots[0] = start;
+                        self.slots[1] = e;
+                        return .{ .start = start, .end = e, .slots = self.slots };
+                    }
+                }
+                if (e == input.len) return null;
+                from = e + 1;
+            }
+        }
         var offset = search_start;
         while (offset < input.len) {
             const member = if (ascii) table[input[offset]] else set.matches(input[offset]);
@@ -5136,7 +5164,7 @@ const BoundedSequenceState = struct {
     const max_elements = 32;
     const max_sets = 8;
     const Kind = enum(u8) { run, optional_group };
-    const Element = struct { kind: Kind = .run, set: u8, min: u8, max: u8, separator: u8 = 0 };
+    const Element = struct { kind: Kind = .run, set: u8, min: u8, max: u8, separator: u8 = 0, fuse: u8 = 0, has_fuse: bool = false };
 
     elements: [max_elements]Element = undefined,
     len: u8 = 0,
@@ -5146,7 +5174,9 @@ const BoundedSequenceState = struct {
     fn build(self: *BoundedSequenceState, source: []const BoundedElement) bool {
         if (source.len > self.elements.len) return false;
         var sets: [max_sets]model.Set = undefined;
-        for (source) |element| {
+        var i: usize = 0;
+        while (i < source.len) {
+            const element = source[i];
             var set_index: u8 = 0;
             while (set_index < self.set_count) : (set_index += 1) {
                 if (shapes.sameSet(sets[set_index], element.set)) break;
@@ -5157,14 +5187,27 @@ const BoundedSequenceState = struct {
                 self.tables[self.set_count] = byte_table.init(256, element.set);
                 self.set_count += 1;
             }
-            self.elements[self.len] = .{
+            var slot = Element{
                 .kind = if (element.kind == .optional_group) .optional_group else .run,
                 .set = set_index,
                 .min = element.min,
                 .max = element.max,
                 .separator = element.separator,
             };
+            if (slot.kind == .run and i + 1 < source.len) {
+                const next = source[i + 1];
+                if (next.kind == .run and next.min == 1 and next.max == 1 and
+                    next.set.ranges.len == 1 and next.set.ranges[0].first == next.set.ranges[0].last and
+                    next.set.ranges[0].first < 256 and !element.set.matches(@intCast(next.set.ranges[0].first)))
+                {
+                    slot.fuse = @intCast(next.set.ranges[0].first);
+                    slot.has_fuse = true;
+                    i += 1;
+                }
+            }
+            self.elements[self.len] = slot;
             self.len += 1;
+            i += 1;
         }
         return true;
     }
