@@ -12,6 +12,14 @@ const c = @cImport({
 
 const gpa = std.heap.smp_allocator;
 
+/// Optional single-case filter from argv, used by the isolated runner.
+var case_filter: ?[]const u8 = null;
+
+fn selected(name: []const u8) bool {
+    if (case_filter) |only| return std.mem.eql(u8, only, name);
+    return true;
+}
+
 const Match = struct { start: usize, end: usize };
 
 /// Advance past one UTF-8 code unit so empty matches do not split a rune.
@@ -71,6 +79,7 @@ fn benchFind(
     input: []const u8,
     iterations: usize,
 ) !void {
+    if (!selected(name)) return;
     var value = try Pattern.init(pattern);
     defer value.deinit();
     for (0..10) |_| std.mem.doNotOptimizeAway(countMatches(&value, input));
@@ -96,6 +105,7 @@ fn benchFindAll(
     iterations: usize,
     borrowed: bool,
 ) !void {
+    if (!selected(name)) return;
     _ = borrowed;
     return benchFind(io, out, name, pattern, input, iterations);
 }
@@ -123,6 +133,7 @@ fn benchSplit(
     input: []const u8,
     iterations: usize,
 ) !void {
+    if (!selected(name)) return;
     var value = try Pattern.init(pattern);
     defer value.deinit();
     for (0..20) |_| {
@@ -157,6 +168,7 @@ fn benchMatches(
     input: []const u8,
     iterations: usize,
 ) !void {
+    if (!selected(name)) return;
     var value = try Pattern.init(pattern);
     defer value.deinit();
     for (0..1000) |_| std.mem.doNotOptimizeAway(fullMatch(&value, input));
@@ -221,6 +233,7 @@ fn benchReplace(
     substitution: []const u8,
     iterations: usize,
 ) !void {
+    if (!selected(name)) return;
     var value = try Pattern.init(pattern);
     defer value.deinit();
     for (0..100) |_| {
@@ -249,6 +262,7 @@ fn benchCompile(
     pattern: []const u8,
     iterations: usize,
 ) !void {
+    if (!selected(name)) return;
     var samples: [5]i96 = undefined;
     for (&samples) |*sample| {
         const start = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds;
@@ -268,6 +282,17 @@ pub fn main() !void {
     var threaded = std.Io.Threaded.init(gpa, .{});
     defer threaded.deinit();
     const io = threaded.io();
+    if (std.Io.Dir.openFileAbsolute(io, "/proc/self/cmdline", .{}) catch null) |file| {
+        var cmdline_buf: [4096]u8 = undefined;
+        var cmdline_reader = file.readerStreaming(io, &cmdline_buf);
+        if (cmdline_reader.interface.allocRemaining(gpa, .limited(1 << 16))) |data| {
+            var args = std.mem.splitScalar(u8, data, 0);
+            _ = args.next();
+            if (args.next()) |arg| {
+                if (arg.len != 0) case_filter = arg;
+            }
+        } else |_| {}
+    }
     var buffer: [4096]u8 = undefined;
     var stdout = std.Io.File.stdout().writer(io, &buffer);
     const out = &stdout.interface;

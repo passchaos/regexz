@@ -9,6 +9,14 @@ const regexz = @import("regexz");
 
 const gpa = std.heap.smp_allocator;
 
+/// Optional single-case filter from argv, used by the isolated runner.
+var case_filter: ?[]const u8 = null;
+
+fn selected(name: []const u8) bool {
+    if (case_filter) |only| return std.mem.eql(u8, only, name);
+    return true;
+}
+
 fn benchFind(
     io: std.Io,
     out: *std.Io.Writer,
@@ -18,6 +26,7 @@ fn benchFind(
     iterations: usize,
     limits: regexz.Limits,
 ) !void {
+    if (!selected(name)) return;
     var value = try regexz.Regex.init(gpa, pattern, limits);
     defer value.deinit();
     var workspace = try regexz.ReplaceWorkspace.init(gpa, value.program, limits);
@@ -61,6 +70,7 @@ fn benchFindAll(
     limits: regexz.Limits,
     borrowed: bool,
 ) !void {
+    if (!selected(name)) return;
     var value = try regexz.Regex.init(gpa, pattern, limits);
     defer value.deinit();
     var workspace: regexz.ReplaceWorkspace = undefined;
@@ -96,6 +106,7 @@ fn benchSplit(
     input: []const u8,
     iterations: usize,
 ) !void {
+    if (!selected(name)) return;
     var value = try regexz.Regex.init(gpa, pattern, .{});
     defer value.deinit();
     for (0..20) |_| {
@@ -126,6 +137,7 @@ fn benchMatches(
     iterations: usize,
     limits: regexz.Limits,
 ) !void {
+    if (!selected(name)) return;
     var value = try regexz.Regex.init(gpa, pattern, limits);
     defer value.deinit();
     for (0..1000) |_| std.mem.doNotOptimizeAway(try value.matches(gpa, input));
@@ -153,6 +165,7 @@ fn benchReplace(
     substitution: []const u8,
     iterations: usize,
 ) !void {
+    if (!selected(name)) return;
     var value = try regexz.Regex.init(gpa, pattern, .{});
     defer value.deinit();
     for (0..100) |_| {
@@ -182,6 +195,7 @@ fn benchSet(
     input: []const u8,
     iterations: usize,
 ) !void {
+    if (!selected(name)) return;
     var set = try regexz.RegexSet.init(gpa, patterns, .{});
     defer set.deinit();
     var matched: [16]bool = undefined;
@@ -210,6 +224,7 @@ fn benchCompile(
     iterations: usize,
     limits: regexz.Limits,
 ) !void {
+    if (!selected(name)) return;
     var samples: [5]i96 = undefined;
     for (&samples) |*sample| {
         const start = std.Io.Clock.Timestamp.now(io, .awake).raw.nanoseconds;
@@ -229,6 +244,17 @@ pub fn main() !void {
     var threaded = std.Io.Threaded.init(gpa, .{});
     defer threaded.deinit();
     const io = threaded.io();
+    if (std.Io.Dir.openFileAbsolute(io, "/proc/self/cmdline", .{}) catch null) |file| {
+        var cmdline_buf: [4096]u8 = undefined;
+        var cmdline_reader = file.readerStreaming(io, &cmdline_buf);
+        if (cmdline_reader.interface.allocRemaining(gpa, .limited(1 << 16))) |data| {
+            var args = std.mem.splitScalar(u8, data, 0);
+            _ = args.next();
+            if (args.next()) |arg| {
+                if (arg.len != 0) case_filter = arg;
+            }
+        } else |_| {}
+    }
     var buffer: [4096]u8 = undefined;
     var stdout = std.Io.File.stdout().writer(io, &buffer);
     const out = &stdout.interface;
