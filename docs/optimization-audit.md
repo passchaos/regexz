@@ -465,7 +465,10 @@ Qwen fast-branch code in the same binary. The isolated runner was added so
 these trade-offs can be measured without cross-case interference. Compile
 block sizes of 128, 192 and 384 KiB were also screened: Qwen find and compile
 stayed within noise, so the 256 KiB headroom is kept for large Unicode
-patterns.
+patterns. The existing `prefilter.indexOfByte` was compared with
+`std.mem.indexOfScalarPos` over 42 KiB: 287-334 ns versus 462-487 ns, so the
+custom AVX2 byte scan is kept; the currency row's 0.83x isolated ratio is
+noise at that 300 ns scale.
 
 `replaceAll` for an edge-only zero-width plan (`\A|\z`, `$`) now computes the
 exact output length and writes into one allocation instead of growing an
