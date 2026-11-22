@@ -24,6 +24,51 @@ fn bench_find(name: &str, pattern: &str, input: &str, iterations: usize) {
     }
     let re = Regex::new(pattern).unwrap();
     for _ in 0..10 {
+        let mut offset = 0;
+        while offset < input.len() {
+            match re.find_at(input, offset) {
+                Some(m) => {
+                    if m.end() <= m.start() {
+                        break;
+                    }
+                    offset = m.end();
+                }
+                None => break,
+            }
+        }
+    }
+    let mut samples = Vec::new();
+    for _ in 0..5 {
+        let start = Instant::now();
+        let mut pieces = 0usize;
+        for _ in 0..iterations {
+            let mut offset = 0;
+            while offset < input.len() {
+                match re.find_at(input, offset) {
+                    Some(m) => {
+                        pieces += 1;
+                        if m.end() <= m.start() {
+                            break;
+                        }
+                        offset = m.end();
+                    }
+                    None => break,
+                }
+            }
+        }
+        let ns = start.elapsed().as_nanos() as f64 / iterations as f64;
+        black_box(pieces);
+        samples.push(ns);
+    }
+    println!("{name:<40} {:>10.1} ns/iter", median(&mut samples));
+}
+
+fn bench_find_all(name: &str, pattern: &str, input: &str, iterations: usize) {
+    if !selected(name) {
+        return;
+    }
+    let re = Regex::new(pattern).unwrap();
+    for _ in 0..10 {
         black_box(re.find_iter(input).count());
     }
     let mut samples = Vec::new();
@@ -37,7 +82,8 @@ fn bench_find(name: &str, pattern: &str, input: &str, iterations: usize) {
         black_box(pieces);
         samples.push(ns);
     }
-    println!("{name:<40} {:>10.1} ns/iter", median(&mut samples));
+    samples.sort_by(|a, b| a.partial_cmp(b).unwrap());
+    println!("{name:<40} {:>10.1} ns/iter", samples[samples.len() / 2]);
 }
 
 fn bench_split(name: &str, pattern: &str, input: &str, iterations: usize) {
@@ -209,8 +255,8 @@ fn main() {
         20000,
     );
     bench_find("find Qwen tokenizer", qwen, &ascii_text, 50);
-    bench_find("findAll Qwen (borrowed)", qwen, &ascii_text, 50);
-    bench_find("findAll Qwen (owning)", qwen, &ascii_text, 50);
+    bench_find_all("findAll Qwen (borrowed)", qwen, &ascii_text, 50);
+    bench_find_all("findAll Qwen (owning)", qwen, &ascii_text, 50);
     bench_find("find CJK tokenizer", qwen, &cjk_text, 50);
     bench_find("find HTML tag", "<[^>]+>", &html_text, 200);
     bench_find("find URL", "https?://[^\\s]+", &url_text, 200);
