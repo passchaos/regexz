@@ -1095,19 +1095,26 @@ probe the current open byte and a 16-byte close window before the vector
 scanners, cutting `<[^>]+>` find by about 35%; tag-name scans probe a short
 window for the next `<`, cutting that row by about 12%; mixed-length literal
 alternations compare short branches directly, cutting `a|bb|ccc` by about
-15%. A whole-pattern ASCII set with
+15%. Line-end anchored runs scan line ends instead of every run, cutting
+`(?m)\w+$` by about 86%, and bounded sequences fuse mandatory single-byte
+separators, cutting IPv4 by about 12% and IPv6 by 10-20%. A whole-pattern
+ASCII set with
 at most 64 single-byte members reuses the literal-byte fast path, so `[abc]`,
 `[0-9]` and `[a-z]` bypass the general VM per match. Case-folded literal
-filters use a 32-lane pair scan on AVX2 hosts. The latest eight-execution
-order-balanced sweep covers 101 cases: 99 are faster, IPv6 is at parity
-(1.01x), and the remaining losses are the one-character alternation (0.88x)
-and currency (0.92x). The geometric-mean ratio is 2.34x. See
-[Rust comparison](benchmarks/rust-comparison.md).
+filters use a 32-lane pair scan on AVX2 hosts. The comparison now measures
+each case in a fresh process (five interleaved rounds), removing the
+cross-case heap and code-layout interference that moved unrelated rows by
+10-50% in the earlier single-process sweep. The isolated sweep covers 101
+cases: 99 are faster, and the remaining losses are the one-character
+alternation (0.87x) and currency (0.96x). The geometric-mean ratio is 2.40x.
+See [Rust comparison](benchmarks/rust-comparison.md).
 
 The same 100-case workload (minus `RegexSet`) was also run against PCRE2
-10.42 with JIT on the same host. regexz is faster or at parity on 99 of 100
-cases, with a geometric-mean PCRE2/regexz ratio of 2.17x. Compile Qwen is now
-1.42x ahead (up from 0.69x); the small ASCII case-insensitive literal is at
-parity (0.99x). regexz wins compile xDS-like (1.24x) and HTML tags (2.10x).
+10.42 with JIT on the same host with the isolated method. regexz is faster or
+at parity on 97 of 100 cases, with a geometric-mean PCRE2/regexz ratio of
+2.21x. Compile Qwen is now 1.42x ahead (up from 0.69x); prefix alternation
+(0.95x), the case-insensitive Unicode literal (0.96x) and the small ASCII
+case-insensitive literal (0.99x) are within host noise. regexz wins compile
+xDS-like (1.23x), HTML tags (2.16x) and end-anchored word scans (7.92x).
 regexz materializes Unicode property sets at compile time, while PCRE2 defers
 them. See [PCRE2 comparison](benchmarks/pcre2-comparison.md).
